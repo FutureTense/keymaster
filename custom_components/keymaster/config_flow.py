@@ -42,8 +42,8 @@ def _get_entities(entities, search=None):
 
 
 @config_entries.HANDLERS.register(DOMAIN)
-class LockManagerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for LockManager."""
+class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+    """Config flow for KeyMaster."""
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
@@ -153,11 +153,11 @@ class LockManagerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return LockManagerOptionsFlow(config_entry)
+        return KeyMasterOptionsFlow(config_entry)
 
 
-class LockManagerOptionsFlow(config_entries.OptionsFlow):
-    """Options flow for Lock Manager."""
+class KeyMasterOptionsFlow(config_entries.OptionsFlow):
+    """Options flow for KeyMaster."""
 
     def __init__(self, config_entry):
         """Initialize."""
