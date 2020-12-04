@@ -1,0 +1,51 @@
+input_boolean:
+    allow_automation_execution:
+        name: 'Allow Automation'
+        initial: off
+
+    system_ready:
+        name: 'System Ready'
+        initial: off
+
+binary_sensor:
+
+    - platform: mqtt
+      name: ozw_network_status
+      state_topic: OpenZWave/1/status/
+      value_template: >
+          {{ "ON" if value_json.Status in ["driverAwakeNodesQueried", "driverAllNodesQueriedSomeDead", "driverAllNodesQueried"] else "OFF" }}
+      json_attributes_topic: OpenZWave/1/status/
+      device_class: "connectivity"
+
+    - platform: template
+      sensors:
+        allow_automation:
+          friendly_name: "Allow Automation"
+          value_template: "{{ is_state('input_boolean.allow_automation_execution', 'on') }}"   
+
+automation:
+    - alias: open_zwave_network_down
+      initial_state: true
+      trigger:
+        - platform: state
+          entity_id: binary_sensor.ozw_network_status
+          to: "off"
+      action:
+        - service: homeassistant.turn_off
+          entity_id: input_boolean.allow_automation_execution
+
+    - alias: open_zwave_network_up
+      initial_state: true
+      trigger:
+        - platform: homeassistant
+          event: start
+        - platform: state
+          entity_id: binary_sensor.ozw_network_status
+          to: "on"
+      condition:
+        - condition: state
+          entity_id: binary_sensor.ozw_network_status
+          state: "on"
+      action:
+        - service: homeassistant.turn_on
+          entity_id: input_boolean.allow_automation_execution

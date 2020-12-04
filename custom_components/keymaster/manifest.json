@@ -1,0 +1,10 @@
+{
+  "domain": "keymaster",
+  "name": "keymaster",
+  "documentation": "https://github.com/FutureTense/keymaster",
+  "dependencies": [],
+  "codeowners": ["@FutureTense", "@firstof9"],
+  "config_flow": true,
+  "issue_tracker": "https://github.com/FutureTense/keymaster/issues",
+  "requirements": []
+}

@@ -1,0 +1,14 @@
+  - title: 'CASE_LOCK_NAME Codes and Configuration'
+    path: keypad-LOCKNAME
+    icon: 'mdi:lock-smart'
+    panel: false
+    badges:
+      - input_boolean.LOCKNAME_lock_notifications
+      - input_boolean.LOCKNAME_dooraccess_notifications
+      - input_boolean.LOCKNAME_garageacess_notifications
+      - entity: >-
+          LOCKENTITYNAME
+      - entity: >-
+          DOORSENSORENTITYNAME
+      - entity: input_text.LOCKNAME_status_report
+    cards:

@@ -1,0 +1,44 @@
+{
+  "config": {
+    "error": {
+      "invalid_path": "Vennligst oppbevar bildene i en annen katalog."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "alarm_level": "Brukerkodesensor (fra lås)",
+          "alarm_type": "Tilgangskontrollsensor (fra lås)",
+          "entity_id": "Velg lås",
+          "slots": "Kodespor",
+          "start_from": "Start fra kodespor #",
+          "sensorname": "Dørsensor",
+          "lockname": "Låsnavn (dvs. frontdør)",
+          "packages_path": "Sti til pakkekatalog"
+        },
+        "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
+        "title": "Lock Manager"
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_path": "Vennligst oppbevar bildene i en annen katalog."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "alarm_level": "Brukerkodesensor (fra lås)",
+          "alarm_type": "Tilgangskontrollsensor (fra lås)",
+          "entity_id": "Velg lås",
+          "slots": "Kodespor",
+          "start_from": "Start fra kodespor #",
+          "sensorname": "Dørsensor",
+          "lockname": "Låsnavn (dvs. frontdør)",
+          "packages_path": "Sti til pakkekatalog"
+        },
+        "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
+        "title": "Lock Manager"
+      }
+    }
+  }
+}

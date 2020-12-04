@@ -1,0 +1,60 @@
+{
+  "config": {
+    "error": {
+      "invalid_path": "Please store the images in another directory."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "alarm_level": "User Code Sensor (from lock)",
+          "alarm_type": "Access Control Sensor (from lock)",
+          "entity_id": "Select your lock",
+          "slots": "Code Slots",
+          "start_from": "Start from code slot #",
+          "sensorname": "Door Sensor",
+          "lockname": "Lock Name (ie: frontdoor)",
+          "packages_path": "Path to packages directory",
+          "using_ozw": "Using OZW?"
+        },
+        "description": "Select the lock to setup and code slots to create.",
+        "title": "Lock-Manager"
+      },
+      "config_2": {
+        "data": {
+          "generate_package": "Generate package after you press submit?"
+        },
+        "description": "If checked this will generate the files once you click submit.\nWARNING: This will remove any customization you've done to the yaml files.",
+        "title": "Confirm"
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_path": "Please store the images in another directory."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "alarm_level": "User Code Sensor (from lock)",
+          "alarm_type": "Access Control Sensor (from lock)",
+          "entity_id": "Select your lock",
+          "slots": "Code Slots",
+          "start_from": "Start from code slot #",
+          "sensorname": "Door Sensor",
+          "lockname": "Lock Name (ie: frontdoor)",
+          "packages_path": "Path to packages directory",
+          "using_ozw": "Using OZW?"
+        },
+        "description": "Select the lock to setup and code slots to create.",
+        "title": "Lock-Manager"
+      },
+      "options_2": {
+        "data": {
+          "generate_package": "Generate package after you press submit?"
+        },
+        "description": "If checked this will generate the files once you click submit.\nWARNING: This will remove any customization you've done to the yaml files.",
+        "title": "Confirm"
+      }
+    }
+  }
+}

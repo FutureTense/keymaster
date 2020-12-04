@@ -1,0 +1,36 @@
+generate_package:
+  description: Generate lock manager files.
+  fields:
+    lockname:
+      description: Lock name to generate files for.
+      example: frontdoor
+
+add_code:
+  description: Add code to lock. Supports ozw and zwave locks.
+  fields:
+    entity_id: 
+      description: The entity_id of the lock you are attempting to modify the code of
+      example: lock.frontdoor_locked
+    code_slot:
+      description: The code slot you are attempting to add/replace a code into
+      example: 2
+    usercode:
+      description: The code you are attempting to set
+      example: 1234      
+      
+clear_code:
+  description: Clear code from lock. Supports ozw and zwave locks.
+  fields:
+    entity_id: 
+      description: The entity_id of the lock you are attempting to modify the code of
+      example: lock.frontdoor_locked
+    code_slot:
+      description: The code slot you are attempting to clear
+      example: 2      
+
+refresh_codes:
+  description: Refresh lock codes from the lock. 
+  fields:
+    entity_id: 
+      description: The entity_id of the lock you are attempting to refresh the codes of
+      example: lock.frontdoor_locked
