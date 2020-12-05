@@ -127,15 +127,14 @@ async def async_setup_entry(hass, config_entry):
             _LOGGER.error("Problem pulling node_id from entity.")
             return
 
-        servicedata = {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_CODE_SLOT: code_slot,
-            ATTR_USER_CODE: usercode,
-        }
-
         _LOGGER.debug("Attempting to call set_usercode...")
 
         if using_ozw:
+            servicedata = {
+                ATTR_ENTITY_ID: entity_id,
+                ATTR_CODE_SLOT: code_slot,
+                ATTR_USER_CODE: usercode,
+            }
             try:
                 await hass.services.async_call(OZW_DOMAIN, SET_USERCODE, servicedata)
             except Exception as err:
@@ -145,6 +144,11 @@ async def async_setup_entry(hass, config_entry):
                 pass
 
         else:
+            servicedata = {
+                ATTR_NODE_ID: data,
+                ATTR_CODE_SLOT: code_slot,
+                ATTR_USER_CODE: usercode,
+            }
             try:
                 await hass.services.async_call(ZWAVE_DOMAIN, SET_USERCODE, servicedata)
             except Exception as err:
@@ -175,14 +179,13 @@ async def async_setup_entry(hass, config_entry):
             _LOGGER.error("Problem pulling node_id from entity.")
             return
 
-        servicedata = {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_CODE_SLOT: code_slot,
-        }
-
         _LOGGER.debug("Attempting to call clear_usercode...")
 
         if using_ozw:
+            servicedata = {
+                ATTR_ENTITY_ID: entity_id,
+                ATTR_CODE_SLOT: code_slot,
+            }
             try:
                 await hass.services.async_call(OZW_DOMAIN, CLEAR_USERCODE, servicedata)
             except Exception as err:
@@ -192,6 +195,10 @@ async def async_setup_entry(hass, config_entry):
                 pass
 
         else:
+            servicedata = {
+                ATTR_NODE_ID: data,
+                ATTR_CODE_SLOT: code_slot,
+            }
             try:
                 await hass.services.async_call(
                     ZWAVE_DOMAIN, CLEAR_USERCODE, servicedata
