@@ -373,7 +373,7 @@ async def async_setup_entry(hass, config_entry):
         _clear_code,
         schema=vol.Schema(
             {
-                vol.Required(ATTR_NODE_ID): vol.Coerce(str),
+                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
                 vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
             }
         ),
