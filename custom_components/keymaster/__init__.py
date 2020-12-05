@@ -184,6 +184,18 @@ async def async_setup_entry(hass, config_entry):
         if using_ozw:
             servicedata = {
                 ATTR_ENTITY_ID: entity_id,
+                ATTR_CODE_SLOT: 999,
+            }
+            try:
+                await hass.services.async_call(OZW_DOMAIN, CLEAR_USERCODE, servicedata)
+            except Exception as err:
+                _LOGGER.error(
+                    "Error calling ozw.clear_usercode service call: %s", str(err)
+                )
+                # pass
+
+            servicedata = {
+                ATTR_ENTITY_ID: entity_id,
                 ATTR_CODE_SLOT: code_slot,
             }
             try:
