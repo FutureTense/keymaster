@@ -1,15 +1,16 @@
-"""Adds config flow for Mail and Packages."""
+"""Adds config flow for keymaster."""
 
 import logging
-import os
-from collections import OrderedDict
 
 import voluptuous as vol
+import os
+
 from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSORS_DOMAIN
 from homeassistant.core import callback
+from homeassistant.util import slugify
 
 from .const import (
     CONF_ALARM_LEVEL,
@@ -22,6 +23,7 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     DEFAULT_CODE_SLOTS,
+    DEFAULT_DOOR_SENSOR,
     DEFAULT_GENERATE,
     DEFAULT_PACKAGES_PATH,
     DEFAULT_START,
@@ -31,14 +33,58 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def _get_entities(entities, search=None):
+def _get_entities(hass, domain, search=None, extra_entities=None):
     data = []
-    for entity in entities:
+    for entity in hass.data[domain].entities:
         if search is not None and not any(map(entity.entity_id.__contains__, search)):
             continue
         data.append(entity.entity_id)
 
+    if extra_entities:
+        data.extend(extra_entities)
+
     return data
+
+
+def _get_schema(hass, user_input, default_dict):
+    """Gets a schema using the default_dict as a backup."""
+    if user_input is None:
+        user_input = {}
+
+    def _get_default(key):
+        """Gets default value for key."""
+        return user_input.get(key, default_dict.get(key))
+
+    return vol.Schema(
+        {
+            vol.Required(CONF_ENTITY_ID, default=_get_default(CONF_ENTITY_ID)): vol.In(
+                _get_entities(hass, LOCK_DOMAIN)
+            ),
+            vol.Required(CONF_SLOTS, default=_get_default(CONF_SLOTS)): vol.Coerce(int),
+            vol.Required(CONF_START, default=_get_default(CONF_START)): vol.Coerce(int),
+            vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
+            vol.Optional(
+                CONF_SENSOR_NAME, default=_get_default(CONF_SENSOR_NAME)
+            ): vol.In(
+                _get_entities(
+                    hass, BINARY_DOMAIN, extra_entities=["binary_sensor.fake"]
+                )
+            ),
+            vol.Optional(
+                CONF_ALARM_LEVEL, default=_get_default(CONF_ALARM_LEVEL)
+            ): vol.In(
+                _get_entities(hass, SENSORS_DOMAIN, search=["alarm_level", "user_code"])
+            ),
+            vol.Optional(
+                CONF_ALARM_TYPE, default=_get_default(CONF_ALARM_TYPE)
+            ): vol.In(
+                _get_entities(
+                    hass, SENSORS_DOMAIN, search=["alarm_type", "access_control"]
+                )
+            ),
+            vol.Required(CONF_PATH, default=_get_default(CONF_PATH)): str,
+        }
+    )
 
 
 @config_entries.HANDLERS.register(DOMAIN)
@@ -48,99 +94,38 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
-    def __init__(self):
-        """Initialize."""
-        self._data = {}
-        self._errors = {}
-        self._locks = None
-
     async def async_step_user(self, user_input={}):
         """Handle a flow initialized by the user."""
-        self._errors = {}
-        self._locks = _get_entities(self.hass.data[LOCK_DOMAIN].entities)
-        self._doors = _get_entities(self.hass.data[BINARY_DOMAIN].entities)
-        self._doors.append("binary_sensor.fake")
-        self._alarm_type = _get_entities(
-            self.hass.data[SENSORS_DOMAIN].entities, ["alarm_type", "access_control"]
-        )
-        self._alarm_level = _get_entities(
-            self.hass.data[SENSORS_DOMAIN].entities, ["alarm_level", "user_code"]
-        )
+        errors = {}
 
         if user_input is not None:
-            user_input[CONF_LOCK_NAME] = (
-                user_input[CONF_LOCK_NAME].lower().replace(" ", "_")
-            )
-            self._data.update(user_input)
-            if user_input[CONF_PATH] is not None:
-                if not user_input[CONF_PATH].endswith("/"):
-                    user_input[CONF_PATH] += "/"
-                    self._data.update(user_input)
-
+            user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
             user_input[CONF_GENERATE] = DEFAULT_GENERATE
-            self._data.update(user_input)
             valid = await self._validate_path(user_input[CONF_PATH])
             if valid:
                 return self.async_create_entry(
-                    title=self._data[CONF_LOCK_NAME], data=self._data
+                    title=user_input[CONF_LOCK_NAME], data=user_input
                 )
             else:
-                self._errors["base"] = "invalid_path"
+                errors["base"] = "invalid_path"
 
-            return await self._show_config_form(user_input)
+            return self._show_config_form(user_input, errors)
 
-        return await self._show_config_form(user_input)
+        return self._show_config_form(user_input, errors)
 
-    async def _show_config_form(self, user_input):
+    def _show_config_form(self, user_input, errors):
         """Show the configuration form to edit location data."""
+        defaults = {
+            CONF_SLOTS: DEFAULT_CODE_SLOTS,
+            CONF_START: DEFAULT_START,
+            CONF_SENSOR_NAME: DEFAULT_DOOR_SENSOR,
+            CONF_PATH: DEFAULT_PACKAGES_PATH,
+        }
 
-        # Defaults
-        entity_id = ""
-        slots = DEFAULT_CODE_SLOTS
-        lockname = ""
-        sensorname = "binary_sensor.fake"
-        packagepath = self.hass.config.path() + DEFAULT_PACKAGES_PATH
-        start_from = DEFAULT_START
-        alarm_level = ""
-        alarm_type = ""
-
-        if user_input is not None:
-            if CONF_ENTITY_ID in user_input:
-                entity_id = user_input[CONF_ENTITY_ID]
-            if CONF_SLOTS in user_input:
-                slots = user_input[CONF_SLOTS]
-            if CONF_LOCK_NAME in user_input:
-                lockname = user_input[CONF_LOCK_NAME]
-            if CONF_SENSOR_NAME in user_input:
-                sensorname = user_input[CONF_SENSOR_NAME]
-            if CONF_PATH in user_input:
-                packagepath = user_input[CONF_PATH]
-            if CONF_START in user_input:
-                start_from = user_input[CONF_START]
-            if CONF_ALARM_LEVEL in user_input:
-                alarm_level = user_input[CONF_ALARM_LEVEL]
-            if CONF_ALARM_TYPE in user_input:
-                alarm_type = user_input[CONF_ALARM_TYPE]
-
-        data_schema = OrderedDict()
-        data_schema[vol.Required(CONF_ENTITY_ID, default=entity_id)] = vol.In(
-            self._locks
-        )
-        data_schema[vol.Required(CONF_SLOTS, default=slots)] = vol.Coerce(int)
-        data_schema[vol.Required(CONF_START, default=start_from)] = vol.Coerce(int)
-        data_schema[vol.Required(CONF_LOCK_NAME, default=lockname)] = str
-        data_schema[vol.Optional(CONF_SENSOR_NAME, default=sensorname)] = vol.In(
-            self._doors
-        )
-        data_schema[vol.Optional(CONF_ALARM_LEVEL, default=alarm_level)] = vol.In(
-            self._alarm_level
-        )
-        data_schema[vol.Optional(CONF_ALARM_TYPE, default=alarm_type)] = vol.In(
-            self._alarm_type
-        )
-        data_schema[vol.Required(CONF_PATH, default=packagepath)] = str
         return self.async_show_form(
-            step_id="user", data_schema=vol.Schema(data_schema), errors=self._errors
+            step_id="user",
+            data_schema=_get_schema(self.hass, user_input, defaults),
+            errors=errors,
         )
 
     async def _validate_path(self, path):
@@ -161,96 +146,30 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry):
         """Initialize."""
-        self.config = config_entry
-        self._data = dict(config_entry.options)
-        self._errors = {}
+        self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Handle a flow initialized by the user."""
-        self._errors = {}
-        self._locks = _get_entities(self.hass.data[LOCK_DOMAIN].entities)
-        self._doors = _get_entities(self.hass.data[BINARY_DOMAIN].entities)
-        self._doors.append("binary_sensor.fake")
-        self._sensors = _get_entities(self.hass.data[SENSORS_DOMAIN].entities)
-        self._alarm_type = _get_entities(
-            self.hass.data[SENSORS_DOMAIN].entities, ["alarm_type", "access_control"]
-        )
-        self._alarm_level = _get_entities(
-            self.hass.data[SENSORS_DOMAIN].entities, ["alarm_level", "user_code"]
-        )
+        errors = {}
 
         if user_input is not None:
-            user_input[CONF_LOCK_NAME] = (
-                user_input[CONF_LOCK_NAME].lower().replace(" ", "_")
-            )
-            self._data.update(user_input)
-            if user_input[CONF_PATH] is not None:
-                if not user_input[CONF_PATH].endswith("/"):
-                    user_input[CONF_PATH] += "/"
-                    self._data.update(user_input)
-
-            user_input[CONF_GENERATE] = DEFAULT_GENERATE
-            self._data.update(user_input)
+            user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
             valid = await self._validate_path(user_input[CONF_PATH])
             if valid:
-                return self.async_create_entry(title="", data=self._data)
+                return self.async_create_entry(title="", data=user_input)
             else:
-                self._errors["base"] = "invalid_path"
+                errors["base"] = "invalid_path"
 
-            return await self._show_options_form(user_input)
+            return self._show_options_form(user_input, errors)
 
-        return await self._show_options_form(user_input)
+        return self._show_options_form(user_input, errors)
 
-    async def _show_options_form(self, user_input):
+    def _show_options_form(self, user_input, errors):
         """Show the configuration form to edit location data."""
-
-        # Defaults
-        entity_id = self.config.options.get(CONF_ENTITY_ID)
-        slots = self.config.options.get(CONF_SLOTS)
-        lockname = self.config.options.get(CONF_LOCK_NAME)
-        sensorname = self.config.options.get(CONF_SENSOR_NAME)
-        packagepath = self.config.options.get(CONF_PATH)
-        start_from = self.config.options.get(CONF_START)
-        alarm_level = self.config.options.get(CONF_ALARM_LEVEL)
-        alarm_type = self.config.options.get(CONF_ALARM_TYPE)
-
-        if user_input is not None:
-            if CONF_ENTITY_ID in user_input:
-                entity_id = user_input[CONF_ENTITY_ID]
-            if CONF_SLOTS in user_input:
-                slots = user_input[CONF_SLOTS]
-            if CONF_LOCK_NAME in user_input:
-                lockname = user_input[CONF_LOCK_NAME]
-            if CONF_SENSOR_NAME in user_input:
-                sensorname = user_input[CONF_SENSOR_NAME]
-            if CONF_PATH in user_input:
-                packagepath = user_input[CONF_PATH]
-            if CONF_START in user_input:
-                start_from = user_input[CONF_START]
-            if CONF_ALARM_LEVEL in user_input:
-                alarm_level = user_input[CONF_ALARM_LEVEL]
-            if CONF_ALARM_TYPE in user_input:
-                alarm_type = user_input[CONF_ALARM_TYPE]
-
-        data_schema = OrderedDict()
-        data_schema[vol.Required(CONF_ENTITY_ID, default=entity_id)] = vol.In(
-            self._locks
-        )
-        data_schema[vol.Required(CONF_SLOTS, default=slots)] = vol.Coerce(int)
-        data_schema[vol.Required(CONF_START, default=start_from)] = vol.Coerce(int)
-        data_schema[vol.Required(CONF_LOCK_NAME, default=lockname)] = str
-        data_schema[vol.Optional(CONF_SENSOR_NAME, default=sensorname)] = vol.In(
-            self._doors
-        )
-        data_schema[vol.Optional(CONF_ALARM_LEVEL, default=alarm_level)] = vol.In(
-            self._alarm_level
-        )
-        data_schema[vol.Optional(CONF_ALARM_TYPE, default=alarm_type)] = vol.In(
-            self._alarm_type
-        )
-        data_schema[vol.Required(CONF_PATH, default=packagepath)] = str
         return self.async_show_form(
-            step_id="init", data_schema=vol.Schema(data_schema), errors=self._errors
+            step_id="init",
+            data_schema=_get_schema(self.hass, user_input, self.config_entry.data),
+            errors=errors,
         )
 
     async def _validate_path(self, path):

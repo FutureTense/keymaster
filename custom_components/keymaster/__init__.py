@@ -1,18 +1,25 @@
 """keymaster Integration."""
-
-import fileinput
+from datetime import timedelta
 import logging
 import os
+import shutil
+from typing import Any, Dict, Optional
 
+from openzwavemqtt.const import CommandClass, ATTR_CODE_SLOT
+from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
+from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
-from homeassistant.core import callback
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import entity_platform
-from openzwavemqtt.const import CommandClass
+
+from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
+from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
+from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
-    ATTR_CODE_SLOT,
-    ATTR_ENTITY_ID,
     ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
@@ -29,6 +36,7 @@ from .const import (
     ISSUE_URL,
     PLATFORM,
     VERSION,
+    ZWAVE_NETWORK,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,128 +46,182 @@ SERVICE_ADD_CODE = "add_code"
 SERVICE_CLEAR_CODE = "clear_code"
 SERVICE_REFRESH_CODES = "refresh_codes"
 
-OZW_DOMAIN = "ozw"
-ZWAVE_DOMAIN = "lock"
-
 MANAGER = "manager"
 
 SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
 
 
-async def async_setup(hass, config_entry):
+class ZWaveIntegrationNotConfiguredError(HomeAssistantError):
+    """Raised when a zwave integration is not configured."""
+
+    def __str__(self) -> str:
+        return (
+            "A Z-Wave integration has not been configured for this "
+            "Home Assistant instance"
+        )
+
+
+class NoNodeSpecifiedError(HomeAssistantError):
+    """Raised when a node was not specified as an input parameter."""
+
+
+def _using_ozw(hass: HomeAssistant) -> bool:
+    """Returns whether the ozw integration is configured."""
+    return OZW_DOMAIN in hass.data
+
+
+def _using_zwave(hass: HomeAssistant) -> bool:
+    """Returns whether the zwave integration is configured."""
+    return ZWAVE_DOMAIN in hass.data
+
+
+def _get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
+    try:
+        # Hack that always returns a dict so that we can do this check in one line
+        return getattr(hass.states.get(entity_id), "attributes", {})[ATTR_NODE_ID]
+    except KeyError:
+        _LOGGER.error(
+            (
+                "Problem retrieving node_id from entity %s because either the entity "
+                "doesn't exist or it doesn't have a node_id attribute"
+            ),
+            entity_id,
+        )
+        return None
+
+
+def _file_output_from_template(
+    input_path: str,
+    input_filename: str,
+    output_path: str,
+    output_filename: str,
+    replacements_dict: Dict[str, str],
+    write_mode: str,
+) -> None:
+    """Generate file output from input templates while replacing string references."""
+    _LOGGER.debug("Starting generation of %s from %s", output_filename, input_filename)
+    with open(os.path.join(input_path, input_filename), "r") as infile, open(
+        os.path.join(output_path, output_filename), write_mode
+    ) as outfile:
+        for line in infile:
+            for src, target in replacements_dict.items():
+                line = line.replace(src, target)
+            outfile.write(line)
+    _LOGGER.debug("Completed generation of %s from %s", output_filename, input_filename)
+
+
+async def async_setup(hass, config) -> bool:
     """ Disallow configuration via YAML """
 
     return True
 
 
-async def async_setup_entry(hass, config_entry):
+async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up is called when Home Assistant is loading our component."""
+    hass.data.setdefault(DOMAIN, {})
     _LOGGER.info(
         "Version %s is starting, if you have any issues please report" " them here: %s",
         VERSION,
         ISSUE_URL,
     )
-    generate_package = None
+    generate_package = config_entry.data.get(CONF_GENERATE)
 
-    # grab the bool before we change it
-    if CONF_GENERATE in config_entry.data.keys():
-        generate_package = config_entry.data[CONF_GENERATE]
+    updated_config = config_entry.data.copy()
 
-        # extract the data and manipulate it
-        config = {k: v for k, v in config_entry.data.items()}
-        config.pop(CONF_GENERATE)
-        config_entry.data = config
+    # pop CONF_GENERATE if it is in data
+    if generate_package is not None:
+        updated_config.pop(CONF_GENERATE)
 
-    config_entry.options = config_entry.data
+    # If CONF_PATH is absolute, make it relative. This can be removed in the future,
+    # it is only needed for entries that are being migrated from using the old absolute
+    # path
+    config_path = hass.config.path()
+    if config_entry.data[CONF_PATH].startswith(config_path):
+        updated_config[CONF_PATH] = updated_config[CONF_PATH].removeprefix(config_path)
+        # Remove leading slashes
+        updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
+
+    if updated_config != config_entry.data:
+        hass.config_entries.async_update_entry(config_entry, data=updated_config)
+
     config_entry.add_update_listener(update_listener)
 
+    coordinator = LockUsercodeUpdateCoordinator(hass, config_entry)
+    hass.data[DOMAIN][config_entry.entry_id] = coordinator
+    await coordinator.async_request_refresh()
+
     async def _refresh_codes(service):
-        """Generate the package files"""
+        """Refresh lock codes."""
         _LOGGER.debug("Refresh Codes service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
-        data = None
         instance_id = 1
 
-        # Pull the node_id from the entity
-        test = hass.states.get(entity_id)
-        if test is not None:
-            data = test.attributes[ATTR_NODE_ID]
-
-        # Bail out if no node_id could be extracted
-        if data is None:
-            _LOGGER.error("Problem pulling node_id from entity.")
+        node_id = _get_node_id(hass, entity_id)
+        if node_id is None:
             return
 
         # OZW Button press (experimental)
-        if OZW_DOMAIN in hass.data:
-            if data is not None:
-                manager = hass.data[OZW_DOMAIN][MANAGER]
-                lock_values = manager.get_instance(instance_id).get_node(data).values()
-                for value in lock_values:
-                    if (
-                        value.command_class == CommandClass.USER_CODE
-                        and value.index == 255
-                    ):
-                        _LOGGER.debug(
-                            "DEBUG: Index found valueIDKey: %s", int(value.value_id_key)
-                        )
-                        value.send_value(True)
-                        value.send_value(False)
+        if _using_ozw(hass):
+            manager = hass.data[OZW_DOMAIN][MANAGER]
+            lock_values = manager.get_instance(instance_id).get_node(node_id).values()
+            for value in lock_values:
+                if value.command_class == CommandClass.USER_CODE and value.index == 255:
+                    _LOGGER.debug(
+                        "DEBUG: Index found valueIDKey: %s", int(value.value_id_key)
+                    )
+                    value.send_value(True)
+                    value.send_value(False)
 
+        # Trigger refresh of user code data
+        await coordinator.async_request_refresh()
         _LOGGER.debug("Refresh codes call completed.")
 
     async def _add_code(service):
-        """Generate the package files"""
+        """Set a user code."""
         _LOGGER.debug("Add Code service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
         code_slot = service.data[ATTR_CODE_SLOT]
         usercode = service.data[ATTR_USER_CODE]
-        using_ozw = False  # Set false by default
-        if OZW_DOMAIN in hass.data:
-            using_ozw = True  # Set true if we find ozw
-        data = None
-
-        # Pull the node_id from the entity
-        test = hass.states.get(entity_id)
-        if test is not None:
-            data = test.attributes[ATTR_NODE_ID]
-
-        # Bail out if no node_id could be extracted
-        if data is None:
-            _LOGGER.error("Problem pulling node_id from entity.")
-            return
 
         _LOGGER.debug("Attempting to call set_usercode...")
 
-        if using_ozw:
-            servicedata = {
-                ATTR_ENTITY_ID: entity_id,
-                ATTR_CODE_SLOT: code_slot,
-                ATTR_USER_CODE: usercode,
-            }
+        servicedata = {
+            ATTR_CODE_SLOT: code_slot,
+            ATTR_USER_CODE: usercode,
+        }
+
+        if _using_ozw(hass):
+            servicedata[ATTR_ENTITY_ID] = entity_id
+
             try:
                 await hass.services.async_call(OZW_DOMAIN, SET_USERCODE, servicedata)
             except Exception as err:
                 _LOGGER.error(
                     "Error calling ozw.set_usercode service call: %s", str(err)
                 )
-                pass
+                return
 
-        else:
-            servicedata = {
-                ATTR_NODE_ID: data,
-                ATTR_CODE_SLOT: code_slot,
-                ATTR_USER_CODE: usercode,
-            }
+        elif _using_zwave(hass):
+            node_id = _get_node_id(hass, entity_id)
+            if node_id is None:
+                return
+
+            servicedata[ATTR_NODE_ID] = node_id
+
             try:
                 await hass.services.async_call(ZWAVE_DOMAIN, SET_USERCODE, servicedata)
             except Exception as err:
                 _LOGGER.error(
                     "Error calling lock.set_usercode service call: %s", str(err)
                 )
-                pass
+                return
 
+        else:
+            raise ZWaveIntegrationNotConfiguredError
+
+        # Trigger refresh of user code data
+        await coordinator.async_request_refresh()
         _LOGGER.debug("Add code call completed.")
 
     async def _clear_code(service):
@@ -167,208 +229,148 @@ async def async_setup_entry(hass, config_entry):
         _LOGGER.debug("Clear Code service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
         code_slot = service.data[ATTR_CODE_SLOT]
-        using_ozw = False  # Set false by default
-        if OZW_DOMAIN in hass.data:
-            using_ozw = True  # Set true if we find ozw
-        data = None
-
-        # Pull the node_id from the entity
-        test = hass.states.get(entity_id)
-        if test is not None:
-            data = test.attributes[ATTR_NODE_ID]
-
-        # Bail out if no node_id could be extracted
-        if data is None:
-            _LOGGER.error("Problem pulling node_id from entity.")
-            return
 
         _LOGGER.debug("Attempting to call clear_usercode...")
 
-        if using_ozw:
+        servicedata = {ATTR_CODE_SLOT: code_slot}
+
+        if _using_ozw(hass):
+            # workaround to call dummy slot
             servicedata = {
                 ATTR_ENTITY_ID: entity_id,
                 ATTR_CODE_SLOT: 999,
             }
+
             try:
                 await hass.services.async_call(OZW_DOMAIN, CLEAR_USERCODE, servicedata)
             except Exception as err:
                 _LOGGER.error(
                     "Error calling ozw.clear_usercode service call: %s", str(err)
                 )
-                # pass
 
-            servicedata = {
-                ATTR_ENTITY_ID: entity_id,
-                ATTR_CODE_SLOT: code_slot,
-            }
+            servicedata[ATTR_ENTITY_ID] = entity_id
+
             try:
                 await hass.services.async_call(OZW_DOMAIN, CLEAR_USERCODE, servicedata)
             except Exception as err:
                 _LOGGER.error(
                     "Error calling ozw.clear_usercode service call: %s", str(err)
                 )
-                pass
+                return
+        elif _using_zwave(hass):
+            node_id = _get_node_id(hass, entity_id)
+            if node_id is None:
+                return
 
-        else:
-            servicedata = {
-                ATTR_NODE_ID: data,
-                ATTR_CODE_SLOT: code_slot,
-            }
+            servicedata[ATTR_NODE_ID] = node_id
+
             try:
-                await hass.services.async_call(
-                    ZWAVE_DOMAIN, CLEAR_USERCODE, servicedata
-                )
+                await hass.services.async_call(LOCK_DOMAIN, CLEAR_USERCODE, servicedata)
             except Exception as err:
                 _LOGGER.error(
                     "Error calling lock.clear_usercode service call: %s", str(err)
                 )
-                pass
+                return
+        else:
+            raise ZWaveIntegrationNotConfiguredError
 
+        # Trigger refresh of user code data
+        await coordinator.async_request_refresh()
         _LOGGER.debug("Clear code call completed.")
 
-    async def _generate_package(service):
+    def _generate_package(service):
         """Generate the package files"""
         _LOGGER.debug("DEBUG: %s", service)
         name = service.data[ATTR_NAME]
-        entry = config_entry
+        lockname = config_entry.data[CONF_LOCK_NAME]
+
         _LOGGER.debug("Starting file generation...")
 
-        _LOGGER.debug(
-            "DEBUG conf_lock: %s name: %s", entry.options[CONF_LOCK_NAME], name
+        _LOGGER.debug("DEBUG conf_lock: %s name: %s", lockname, name)
+
+        if lockname != name:
+            return
+
+        inputlockpinheader = f"input_text.{lockname}_pin"
+        activelockheader = f"binary_sensor.active_{lockname}"
+        lockentityname = config_entry.data[CONF_ENTITY_ID]
+        sensorname = lockname
+        doorsensorentityname = config_entry.data[CONF_SENSOR_NAME] or ""
+        sensoralarmlevel = config_entry.data[CONF_ALARM_LEVEL]
+        sensoralarmtype = config_entry.data[CONF_ALARM_TYPE]
+        using_ozw = f"{_using_ozw(hass)}"
+
+        output_path = os.path.join(
+            hass.config.path(), config_entry.data[CONF_PATH], lockname
         )
-        if entry.options[CONF_LOCK_NAME] == name:
-            lockname = entry.options[CONF_LOCK_NAME]
-            inputlockpinheader = "input_text." + lockname + "_pin_"
-            activelockheader = "binary_sensor.active_" + lockname + "_"
-            lockentityname = entry.options[CONF_ENTITY_ID]
-            sensorname = lockname
-            doorsensorentityname = entry.options[CONF_SENSOR_NAME] or ""
-            sensoralarmlevel = entry.options[CONF_ALARM_LEVEL]
-            sensoralarmtype = entry.options[CONF_ALARM_TYPE]
-            using_ozw = False  # Set false by default
-            if OZW_DOMAIN in hass.data:
-                using_ozw = True  # Set true if we find ozw
-            dummy = "foobar"
+        input_path = os.path.dirname(__file__)
 
-            output_path = entry.options[CONF_PATH] + lockname + "/"
+        # If packages folder exists, delete it so we can recreate it
+        if os.path.isdir(output_path):
+            _LOGGER.debug("Directory %s already exists, cleaning it up", output_path)
+            shutil.rmtree(output_path)
 
-            """Check to see if the path exists, if not make it"""
-            pathcheck = os.path.isdir(output_path)
-            if not pathcheck:
-                try:
-                    os.makedirs(output_path)
-                    _LOGGER.debug("Creating packages directory")
-                except Exception as err:
-                    _LOGGER.critical("Error creating directory: %s", str(err))
+        _LOGGER.debug("Creating packages directory %s", output_path)
+        try:
+            os.makedirs(output_path)
+        except Exception as err:
+            _LOGGER.critical("Error creating directory: %s", str(err))
 
-            """Clean up directory"""
-            _LOGGER.debug("Cleaning up directory: %s", str(output_path))
-            for file in os.listdir(output_path):
-                os.remove(output_path + file)
+        _LOGGER.debug("Packages directory is ready for file generation")
 
-            _LOGGER.debug("Created packages directory")
+        # Generate list of code slots
+        code_slots = config_entry.data[CONF_SLOTS]
+        start_from = config_entry.data[CONF_START]
 
-            # Generate list of code slots
-            code_slots = entry.options[CONF_SLOTS]
-            start_from = entry.options[CONF_START]
+        activelockheaders = ",".join(
+            [f"{activelockheader}_{x}" for x in range(start_from, code_slots + 1)]
+        )
+        inputlockpinheaders = ",".join(
+            [f"{inputlockpinheader}_{x}" for x in range(start_from, code_slots + 1)]
+        )
 
-            x = start_from
-            activelockheaders = []
-            while code_slots > 0:
-                activelockheaders.append(activelockheader + str(x))
-                x += 1
-                code_slots -= 1
-            activelockheaders = ",".join(map(str, activelockheaders))
+        _LOGGER.debug("Creating common YAML files...")
+        replacements = {
+            "LOCKNAME": lockname,
+            "CASE_LOCK_NAME": lockname,
+            "INPUTLOCKPINHEADER": inputlockpinheaders,
+            "ACTIVELOCKHEADER": activelockheaders,
+            "LOCKENTITYNAME": lockentityname,
+            "SENSORNAME": sensorname,
+            "DOORSENSORENTITYNAME": doorsensorentityname,
+            "SENSORALARMTYPE": sensoralarmtype,
+            "SENSORALARMLEVEL": sensoralarmlevel,
+            "USINGOZW": using_ozw,
+        }
+        # Replace variables in common file
+        for in_f, out_f, write_mode in (
+            ("keymaster_common.yaml", f"{lockname}_keymaster_common.yaml", "w+"),
+            ("lovelace.head", f"{lockname}_lovelace", "w+"),
+        ):
+            _file_output_from_template(
+                input_path, in_f, output_path, out_f, replacements, write_mode
+            )
 
-            # Generate pin slots
-            code_slots = entry.options[CONF_SLOTS]
-
-            x = start_from
-            inputlockpinheaders = []
-            while code_slots > 0:
-                inputlockpinheaders.append(inputlockpinheader + str(x))
-                x += 1
-                code_slots -= 1
-            inputlockpinheaders = ",".join(map(str, inputlockpinheaders))
-            using_ozw = f"{using_ozw}"
-
-            _LOGGER.debug("Creating common YAML file...")
+        _LOGGER.debug("Creating per slot YAML and lovelace cards...")
+        # Replace variables in code slot files
+        for x in range(start_from, code_slots + 1):
             replacements = {
                 "LOCKNAME": lockname,
                 "CASE_LOCK_NAME": lockname,
-                "INPUTLOCKPINHEADER": inputlockpinheaders,
-                "ACTIVELOCKHEADER": activelockheaders,
+                "TEMPLATENUM": str(x),
                 "LOCKENTITYNAME": lockentityname,
-                "SENSORNAME": sensorname,
-                "DOORSENSORENTITYNAME": doorsensorentityname,
-                "SENSORALARMTYPE": sensoralarmtype,
-                "SENSORALARMLEVEL": sensoralarmlevel,
                 "USINGOZW": using_ozw,
             }
-            # Replace variables in common file
-            output = open(
-                output_path + lockname + "_keymaster_common.yaml",
-                "w+",
-            )
-            infile = open(os.path.dirname(__file__) + "/keymaster_common.yaml", "r")
-            with infile as file1:
-                for line in file1:
-                    for src, target in replacements.items():
-                        line = line.replace(src, target)
-                    output.write(line)
-            _LOGGER.debug("Common YAML file created")
-            _LOGGER.debug("Creating lovelace header...")
-            # Replace variables in lovelace file
-            output = open(
-                output_path + lockname + "_lovelace",
-                "w+",
-            )
-            infile = open(os.path.dirname(__file__) + "/lovelace.head", "r")
-            with infile as file1:
-                for line in file1:
-                    for src, target in replacements.items():
-                        line = line.replace(src, target)
-                    output.write(line)
-            _LOGGER.debug("Lovelace header created")
-            _LOGGER.debug("Creating per slot YAML and lovelace cards...")
-            # Replace variables in code slot files
-            code_slots = entry.options[CONF_SLOTS]
 
-            x = start_from
-            while code_slots > 0:
-                replacements = {
-                    "LOCKNAME": lockname,
-                    "CASE_LOCK_NAME": lockname,
-                    "TEMPLATENUM": str(x),
-                    "LOCKENTITYNAME": lockentityname,
-                    "USINGOZW": using_ozw,
-                }
-
-                output = open(
-                    output_path + lockname + "_keymaster_" + str(x) + ".yaml",
-                    "w+",
+            for in_f, out_f, write_mode in (
+                ("keymaster.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
+                ("lovelace.code", f"{lockname}_lovelace", "a"),
+            ):
+                _file_output_from_template(
+                    input_path, in_f, output_path, out_f, replacements, write_mode
                 )
-                infile = open(os.path.dirname(__file__) + "/keymaster.yaml", "r")
-                with infile as file1:
-                    for line in file1:
-                        for src, target in replacements.items():
-                            line = line.replace(src, target)
-                        output.write(line)
 
-                # Loop the lovelace code slot files
-                output = open(
-                    output_path + lockname + "_lovelace",
-                    "a",
-                )
-                infile = open(os.path.dirname(__file__) + "/lovelace.code", "r")
-                with infile as file1:
-                    for line in file1:
-                        for src, target in replacements.items():
-                            line = line.replace(src, target)
-                        output.write(line)
-                x += 1
-                code_slots -= 1
-            _LOGGER.debug("Package generation complete")
+        _LOGGER.debug("Package generation complete")
 
     hass.services.async_register(
         DOMAIN,
@@ -421,32 +423,167 @@ async def async_setup_entry(hass, config_entry):
     )
 
     # if the use turned on the bool generate the files
-    if generate_package is not None:
-        servicedata = {"lockname": config_entry.options[CONF_LOCK_NAME]}
-        await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
-
-    return True
-
-
-async def async_unload_entry(hass, config_entry):
-    """Handle removal of an entry."""
-
-    return True
-
-
-async def update_listener(hass, entry):
-    """Update listener."""
-
-    # grab the bool before we change it
-    generate_package = entry.options[CONF_GENERATE]
-
     if generate_package:
-        servicedata = {"lockname": entry.options[CONF_LOCK_NAME]}
+        servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
         await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
-    # extract the data and manipulate it
-    config = {k: v for k, v in entry.options.items()}
-    config.pop(CONF_GENERATE)
-    entry.options = config
+    return True
 
-    entry.data = entry.options
+
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Handle removal of an entry."""
+    output_path = os.path.join(
+        hass.config.path(),
+        config_entry.data[CONF_PATH],
+        config_entry.data[CONF_LOCK_NAME],
+    )
+    await hass.async_add_executor_job(shutil.rmtree, output_path)
+    return True
+
+
+async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Update listener."""
+    hass.config_entries.async_update_entry(
+        entry=entry, data=entry.options.copy(), options={}
+    )
+    servicedata = {"lockname": entry.options[CONF_LOCK_NAME]}
+    await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
+    """Class to manage usercode updates."""
+
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+        self._entity_id = config_entry.data[CONF_ENTITY_ID]
+        self._lock_name = config_entry.data[CONF_LOCK_NAME]
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(hours=1),
+            update_method=self.async_update_usercodes,
+        )
+
+    def _invalid_code(self, code_slot):
+        """Return the PIN slot value as we are unable to read the slot value
+        from the lock."""
+
+        _LOGGER.debug("Work around code in use.")
+        # This is a fail safe and should not be needing to return ""
+        data = ""
+
+        # Build data from entities
+        enabled_bool = f"input_boolean.enabled_{self._lock_name}_{code_slot}"
+        enabled = self.hass.states.get(enabled_bool)
+        pin_data = f"input_text.{self._lock_name}_pin_{code_slot}"
+        pin = self.hass.states.get(pin_data)
+
+        # If slot is enabled return the PIN
+        if enabled is not None:
+            if enabled.state == "on" and pin.state.isnumeric():
+                _LOGGER.debug("Utilizing BE469 work around code.")
+                data = pin.state
+            else:
+                _LOGGER.debug("Utilizing FE599 work around code.")
+                data = ""
+
+        return data
+
+    async def async_update_usercodes(self) -> Dict[str, Any]:
+        """Async wrapper to update usercodes."""
+        try:
+            return await self.hass.async_add_executor_job(self.update_usercodes)
+        except (
+            NotFoundError,
+            NotSupportedError,
+            NoNodeSpecifiedError,
+            ZWaveIntegrationNotConfiguredError,
+        ) as err:
+            raise UpdateFailed from err
+
+    def update_usercodes(self) -> Dict[str, Any]:
+        """Update usercodes."""
+        # loop to get user code data from entity_id node
+        instance_id = 1  # default
+        data = {}
+        data[CONF_ENTITY_ID] = self._entity_id
+        data[ATTR_NODE_ID] = _get_node_id(self.hass, self._entity_id)
+
+        if data[ATTR_NODE_ID] is None:
+            raise NoNodeSpecifiedError
+
+        # # make button call
+        # servicedata = {"entity_id": self._entity_id}
+        # await self.hass.services.async_call(DOMAIN, SERVICE_REFRESH_CODES, servicedata)
+
+        # pull the codes for ozw
+        if _using_ozw(self.hass):
+            # Raises exception when node not found
+            node = get_node_from_manager(
+                self.hass.data[OZW_DOMAIN][MANAGER],
+                instance_id,
+                data[ATTR_NODE_ID],
+            )
+            command_class = node.get_command_class(CommandClass.USER_CODE)
+
+            if not command_class:
+                raise NotSupportedError("Node doesn't have code slots")
+
+            for value in command_class.values():  # type: ignore
+                code_slot = value.index
+                _LOGGER.debug(
+                    "DEBUG: Code slot %s value: %s",
+                    code_slot,
+                    str(value.value) if value.value_set else None,
+                )
+                if value.value and "*" in str(value.value):
+                    _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
+                    data[code_slot] = self._invalid_code(code_slot)
+                else:
+                    data[code_slot] = value.value if value.value_set else None
+
+            return data
+
+        # pull codes for zwave
+        elif _using_zwave(self.hass):
+            network = self.hass.data[ZWAVE_NETWORK]
+            node = network.nodes.get(data[ATTR_NODE_ID])
+            if not node:
+                raise NotFoundError
+
+            lock_values = node.get_values(class_id=CommandClass.USER_CODE).values()
+            for value in lock_values:
+                _LOGGER.debug(
+                    "DEBUG: Code slot %s value: %s",
+                    str(value.index),
+                    str(value.data),
+                )
+                # do not update if the code contains *s
+                code = str(value.data)
+
+                # Remove \x00 if found
+                code = code.replace("\x00", "")
+
+                # Check for * in lock data and use workaround code if exist
+                if "*" in code:
+                    _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
+                    code = self._invalid_code(value.index)
+
+                # Build data from entities
+                enabled_bool = f"input_boolean.enabled_{self._lock_name}_{value.index}"
+                enabled = self.hass.states.get(enabled_bool)
+
+                # Report blank slot if occupied by random code
+                if enabled is not None:
+                    if enabled.state == "off":
+                        _LOGGER.debug(
+                            "DEBUG: Utilizing Zwave clear_usercode work around code."
+                        )
+                        code = ""
+
+                data[int(value.index)] = code
+
+            return data
+        else:
+            raise ZWaveIntegrationNotConfiguredError
