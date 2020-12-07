@@ -6,12 +6,6 @@
 ################  COMMON ENTITIES  ###############
 ##################################################
 
-############  timer:  #####################  
-timer:
-
-  LOCKNAME_refresh_lock_node:
-    duration: '00:15:00'
-
 ###############  input_text:  #################
 input_text:
   LOCKNAME_status_report:
@@ -109,37 +103,9 @@ script:
             { "node": {{ node_id }} }
           retain: true
           
-  LOCKNAME_refresh_codes:
-    description:  'Refreshes lock user codes'
-    sequence:
-      - service: system_log.write
-        data_template:
-          message: "refresh user codes: {{ now() }}"
-          level: debug
-      # - service: mqtt.publish
-      #   data:
-      #     topic: 'OpenZWave/1/command/refreshnodeinfo/'
-      #     payload: >-
-      #       {% set node_id = state_attr('LOCKENTITYNAME','node_id') %}
-      #       { "node": {{ node_id }} }
-      #     retain: true
-
 ###################  automation:  ####################
 automation:
           
-  - alias: LOCKNAME_refresh_lock_node_finished
-    trigger:
-      platform: event
-      event_type: timer.finished
-      event_data:
-        entity_id: timer.LOCKNAME_refresh_lock_node
-    condition:
-      - condition: state
-        entity_id: "binary_sensor.allow_automation"
-        state: "on"
-    action:
-      - service: script.LOCKNAME_refreshnodeinfo
-
   - alias: CASE_LOCK_NAME Lock Command
     trigger:
       platform: state
@@ -446,54 +412,6 @@ automation:
       - service: script.LOCKNAME_reset_lock
       - service: input_boolean.turn_off
         entity_id: input_boolean.LOCKNAME_reset_lock
-
-  # - alias: CASE_LOCK_NAME Clear Code
-  #   trigger:
-  #     entity_id: ACTIVELOCKHEADER
-  #     platform: state
-  #     to: "off"
-  #   condition:
-  #     - condition: state
-  #       entity_id: "binary_sensor.allow_automation"
-  #       state: "on"
-  #   action:
-  #     - choose:
-  #         - conditions: >
-  #             {{ USINGOZW }}
-  #         # this comment preserves formating
-  #           sequence:
-  #             - service: ozw.clear_usercode
-  #               data_template:
-  #                 entity_id: LOCKENTITYNAME
-  #                 code_slot: >-
-  #                   {% set object_id = trigger.to_state.object_id %}
-  #                   {% set index = object_id.rfind('_') + 1 %}
-  #                   {% set code_slot = object_id[index:] %}
-  #                   {{ code_slot  }}
-  #         - conditions: >
-  #             {{ USINGOZW == False }}
-  #         # this comment preserves formating
-  #           sequence:
-  #             - service: lock.set_usercode
-  #               data_template:
-  #                 node_id: >-
-  #                   {{ state_attr('LOCKENTITYNAME','node_id') }}
-  #                 code_slot: >-
-  #                   {% set object_id = trigger.to_state.object_id %}
-  #                   {% set index = object_id.rfind('_') + 1 %}
-  #                   {% set code_slot = object_id[index:] %}
-  #                   {{ code_slot  }}
-  #                 usercode: >-
-  #                   {{ range(1000, 9999) | random | int }}
-  #             - service: lock.clear_usercode
-  #               data_template:
-  #                 node_id: >-
-  #                   {{ state_attr('LOCKENTITYNAME','node_id') }}
-  #                 code_slot: >-
-  #                   {% set object_id = trigger.to_state.object_id %}
-  #                   {% set index = object_id.rfind('_') + 1 %}
-  #                   {% set code_slot = object_id[index:] %}
-  #                   {{ code_slot  }}
 
   - alias: CASE_LOCK_NAME Decrement Access Count
     trigger:

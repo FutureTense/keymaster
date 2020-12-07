@@ -166,121 +166,51 @@ input_boolean:
 ################  automation: #################  
 automation:
 
-- alias: sensor_cleanup_LOCKNAME_TEMPLATENUM
-  trigger:
-    - platform: state
-      entity_id: "sensor.connected_LOCKNAME_TEMPLATENUM"
-  condition:
-    - condition: state
-      entity_id: "binary_sensor.allow_automation"
-      state: "on"
-    - condition: template
-      value_template: >-
-        {{ states('sensor.connected_LOCKNAME_TEMPLATENUM') | lower in ['disconnected','connected'] }} 
-  action:
-    - service: timer.cancel
-      entity_id:
-        - timer.LOCKNAME_refresh_lock_node
-
 - alias: synchronize_codeslot_LOCKNAME_TEMPLATENUM
   initial_state: true
   trigger:
     - platform: state
       entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
       to: 'off'
-    - platform: state
-      entity_id: "sensor.LOCKNAME_code_slot_TEMPLATENUM"
+    # - platform: state
+    #   entity_id: "sensor.LOCKNAME_code_slot_TEMPLATENUM"
   condition:
     - condition: state
       entity_id: "binary_sensor.allow_automation"
       state: "on"
-    - condition: state
-      entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
-      state: "off"
+    # - condition: state
+    #   entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
+    #   state: "off"
     - condition: template
       value_template: >-
         {{ states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != "unavailable" }}
   action:
     - choose:
-        - conditions:
-            - condition: template
-              value_template: >-
-                {{ states('sensor.connected_LOCKNAME_TEMPLATENUM') | lower in ['disconnecting','connecting'] }} 
-            - condition: template
-              value_template: >-
-                {{ states('timer.LOCKNAME_refresh_lock_node') != 'active' }} 
-          sequence:
-            - service: timer.start
-              entity_id: timer.LOCKNAME_refresh_lock_node
-    - choose:
+
+        # The code should be added to the lock's slot
         - conditions:
             - condition: template
               value_template: "{{ is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM','on') }}"
           sequence:
-            - choose:
-                  - conditions: >
-                      {{ USINGOZW }}
-                  # this comment preserves formating
-                    sequence:
-                      - service: ozw.set_usercode
-                        data_template:
-                          entity_id: LOCKENTITYNAME
-                          code_slot: >-
-                            {{ TEMPLATENUM }}
-                          usercode: >-
-                            {% set object = states('input_text.LOCKNAME_pin_TEMPLATENUM') %}
-                            {{ object.strip() }}
-                  - conditions: >
-                      {{ USINGOZW == False }}
-                  # this comment preserves formating
-                    sequence:
-                      - service: lock.set_usercode
-                        data_template:
-                          node_id: >-
-                            {{ state_attr('LOCKENTITYNAME','node_id') }}
-                          code_slot: >-
-                            {{ TEMPLATENUM }}
-                          usercode: >-
-                            {% set object = states('input_text.LOCKNAME_pin_TEMPLATENUM') %}
-                            {{ object.strip() }}
+            - service: keymaster.add_code
+              data_template:
+                entity_id: LOCKENTITYNAME
+                code_slot: >-
+                  {{ TEMPLATENUM }}
+                usercode: >-
+                  {% set object = states('input_text.LOCKNAME_pin_TEMPLATENUM') %}
+                  {{ object.strip() }}
+
+        # The code should be removed from the lock's slot
         - conditions:
             - condition: template
               value_template: "{{ is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM','off') }}"
           sequence:
-            - choose:
-                  - conditions: >
-                      {{ USINGOZW }}
-                  # this comment preserves formating
-                    sequence:
-                      # a fake call to clear a non existent slot seems to fix a non clearing call on Schlage
-                      - service: ozw.clear_usercode
-                        data_template:
-                          entity_id: LOCKENTITYNAME
-                          code_slot: >-
-                            {{ 999 }}
-                      - service: ozw.clear_usercode
-                        data_template:
-                          entity_id: LOCKENTITYNAME
-                          code_slot: >-
-                            {{ TEMPLATENUM }}
-                  - conditions: >
-                      {{ USINGOZW == False }}
-                  # this comment preserves formating
-                    sequence:
-                      - service: lock.set_usercode
-                        data_template:
-                          node_id: >-
-                            {{ state_attr('LOCKENTITYNAME','node_id') }}
-                          code_slot: >-
-                            {{ TEMPLATENUM }}
-                          usercode: >-
-                            {{ range(1000, 9999) | random | int }}
-                      - service: lock.clear_usercode
-                        data_template:
-                          node_id: >-
-                            {{ state_attr('LOCKENTITYNAME','node_id') }}
-                          code_slot: >-
-                            {{ TEMPLATENUM }}
+            - service: keymaster.clear_code
+              data_template:
+                entity_id: LOCKENTITYNAME
+                code_slot: >-
+                  {{ TEMPLATENUM }}
           
 - alias: reset_codeslot_LOCKNAME_TEMPLATENUM
   trigger:
