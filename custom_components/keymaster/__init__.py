@@ -10,7 +10,6 @@ from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
 from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
 
-from homeassistant.components.counter import DOMAIN as COUNTER_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
 from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
@@ -139,7 +138,6 @@ def _get_entities_to_remove(
         file_dict = load_yaml(os.path.join(output_path, filename))
         # get all entities from all helper domains that exist in package files
         for domain in (
-            COUNTER_DOMAIN,
             IN_BOOL_DOMAIN,
             IN_DT_DOMAIN,
             IN_NUM_DOMAIN,
