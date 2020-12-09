@@ -1,8 +1,9 @@
 """Sensor for keymaster."""
 import logging
 
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from openzwavemqtt.const import ATTR_CODE_SLOT
+
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_LOCK_NAME, CONF_SLOTS, CONF_START, DOMAIN
 
