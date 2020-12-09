@@ -2,7 +2,6 @@
 from datetime import timedelta
 import logging
 import os
-import shutil
 from typing import Any, Dict, List, Optional, Union
 
 from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
@@ -165,7 +164,8 @@ async def _remove_entities(
     )
 
     for entity_id in entities_to_remove:
-        ent_reg.async_remove(entity_id)
+        if ent_reg.async_get(entity_id):
+            ent_reg.async_remove(entity_id)
 
     return entities_to_remove
 
@@ -357,13 +357,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         # If packages folder exists, delete it so we can recreate it
         if os.path.isdir(output_path):
             _LOGGER.debug("Directory %s already exists, cleaning it up", output_path)
-            shutil.rmtree(output_path)
-
-        _LOGGER.debug("Creating packages directory %s", output_path)
-        try:
-            os.makedirs(output_path)
-        except Exception as err:
-            _LOGGER.critical("Error creating directory: %s", str(err))
+            for file in os.listdir(output_path):
+                os.remove(os.path.join(output_path, file))
+        else:
+            _LOGGER.debug("Creating packages directory %s", output_path)
+            try:
+                os.makedirs(output_path)
+            except Exception as err:
+                _LOGGER.critical("Error creating directory: %s", str(err))
 
         _LOGGER.debug("Packages directory is ready for file generation")
 
@@ -487,10 +488,12 @@ def _delete_lock_and_base_folder(
 
     # Remove all package files
     output_path = os.path.join(base_path, config_entry.data[CONF_LOCK_NAME])
-    shutil.rmtree(output_path)
+    for file in os.listdir(output_path):
+        os.remove(os.path.join(output_path, file))
+    os.rmdir(output_path)
 
     if not os.listdir(base_path):
-        shutil.rmtree(base_path)
+        os.rmdir(base_path)
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -524,11 +527,12 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     )
 
     hass.config_entries.async_update_entry(
-        entry=config_entry, data=config_entry.options.copy(), options={}
+        unique_id=config_entry.data[CONF_LOCK_NAME],
+        entry=config_entry,
+        data=config_entry.options.copy(),
     )
     servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
-    await hass.config_entries.async_reload(config_entry.entry_id)
 
 
 class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
@@ -613,15 +617,13 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             for value in command_class.values():  # type: ignore
                 code_slot = int(value.index)
                 _LOGGER.debug(
-                    "DEBUG: Code slot %s value: %s",
-                    code_slot,
-                    str(value.value) if value.value_set else None,
+                    "DEBUG: Code slot %s value: %s", code_slot, str(value.value)
                 )
                 if value.value and "*" in str(value.value):
                     _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
                     data[code_slot] = self._invalid_code(code_slot)
                 else:
-                    data[code_slot] = value.value if value.value_set else None
+                    data[code_slot] = value.value
 
             return data
 

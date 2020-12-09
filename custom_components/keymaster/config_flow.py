@@ -174,11 +174,14 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
-            existing_entry = self.config_entry.async_set_unique_id(
-                user_input[CONF_LOCK_NAME], raise_on_progress=True
-            )
-            if existing_entry and existing_entry.entry_id != self.config_entry.entry_id:
-                errors[CONF_LOCK_NAME] = "same_name"
+
+            # If lock name has changed, make sure new name isn't already being used
+            # otherwise show an error
+            if self.config_entry.unique_id != user_input[CONF_LOCK_NAME]:
+                for entry in self.hass.config_entries.async_entries(DOMAIN):
+                    if entry.unique_id == user_input[CONF_LOCK_NAME]:
+                        errors[CONF_LOCK_NAME] = "same_name"
+
             valid = await self._validate_path(user_input[CONF_PATH])
             if valid:
                 return self.async_create_entry(title="", data=user_input)
