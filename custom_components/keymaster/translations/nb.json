@@ -16,7 +16,7 @@
           "packages_path": "Sti til pakkekatalog"
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
-        "title": "Lock Manager"
+        "title": "KeyMaster"
       }
     }
   },
@@ -37,7 +37,7 @@
           "packages_path": "Sti til pakkekatalog"
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
-        "title": "Lock Manager"
+        "title": "KeyMaster"
       }
     }
   }

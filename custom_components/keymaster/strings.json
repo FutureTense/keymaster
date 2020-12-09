@@ -16,8 +16,8 @@
           "packages_path": "Path to packages directory",
           "using_ozw": "Using OZW?"
         },
-        "description": "Select the lock to setup and code slots to create.",
-        "title": "Lock-Manager"
+        "description": "Select the lock to setup and code slots to create.\n\nPackages path is relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
+        "title": "KeyMaster"
       },
       "config_2": {
         "data": {
@@ -45,8 +45,8 @@
           "packages_path": "Path to packages directory",
           "using_ozw": "Using OZW?"
         },
-        "description": "Select the lock to setup and code slots to create.",
-        "title": "Lock-Manager"
+        "description": "Select the lock to setup and code slots to create.\n\nPackages path is relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
+        "title": "KeyMaster"
       },
       "options_2": {
         "data": {
