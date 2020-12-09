@@ -3,17 +3,26 @@ import logging
 import os
 import shutil
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import voluptuous as vol
+from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
+from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
+from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
+from homeassistant.components.input_select import DOMAIN as IN_SELECT_DOMAIN
+from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
+from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity_registry import async_get_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import slugify
+from homeassistant.util.yaml.loader import load_yaml
 from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
 from openzwavemqtt.util.node import get_node_from_manager
@@ -76,6 +85,7 @@ def _using_zwave(hass: HomeAssistant) -> bool:
 
 
 def _get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
+    """Get node ID from entity."""
     try:
         # Hack that always returns a dict so that we can do this check in one line
         return getattr(hass.states.get(entity_id), "attributes", {})[ATTR_NODE_ID]
@@ -108,6 +118,59 @@ def _file_output_from_template(
                 line = line.replace(src, target)
             outfile.write(line)
     _LOGGER.debug("Completed generation of %s from %s", output_filename, input_filename)
+
+
+def _get_entities_to_remove(
+    lock_name: str,
+    file_path: str,
+    code_slots_to_remove: Union[List[int], range],
+    remove_common_file: bool,
+) -> List[str]:
+    """Gets list of entities to remove."""
+    output_path = os.path.join(file_path, lock_name)
+    filenames = [f"{lock_name}_keymaster_{x}.yaml" for x in code_slots_to_remove]
+    if remove_common_file:
+        filenames.append(f"{lock_name}_keymaster_common.yaml")
+
+    entities = []
+    for filename in filenames:
+        file_dict = load_yaml(os.path.join(output_path, filename))
+        # get all entities from all helper domains that exist in package files
+        for domain in (
+            IN_BOOL_DOMAIN,
+            IN_DT_DOMAIN,
+            IN_NUM_DOMAIN,
+            IN_SELECT_DOMAIN,
+            IN_TXT_DOMAIN,
+            TIMER_DOMAIN,
+        ):
+            entities.extend(
+                [f"{domain}.{ent_id}" for ent_id in file_dict.get(domain, {})]
+            )
+
+    return entities
+
+
+async def _remove_entities(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    code_slots_to_remove: Union[List[int], range],
+    remove_common_file: bool,
+) -> List[str]:
+    """Remove entities and return removed list."""
+    ent_reg = await async_get_registry(hass)
+    entities_to_remove = await hass.async_add_executor_job(
+        _get_entities_to_remove,
+        config_entry.data[CONF_LOCK_NAME],
+        os.path.join(hass.config.path(), config_entry.data[CONF_PATH]),
+        code_slots_to_remove,
+        remove_common_file,
+    )
+
+    for entity_id in entities_to_remove:
+        ent_reg.async_remove(entity_id)
+
+    return entities_to_remove
 
 
 async def async_setup(hass, config) -> bool:
@@ -435,23 +498,45 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
+
+    # Remove all generated helper entries
+    await _remove_entities(
+        hass,
+        config_entry,
+        range(config_entry.data[CONF_START], config_entry.data[CONF_SLOTS] + 1),
+        True,
+    )
+
+    # Remove all package files
     output_path = os.path.join(
         hass.config.path(),
         config_entry.data[CONF_PATH],
         config_entry.data[CONF_LOCK_NAME],
     )
     await hass.async_add_executor_job(shutil.rmtree, output_path)
+
     return True
 
 
-async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Update listener."""
-    hass.config_entries.async_update_entry(
-        entry=entry, data=entry.options.copy(), options={}
+    # Get current code slots and new code slots, and remove entities for current code
+    # slots that are being removed
+    curr_slots = range(config_entry.data[CONF_START], config_entry.data[CONF_SLOTS] + 1)
+    new_slots = range(
+        config_entry.options[CONF_START], config_entry.options[CONF_SLOTS] + 1
     )
-    servicedata = {"lockname": entry.options[CONF_LOCK_NAME]}
+
+    await _remove_entities(
+        hass, config_entry, list(set(curr_slots) - set(new_slots)), False
+    )
+
+    hass.config_entries.async_update_entry(
+        entry=config_entry, data=config_entry.options.copy(), options={}
+    )
+    servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
-    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.config_entries.async_reload(config_entry.entry_id)
 
 
 class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
