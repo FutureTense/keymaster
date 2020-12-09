@@ -4,7 +4,7 @@ import logging
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
-from .const import CONF_SLOTS, CONF_LOCK_NAME, CONF_START, DOMAIN
+from .const import CONF_LOCK_NAME, CONF_SLOTS, CONF_START, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
