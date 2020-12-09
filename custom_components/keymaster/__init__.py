@@ -21,7 +21,7 @@ from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Config, HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_registry import async_get_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -173,9 +173,8 @@ async def _remove_entities(
     return entities_to_remove
 
 
-async def async_setup(hass, config) -> bool:
-    """ Disallow configuration via YAML """
-
+async def async_setup(hass: HomeAssistant, config: Config) -> bool:
+    """Disallow configuration via YAML."""
     return True
 
 
@@ -213,7 +212,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     hass.data[DOMAIN][config_entry.entry_id] = coordinator
     await coordinator.async_request_refresh()
 
-    async def _refresh_codes(service):
+    async def _refresh_codes(service: ServiceCall) -> None:
         """Refresh lock codes."""
         _LOGGER.debug("Refresh Codes service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
@@ -239,7 +238,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         await coordinator.async_request_refresh()
         _LOGGER.debug("Refresh codes call completed.")
 
-    async def _add_code(service):
+    async def _add_code(service: ServiceCall) -> None:
         """Set a user code."""
         _LOGGER.debug("Add Code service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
@@ -286,7 +285,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         await coordinator.async_request_refresh()
         _LOGGER.debug("Add code call completed.")
 
-    async def _clear_code(service):
+    async def _clear_code(service: ServiceCall) -> None:
         """Generate the package files"""
         _LOGGER.debug("Clear Code service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
@@ -344,7 +343,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         await coordinator.async_request_refresh()
         _LOGGER.debug("Clear code call completed.")
 
-    def _generate_package(service):
+    def _generate_package(service: ServiceCall) -> None:
         """Generate the package files"""
         _LOGGER.debug("DEBUG: %s", service)
         name = service.data[ATTR_NAME]
@@ -496,7 +495,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     return True
 
 
-def _delete_lock_and_base_folder(hass, config_entry):
+def _delete_lock_and_base_folder(
+    hass: HomeAssistant, config_entry: ConfigEntry
+) -> None:
+    """Delete packages folder for lock and base keymaster folder if empty."""
     base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
 
     # Remove all package files

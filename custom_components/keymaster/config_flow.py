@@ -1,7 +1,7 @@
 """Adds config flow for keymaster."""
-
 import logging
 import os
+from typing import Any, Dict, List, Optional
 
 import voluptuous as vol
 
@@ -9,7 +9,7 @@ from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSORS_DOMAIN
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 
 from .const import (
@@ -33,7 +33,12 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def _get_entities(hass, domain, search=None, extra_entities=None):
+def _get_entities(
+    hass: HomeAssistant,
+    domain: str,
+    search: List[str] = None,
+    extra_entities: List[str] = None,
+) -> List[str]:
     data = []
     for entity in hass.data[domain].entities:
         if search is not None and not any(map(entity.entity_id.__contains__, search)):
@@ -46,12 +51,16 @@ def _get_entities(hass, domain, search=None, extra_entities=None):
     return data
 
 
-def _get_schema(hass, user_input, default_dict):
+def _get_schema(
+    hass: HomeAssistant,
+    user_input: Optional[Dict[str, Any]],
+    default_dict: Dict[str, Any],
+) -> vol.Schema:
     """Gets a schema using the default_dict as a backup."""
     if user_input is None:
         user_input = {}
 
-    def _get_default(key):
+    def _get_default(key: str):
         """Gets default value for key."""
         return user_input.get(key, default_dict.get(key))
 
@@ -94,7 +103,9 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
-    async def async_step_user(self, user_input={}):
+    async def async_step_user(
+        self, user_input: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Handle a flow initialized by the user."""
         errors = {}
 
@@ -118,7 +129,9 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self._show_config_form(user_input, errors)
 
-    def _show_config_form(self, user_input, errors):
+    def _show_config_form(
+        self, user_input: Dict[str, Any], errors: Dict[str, str]
+    ) -> Dict[str, Any]:
         """Show the configuration form to edit location data."""
         defaults = {
             CONF_SLOTS: DEFAULT_CODE_SLOTS,
@@ -133,7 +146,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def _validate_path(self, path):
+    async def _validate_path(self, path: str) -> bool:
         """ make sure path is valid """
         if path in os.path.dirname(__file__):
             return False
@@ -142,7 +155,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
         return KeyMasterOptionsFlow(config_entry)
 
 
@@ -153,7 +166,9 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
         """Initialize."""
         self.config_entry = config_entry
 
-    async def async_step_init(self, user_input=None):
+    async def async_step_init(
+        self, user_input: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Handle a flow initialized by the user."""
         errors = {}
 
@@ -174,7 +189,9 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
 
         return self._show_options_form(user_input, errors)
 
-    def _show_options_form(self, user_input, errors):
+    def _show_options_form(
+        self, user_input: Dict[str, Any], errors: Dict[str, str]
+    ) -> Dict[str, Any]:
         """Show the configuration form to edit location data."""
         return self.async_show_form(
             step_id="init",
@@ -182,7 +199,7 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
             errors=errors,
         )
 
-    async def _validate_path(self, path):
+    async def _validate_path(self, path: str) -> bool:
         """ make sure path is valid """
         if os.path.dirname(__file__) in path:
             return False
