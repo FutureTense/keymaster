@@ -535,7 +535,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     hass.config_entries.async_update_entry(
         entry=config_entry, data=config_entry.options.copy(), options={}
     )
-    servicedata = {"lockname": config_entry.options[CONF_LOCK_NAME]}
+    servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
     await hass.config_entries.async_reload(config_entry.entry_id)
 
