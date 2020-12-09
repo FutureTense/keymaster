@@ -232,8 +232,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
         _LOGGER.debug("Attempting to call clear_usercode...")
 
-        servicedata = {ATTR_CODE_SLOT: code_slot}
-
         if _using_ozw(hass):
             # workaround to call dummy slot
             servicedata = {
@@ -248,7 +246,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                     "Error calling ozw.clear_usercode service call: %s", str(err)
                 )
 
-            servicedata[ATTR_ENTITY_ID] = entity_id
+            servicedata = {ATTR_ENTITY_ID: entity_id, ATTR_CODE_SLOT: code_slot}
 
             try:
                 await hass.services.async_call(OZW_DOMAIN, CLEAR_USERCODE, servicedata)
@@ -262,7 +260,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             if node_id is None:
                 return
 
-            servicedata[ATTR_NODE_ID] = node_id
+            servicedata = {ATTR_NODE_ID: node_id, ATTR_CODE_SLOT: code_slot}
 
             try:
                 await hass.services.async_call(LOCK_DOMAIN, CLEAR_USERCODE, servicedata)
