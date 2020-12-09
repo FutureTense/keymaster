@@ -1,13 +1,14 @@
 """ Sensor for keymaster """
 
-from .const import CONF_ENTITY_ID, CONF_SLOTS, CONF_LOCK_NAME, DOMAIN, ZWAVE_NETWORK
+import logging
 from datetime import timedelta
+
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from openzwavemqtt.const import CommandClass
 from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
-import logging
+from openzwavemqtt.const import CommandClass
 
+from .const import CONF_ENTITY_ID, CONF_LOCK_NAME, CONF_SLOTS, DOMAIN, ZWAVE_NETWORK
 
 MANAGER = "manager"
 ATTR_VALUES = "values"
@@ -153,8 +154,8 @@ class CodeSlotsData:
         return data
 
     def _invalid_code(self, code_slot):
-        """ Return the PIN slot value as we are unable to read the slot value
-        from the lock. """
+        """Return the PIN slot value as we are unable to read the slot value
+        from the lock."""
 
         _LOGGER.debug("Work around code in use.")
         # This is a fail safe and should not be needing to return ""

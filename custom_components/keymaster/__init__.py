@@ -1,14 +1,19 @@
 """keymaster Integration."""
 
 import fileinput
-from homeassistant.core import callback
-from homeassistant.helpers import config_validation as cv, entity_platform
 import logging
 import os
+
+import voluptuous as vol
+from homeassistant.core import callback
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_platform
+from openzwavemqtt.const import CommandClass
+
 from .const import (
-    ATTR_NAME,
     ATTR_CODE_SLOT,
     ATTR_ENTITY_ID,
+    ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
     CONF_ALARM_LEVEL,
@@ -21,12 +26,10 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     DOMAIN,
-    VERSION,
     ISSUE_URL,
     PLATFORM,
+    VERSION,
 )
-from openzwavemqtt.const import CommandClass
-import voluptuous as vol
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -303,7 +306,10 @@ async def async_setup_entry(hass, config_entry):
                 "USINGOZW": using_ozw,
             }
             # Replace variables in common file
-            output = open(output_path + lockname + "_keymaster_common.yaml", "w+",)
+            output = open(
+                output_path + lockname + "_keymaster_common.yaml",
+                "w+",
+            )
             infile = open(os.path.dirname(__file__) + "/keymaster_common.yaml", "r")
             with infile as file1:
                 for line in file1:
@@ -313,7 +319,10 @@ async def async_setup_entry(hass, config_entry):
             _LOGGER.debug("Common YAML file created")
             _LOGGER.debug("Creating lovelace header...")
             # Replace variables in lovelace file
-            output = open(output_path + lockname + "_lovelace", "w+",)
+            output = open(
+                output_path + lockname + "_lovelace",
+                "w+",
+            )
             infile = open(os.path.dirname(__file__) + "/lovelace.head", "r")
             with infile as file1:
                 for line in file1:
@@ -336,7 +345,8 @@ async def async_setup_entry(hass, config_entry):
                 }
 
                 output = open(
-                    output_path + lockname + "_keymaster_" + str(x) + ".yaml", "w+",
+                    output_path + lockname + "_keymaster_" + str(x) + ".yaml",
+                    "w+",
                 )
                 infile = open(os.path.dirname(__file__) + "/keymaster.yaml", "r")
                 with infile as file1:
@@ -346,7 +356,10 @@ async def async_setup_entry(hass, config_entry):
                         output.write(line)
 
                 # Loop the lovelace code slot files
-                output = open(output_path + lockname + "_lovelace", "a",)
+                output = open(
+                    output_path + lockname + "_lovelace",
+                    "a",
+                )
                 infile = open(os.path.dirname(__file__) + "/lovelace.code", "r")
                 with infile as file1:
                     for line in file1:
@@ -396,7 +409,11 @@ async def async_setup_entry(hass, config_entry):
         DOMAIN,
         SERVICE_REFRESH_CODES,
         _refresh_codes,
-        schema=vol.Schema({vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),}),
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
+            }
+        ),
     )
 
     hass.async_create_task(
@@ -433,4 +450,3 @@ async def update_listener(hass, entry):
     entry.options = config
 
     entry.data = entry.options
-

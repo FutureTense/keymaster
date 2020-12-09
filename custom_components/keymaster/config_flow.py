@@ -1,19 +1,19 @@
 """Adds config flow for Mail and Packages."""
 
 import logging
+import os
 from collections import OrderedDict
 
 import voluptuous as vol
-import os
-
-from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
+from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
+from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSORS_DOMAIN
 from homeassistant.core import callback
-from homeassistant import config_entries
+
 from .const import (
-    CONF_ALARM_TYPE,
     CONF_ALARM_LEVEL,
+    CONF_ALARM_TYPE,
     CONF_ENTITY_ID,
     CONF_GENERATE,
     CONF_LOCK_NAME,
