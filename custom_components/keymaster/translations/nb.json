@@ -1,7 +1,8 @@
 {
   "config": {
     "error": {
-      "invalid_path": "Vennligst oppbevar bildene i en annen katalog."
+      "invalid_path": "Vennligst oppbevar bildene i en annen katalog.",
+      "same_name": "Please choose a different name, this one is already in use."
     },
     "step": {
       "user": {
@@ -22,7 +23,8 @@
   },
   "options": {
     "error": {
-      "invalid_path": "Vennligst oppbevar bildene i en annen katalog."
+      "invalid_path": "Vennligst oppbevar bildene i en annen katalog.",
+      "same_name": "Please choose a different name, this one is already in use."
     },
     "step": {
       "init": {

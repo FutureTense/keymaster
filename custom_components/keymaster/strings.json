@@ -1,7 +1,8 @@
 {
   "config": {
     "error": {
-      "invalid_path": "Please store the images in another directory."
+      "invalid_path": "Please store the images in another directory.",
+      "same_name": "Please choose a different name, this one is already in use."
     },
     "step": {
       "user": {
@@ -30,7 +31,8 @@
   },
   "options": {
     "error": {
-      "invalid_path": "Please store the images in another directory."
+      "invalid_path": "Please store the images in another directory.",
+      "same_name": "Please choose a different name, this one is already in use."
     },
     "step": {
       "init": {

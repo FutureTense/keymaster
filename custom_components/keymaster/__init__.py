@@ -21,7 +21,7 @@ from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Config, HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_registry import async_get_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -86,18 +86,18 @@ def _using_zwave(hass: HomeAssistant) -> bool:
 
 def _get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
     """Get node ID from entity."""
-    try:
-        # Hack that always returns a dict so that we can do this check in one line
-        return getattr(hass.states.get(entity_id), "attributes", {})[ATTR_NODE_ID]
-    except KeyError:
-        _LOGGER.error(
-            (
-                "Problem retrieving node_id from entity %s because either the entity "
-                "doesn't exist or it doesn't have a node_id attribute"
-            ),
-            entity_id,
-        )
-        return None
+    state = hass.states.get(entity_id)
+    if state:
+        return state.attributes[ATTR_NODE_ID]
+
+    _LOGGER.error(
+        (
+            "Problem retrieving node_id from entity %s because either the entity "
+            "doesn't exist or it doesn't have a node_id attribute"
+        ),
+        entity_id,
+    )
+    return None
 
 
 def _file_output_from_template(
@@ -173,9 +173,8 @@ async def _remove_entities(
     return entities_to_remove
 
 
-async def async_setup(hass, config) -> bool:
-    """ Disallow configuration via YAML """
-
+async def async_setup(hass: HomeAssistant, config: Config) -> bool:
+    """Disallow configuration via YAML."""
     return True
 
 
@@ -213,7 +212,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     hass.data[DOMAIN][config_entry.entry_id] = coordinator
     await coordinator.async_request_refresh()
 
-    async def _refresh_codes(service):
+    async def _refresh_codes(service: ServiceCall) -> None:
         """Refresh lock codes."""
         _LOGGER.debug("Refresh Codes service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
@@ -239,7 +238,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         await coordinator.async_request_refresh()
         _LOGGER.debug("Refresh codes call completed.")
 
-    async def _add_code(service):
+    async def _add_code(service: ServiceCall) -> None:
         """Set a user code."""
         _LOGGER.debug("Add Code service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
@@ -286,7 +285,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         await coordinator.async_request_refresh()
         _LOGGER.debug("Add code call completed.")
 
-    async def _clear_code(service):
+    async def _clear_code(service: ServiceCall) -> None:
         """Generate the package files"""
         _LOGGER.debug("Clear Code service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
@@ -344,7 +343,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         await coordinator.async_request_refresh()
         _LOGGER.debug("Clear code call completed.")
 
-    def _generate_package(service):
+    def _generate_package(service: ServiceCall) -> None:
         """Generate the package files"""
         _LOGGER.debug("DEBUG: %s", service)
         name = service.data[ATTR_NAME]
@@ -496,6 +495,20 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     return True
 
 
+def _delete_lock_and_base_folder(
+    hass: HomeAssistant, config_entry: ConfigEntry
+) -> None:
+    """Delete packages folder for lock and base keymaster folder if empty."""
+    base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
+
+    # Remove all package files
+    output_path = os.path.join(base_path, config_entry.data[CONF_LOCK_NAME])
+    shutil.rmtree(output_path)
+
+    if not os.listdir(base_path):
+        shutil.rmtree(base_path)
+
+
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
 
@@ -507,13 +520,8 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         True,
     )
 
-    # Remove all package files
-    output_path = os.path.join(
-        hass.config.path(),
-        config_entry.data[CONF_PATH],
-        config_entry.data[CONF_LOCK_NAME],
-    )
-    await hass.async_add_executor_job(shutil.rmtree, output_path)
+    # Remove all package files and the base folder if needed
+    await hass.async_add_executor_job(_delete_lock_and_base_folder, hass, config_entry)
 
     return True
 
@@ -619,7 +627,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 raise NotSupportedError("Node doesn't have code slots")
 
             for value in command_class.values():  # type: ignore
-                code_slot = value.index
+                code_slot = int(value.index)
                 _LOGGER.debug(
                     "DEBUG: Code slot %s value: %s",
                     code_slot,
