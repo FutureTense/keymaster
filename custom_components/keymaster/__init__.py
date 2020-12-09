@@ -91,10 +91,7 @@ def _get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
         return state.attributes[ATTR_NODE_ID]
 
     _LOGGER.error(
-        (
-            "Problem retrieving node_id from entity %s because either the entity "
-            "doesn't exist or it doesn't have a node_id attribute"
-        ),
+        "Problem retrieving node_id from entity %s because the entity doesn't exist.",
         entity_id,
     )
     return None
@@ -199,7 +196,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # path
     config_path = hass.config.path()
     if config_entry.data[CONF_PATH].startswith(config_path):
-        updated_config[CONF_PATH] = updated_config[CONF_PATH][len(config_path):]
+        updated_config[CONF_PATH] = updated_config[CONF_PATH][len(config_path) :]
         # Remove leading slashes
         updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
 
@@ -210,7 +207,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     coordinator = LockUsercodeUpdateCoordinator(hass, config_entry)
     hass.data[DOMAIN][config_entry.entry_id] = coordinator
-    await coordinator.async_request_refresh()
 
     async def _refresh_codes(service: ServiceCall) -> None:
         """Refresh lock codes."""
@@ -233,10 +229,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                     )
                     value.send_value(True)
                     value.send_value(False)
-
-        # Trigger refresh of user code data
-        await coordinator.async_request_refresh()
-        _LOGGER.debug("Refresh codes call completed.")
 
     async def _add_code(service: ServiceCall) -> None:
         """Set a user code."""
@@ -281,12 +273,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         else:
             raise ZWaveIntegrationNotConfiguredError
 
-        # Trigger refresh of user code data
-        await coordinator.async_request_refresh()
-        _LOGGER.debug("Add code call completed.")
-
     async def _clear_code(service: ServiceCall) -> None:
-        """Generate the package files"""
+        """Clear a user code."""
         _LOGGER.debug("Clear Code service: %s", service)
         entity_id = service.data[ATTR_ENTITY_ID]
         code_slot = service.data[ATTR_CODE_SLOT]
@@ -339,12 +327,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         else:
             raise ZWaveIntegrationNotConfiguredError
 
-        # Trigger refresh of user code data
-        await coordinator.async_request_refresh()
-        _LOGGER.debug("Clear code call completed.")
-
     def _generate_package(service: ServiceCall) -> None:
-        """Generate the package files"""
+        """Generate the package files."""
         _LOGGER.debug("DEBUG: %s", service)
         name = service.data[ATTR_NAME]
         lockname = config_entry.data[CONF_LOCK_NAME]
@@ -557,7 +541,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(hours=1),
+            update_interval=timedelta(seconds=5),
             update_method=self.async_update_usercodes,
         )
 
