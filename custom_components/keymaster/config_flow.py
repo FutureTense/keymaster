@@ -4,7 +4,6 @@ import logging
 import os
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
