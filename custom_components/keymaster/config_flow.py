@@ -100,6 +100,11 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
+            existing_entry = self.async_set_unique_id(
+                user_input[CONF_LOCK_NAME], raise_on_progress=True
+            )
+            if existing_entry:
+                errors[CONF_LOCK_NAME] = "same_name"
             user_input[CONF_GENERATE] = DEFAULT_GENERATE
             valid = await self._validate_path(user_input[CONF_PATH])
             if valid:
@@ -144,7 +149,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 class KeyMasterOptionsFlow(config_entries.OptionsFlow):
     """Options flow for KeyMaster."""
 
-    def __init__(self, config_entry):
+    def __init__(self, config_entry: config_entries.ConfigEntry):
         """Initialize."""
         self.config_entry = config_entry
 
@@ -154,6 +159,11 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
+            existing_entry = self.async_set_unique_id(
+                user_input[CONF_LOCK_NAME], raise_on_progress=True
+            )
+            if existing_entry and existing_entry.entry_id != self.config_entry.entry_id:
+                errors[CONF_LOCK_NAME] = "same_name"
             valid = await self._validate_path(user_input[CONF_PATH])
             if valid:
                 return self.async_create_entry(title="", data=user_input)
