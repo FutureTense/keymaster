@@ -238,9 +238,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     hass.services.async_register(
         DOMAIN,
-        SERVICE_GENERATE_PACKAGE,
-        _generate_package,
-        schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
+        SERVICE_REFRESH_CODES,
+        _refresh_codes,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
+            }
+        ),
     )
 
     for platform in PLATFORMS:
@@ -575,15 +579,11 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             if data[ATTR_NODE_ID] is None:
                 raise NoNodeSpecifiedError
             # Raises exception when node not found
-            try:
-                node = get_node_from_manager(
-                    self.hass.data[OZW_DOMAIN][MANAGER],
-                    instance_id,
-                    data[ATTR_NODE_ID],
-                )
-            except NotFoundError:
-                raise NativeNotFoundError from None
-
+            node = get_node_from_manager(
+                self.hass.data[OZW_DOMAIN][MANAGER],
+                instance_id,
+                data[ATTR_NODE_ID],
+            )
             command_class = node.get_command_class(CommandClass.USER_CODE)
 
             if not command_class:
