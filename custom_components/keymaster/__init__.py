@@ -5,7 +5,11 @@ import shutil
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Union
 
+from openzwavemqtt.const import CommandClass, ATTR_CODE_SLOT
+from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
+from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
+
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
 from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
@@ -21,11 +25,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_registry import async_get_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import slugify
 from homeassistant.util.yaml.loader import load_yaml
-from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
-from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
-from openzwavemqtt.util.node import get_node_from_manager
 
 from .const import (
     ATTR_NAME,
