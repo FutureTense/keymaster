@@ -2,3 +2,5 @@
 custom_components/*/__pycache__/
 .venv
 venv
+*.pyc
+.coverage
