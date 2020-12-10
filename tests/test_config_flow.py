@@ -43,8 +43,7 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
     with patch(
         "custom_components.keymaster.async_setup", return_value=True
     ) as mock_setup, patch(
-        "custom_components.keymaster.async_setup_entry",
-        return_value=True,
+        "custom_components.keymaster.async_setup_entry", return_value=True,
     ) as mock_setup_entry:
 
         await setup.async_setup_component(hass, "persistent_notification", {})
@@ -116,8 +115,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
     ), patch(
         "custom_components.keymaster.async_setup", return_value=True
     ) as mock_setup, patch(
-        "custom_components.keymaster.async_setup_entry",
-        return_value=True,
+        "custom_components.keymaster.async_setup_entry", return_value=True,
     ) as mock_setup_entry:
 
         result2 = await hass.config_entries.flow.async_configure(
@@ -168,11 +166,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
 )
 async def test_options_flow(input_1, title, data, hass, mock_get_entities):
     """Test config flow options."""
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="frontdoor",
-        data=CONFIG_DATA,
-    )
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA,)
 
     entry.add_to_hass(hass)
 
@@ -186,8 +180,7 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
     with patch(
         "custom_components.keymaster.async_setup", return_value=True
     ) as mock_setup, patch(
-        "custom_components.keymaster.async_setup_entry",
-        return_value=True,
+        "custom_components.keymaster.async_setup_entry", return_value=True,
     ) as mock_setup_entry:
 
         result2 = await hass.config_entries.options.async_configure(
@@ -196,4 +189,4 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
         assert result2["type"] == "create_entry"
 
         await hass.async_block_till_done()
-        assert entry.options == data
+        assert entry.data == data

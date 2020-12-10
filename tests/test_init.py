@@ -8,9 +8,7 @@ from custom_components.keymaster.const import DOMAIN
 from tests.const import CONFIG_DATA
 
 
-async def test_setup_entry(
-    hass, mock_osremove, mock_osmakedir, mock_listdir,
-):
+async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
     """Test settting up entities. """
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA)
 
@@ -24,7 +22,7 @@ async def test_setup_entry(
 
 
 async def test_unload_entry(
-    hass, mock_listdir, mock_osremove, mock_osrmdir, mock_get_entities_to_remove
+    hass, mock_listdir, mock_osremove, mock_osrmdir, mock_get_entities_to_remove,
 ):
     """Test unloading entities. """
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA)
