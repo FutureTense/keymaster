@@ -111,7 +111,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
-            existing_entry = self.async_set_unique_id(
+            existing_entry = await self.async_set_unique_id(
                 user_input[CONF_LOCK_NAME], raise_on_progress=True
             )
             if existing_entry:
