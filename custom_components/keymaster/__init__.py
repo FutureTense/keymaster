@@ -90,15 +90,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     coordinator = LockUsercodeUpdateCoordinator(hass, config_entry)
     hass.data[DOMAIN][config_entry.entry_id] = coordinator
 
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(config_entry, PLATFORM)
-    )
-
-    # if the use turned on the bool generate the files
-    if should_generate_package:
-        servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
-        await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
-
     # Button Press
     async def _refresh_codes(service: ServiceCall) -> None:
         """Refresh lock codes."""
@@ -173,6 +164,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         _generate_package,
         schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
     )
+
+    hass.async_create_task(
+        hass.config_entries.async_forward_entry_setup(config_entry, PLATFORM)
+    )
+
+    # if the use turned on the bool generate the files
+    if should_generate_package:
+        servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
+        await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
     return True
 

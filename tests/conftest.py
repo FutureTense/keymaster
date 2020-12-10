@@ -27,7 +27,7 @@ def mock_get_entities():
 def mock_get_entities_to_remove():
     """ Mock email data update class values. """
     with patch(
-        "custom_components.keymaster._get_entities_to_remove", autospec=True
+        "custom_components.keymaster.helpers._get_entities_to_remove", autospec=True
     ) as mock_get_entities_to_remove:
         mock_get_entities_to_remove.return_value = []
         yield mock_get_entities_to_remove
