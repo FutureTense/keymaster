@@ -180,18 +180,25 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
 
-    # Remove all generated helper entries
-    await remove_generated_entities(
-        hass,
-        config_entry,
-        range(config_entry.data[CONF_START], config_entry.data[CONF_SLOTS] + 1),
-        True,
+    unload_ok = await hass.config_entries.async_forward_entry_unload(
+        config_entry, PLATFORM
     )
 
-    # Remove all package files and the base folder if needed
-    await hass.async_add_executor_job(delete_lock_and_base_folder, hass, config_entry)
+    if unload_ok:
+        # Remove all generated helper entries
+        await remove_generated_entities(
+            hass,
+            config_entry,
+            range(config_entry.data[CONF_START], config_entry.data[CONF_SLOTS] + 1),
+            True,
+        )
 
-    return True
+        # Remove all package files and the base folder if needed
+        await hass.async_add_executor_job(
+            delete_lock_and_base_folder, hass, config_entry
+        )
+
+    return unload_ok
 
 
 async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
