@@ -1,16 +1,15 @@
 """ Test keymaster init """
 import pytest
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from pytest_homeassistant_custom_component.async_mock import call, patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+
 from tests.const import CONFIG_DATA
 
 
-async def test_setup_entry(
-    hass, mock_osremove, mock_osmakedir, mock_listdir,
-):
+async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
     """Test settting up entities. """
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA)
 
@@ -24,7 +23,11 @@ async def test_setup_entry(
 
 
 async def test_unload_entry(
-    hass, mock_listdir, mock_osremove, mock_osrmdir, mock_get_entities_to_remove
+    hass,
+    mock_listdir,
+    mock_osremove,
+    mock_osrmdir,
+    mock_get_entities_to_remove,
 ):
     """Test unloading entities. """
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA)

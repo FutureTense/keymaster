@@ -196,4 +196,4 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
         assert result2["type"] == "create_entry"
 
         await hass.async_block_till_done()
-        assert entry.options == data
+        assert entry.data == data
