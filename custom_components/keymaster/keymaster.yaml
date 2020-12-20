@@ -2,11 +2,11 @@
 ############  input_number:  #####################  
 input_number:
   accesscount_LOCKNAME_TEMPLATENUM:
-    name: Access Count
+    name: 'Unlock events '
     min: 0
     max: 100
     step: 1
-    unit_of_measurement: "Openings Left"
+    mode: box
 
 #################  input_datetime:  ##############  
 input_datetime:
@@ -101,7 +101,7 @@ input_boolean:
   enabled_LOCKNAME_TEMPLATENUM:
     name: 'Enabled'
   accesslimit_LOCKNAME_TEMPLATENUM:
-    name: 'Limit Access Count'
+    name: 'Enforce PIN limit'
     initial: off
   reset_codeslot_LOCKNAME_TEMPLATENUM:
     name: 'Reset Code Slot'

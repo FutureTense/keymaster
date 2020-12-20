@@ -23,6 +23,7 @@
                   state_color: true
                 - type: divider
                 - entity: sensor.LOCKNAME_code_slot_TEMPLATENUM
+                  name: 'LOCKNAME slot TEMPLATENUM actual'
                   state_color: true
                 - type: divider
                 - entity: binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM
@@ -36,6 +37,9 @@
                   - type: divider
                   - entity: input_boolean.accesslimit_LOCKNAME_TEMPLATENUM
                   - entity: input_number.accesscount_LOCKNAME_TEMPLATENUM
+                    type: 'custom:numberbox-card'
+                    icon: 'mdi:key-variant'
+                    speed: 250
                   - type: divider
                   - entity: input_boolean.daterange_LOCKNAME_TEMPLATENUM
                   - entity: input_datetime.start_date_LOCKNAME_TEMPLATENUM
