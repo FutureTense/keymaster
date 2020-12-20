@@ -422,6 +422,13 @@ automation:
         entity_id: "binary_sensor.allow_automation"
         state: "on"
       - condition: template
+        # make sure decrementing access entries is enabled 
+        value_template: >-
+          {% set report = states.input_text.LOCKNAME_status_report.state %}
+          {% set a = report.split(';') %}
+          {% set buttonName = 'input_boolean.accesslimit_LOCKNAME_' + a[2] %}
+          {{ states(buttonName)=='on' }}
+      - condition: template
         # Check for Keypad Unlock code
         value_template: >-
           {% set report = states.input_text.LOCKNAME_status_report.state %}
