@@ -121,12 +121,17 @@ async def remove_generated_entities(
 def delete_lock_and_base_folder(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Delete packages folder for lock and base keymaster folder if empty."""
     base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
-
-    # Remove all package files
-    output_path = os.path.join(base_path, config_entry.data[CONF_LOCK_NAME])
-    for file in os.listdir(output_path):
-        os.remove(os.path.join(output_path, file))
-    os.rmdir(output_path)
-
+    delete_folder(base_path, config_entry.data[CONF_LOCK_NAME])
     if not os.listdir(base_path):
         os.rmdir(base_path)
+
+
+def delete_folder(absolute_path: str, *relative_paths: str) -> None:
+    """Recursively delete folder and all children files and folders (depth first)."""
+    path = os.path.join(absolute_path, *relative_paths)
+    if os.path.isfile(path):
+        os.remove(path)
+    else:
+        for file_or_dir in os.listdir(path):
+            delete_folder(path, file_or_dir)
+        os.rmdir(path)

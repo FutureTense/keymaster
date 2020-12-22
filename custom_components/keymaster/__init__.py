@@ -33,6 +33,7 @@ from .const import (
 )
 from .exceptions import NoNodeSpecifiedError, ZWaveIntegrationNotConfiguredError
 from .helpers import (
+    delete_folder,
     delete_lock_and_base_folder,
     get_node_id,
     remove_generated_entities,
@@ -214,9 +215,23 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         hass, config_entry, list(set(curr_slots) - set(new_slots)), False
     )
 
+    # If the path has changed delete the old base folder, otherwise if the lock name
+    # has changed only delete the old lock folder
+    if config_entry.options[CONF_PATH] != config_entry.data[CONF_PATH]:
+        await hass.async_add_executor_job(
+            delete_folder, hass.config.path(), config_entry.data[CONF_PATH]
+        )
+    elif config_entry.options[CONF_LOCK_NAME] != config_entry.data[CONF_LOCK_NAME]:
+        await hass.async_add_executor_job(
+            delete_folder,
+            hass.config.path(),
+            config_entry.data[CONF_PATH],
+            config_entry.data[CONF_LOCK_NAME],
+        )
+
     hass.config_entries.async_update_entry(
-        unique_id=config_entry.data[CONF_LOCK_NAME],
         entry=config_entry,
+        unique_id=config_entry.options[CONF_LOCK_NAME],
         data=config_entry.options.copy(),
     )
     servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
