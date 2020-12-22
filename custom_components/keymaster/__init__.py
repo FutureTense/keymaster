@@ -18,8 +18,12 @@ from .const import (
     ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
-    CONF_ENTITY_ID,
+    CONF_ALARM_LEVEL,
+    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+    CONF_ALARM_TYPE,
+    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_GENERATE,
+    CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
     CONF_SLOTS,
@@ -79,7 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # path
     config_path = hass.config.path()
     if config_entry.data[CONF_PATH].startswith(config_path):
-        updated_config[CONF_PATH] = updated_config[CONF_PATH][len(config_path):]
+        updated_config[CONF_PATH] = updated_config[CONF_PATH][len(config_path) :]
         # Remove leading slashes
         updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
 
@@ -202,6 +206,26 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     return unload_ok
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate an old config entry."""
+    version = config_entry.version
+
+    # 1 -> 2: Migrate to new keys
+    if version == 1:
+        _LOGGER.debug("Migrating from version %s", version)
+        data = config_entry.data.copy()
+
+        data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL)
+        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(CONF_ALARM_TYPE)
+        data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_LOCK_ENTITY_ID)
+
+        await hass.config_entries.async_update_entry(entry=config_entry, data=data)
+        config_entry.version = 2
+        _LOGGER.debug("Migration to version %s complete", config_entry.version)
+
+    return True
+
+
 async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Update listener."""
     # Get current code slots and new code slots, and remove entities for current code
@@ -242,7 +266,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage usercode updates."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-        self._entity_id = config_entry.data[CONF_ENTITY_ID]
+        self._entity_id = config_entry.data[CONF_LOCK_ENTITY_ID]
         self._lock_name = config_entry.data[CONF_LOCK_NAME]
         super().__init__(
             hass,
@@ -294,7 +318,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         # loop to get user code data from entity_id node
         instance_id = 1  # default
         data = {}
-        data[CONF_ENTITY_ID] = self._entity_id
+        data[CONF_LOCK_ENTITY_ID] = self._entity_id
         data[ATTR_NODE_ID] = get_node_id(self.hass, self._entity_id)
 
         if data[ATTR_NODE_ID] is None:

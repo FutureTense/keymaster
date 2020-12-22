@@ -73,3 +73,10 @@ def mock_delete_folder():
     """Fixture to mock delete_folder helper function."""
     with patch("custom_components.keymaster.delete_folder"):
         yield
+
+
+@pytest.fixture
+def mock_delete_lock_and_base_folder():
+    """Fixture to mock delete_lock_and_base_folder helper function."""
+    with patch("custom_components.keymaster.delete_lock_and_base_folder"):
+        yield

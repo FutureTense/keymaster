@@ -14,9 +14,9 @@ from tests.const import CONFIG_DATA
     [
         (
             {
-                "alarm_level": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-                "alarm_type": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
-                "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
                 "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
@@ -25,9 +25,9 @@ from tests.const import CONFIG_DATA
             },
             "frontdoor",
             {
-                "alarm_level": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-                "alarm_type": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
-                "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
                 "generate_package": True,
                 "packages_path": "packages/keymaster",
@@ -73,9 +73,9 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
     [
         (
             {
-                "alarm_level": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-                "alarm_type": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
-                "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
                 "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
@@ -84,9 +84,9 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
             },
             "frontdoor",
             {
-                "alarm_level": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-                "alarm_type": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
-                "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
                 "generate_package": True,
                 "packages_path": "packages/keymaster",
@@ -142,9 +142,9 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
     [
         (
             {
-                "alarm_level": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-                "alarm_type": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
-                "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
                 "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
@@ -153,9 +153,9 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
             },
             "frontdoor",
             {
-                "alarm_level": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-                "alarm_type": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
-                "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
                 "generate_package": True,
                 "packages_path": "packages/keymaster",

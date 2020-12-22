@@ -11,7 +11,9 @@ from tests.const import CONFIG_DATA
 
 async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
     """Test setting up entities."""
-    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA)
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+    )
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -26,9 +28,12 @@ async def test_unload_entry(
     hass,
     mock_delete_folder,
     mock_get_entities_to_remove,
+    mock_delete_lock_and_base_folder,
 ):
     """Test unloading entities."""
-    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA)
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+    )
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
