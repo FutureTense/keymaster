@@ -46,74 +46,6 @@ CHILD_LOCKS_SCHEMA = cv.schema_with_slug_keys(
 )
 
 
-def _get_entities(
-    hass: HomeAssistant,
-    domain: str,
-    search: List[str] = None,
-    extra_entities: List[str] = None,
-) -> List[str]:
-    data = []
-    for entity in hass.data[domain].entities:
-        if search is not None and not any(map(entity.entity_id.__contains__, search)):
-            continue
-        data.append(entity.entity_id)
-
-    if extra_entities:
-        data.extend(extra_entities)
-
-    return data
-
-
-def _get_schema(
-    hass: HomeAssistant,
-    user_input: Optional[Dict[str, Any]],
-    default_dict: Dict[str, Any],
-) -> vol.Schema:
-    """Gets a schema using the default_dict as a backup."""
-    if user_input is None:
-        user_input = {}
-
-    def _get_default(key: str):
-        """Gets default value for key."""
-        return user_input.get(key, default_dict.get(key))
-
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
-            ): vol.In(_get_entities(hass, LOCK_DOMAIN)),
-            vol.Required(CONF_SLOTS, default=_get_default(CONF_SLOTS)): vol.Coerce(int),
-            vol.Required(CONF_START, default=_get_default(CONF_START)): vol.Coerce(int),
-            vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
-            vol.Optional(
-                CONF_SENSOR_NAME, default=_get_default(CONF_SENSOR_NAME)
-            ): vol.In(
-                _get_entities(
-                    hass, BINARY_DOMAIN, extra_entities=["binary_sensor.fake"]
-                )
-            ),
-            vol.Optional(
-                CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-                default=_get_default(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
-            ): vol.In(
-                _get_entities(hass, SENSORS_DOMAIN, search=["alarm_level", "user_code"])
-            ),
-            vol.Optional(
-                CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-                default=_get_default(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
-            ): vol.In(
-                _get_entities(
-                    hass, SENSORS_DOMAIN, search=["alarm_type", "access_control"]
-                )
-            ),
-            vol.Required(CONF_PATH, default=_get_default(CONF_PATH)): str,
-            vol.Optional(
-                CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE)
-            ): vol.Any(str, None),
-        }
-    )
-
-
 def _parse_child_locks_file(file_path: str) -> bool:
     """Validate that child locks file exists and is valid."""
     if not os.path.exists(file_path):
@@ -204,6 +136,74 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
         return await _start_config_flow(
             self, "init", "", user_input, self.config_entry.data
         )
+
+
+def _get_entities(
+    hass: HomeAssistant,
+    domain: str,
+    search: List[str] = None,
+    extra_entities: List[str] = None,
+) -> List[str]:
+    data = []
+    for entity in hass.data[domain].entities:
+        if search is not None and not any(map(entity.entity_id.__contains__, search)):
+            continue
+        data.append(entity.entity_id)
+
+    if extra_entities:
+        data.extend(extra_entities)
+
+    return data
+
+
+def _get_schema(
+    hass: HomeAssistant,
+    user_input: Optional[Dict[str, Any]],
+    default_dict: Dict[str, Any],
+) -> vol.Schema:
+    """Gets a schema using the default_dict as a backup."""
+    if user_input is None:
+        user_input = {}
+
+    def _get_default(key: str):
+        """Gets default value for key."""
+        return user_input.get(key, default_dict.get(key))
+
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
+            ): vol.In(_get_entities(hass, LOCK_DOMAIN)),
+            vol.Required(CONF_SLOTS, default=_get_default(CONF_SLOTS)): vol.Coerce(int),
+            vol.Required(CONF_START, default=_get_default(CONF_START)): vol.Coerce(int),
+            vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
+            vol.Optional(
+                CONF_SENSOR_NAME, default=_get_default(CONF_SENSOR_NAME)
+            ): vol.In(
+                _get_entities(
+                    hass, BINARY_DOMAIN, extra_entities=["binary_sensor.fake"]
+                )
+            ),
+            vol.Optional(
+                CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+                default=_get_default(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
+            ): vol.In(
+                _get_entities(hass, SENSORS_DOMAIN, search=["alarm_level", "user_code"])
+            ),
+            vol.Optional(
+                CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+                default=_get_default(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
+            ): vol.In(
+                _get_entities(
+                    hass, SENSORS_DOMAIN, search=["alarm_type", "access_control"]
+                )
+            ),
+            vol.Required(CONF_PATH, default=_get_default(CONF_PATH)): str,
+            vol.Optional(
+                CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE)
+            ): vol.Any(str, None),
+        }
+    )
 
 
 def _show_config_form(
