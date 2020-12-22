@@ -8,8 +8,8 @@
     "step": {
       "user": {
         "data": {
-          "alarm_level_or_user_code_entity_id": "User Code Sensor (from lock)",
-          "alarm_type_or_access_control_entity_id": "Access Control Sensor (from lock)",
+          "alarm_level_or_user_code_entity_id": "Alarm Level/User Code Sensor (from lock)",
+          "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
           "lock_entity_id": "Select your lock",
           "slots": "Code Slots",
           "start_from": "Start from code slot #",
@@ -40,8 +40,8 @@
     "step": {
       "init": {
         "data": {
-          "alarm_level_or_user_code_entity_id": "User Code Sensor (from lock)",
-          "alarm_type_or_access_control_entity_id": "Access Control Sensor (from lock)",
+          "alarm_level_or_user_code_entity_id": "Alarm Level/User Code Sensor (from lock)",
+          "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
           "lock_entity_id": "Select your lock",
           "slots": "Code Slots",
           "start_from": "Start from code slot #",
