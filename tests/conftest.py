@@ -9,7 +9,7 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 
 @pytest.fixture()
 def mock_get_entities():
-    """ Mock email data update class values. """
+    """Mock email data update class values."""
     with patch(
         "custom_components.keymaster.config_flow._get_entities", autospec=True
     ) as mock_get_entities:
@@ -25,7 +25,7 @@ def mock_get_entities():
 
 @pytest.fixture()
 def mock_get_entities_to_remove():
-    """ Mock email data update class values. """
+    """Mock email data update class values."""
     with patch(
         "custom_components.keymaster.helpers._get_entities_to_remove", autospec=True
     ) as mock_get_entities_to_remove:
@@ -35,35 +35,41 @@ def mock_get_entities_to_remove():
 
 @pytest.fixture
 def mock_listdir():
-    """ Fixture to mock listdir """
-    with patch("os.listdir") as mock_listdir:
-        mock_listdir.return_value = [
+    """Fixture to mock listdir."""
+    with patch(
+        "os.listdir",
+        return_value=[
             "testfile.gif",
             "anotherfakefile.mp4",
             "lastfile.txt",
-        ]
-        yield mock_listdir
+        ],
+    ):
+        yield
 
 
 @pytest.fixture
 def mock_osremove():
-    """ Fixture to mock remove """
-    with patch("os.remove") as mock_remove:
-        mock_remove.return_value = True
-        yield mock_remove
+    """Fixture to mock remove file."""
+    with patch("os.remove", return_value=True):
+        yield
 
 
 @pytest.fixture
 def mock_osrmdir():
-    """ Fixture to mock remove """
-    with patch("os.rmdir") as mock_rmdir:
-        mock_rmdir.return_value = True
-        yield mock_rmdir
+    """Fixture to mock remove directory."""
+    with patch("os.rmdir", return_value=True):
+        yield
 
 
 @pytest.fixture
 def mock_osmakedir():
-    """ Fixture to mock makedirs """
-    with patch("os.makedirs") as mock_osmakedir:
-        mock_osmakedir.return_value = True
-        yield mock_osmakedir
+    """Fixture to mock makedirs."""
+    with patch("os.makedirs", return_value=True):
+        yield
+
+
+@pytest.fixture
+def mock_delete_folder():
+    """Fixture to mock delete_folder helper function."""
+    with patch("custom_components.keymaster.delete_folder"):
+        yield
