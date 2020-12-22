@@ -10,7 +10,7 @@ from tests.const import CONFIG_DATA
 
 
 async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
-    """Test settting up entities. """
+    """Test setting up entities."""
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA)
 
     entry.add_to_hass(hass)
@@ -24,12 +24,10 @@ async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
 
 async def test_unload_entry(
     hass,
-    mock_listdir,
-    mock_osremove,
-    mock_osrmdir,
+    mock_delete_folder,
     mock_get_entities_to_remove,
 ):
-    """Test unloading entities. """
+    """Test unloading entities."""
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA)
 
     entry.add_to_hass(hass)
