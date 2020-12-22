@@ -236,7 +236,7 @@ async def _start_config_flow(
     description_placeholders = {}
 
     if user_input is not None:
-        user_input[CONF_GENERATE] = True
+        user_input[CONF_GENERATE] = DEFAULT_GENERATE
         user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
 
         # Regular flow has an async function, options flow has a sync function
