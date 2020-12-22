@@ -33,7 +33,7 @@ from .const import (
 )
 from .exceptions import NoNodeSpecifiedError, ZWaveIntegrationNotConfiguredError
 from .helpers import (
-    delete_folder_and_children,
+    delete_folder,
     delete_lock_and_base_folder,
     get_node_id,
     remove_generated_entities,
@@ -219,11 +219,11 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     # has changed only delete the old lock folder
     if config_entry.options[CONF_PATH] != config_entry.data[CONF_PATH]:
         await hass.async_add_executor_job(
-            delete_folder_and_children, hass.config.path(), config_entry.data[CONF_PATH]
+            delete_folder, hass.config.path(), config_entry.data[CONF_PATH]
         )
     elif config_entry.options[CONF_LOCK_NAME] != config_entry.data[CONF_LOCK_NAME]:
         await hass.async_add_executor_job(
-            delete_folder_and_children,
+            delete_folder,
             hass.config.path(),
             config_entry.data[CONF_PATH],
             config_entry.data[CONF_LOCK_NAME],
