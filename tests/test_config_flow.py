@@ -3,7 +3,7 @@ import pytest
 from pytest_homeassistant_custom_component.async_mock import patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster.const import DOMAIN
+from custom_components.keymaster.const import CONF_PATH, DOMAIN
 from homeassistant import config_entries, setup
 
 from tests.const import CONFIG_DATA
@@ -77,7 +77,7 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
-                "packages_path": "packages/keymaster",
+                "packages_path": "/packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
@@ -89,7 +89,7 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
                 "generate_package": True,
-                "packages_path": "packages/keymaster",
+                "packages_path": "/packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
@@ -111,9 +111,6 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
         "custom_components.keymaster.config_flow._get_entities",
         return_value="['lock.kwikset_touchpad_electronic_deadbolt_frontdoor']",
     ), patch(
-        "custom_components.keymaster.config_flow.KeyMasterFlowHandler._validate_path",
-        return_value=False,
-    ), patch(
         "custom_components.keymaster.async_setup", return_value=True
     ) as mock_setup, patch(
         "custom_components.keymaster.async_setup_entry",
@@ -124,7 +121,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
             result["flow_id"], input_1
         )
         assert result2["type"] == "form"
-        assert result2["errors"] == {"base": "invalid_path"}
+        assert result2["errors"] == {CONF_PATH: "invalid_path"}
 
 
 # async def test_valid_path():

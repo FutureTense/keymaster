@@ -107,7 +107,9 @@ def _get_schema(
                 )
             ),
             vol.Required(CONF_PATH, default=_get_default(CONF_PATH)): str,
-            vol.Optional(CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_PATH)): str,
+            vol.Optional(
+                CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE)
+            ): vol.Any(str, None),
         }
     )
 
@@ -118,13 +120,15 @@ def validate_child_locks_file(file_path: str) -> bool:
         child_locks = load_yaml(file_path)
         try:
             CHILD_LOCKS_SCHEMA(child_locks)
+            if not child_locks:
+                return {}, "File is empty"
         except (vol.Invalid, vol.MultipleInvalid) as err:
             _LOGGER.error("Child locks file data is invalid: %s", err)
-            return (None, f"File data is invalid: {err}")
-        return (child_locks, None)
+            return {}, f"File data is invalid: {err}"
+        return child_locks, ""
 
     _LOGGER.error("The child locks file (%s) does not exist as a valid file", file_path)
-    return (None, "Path invalid or not a file")
+    return {}, "Path invalid or not a file"
 
 
 @config_entries.HANDLERS.register(DOMAIN)
@@ -178,7 +182,8 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             # Create entry if no errors
             if not errors:
                 user_input.pop(CONF_CHILD_LOCKS_FILE)
-                user_input[CONF_CHILD_LOCKS] = child_locks
+                if child_locks:
+                    user_input[CONF_CHILD_LOCKS] = child_locks
                 return self.async_create_entry(
                     title=user_input[CONF_LOCK_NAME], data=user_input
                 )
@@ -263,7 +268,8 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
             # Update options if no errors
             if not errors:
                 user_input.pop(CONF_CHILD_LOCKS_FILE)
-                user_input[CONF_CHILD_LOCKS] = child_locks
+                if child_locks:
+                    user_input[CONF_CHILD_LOCKS] = child_locks
                 return self.async_create_entry(title="", data=user_input)
 
             return self._show_options_form(user_input, errors, description_placeholders)
