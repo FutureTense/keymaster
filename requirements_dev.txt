@@ -1,3 +1,2 @@
-black
 homeassistant
 python-openzwave-mqtt
