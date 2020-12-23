@@ -1,23 +1,25 @@
 {
   "config": {
     "error": {
-      "invalid_path": "Please store the images in another directory.",
-      "same_name": "Please choose a different name, this one is already in use."
+      "invalid_path": "Path must be a relative path, not absolute",
+      "same_name": "Name already in use",
+      "invalid_child_locks_file": "{error}"
     },
     "step": {
       "user": {
         "data": {
-          "alarm_level": "User Code Sensor (from lock)",
-          "alarm_type": "Access Control Sensor (from lock)",
-          "entity_id": "Select your lock",
+          "alarm_level_or_user_code_entity_id": "Alarm Level/User Code Sensor (from lock)",
+          "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
+          "lock_entity_id": "Select your lock",
           "slots": "Code Slots",
           "start_from": "Start from code slot #",
           "sensorname": "Door Sensor",
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
-          "using_ozw": "Using OZW?"
+          "using_ozw": "Using OZW?",
+          "child_locks_file": "Path to child locks file (relative)"
         },
-        "description": "Select the lock to setup and code slots to create.\n\nPackages path is relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
+        "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
         "title": "KeyMaster"
       },
       "config_2": {
@@ -31,23 +33,25 @@
   },
   "options": {
     "error": {
-      "invalid_path": "Please store the images in another directory.",
-      "same_name": "Please choose a different name, this one is already in use."
+      "invalid_path": "Path must be a relative path, not absolute",
+      "same_name": "Name already in use",
+      "invalid_child_locks_file": "{error}"
     },
     "step": {
       "init": {
         "data": {
-          "alarm_level": "User Code Sensor (from lock)",
-          "alarm_type": "Access Control Sensor (from lock)",
-          "entity_id": "Select your lock",
+          "alarm_level_or_user_code_entity_id": "Alarm Level/User Code Sensor (from lock)",
+          "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
+          "lock_entity_id": "Select your lock",
           "slots": "Code Slots",
           "start_from": "Start from code slot #",
           "sensorname": "Door Sensor",
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
-          "using_ozw": "Using OZW?"
+          "using_ozw": "Using OZW?",
+          "child_locks_file": "Path to child locks file"
         },
-        "description": "Select the lock to setup and code slots to create.\n\nPackages path is relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
+        "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
         "title": "KeyMaster"
       },
       "options_2": {

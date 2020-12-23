@@ -18,16 +18,25 @@ from .const import (
     ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
-    CONF_ENTITY_ID,
+    CHILD_LOCKS,
+    CONF_ALARM_LEVEL,
+    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+    CONF_ALARM_TYPE,
+    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_CHILD_LOCKS,
     CONF_GENERATE,
+    CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
+    CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
     DOMAIN,
     ISSUE_URL,
     MANAGER,
     PLATFORM,
+    PRIMARY_LOCK,
     VERSION,
     ZWAVE_NETWORK,
 )
@@ -40,6 +49,7 @@ from .helpers import (
     using_ozw,
     using_zwave,
 )
+from .lock import KeymasterLock
 from .services import add_code, clear_code, generate_package_files, refresh_codes
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,7 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # path
     config_path = hass.config.path()
     if config_entry.data[CONF_PATH].startswith(config_path):
-        updated_config[CONF_PATH] = updated_config[CONF_PATH][len(config_path):]
+        updated_config[CONF_PATH] = updated_config[CONF_PATH][len(config_path) :]
         # Remove leading slashes
         updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
 
@@ -88,8 +98,28 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     config_entry.add_update_listener(update_listener)
 
+    primary_lock = KeymasterLock(
+        config_entry.data[CONF_LOCK_NAME],
+        config_entry.data[CONF_LOCK_ENTITY_ID],
+        config_entry.data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
+        config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
+        config_entry.data[CONF_SENSOR_NAME],
+    )
+    child_locks = [
+        KeymasterLock(
+            lock_name,
+            lock[CONF_LOCK_ENTITY_ID],
+            lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
+            lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
+        )
+        for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
+    ]
+    hass.data[DOMAIN][config_entry.entry_id] = {
+        PRIMARY_LOCK: primary_lock,
+        CHILD_LOCKS: child_locks,
+    }
     coordinator = LockUsercodeUpdateCoordinator(hass, config_entry)
-    hass.data[DOMAIN][config_entry.entry_id] = coordinator
+    hass.data[DOMAIN][config_entry.entry_id][COORDINATOR] = coordinator
 
     # Button Press
     async def _refresh_codes(service: ServiceCall) -> None:
@@ -172,7 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     # if the use turned on the bool generate the files
     if should_generate_package:
-        servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
+        servicedata = {"lockname": primary_lock.lock_name}
         await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
     return True
@@ -199,7 +229,29 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
             delete_lock_and_base_folder, hass, config_entry
         )
 
+        hass.data[DOMAIN].pop(config_entry.entry_id)
+
     return unload_ok
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate an old config entry."""
+    version = config_entry.version
+
+    # 1 -> 2: Migrate to new keys
+    if version == 1:
+        _LOGGER.debug("Migrating from version %s", version)
+        data = config_entry.data.copy()
+
+        data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL)
+        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(CONF_ALARM_TYPE)
+        data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_LOCK_ENTITY_ID)
+
+        await hass.config_entries.async_update_entry(entry=config_entry, data=data)
+        config_entry.version = 2
+        _LOGGER.debug("Migration to version %s complete", config_entry.version)
+
+    return True
 
 
 async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
@@ -229,12 +281,39 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
             config_entry.data[CONF_LOCK_NAME],
         )
 
+    new_data = config_entry.options.copy()
+    new_data.pop(CONF_GENERATE, None)
+
     hass.config_entries.async_update_entry(
         entry=config_entry,
         unique_id=config_entry.options[CONF_LOCK_NAME],
-        data=config_entry.options.copy(),
+        data=new_data,
     )
-    servicedata = {"lockname": config_entry.data[CONF_LOCK_NAME]}
+
+    primary_lock = KeymasterLock(
+        config_entry.data[CONF_LOCK_NAME],
+        config_entry.data[CONF_LOCK_ENTITY_ID],
+        config_entry.data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
+        config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
+        config_entry.data[CONF_SENSOR_NAME],
+    )
+    hass.data[DOMAIN].update(
+        {
+            PRIMARY_LOCK: primary_lock,
+            CHILD_LOCKS: [
+                KeymasterLock(
+                    lock_name,
+                    lock[CONF_LOCK_ENTITY_ID],
+                    lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
+                    lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
+                )
+                for lock_name, lock in config_entry.data.get(
+                    CONF_CHILD_LOCKS, {}
+                ).items()
+            ],
+        }
+    )
+    servicedata = {"lockname": primary_lock.lock_name}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
 
@@ -242,8 +321,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage usercode updates."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-        self._entity_id = config_entry.data[CONF_ENTITY_ID]
-        self._lock_name = config_entry.data[CONF_LOCK_NAME]
+        self._lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
+            PRIMARY_LOCK
+        ]
         super().__init__(
             hass,
             _LOGGER,
@@ -261,9 +341,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         data = ""
 
         # Build data from entities
-        enabled_bool = f"input_boolean.enabled_{self._lock_name}_{code_slot}"
+        enabled_bool = f"input_boolean.enabled_{self._lock.lock_name}_{code_slot}"
         enabled = self.hass.states.get(enabled_bool)
-        pin_data = f"input_text.{self._lock_name}_pin_{code_slot}"
+        pin_data = f"input_text.{self._lock.lock_name}_pin_{code_slot}"
         pin = self.hass.states.get(pin_data)
 
         # If slot is enabled return the PIN
@@ -294,8 +374,8 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         # loop to get user code data from entity_id node
         instance_id = 1  # default
         data = {}
-        data[CONF_ENTITY_ID] = self._entity_id
-        data[ATTR_NODE_ID] = get_node_id(self.hass, self._entity_id)
+        data[CONF_LOCK_ENTITY_ID] = self._lock.lock_entity_id
+        data[ATTR_NODE_ID] = get_node_id(self.hass, self._lock.lock_entity_id)
 
         if data[ATTR_NODE_ID] is None:
             raise NoNodeSpecifiedError
@@ -356,7 +436,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     code = self._invalid_code(value.index)
 
                 # Build data from entities
-                enabled_bool = f"input_boolean.enabled_{self._lock_name}_{value.index}"
+                enabled_bool = (
+                    f"input_boolean.enabled_{self._lock.lock_name}_{value.index}"
+                )
                 enabled = self.hass.states.get(enabled_bool)
 
                 # Report blank slot if occupied by random code

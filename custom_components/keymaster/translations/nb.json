@@ -2,19 +2,21 @@
   "config": {
     "error": {
       "invalid_path": "Vennligst oppbevar bildene i en annen katalog.",
-      "same_name": "Please choose a different name, this one is already in use."
+      "same_name": "Name already in use",
+      "invalid_child_locks_file": "{error}"
     },
     "step": {
       "user": {
         "data": {
-          "alarm_level": "Brukerkodesensor (fra lås)",
-          "alarm_type": "Tilgangskontrollsensor (fra lås)",
-          "entity_id": "Velg lås",
+          "alarm_level_or_user_code_entity_id": "Brukerkodesensor (fra lås)",
+          "alarm_type_or_access_control_entity_id": "Tilgangskontrollsensor (fra lås)",
+          "lock_entity_id": "Velg lås",
           "slots": "Kodespor",
           "start_from": "Start fra kodespor #",
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
-          "packages_path": "Sti til pakkekatalog"
+          "packages_path": "Sti til pakkekatalog",
+          "child_locks_file": "Path to child locks file"
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "KeyMaster"
@@ -24,19 +26,21 @@
   "options": {
     "error": {
       "invalid_path": "Vennligst oppbevar bildene i en annen katalog.",
-      "same_name": "Please choose a different name, this one is already in use."
+      "same_name": "Name already in use",
+      "invalid_child_locks_file": "{error}"
     },
     "step": {
       "init": {
         "data": {
-          "alarm_level": "Brukerkodesensor (fra lås)",
-          "alarm_type": "Tilgangskontrollsensor (fra lås)",
-          "entity_id": "Velg lås",
+          "alarm_level_or_user_code_entity_id": "Brukerkodesensor (fra lås)",
+          "alarm_type_or_access_control_entity_id": "Tilgangskontrollsensor (fra lås)",
+          "lock_entity_id": "Velg lås",
           "slots": "Kodespor",
           "start_from": "Start fra kodespor #",
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
-          "packages_path": "Sti til pakkekatalog"
+          "packages_path": "Sti til pakkekatalog",
+          "child_locks_file": "Path to child locks file"
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "KeyMaster"

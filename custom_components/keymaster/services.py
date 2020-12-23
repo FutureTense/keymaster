@@ -14,18 +14,21 @@ from homeassistant.core import HomeAssistant
 from .const import (
     ATTR_NODE_ID,
     ATTR_USER_CODE,
-    CONF_ALARM_LEVEL,
-    CONF_ALARM_TYPE,
-    CONF_ENTITY_ID,
+    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
     CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
+    DOMAIN,
     MANAGER,
+    PRIMARY_LOCK,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
 from .helpers import get_node_id, output_to_file_from_template, using_ozw, using_zwave
+from .lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -142,7 +145,8 @@ def generate_package_files(
     hass: HomeAssistant, config_entry: ConfigEntry, name: str
 ) -> None:
     """Generate the package files."""
-    lockname = config_entry.data[CONF_LOCK_NAME]
+    primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+    lockname = primary_lock.lock_name
 
     _LOGGER.debug("Starting file generation...")
 
@@ -153,11 +157,11 @@ def generate_package_files(
 
     inputlockpinheader = f"input_text.{lockname}_pin"
     activelockheader = f"binary_sensor.active_{lockname}"
-    lockentityname = config_entry.data[CONF_ENTITY_ID]
+    lockentityname = primary_lock.lock_entity_id
     sensorname = lockname
-    doorsensorentityname = config_entry.data[CONF_SENSOR_NAME] or ""
-    sensoralarmlevel = config_entry.data[CONF_ALARM_LEVEL]
-    sensoralarmtype = config_entry.data[CONF_ALARM_TYPE]
+    doorsensorentityname = primary_lock.door_sensor or ""
+    sensoralarmlevel = primary_lock.alarm_level_or_user_code_entity_id
+    sensoralarmtype = primary_lock.alarm_type_or_access_control_entity_id
     using_ozw_str = f"{using_ozw(hass)}"
 
     output_path = os.path.join(
