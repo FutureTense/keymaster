@@ -1,5 +1,4 @@
 """Services for keymaster."""
-from custom_components.keymaster.lock import KeymasterLock
 import logging
 import os
 
