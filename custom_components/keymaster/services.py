@@ -1,4 +1,5 @@
 """Services for keymaster."""
+from custom_components.keymaster.lock import KeymasterLock
 import logging
 import os
 
@@ -14,9 +15,9 @@ from homeassistant.core import HomeAssistant
 from .const import (
     ATTR_NODE_ID,
     ATTR_USER_CODE,
-    CONF_ALARM_LEVEL,
-    CONF_ALARM_TYPE,
-    CONF_ENTITY_ID,
+    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
     CONF_SENSOR_NAME,
@@ -153,11 +154,11 @@ def generate_package_files(
 
     inputlockpinheader = f"input_text.{lockname}_pin"
     activelockheader = f"binary_sensor.active_{lockname}"
-    lockentityname = config_entry.data[CONF_ENTITY_ID]
+    lockentityname = config_entry.data[CONF_LOCK_ENTITY_ID]
     sensorname = lockname
     doorsensorentityname = config_entry.data[CONF_SENSOR_NAME] or ""
-    sensoralarmlevel = config_entry.data[CONF_ALARM_LEVEL]
-    sensoralarmtype = config_entry.data[CONF_ALARM_TYPE]
+    sensoralarmlevel = config_entry.data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID]
+    sensoralarmtype = config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID]
     using_ozw_str = f"{using_ozw(hass)}"
 
     output_path = os.path.join(
