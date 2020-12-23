@@ -1,4 +1,5 @@
 -r requirements_dev.txt
+asyncio_mqtt
 pytest
 pytest-homeassistant-custom-component
 black
