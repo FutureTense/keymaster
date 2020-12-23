@@ -5,6 +5,11 @@ PLATFORM = "sensor"
 ZWAVE_NETWORK = "zwave_network"
 MANAGER = "manager"
 
+# hass.data attributes
+CHILD_LOCKS = "child_locks"
+COORDINATOR = "coordinator"
+PRIMARY_LOCK = "primary_lock"
+
 # Attributes
 ATTR_NAME = "lockname"
 ATTR_NODE_ID = "node_id"

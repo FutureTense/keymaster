@@ -5,7 +5,7 @@ from openzwavemqtt.const import ATTR_CODE_SLOT
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_LOCK_NAME, CONF_SLOTS, CONF_START, DOMAIN
+from .const import CONF_LOCK_NAME, CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class CodesSensor(CoordinatorEntity):
         self._state = None
         self._name = f"code_slot_{code_slot}"
         self._lock_name = entry.data.get(CONF_LOCK_NAME)
-        super().__init__(hass.data[DOMAIN][entry.entry_id])
+        super().__init__(hass.data[DOMAIN][entry.entry_id][COORDINATOR])
 
     @property
     def unique_id(self):

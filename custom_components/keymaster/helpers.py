@@ -16,7 +16,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import async_get_registry
 from homeassistant.util.yaml.loader import load_yaml
 
-from .const import ATTR_NODE_ID, CONF_LOCK_NAME, CONF_PATH
+from .const import ATTR_NODE_ID, CONF_PATH, DOMAIN, PRIMARY_LOCK
+from .lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,9 +104,11 @@ async def remove_generated_entities(
 ) -> List[str]:
     """Remove entities and return removed list."""
     ent_reg = await async_get_registry(hass)
+    lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+
     entities_to_remove = await hass.async_add_executor_job(
         _get_entities_to_remove,
-        config_entry.data[CONF_LOCK_NAME],
+        lock.lock_name,
         os.path.join(hass.config.path(), config_entry.data[CONF_PATH]),
         code_slots_to_remove,
         remove_common_file,
@@ -121,7 +124,9 @@ async def remove_generated_entities(
 def delete_lock_and_base_folder(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Delete packages folder for lock and base keymaster folder if empty."""
     base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
-    delete_folder(base_path, config_entry.data[CONF_LOCK_NAME])
+    lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+
+    delete_folder(base_path, lock.lock_name)
     if not os.listdir(base_path):
         os.rmdir(base_path)
 
