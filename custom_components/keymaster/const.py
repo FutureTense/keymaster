@@ -14,9 +14,9 @@ COORDINATOR = "coordinator"
 PRIMARY_LOCK = "primary_lock"
 UNSUB_LISTENERS = "unsub_listeners"
 
-# Manufacturer constants
-SCHLAGE = "schlage"
-KWIKSET = "kwikset"
+# Action entity type
+ALARM_TYPE = "alarm_type"
+ACCESS_CONTROL = "access_control"
 
 # Events
 EVENT_KEYMASTER_LOCK_STATE_CHANGED = "keymaster_lock_state_changed"
@@ -57,9 +57,9 @@ DEFAULT_GENERATE = True
 DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
 DEFAULT_HIDE_PINS = False
 
-# Alarm Type/Access Control maps
-ALARM_TYPE_MAP = {
-    KWIKSET: {
+# Action maps
+ACTION_MAP = {
+    ALARM_TYPE: {
         999: "Kwikset",
         0: "No Status Reported",
         9: "Lock Jammed",
@@ -84,7 +84,7 @@ ALARM_TYPE_MAP = {
         112: "Code Changed",
         113: "Duplicate Code",
     },
-    SCHLAGE: {
+    ACCESS_CONTROL: {
         999: "Schlage",
         1: "Manual Lock",
         2: "Manual Unlock",
@@ -108,11 +108,11 @@ ALARM_TYPE_MAP = {
 }
 
 LOCK_STATE_MAP = {
-    KWIKSET: {
+    ALARM_TYPE: {
         STATE_LOCKED: 24,
         STATE_UNLOCKED: 25,
     },
-    SCHLAGE: {
+    ACCESS_CONTROL: {
         STATE_LOCKED: 3,
         STATE_UNLOCKED: 4,
     },

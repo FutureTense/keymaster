@@ -12,20 +12,14 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, STATE_LOCKED, STATE_UNLOCKED
 from homeassistant.core import Config, HomeAssistant, ServiceCall, State
-from homeassistant.helpers.device_registry import (
-    DeviceRegistry,
-    async_get_registry as async_get_device_registry,
-)
-from homeassistant.helpers.entity_registry import (
-    EntityRegistry,
-    async_get_registry as async_get_entity_registry,
-)
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import datetime as dt_util
 
 from .const import (
-    ALARM_TYPE_MAP,
+    ACCESS_CONTROL,
+    ACTION_MAP,
+    ALARM_TYPE,
     ATTR_ACTION_CODE,
     ATTR_ACTION_TEXT,
     ATTR_NAME,
@@ -52,12 +46,10 @@ from .const import (
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
-    KWIKSET,
     LOCK_STATE_MAP,
     MANAGER,
     PLATFORM,
     PRIMARY_LOCK,
-    SCHLAGE,
     UNSUB_LISTENERS,
     VERSION,
     ZWAVE_NETWORK,
@@ -243,19 +235,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         ]:
             return
 
-        # Get lock entity's device manufacturer property to determine whether
-        # the manufacturer is someone we support
-        device_reg: DeviceRegistry = await async_get_device_registry(hass)
-        ent_reg: EntityRegistry = await async_get_entity_registry(hass)
-        manufacturer_raw = device_reg.async_get(
-            ent_reg.async_get(primary_lock.lock_entity_id).device_id
-        ).manufacturer.lower()
-        manufacturer = ""
-
-        if SCHLAGE in manufacturer_raw:
-            manufacturer = SCHLAGE
-        elif KWIKSET in manufacturer_raw:
-            manufacturer = KWIKSET
+        action_type = ""
+        if ALARM_TYPE in primary_lock.alarm_type_or_access_control_entity_id:
+            action_type = ALARM_TYPE
+        if ACCESS_CONTROL in primary_lock.alarm_type_or_access_control_entity_id:
+            action_type = ACCESS_CONTROL
 
         alarm_level_state = hass.states.get(
             primary_lock.alarm_level_or_user_code_entity_id
@@ -280,12 +264,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
             if (
                 new_state.state in (STATE_LOCKED, STATE_UNLOCKED)
-                and manufacturer in LOCK_STATE_MAP
+                and action_type in LOCK_STATE_MAP
             ):
-                alarm_type_value = LOCK_STATE_MAP[manufacturer][new_state.state]
+                alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
 
         action_text = (
-            ALARM_TYPE_MAP.get(manufacturer, {}).get(
+            ACTION_MAP.get(action_type, {}).get(
                 alarm_type_value, "Unknown Alarm Type Value"
             )
             if alarm_type_value is not None
