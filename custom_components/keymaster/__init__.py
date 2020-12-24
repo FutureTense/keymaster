@@ -24,6 +24,7 @@ from .const import (
     CONF_ALARM_TYPE,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_CHILD_LOCKS,
+    CONF_ENTITY_ID,
     CONF_GENERATE,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
@@ -81,8 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     updated_config = config_entry.data.copy()
 
     # pop CONF_GENERATE if it is in data
-    if should_generate_package is not None:
-        updated_config.pop(CONF_GENERATE)
+    updated_config.pop(CONF_GENERATE, None)
 
     # If CONF_PATH is absolute, make it relative. This can be removed in the future,
     # it is only needed for entries that are being migrated from using the old absolute
@@ -245,7 +245,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
         data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL)
         data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(CONF_ALARM_TYPE)
-        data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_LOCK_ENTITY_ID)
+        data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_ENTITY_ID)
 
         await hass.config_entries.async_update_entry(entry=config_entry, data=data)
         config_entry.version = 2

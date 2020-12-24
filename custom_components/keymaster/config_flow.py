@@ -3,9 +3,9 @@ import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional, Union
-from homeassistant.util.yaml.loader import load_yaml
 
 import voluptuous as vol
+from voluptuous.schema_builder import ALLOW_EXTRA
 
 from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
@@ -14,6 +14,7 @@ from homeassistant.components.sensor import DOMAIN as SENSORS_DOMAIN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import slugify
+from homeassistant.util.yaml.loader import load_yaml
 
 from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
@@ -82,6 +83,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         CONF_START: DEFAULT_START,
         CONF_SENSOR_NAME: DEFAULT_DOOR_SENSOR,
         CONF_PATH: DEFAULT_PACKAGES_PATH,
+        CONF_CHILD_LOCKS_FILE: "",
     }
 
     async def _get_unique_name_error(self, user_input) -> Dict[str, str]:
@@ -202,8 +204,9 @@ def _get_schema(
             vol.Required(CONF_PATH, default=_get_default(CONF_PATH)): str,
             vol.Optional(
                 CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE)
-            ): vol.Any(str, None),
-        }
+            ): str,
+        },
+        extra=ALLOW_EXTRA,
     )
 
 
