@@ -255,7 +255,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         )
 
         # Unsubscribe to any listeners
-        for unsub_listener in hass.data.domain[DOMAIN].get(UNSUB_LISTENERS, []):
+        for unsub_listener in hass.data[DOMAIN].get(UNSUB_LISTENERS, []):
             unsub_listener()
 
         hass.data[DOMAIN].pop(config_entry.entry_id)
