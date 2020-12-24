@@ -284,7 +284,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             else None
         )
 
-        await hass.bus.async_fire(
+        hass.bus.async_fire(
             EVENT_KEYMASTER_LOCK_STATE_CHANGED,
             event_data={
                 ATTR_ACTION_CODE: alarm_type_value,
