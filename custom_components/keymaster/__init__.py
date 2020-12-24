@@ -294,7 +294,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             },
         )
 
-    await async_track_state_change(
+    async_track_state_change(
         hass,
         [
             primary_lock.lock_entity_id,
