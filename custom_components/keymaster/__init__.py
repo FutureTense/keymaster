@@ -32,6 +32,7 @@ from .const import (
     CONF_ALARM_TYPE,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_CHILD_LOCKS,
+    CONF_CHILD_LOCKS_FILE,
     CONF_ENTITY_ID,
     CONF_GENERATE,
     CONF_HIDE_PINS,
@@ -350,6 +351,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_ENTITY_ID)
         if CONF_HIDE_PINS not in data:
             data[CONF_HIDE_PINS] = DEFAULT_HIDE_PINS
+        data[CONF_CHILD_LOCKS_FILE] = data.get(CONF_CHILD_LOCKS_FILE, "")
 
         hass.config_entries.async_update_entry(entry=config_entry, data=data)
         config_entry.version = 2

@@ -138,10 +138,9 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
         self, user_input: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """Handle a flow initialized by the user."""
-
-        data = self.config_entry.data.copy()
-        data[CONF_CHILD_LOCKS_FILE] = data.get(CONF_CHILD_LOCKS_FILE, "")
-        return await _start_config_flow(self, "init", "", user_input, data)
+        return await _start_config_flow(
+            self, "init", "", user_input, self.config_entry.data
+        )
 
 
 def _get_entities(
