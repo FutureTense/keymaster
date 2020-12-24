@@ -351,7 +351,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         if CONF_HIDE_PINS not in data:
             data[CONF_HIDE_PINS] = DEFAULT_HIDE_PINS
 
-        await hass.config_entries.async_update_entry(entry=config_entry, data=data)
+        hass.config_entries.async_update_entry(entry=config_entry, data=data)
         config_entry.version = 2
         _LOGGER.debug("Migration to version %s complete", config_entry.version)
 
