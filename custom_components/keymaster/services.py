@@ -223,13 +223,7 @@ def generate_package_files(
     _LOGGER.debug("Creating per slot YAML and lovelace cards...")
     # Replace variables in code slot files
     for x in range(start_from, code_slots + 1):
-        replacements = {
-            "LOCKNAME": lockname,
-            "CASE_LOCK_NAME": lockname,
-            "TEMPLATENUM": str(x),
-            "LOCKENTITYNAME": lockentityname,
-            "USINGOZW": using_ozw_str,
-        }
+        replacements["TEMPLATENUM"] = str(x)
 
         for in_f, out_f, write_mode in (
             ("keymaster.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
