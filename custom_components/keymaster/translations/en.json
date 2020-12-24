@@ -3,7 +3,7 @@
     "error": {
       "invalid_path": "Path must be a relative path, not absolute",
       "same_name": "Name already in use",
-      "invalid_child_locks_file": "{error}"
+      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
     },
     "step": {
       "user": {
@@ -36,7 +36,7 @@
     "error": {
       "invalid_path": "Path must be a relative path, not absolute",
       "same_name": "Name already in use",
-      "invalid_child_locks_file": "{error}"
+      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
     },
     "step": {
       "init": {

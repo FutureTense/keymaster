@@ -281,7 +281,7 @@ async def _start_config_flow(
                 )
                 if err_msg:
                     errors[CONF_CHILD_LOCKS_FILE] = "invalid_child_locks_file"
-                    description_placeholders["error"] = err_msg
+                    description_placeholders["error"] = "invalid_child_locks_file"
 
         # Update options if no errors
         if not errors:
