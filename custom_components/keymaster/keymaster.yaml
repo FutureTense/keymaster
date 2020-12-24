@@ -89,6 +89,7 @@ input_text:
     name: 'Name'
   LOCKNAME_pin_TEMPLATENUM:
     name: 'PIN'
+    mode: HIDE_PINS
 
 #################  input_boolean: ################  
 input_boolean:

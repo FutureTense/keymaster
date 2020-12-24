@@ -3,7 +3,7 @@
     "error": {
       "invalid_path": "Path must be a relative path, not absolute",
       "same_name": "Name already in use",
-      "invalid_child_locks_file": "{error}"
+      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
     },
     "step": {
       "user": {
@@ -17,7 +17,8 @@
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
           "using_ozw": "Using OZW?",
-          "child_locks_file": "Path to child locks file (relative)"
+          "child_locks_file": "Path to child locks file",
+          "hide_pins": "Hide PINs in UI?"
         },
         "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
         "title": "KeyMaster"
@@ -35,7 +36,7 @@
     "error": {
       "invalid_path": "Path must be a relative path, not absolute",
       "same_name": "Name already in use",
-      "invalid_child_locks_file": "{error}"
+      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
     },
     "step": {
       "init": {
@@ -49,7 +50,8 @@
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
           "using_ozw": "Using OZW?",
-          "child_locks_file": "Path to child locks file"
+          "child_locks_file": "Path to child locks file",
+          "hide_pins": "Hide PINs in UI?"
         },
         "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
         "title": "KeyMaster"

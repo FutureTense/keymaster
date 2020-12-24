@@ -4,6 +4,7 @@ import os
 
 from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 
+from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
@@ -14,15 +15,12 @@ from homeassistant.core import HomeAssistant
 from .const import (
     ATTR_NODE_ID,
     ATTR_USER_CODE,
-    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_LOCK_ENTITY_ID,
-    CONF_LOCK_NAME,
+    CONF_HIDE_PINS,
     CONF_PATH,
-    CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
     DOMAIN,
+    DEFAULT_HIDE_PINS,
     MANAGER,
     PRIMARY_LOCK,
 )
@@ -159,10 +157,15 @@ def generate_package_files(
     activelockheader = f"binary_sensor.active_{lockname}"
     lockentityname = primary_lock.lock_entity_id
     sensorname = lockname
-    doorsensorentityname = primary_lock.door_sensor or ""
+    doorsensorentityname = primary_lock.door_sensor_entity_id or ""
     sensoralarmlevel = primary_lock.alarm_level_or_user_code_entity_id
     sensoralarmtype = primary_lock.alarm_type_or_access_control_entity_id
     using_ozw_str = f"{using_ozw(hass)}"
+    hide_pins = (
+        MODE_PASSWORD
+        if config_entry.data.get(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
+        else MODE_TEXT
+    )
 
     output_path = os.path.join(
         hass.config.path(), config_entry.data[CONF_PATH], lockname
@@ -206,6 +209,7 @@ def generate_package_files(
         "SENSORALARMTYPE": sensoralarmtype,
         "SENSORALARMLEVEL": sensoralarmlevel,
         "USINGOZW": using_ozw_str,
+        "HIDE_PINS": hide_pins,
     }
     # Replace variables in common file
     for in_f, out_f, write_mode in (
