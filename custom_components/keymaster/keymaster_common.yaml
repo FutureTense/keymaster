@@ -86,6 +86,8 @@ automation:
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
+      event_data:
+        lockname: LOCKNAME
     condition:
       - condition: state
         entity_id: "binary_sensor.allow_automation"
@@ -101,6 +103,8 @@ automation:
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
+      event_data:
+        lockname: LOCKNAME
     condition:
       - condition: state
         entity_id: "binary_sensor.allow_automation"
@@ -198,6 +202,8 @@ automation:
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
+      event_data:
+        lockname: LOCKNAME
     condition:
       - condition: state
         entity_id: "binary_sensor.allow_automation"

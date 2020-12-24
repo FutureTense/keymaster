@@ -10,22 +10,15 @@ import voluptuous as vol
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID, STATE_LOCKED, STATE_UNLOCKED
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import Config, HomeAssistant, ServiceCall, State
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import datetime as dt_util
 
 from .const import (
-    ACCESS_CONTROL,
-    ACTION_MAP,
-    ALARM_TYPE,
-    ATTR_ACTION_CODE,
-    ATTR_ACTION_TEXT,
     ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
-    ATTR_USER_CODE_NAME,
     CHILD_LOCKS,
     CONF_ALARM_LEVEL,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
@@ -45,9 +38,7 @@ from .const import (
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
-    EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
-    LOCK_STATE_MAP,
     MANAGER,
     PLATFORM,
     PRIMARY_LOCK,
@@ -60,6 +51,7 @@ from .helpers import (
     delete_folder,
     delete_lock_and_base_folder,
     get_node_id,
+    handle_state_change,
     remove_generated_entities,
     using_ozw,
     using_zwave,
@@ -224,84 +216,19 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         changed_entity: str, old_state: State, new_state: State
     ) -> None:
         """Listener to track state changes to lock entities."""
-        primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
-            PRIMARY_LOCK
-        ]
+        handle_state_change(hass, config_entry, changed_entity, new_state)
 
-        # If listener was called for entity that is not for this entry, ignore
-        if changed_entity not in [
-            primary_lock.lock_entity_id,
-            primary_lock.alarm_level_or_user_code_entity_id,
-            primary_lock.alarm_type_or_access_control_entity_id,
-        ]:
-            return
-
-        action_type = ""
-        if ALARM_TYPE in primary_lock.alarm_type_or_access_control_entity_id:
-            action_type = ALARM_TYPE
-        if ACCESS_CONTROL in primary_lock.alarm_type_or_access_control_entity_id:
-            action_type = ACCESS_CONTROL
-
-        alarm_level_state = hass.states.get(
-            primary_lock.alarm_level_or_user_code_entity_id
+    # Listen to lock state changes so we can fire an event
+    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+        async_track_state_change(
+            hass,
+            [
+                primary_lock.lock_entity_id,
+                primary_lock.alarm_level_or_user_code_entity_id,
+                primary_lock.alarm_type_or_access_control_entity_id,
+            ],
+            async_entity_state_listener,
         )
-        alarm_level_value = int(alarm_level_state.state) if alarm_level_state else None
-
-        alarm_type_state = hass.states.get(
-            primary_lock.alarm_type_or_access_control_entity_id
-        )
-        alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
-
-        if changed_entity == primary_lock.lock_entity_id:
-            if (
-                alarm_level_state is None
-                or int(alarm_level_state.state) != 0
-                or (
-                    dt_util.utcnow() - alarm_type_state.last_changed
-                    < timedelta(seconds=2)
-                )
-            ):
-                return
-
-            if (
-                new_state.state in (STATE_LOCKED, STATE_UNLOCKED)
-                and action_type in LOCK_STATE_MAP
-            ):
-                alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
-
-        action_text = (
-            ACTION_MAP.get(action_type, {}).get(
-                alarm_type_value, "Unknown Alarm Type Value"
-            )
-            if alarm_type_value is not None
-            else None
-        )
-        usercode_name = (
-            hass.states.get(
-                f"input_text.{primary_lock.lock_name}_name_{alarm_level_value}"
-            ).state
-            if alarm_level_value is not None
-            else None
-        )
-
-        hass.bus.async_fire(
-            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-            event_data={
-                ATTR_ACTION_CODE: alarm_type_value,
-                ATTR_ACTION_TEXT: action_text,
-                ATTR_USER_CODE: alarm_level_value,
-                ATTR_USER_CODE_NAME: usercode_name,
-            },
-        )
-
-    async_track_state_change(
-        hass,
-        [
-            primary_lock.lock_entity_id,
-            primary_lock.alarm_level_or_user_code_entity_id,
-            primary_lock.alarm_type_or_access_control_entity_id,
-        ],
-        async_entity_state_listener,
     )
 
     return True
@@ -421,6 +348,29 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     )
     servicedata = {"lockname": primary_lock.lock_name}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
+
+    async def async_entity_state_listener(
+        changed_entity: str, old_state: State, new_state: State
+    ) -> None:
+        """Listener to track state changes to lock entities."""
+        handle_state_change(hass, config_entry, changed_entity, new_state)
+
+    # Unsubscribe to any listeners so we can create new ones
+    for unsub_listener in hass.data.domain[DOMAIN].get(UNSUB_LISTENERS, []):
+        unsub_listener()
+
+    # Create new listeners
+    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+        async_track_state_change(
+            hass,
+            [
+                primary_lock.lock_entity_id,
+                primary_lock.alarm_level_or_user_code_entity_id,
+                primary_lock.alarm_type_or_access_control_entity_id,
+            ],
+            async_entity_state_listener,
+        )
+    )
 
 
 class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
