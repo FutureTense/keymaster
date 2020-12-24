@@ -10,4 +10,4 @@ class KeymasterLock:
     lock_entity_id: str
     alarm_level_or_user_code_entity_id: str
     alarm_type_or_access_control_entity_id: str
-    door_sensor: str
+    door_sensor_entity_id: str

@@ -31,6 +31,7 @@ CONF_OZW = "using_ozw"
 CONF_SENSOR_NAME = "sensorname"
 CONF_SLOTS = "slots"
 CONF_START = "start_from"
+CONF_HIDE_PINS = "hide_pins"
 
 # Defaults
 DEFAULT_CODE_SLOTS = 10
@@ -38,3 +39,4 @@ DEFAULT_PACKAGES_PATH = "packages/keymaster/"
 DEFAULT_START = 1
 DEFAULT_GENERATE = True
 DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
+DEFAULT_HIDE_PINS = False

@@ -16,7 +16,9 @@
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
           "packages_path": "Sti til pakkekatalog",
-          "child_locks_file": "Path to child locks file"
+          "child_locks_file": "Path to child locks file",
+          "using_ozw": "Using OZW?",
+          "hide_pins": "Hide PINs in UI?"
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "KeyMaster"
@@ -40,7 +42,9 @@
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
           "packages_path": "Sti til pakkekatalog",
-          "child_locks_file": "Path to child locks file"
+          "child_locks_file": "Path to child locks file",
+          "using_ozw": "Using OZW?",
+          "hide_pins": "Hide PINs in UI?"
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "KeyMaster"

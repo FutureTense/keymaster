@@ -43,6 +43,7 @@ _LOGGER = logging.getLogger(__name__)
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
+                "hide_pins": False,
             },
         ),
         (
@@ -75,6 +76,7 @@ _LOGGER = logging.getLogger(__name__)
                         "lock_entity_id": "lock.test",
                     }
                 },
+                "hide_pins": False,
             },
         ),
     ],
@@ -147,6 +149,8 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
+                "child_locks_file": "",
+                "hide_pins": False,
             },
         ),
     ],
@@ -214,6 +218,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "slots": 6,
                 "start_from": 1,
                 "child_locks_file": "",
+                "hide_pins": False,
             },
         ),
     ],

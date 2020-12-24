@@ -17,7 +17,8 @@
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
           "using_ozw": "Using OZW?",
-          "child_locks_file": "Path to child locks file (relative)"
+          "child_locks_file": "Path to child locks file",
+          "hide_pins": "Hide PINs in UI?"
         },
         "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
         "title": "KeyMaster"
@@ -49,7 +50,8 @@
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
           "using_ozw": "Using OZW?",
-          "child_locks_file": "Path to child locks file"
+          "child_locks_file": "Path to child locks file",
+          "hide_pins": "Hide PINs in UI?"
         },
         "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
         "title": "KeyMaster"

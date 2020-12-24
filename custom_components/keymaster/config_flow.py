@@ -22,6 +22,7 @@ from .const import (
     CONF_CHILD_LOCKS,
     CONF_CHILD_LOCKS_FILE,
     CONF_GENERATE,
+    CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
@@ -31,6 +32,7 @@ from .const import (
     DEFAULT_CODE_SLOTS,
     DEFAULT_DOOR_SENSOR,
     DEFAULT_GENERATE,
+    DEFAULT_HIDE_PINS,
     DEFAULT_PACKAGES_PATH,
     DEFAULT_START,
     DOMAIN,
@@ -84,6 +86,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         CONF_SENSOR_NAME: DEFAULT_DOOR_SENSOR,
         CONF_PATH: DEFAULT_PACKAGES_PATH,
         CONF_CHILD_LOCKS_FILE: "",
+        CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
     async def _get_unique_name_error(self, user_input) -> Dict[str, str]:
@@ -168,20 +171,25 @@ def _get_schema(
     if user_input is None:
         user_input = {}
 
-    def _get_default(key: str):
+    def _get_default(key: str, fallback_default: Any = None) -> None:
         """Gets default value for key."""
-        return user_input.get(key, default_dict.get(key))
+        return user_input.get(key, default_dict.get(key, fallback_default))
 
     return vol.Schema(
         {
             vol.Required(
                 CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
             ): vol.In(_get_entities(hass, LOCK_DOMAIN)),
-            vol.Required(CONF_SLOTS, default=_get_default(CONF_SLOTS)): vol.Coerce(int),
-            vol.Required(CONF_START, default=_get_default(CONF_START)): vol.Coerce(int),
+            vol.Required(
+                CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)
+            ): vol.Coerce(int),
+            vol.Required(
+                CONF_START, default=_get_default(CONF_START, DEFAULT_START)
+            ): vol.Coerce(int),
             vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
             vol.Optional(
-                CONF_SENSOR_NAME, default=_get_default(CONF_SENSOR_NAME)
+                CONF_SENSOR_NAME,
+                default=_get_default(CONF_SENSOR_NAME, DEFAULT_DOOR_SENSOR),
             ): vol.In(
                 _get_entities(
                     hass, BINARY_DOMAIN, extra_entities=["binary_sensor.fake"]
@@ -201,10 +209,15 @@ def _get_schema(
                     hass, SENSORS_DOMAIN, search=["alarm_type", "access_control"]
                 )
             ),
-            vol.Required(CONF_PATH, default=_get_default(CONF_PATH)): str,
-            vol.Optional(
-                CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE)
+            vol.Required(
+                CONF_PATH, default=_get_default(CONF_PATH, DEFAULT_PACKAGES_PATH)
             ): str,
+            vol.Optional(
+                CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE, "")
+            ): str,
+            vol.Required(
+                CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
+            ): bool,
         },
         extra=ALLOW_EXTRA,
     )
