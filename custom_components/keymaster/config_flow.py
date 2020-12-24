@@ -211,13 +211,13 @@ def _get_schema(
             ),
             vol.Required(
                 CONF_PATH, default=_get_default(CONF_PATH, DEFAULT_PACKAGES_PATH)
-            ): str,,
+            ): str,
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
             vol.Optional(
                 CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE, "")
-            ): str
+            ): str,
         },
         extra=ALLOW_EXTRA,
     )
