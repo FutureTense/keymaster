@@ -9,7 +9,7 @@
 ###############  input_text:  #################
 input_text:
   LOCKNAME_status_report:
-    name: LOCKNAME Status report
+    name: CASE_LOCK_NAME Status report
 
 ###############  input_number:  #################
 input_number:
@@ -40,29 +40,6 @@ sensor:
     display_options:
       - "time"
       - "date"
-      - "date_time"
-      - "date_time_iso"
-      - "time_date"
-      - "time_utc"
-      - "beat"
-
-  - platform: template
-    sensors:
-      LOCKNAME_ac_last_changed:
-        friendly_name: CASE_LOCK_NAME AC Last Changed From Present
-        unit_of_measurement: "seconds"
-        value_template: >-
-          {% set CONTROL = 'input_number.LOCKNAME_lock_command' %}
-          {% set CONTROLlc = states.input_number[CONTROL.split('.')[-1]].last_changed %}
-          {{ (as_timestamp(now()) - as_timestamp(CONTROLlc)) | float }}
-
-      LOCKNAME_uc_last_changed:
-        friendly_name: CASE_LOCK_NAME UC Last Changed From Present
-        unit_of_measurement: "seconds"
-        value_template: >-
-          {% set CONTROL = 'input_number.LOCKNAME_lock_user' %}
-          {% set CONTROLlc = states.input_number[CONTROL.split('.')[-1]].last_changed %}
-          {{ (as_timestamp(now()) - as_timestamp(CONTROLlc)) | float }}
 
 ###################  script    :  ####################
 script:

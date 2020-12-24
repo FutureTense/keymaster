@@ -10,14 +10,28 @@ import voluptuous as vol
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import Config, HomeAssistant, ServiceCall
+from homeassistant.const import ATTR_ENTITY_ID, STATE_LOCKED, STATE_UNLOCKED
+from homeassistant.core import Config, HomeAssistant, ServiceCall, State
+from homeassistant.helpers.device_registry import (
+    DeviceRegistry,
+    async_get_registry as async_get_device_registry,
+)
+from homeassistant.helpers.entity_registry import (
+    EntityRegistry,
+    async_get_registry as async_get_entity_registry,
+)
+from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import datetime as dt_util
 
 from .const import (
+    ALARM_TYPE_MAP,
+    ATTR_ACTION_CODE,
+    ATTR_ACTION_TEXT,
     ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
+    ATTR_USER_CODE_NAME,
     CHILD_LOCKS,
     CONF_ALARM_LEVEL,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
@@ -36,10 +50,15 @@ from .const import (
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
+    EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
+    KWIKSET,
+    LOCK_STATE_MAP,
     MANAGER,
     PLATFORM,
     PRIMARY_LOCK,
+    SCHLAGE,
+    UNSUB_LISTENERS,
     VERSION,
     ZWAVE_NETWORK,
 )
@@ -119,6 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     hass.data[DOMAIN][config_entry.entry_id] = {
         PRIMARY_LOCK: primary_lock,
         CHILD_LOCKS: child_locks,
+        UNSUB_LISTENERS: [],
     }
     coordinator = LockUsercodeUpdateCoordinator(hass, config_entry)
     hass.data[DOMAIN][config_entry.entry_id][COORDINATOR] = coordinator
@@ -207,6 +227,98 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         servicedata = {"lockname": primary_lock.lock_name}
         await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
+    async def async_entity_state_listener(
+        changed_entity: str, old_state: State, new_state: State
+    ) -> None:
+        """Listener to track state changes to lock entities."""
+        primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
+            PRIMARY_LOCK
+        ]
+
+        # If listener was called for entity that is not for this entry, ignore
+        if changed_entity not in [
+            primary_lock.lock_entity_id,
+            primary_lock.alarm_level_or_user_code_entity_id,
+            primary_lock.alarm_type_or_access_control_entity_id,
+        ]:
+            return
+
+        # Get lock entity's device manufacturer property to determine whether
+        # the manufacturer is someone we support
+        device_reg: DeviceRegistry = await async_get_device_registry(hass)
+        ent_reg: EntityRegistry = await async_get_entity_registry(hass)
+        manufacturer_raw = device_reg.async_get(
+            ent_reg.async_get(primary_lock.lock_entity_id).device_id
+        ).manufacturer.lower()
+        manufacturer = ""
+
+        if SCHLAGE in manufacturer_raw:
+            manufacturer = SCHLAGE
+        elif KWIKSET in manufacturer_raw:
+            manufacturer = KWIKSET
+
+        alarm_level_state = hass.states.get(
+            primary_lock.alarm_level_or_user_code_entity_id
+        )
+        alarm_level_value = int(alarm_level_state.state) if alarm_level_state else None
+
+        alarm_type_state = hass.states.get(
+            primary_lock.alarm_type_or_access_control_entity_id
+        )
+        alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
+
+        if changed_entity == primary_lock.lock_entity_id:
+            if (
+                alarm_level_state is None
+                or int(alarm_level_state.state) != 0
+                or (
+                    dt_util.utcnow() - alarm_type_state.last_changed
+                    < timedelta(seconds=2)
+                )
+            ):
+                return
+
+            if (
+                new_state.state in (STATE_LOCKED, STATE_UNLOCKED)
+                and manufacturer in LOCK_STATE_MAP
+            ):
+                alarm_type_value = LOCK_STATE_MAP[manufacturer][new_state.state]
+
+        action_text = (
+            ALARM_TYPE_MAP.get(manufacturer, {}).get(
+                alarm_type_value, "Unknown Alarm Type Value"
+            )
+            if alarm_type_value is not None
+            else None
+        )
+        usercode_name = (
+            hass.states.get(
+                f"input_text.{primary_lock.lock_name}_name_{alarm_level_value}"
+            ).state
+            if alarm_level_value is not None
+            else None
+        )
+
+        await hass.bus.async_fire(
+            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+            event_data={
+                ATTR_ACTION_CODE: alarm_type_value,
+                ATTR_ACTION_TEXT: action_text,
+                ATTR_USER_CODE: alarm_level_value,
+                ATTR_USER_CODE_NAME: usercode_name,
+            },
+        )
+
+    await async_track_state_change(
+        hass,
+        [
+            primary_lock.lock_entity_id,
+            primary_lock.alarm_level_or_user_code_entity_id,
+            primary_lock.alarm_type_or_access_control_entity_id,
+        ],
+        async_entity_state_listener,
+    )
+
     return True
 
 
@@ -230,6 +342,10 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         await hass.async_add_executor_job(
             delete_lock_and_base_folder, hass, config_entry
         )
+
+        # Unsubscribe to any listeners
+        for unsub_listener in hass.data.domain[DOMAIN].get(UNSUB_LISTENERS, []):
+            unsub_listener()
 
         hass.data[DOMAIN].pop(config_entry.entry_id)
 
