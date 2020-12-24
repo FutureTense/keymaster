@@ -224,7 +224,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             hass,
             [
                 primary_lock.lock_entity_id,
-                primary_lock.alarm_level_or_user_code_entity_id,
                 primary_lock.alarm_type_or_access_control_entity_id,
             ],
             async_entity_state_listener,
@@ -365,7 +364,6 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
             hass,
             [
                 primary_lock.lock_entity_id,
-                primary_lock.alarm_level_or_user_code_entity_id,
                 primary_lock.alarm_type_or_access_control_entity_id,
             ],
             async_entity_state_listener,

@@ -13,7 +13,7 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_LOCKED, STATE_UNLOCKED
+from homeassistant.const import ATTR_STATE, STATE_LOCKED, STATE_UNLOCKED
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_registry import async_get_registry
 from homeassistant.util import datetime as dt_util
@@ -24,7 +24,8 @@ from .const import (
     ACTION_MAP,
     ALARM_TYPE,
     ATTR_ACTION_CODE,
-    ATTR_ACTION_TEXT, ATTR_NAME,
+    ATTR_ACTION_TEXT,
+    ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
     ATTR_USER_CODE_NAME,
@@ -171,7 +172,6 @@ def handle_state_change(
     # If listener was called for entity that is not for this entry, ignore
     if changed_entity not in [
         primary_lock.lock_entity_id,
-        primary_lock.alarm_level_or_user_code_entity_id,
         primary_lock.alarm_type_or_access_control_entity_id,
     ]:
         return
@@ -208,6 +208,7 @@ def handle_state_change(
         ):
             alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
 
+    # Lookup action text based on alarm type value
     action_text = (
         ACTION_MAP.get(action_type, {}).get(
             alarm_type_value, "Unknown Alarm Type Value"
@@ -215,6 +216,8 @@ def handle_state_change(
         if alarm_type_value is not None
         else None
     )
+
+    # Lookup name for usercode
     usercode_name = (
         hass.states.get(
             f"input_text.{primary_lock.lock_name}_name_{alarm_level_value}"
@@ -223,10 +226,15 @@ def handle_state_change(
         else None
     )
 
+    # Get lock state to provide as part of event data
+    lock_state = hass.states.get(primary_lock.lock_entity_id)
+
+    # Fire state change event
     hass.bus.async_fire(
         EVENT_KEYMASTER_LOCK_STATE_CHANGED,
         event_data={
             ATTR_NAME: primary_lock.lock_name,
+            ATTR_STATE: lock_state.state if lock_state else None,
             ATTR_ACTION_CODE: alarm_type_value,
             ATTR_ACTION_TEXT: action_text,
             ATTR_USER_CODE: alarm_level_value,
