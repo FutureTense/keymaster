@@ -1,13 +1,21 @@
 """ Test keymaster config flow """
+import logging
 import pytest
 from pytest_homeassistant_custom_component.async_mock import patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster.config_flow import _parse_child_locks_file
+from custom_components.keymaster.config_flow import (
+    _parse_child_locks_file,
+    KeyMasterFlowHandler,
+    _get_schema,
+)
 from custom_components.keymaster.const import CONF_PATH, DOMAIN
 from homeassistant import config_entries, setup
 
 from tests.const import CONFIG_DATA
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize(
@@ -205,16 +213,18 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
+                "child_locks_file": "",
             },
         ),
     ],
 )
 async def test_options_flow(input_1, title, data, hass, mock_get_entities):
     """Test config flow options."""
+    _LOGGER.error(_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS))
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="frontdoor",
-        data=CONFIG_DATA,
+        data=_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS)(CONFIG_DATA),
     )
 
     entry.add_to_hass(hass)
