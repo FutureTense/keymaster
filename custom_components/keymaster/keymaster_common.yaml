@@ -82,168 +82,38 @@ script:
           
 ###################  automation:  ####################
 automation:
-  - alias: CASE_LOCK_NAME Status Report
-    trigger:
-      platform: state
-      entity_id: input_number.LOCKNAME_lock_command, input_number.LOCKNAME_lock_user
-    condition:
-      - condition: state
-        entity_id: "binary_sensor.allow_automation"
-        state: "on"
-      - condition: template
-        value_template: "{{ states('SENSORALARMTYPE') != 0 }}"
-    action:
-      - service: input_text.set_value
-        data_template:
-          entity_id: input_text.LOCKNAME_status_report
-          value: >-
-            {% set UC = 'SENSORALARMLEVEL' %}
-            {% set AC = 'SENSORALARMTYPE' %}
-            {% set UClc = states.sensor[UC.split('.')[-1]].last_changed %}
-            {% set AClc = states.sensor[AC.split('.')[-1]].last_changed %}
-
-            {% set usercode_value = states.input_number.LOCKNAME_lock_user.state | int | string  %}
-            {% set alarm_type_value = states.input_number.LOCKNAME_lock_command.state | int | string %}
-
-            {% set atv = 0 %}
-            {% if (alarm_type_value | int == 66 or alarm_type_value | int == 67) %}
-              {% if 'alarm_type' in AC %}
-                 {% set atv = alarm_type_value | int - 42 %}
-              {% elif 'access_control' in AC %}
-                 {% set atv = alarm_type_value | int - 63 %}
-              {% endif %}
-            {% endif %}
-            {% if atv != 0 %}
-               {% set alarm_type_value = atv %}
-            {% endif %}
-
-            {% set alarm_type_value = alarm_type_value | string %}
-
-            {% if 'alarm_type' in AC %}
-              {% set alarm_type_general_actions = {
-                '999':'Kwikset',
-                '0':'No Status Reported',
-                '9':'Lock Jammed',
-                '17':'Keypad Lock Jammed',
-                '21':'Manual Lock',
-                '22':'Manual Unlock',
-                '23':'RF Lock Jammed',
-                '24':'RF Lock',
-                '25':'RF Unlock',
-                '26':'Auto Lock Jammed',
-                '27':'Auto Lock',
-                '32':'All Codes Deleted',
-                '161':'Bad Code Entered',
-                '167':'Battery Low',
-                '168':'Battery Critical',
-                '169':'Battery Too Low To Operate Lock' } %}
-              {% set alarm_type_lock_actions = {
-                '16':'Keypad Unlock',
-                '18':'Keypad Lock',
-                '19':'Keypad Unlock',
-                '162':'Lock Code Attempt Outside of Schedule' } %}
-              {% set alarm_type_code_actions = {
-                '33':'Code Deleted',
-                '112':'Code Changed',
-                '113':'Duplicate Code' } %}
-            {% elif 'access_control' in AC %}
-              {% set alarm_type_general_actions = {
-                '999':'Schlage',
-                '1':'Manual Lock',
-                '2':'Manual Unlock',
-                '3':'RF Lock',
-                '4':'RF Unlock',
-                '7':'Manual not fully locked',
-                '8':'RF not fully locked',
-                '9':'Auto Lock locked',
-                '10':'Auto Lock not fully locked',
-                '11':'Lock Jammed',
-                '16':'Keypad temporary disabled',
-                '17':'Keypad busy' } %}
-              {% set alarm_type_lock_actions = {
-                '5':'Keypad Lock',
-                '6':'Keypad Unlock' } %}
-              {% set alarm_type_code_actions = {
-                '12':'All User Codes Deleted',
-                '13':'Single Code Deleted',
-                '14':'New User Code Added',
-                '18':'New Program Code Entered',
-                '15':'Duplicate Code' } %}
-            {% endif %}
-            {% if alarm_type_value in alarm_type_code_actions %}
-              {{alarm_type_value}};{{ alarm_type_code_actions[alarm_type_value] }};{{usercode_value}}
-            {% elif alarm_type_value in alarm_type_lock_actions  %}
-              {{alarm_type_value}};{{ alarm_type_lock_actions[alarm_type_value] }};{{usercode_value}}
-            {% elif alarm_type_value in alarm_type_general_actions %}
-              {{alarm_type_value}};{{ alarm_type_general_actions[alarm_type_value] }};{{usercode_value}}
-            {% else %}
-              {{alarm_type_value}};{{alarm_type_value}}-Unknown Alarm Type Value;{{usercode_value}}
-            {% endif %}
-
   - alias: CASE_LOCK_NAME Lock Notifications
     trigger:
-      platform: state
-      entity_id: input_text.LOCKNAME_status_report
+      platform: event
+      event_type: keymaster_lock_state_changed
     condition:
       - condition: state
         entity_id: "binary_sensor.allow_automation"
         state: "on"
-      - condition: template
-        value_template: >-
-          {% set report = states.input_text.LOCKNAME_status_report.state %}
-          {% set a = report.split(';') %}
-          {% if (a|length) != 3 or (a[2] == "0") %} 
-            {{ true }}
-          {% else %}
-            {{ true }}
-          {% endif %}
     action:
       - service: script.LOCKNAME_conditional_notify
         data_template:
           boolean: input_boolean.LOCKNAME_lock_notifications
           title: CASE_LOCK_NAME
-          message: >-
-            {% set report = states.input_text.LOCKNAME_status_report.state %}
-            {% set a = report.split(';') %}
-            {{ a[1] }}
+          message: "{{ trigger.event_data.action_text }}"
 
   - alias: CASE_LOCK_NAME User Notifications
     trigger:
-      platform: state
-      entity_id: input_text.LOCKNAME_status_report
+      platform: event
+      event_type: keymaster_lock_state_changed
     condition:
       - condition: state
         entity_id: "binary_sensor.allow_automation"
         state: "on"
       - condition: template
-        value_template: >-
-          {% set report = states.input_text.LOCKNAME_status_report.state %}
-          {% set a = report.split(';') %}
-          {% if (a|length) == 3 and (a[2] | int > 0) %} 
-            {{ true }}
-          {% else %}
-            {{ false }}
-          {% endif %}
+        value_template: "{{ trigger.event_data.usercode > 0 }}"
       - condition: template
-        value_template: >-
-          {% set report = states.input_text.LOCKNAME_status_report.state %}
-          {% set a = report.split(';') %}
-          {% set entity_id = 'notify_LOCKNAME_' + a[2] %}
-          {% set notify = states['input_boolean'][entity_id].state %}
-          {{ notify == "on" }}
+        value_template: "{{ states['input_boolean']['notify_LOCKNAME_' + trigger.event_data.usercode].state == 'on' }}"
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
-          title: >-
-            {% set report = states.input_text.LOCKNAME_status_report.state %}
-            {% set a = report.split(';') %}
-            {{ a[1] }}
-          message: >-
-            {% set report = states.input_text.LOCKNAME_status_report.state %}
-            {% set a = report.split(';') %}
-            {% set entity_id = 'input_text.LOCKNAME_name_' + a[2] %}
-            {% set user = states(entity_id) %}
-            {{ user }}
+          title: "{{ trigger.event_data.action_text }}"
+          message: "{{ trigger.event_data.usercode_name }}"
 
   - alias: CASE_LOCK_NAME Sensor Close
     condition:
@@ -326,33 +196,19 @@ automation:
 
   - alias: CASE_LOCK_NAME Decrement Access Count
     trigger:
-      platform: state
-      entity_id: input_text.LOCKNAME_status_report
+      platform: event
+      event_type: keymaster_lock_state_changed
     condition:
       - condition: state
         entity_id: "binary_sensor.allow_automation"
         state: "on"
       - condition: template
         # make sure decrementing access entries is enabled 
-        value_template: >-
-          {% set report = states.input_text.LOCKNAME_status_report.state %}
-          {% set a = report.split(';') %}
-          {% set buttonName = 'input_boolean.accesslimit_LOCKNAME_' + a[2] %}
-          {{ states(buttonName)=='on' }}
+        value_template: "{{ states('input_boolean.accesslimit_LOCKNAME_' + trigger.event_data.usercode)=='on' }}"
       - condition: template
         # Check for Keypad Unlock code
-        value_template: >-
-          {% set report = states.input_text.LOCKNAME_status_report.state %}
-          {% set a = report.split(';') %}
-          {% if (a|length) == 3 and (a[2] | int > 0) %} 
-             {{ (a[0] | int == 19) or (a[0] | int == 6)  }}
-          {% else %}
-            {{ false }}
-          {% endif %}
+        value_template: "{{ trigger.event_data.usercode > 0 and trigger.event_data.action_code in (6, 19)}}"
     action:
       - service: input_number.decrement
         data_template:
-          entity_id: >-
-            {% set report = states.input_text.LOCKNAME_status_report.state %}
-            {% set a = report.split(';') %}
-            {{ 'input_number.accesscount_LOCKNAME_' + a[2] }}
+          entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event_data.usercode }}"

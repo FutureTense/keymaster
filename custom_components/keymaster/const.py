@@ -22,7 +22,7 @@ ACCESS_CONTROL = "access_control"
 EVENT_KEYMASTER_LOCK_STATE_CHANGED = "keymaster_lock_state_changed"
 
 # Event data constants
-ATTR_ACTION_CODE = "alarm_type"
+ATTR_ACTION_CODE = "action_code"
 ATTR_ACTION_TEXT = "action_text"
 ATTR_USER_CODE_NAME = "usercode_name"
 
