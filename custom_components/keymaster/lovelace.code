@@ -13,21 +13,10 @@
               - type: divider
               - entity: sensor.connected_LOCKNAME_TEMPLATENUM
                 state_color: true
-              - type: 'custom:fold-entity-row'
-                head:
-                  type: section
-                  label: Debug
-                open: false
-                entities:
-                - entity: binary_sensor.active_LOCKNAME_TEMPLATENUM
-                  state_color: true
-                - type: divider
-                - entity: sensor.LOCKNAME_code_slot_TEMPLATENUM
-                  name: 'LOCKNAME slot TEMPLATENUM actual'
-                  state_color: true
-                - type: divider
-                - entity: binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM
-                  state_color: true
+              - entity: binary_sensor.active_LOCKNAME_TEMPLATENUM
+                state_color: true
+              - entity: binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM
+                state_color: true
               - type: 'custom:fold-entity-row'
                 head:
                   type: section
