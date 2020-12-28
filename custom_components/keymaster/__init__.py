@@ -221,12 +221,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # Listen to lock state changes so we can fire an event
     hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
         async_track_state_change(
-            hass,
-            [
-                primary_lock.lock_entity_id,
-                primary_lock.alarm_type_or_access_control_entity_id,
-            ],
-            async_entity_state_listener,
+            hass, primary_lock.lock_entity_id, async_entity_state_listener
         )
     )
 
