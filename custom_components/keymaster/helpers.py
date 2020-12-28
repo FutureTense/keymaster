@@ -170,10 +170,7 @@ def handle_state_change(
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
 
     # If listener was called for entity that is not for this entry, ignore
-    if changed_entity not in [
-        primary_lock.lock_entity_id,
-        primary_lock.alarm_type_or_access_control_entity_id,
-    ]:
+    if changed_entity != primary_lock.lock_entity_id:
         return
 
     # Determine action type to set appropriate action text using ACTION_MAP
@@ -194,22 +191,15 @@ def handle_state_change(
 
     # If lock has changed state but alarm_type/access_control state hasn't changed in a while
     # set action_value to RF lock/unlock
-    if changed_entity == primary_lock.lock_entity_id:
-        if (
-            alarm_level_state is None
-            or int(alarm_level_state.state) != 0
-            or (
-                dt_util.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
-                < timedelta(seconds=5)
-            )
-        ):
-            return
-
-        if (
-            new_state.state in (STATE_LOCKED, STATE_UNLOCKED)
-            and action_type in LOCK_STATE_MAP
-        ):
-            alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
+    if (
+        alarm_level_state is not None
+        and int(alarm_level_state.state) == 0
+        and dt_util.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
+        > timedelta(seconds=5)
+        and new_state.state in (STATE_LOCKED, STATE_UNLOCKED)
+        and action_type in LOCK_STATE_MAP
+    ):
+        alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
 
     # Lookup action text based on alarm type value
     action_text = (

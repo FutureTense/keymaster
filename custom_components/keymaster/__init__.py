@@ -361,12 +361,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     # Create new listeners
     hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
         async_track_state_change(
-            hass,
-            [
-                primary_lock.lock_entity_id,
-                primary_lock.alarm_type_or_access_control_entity_id,
-            ],
-            async_entity_state_listener,
+            hass, primary_lock.lock_entity_id, async_entity_state_listener
         )
     )
 
