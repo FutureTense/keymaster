@@ -6,23 +6,6 @@
 ################  COMMON ENTITIES  ###############
 ##################################################
 
-###############  input_text:  #################
-input_text:
-  LOCKNAME_status_report:
-    name: CASE_LOCK_NAME Status report
-
-###############  input_number:  #################
-input_number:
-  LOCKNAME_lock_command:
-    name: CASE_LOCK_NAME Lock command
-    min: 0
-    max: 999
-
-  LOCKNAME_lock_user:
-    name: CASE_LOCK_NAME Lock user
-    min: 0
-    max: 999
-
 ###############  input_boolean:  #################
 input_boolean:
   LOCKNAME_lock_notifications:
@@ -97,7 +80,7 @@ automation:
         data_template:
           boolean: input_boolean.LOCKNAME_lock_notifications
           title: CASE_LOCK_NAME
-          message: "{{ trigger.event_data.action_text }}"
+          message: "{{ trigger.event.data.action_text }}"
 
   - alias: CASE_LOCK_NAME User Notifications
     trigger:
@@ -110,14 +93,14 @@ automation:
         entity_id: "binary_sensor.allow_automation"
         state: "on"
       - condition: template
-        value_template: "{{ trigger.event_data.usercode > 0 }}"
+        value_template: "{{ trigger.event.data.usercode > 0 }}"
       - condition: template
-        value_template: "{{ states['input_boolean']['notify_LOCKNAME_' + trigger.event_data.usercode].state == 'on' }}"
+        value_template: "{{ states['input_boolean']['notify_LOCKNAME_' + trigger.event.data.usercode].state == 'on' }}"
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
-          title: "{{ trigger.event_data.action_text }}"
-          message: "{{ trigger.event_data.usercode_name }}"
+          title: "{{ trigger.event.data.action_text }}"
+          message: "{{ trigger.event.data.usercode_name }}"
 
   - alias: CASE_LOCK_NAME Sensor Close
     condition:
@@ -210,11 +193,11 @@ automation:
         state: "on"
       - condition: template
         # make sure decrementing access entries is enabled 
-        value_template: "{{ states('input_boolean.accesslimit_LOCKNAME_' + trigger.event_data.usercode)=='on' }}"
+        value_template: "{{ states('input_boolean.accesslimit_LOCKNAME_' + trigger.event.data.usercode)=='on' }}"
       - condition: template
         # Check for Keypad Unlock code
-        value_template: "{{ trigger.event_data.usercode > 0 and trigger.event_data.action_code in (6, 19)}}"
+        value_template: "{{ trigger.event.data.usercode > 0 and trigger.event.data.action_code in (6, 19)}}"
     action:
       - service: input_number.decrement
         data_template:
-          entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event_data.usercode }}"
+          entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event.data.usercode }}"

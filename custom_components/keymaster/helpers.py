@@ -198,7 +198,10 @@ def handle_state_change(
         if (
             alarm_level_state is None
             or int(alarm_level_state.state) != 0
-            or (dt_util.utcnow() - alarm_type_state.last_changed < timedelta(seconds=2))
+            or (
+                dt_util.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
+                < timedelta(seconds=2)
+            )
         ):
             return
 
@@ -218,12 +221,11 @@ def handle_state_change(
     )
 
     # Lookup name for usercode
+    usercode_name_state = hass.states.get(
+        f"input_text.{primary_lock.lock_name}_name_{alarm_level_value}"
+    )
     usercode_name = (
-        hass.states.get(
-            f"input_text.{primary_lock.lock_name}_name_{alarm_level_value}"
-        ).state
-        if alarm_level_value is not None
-        else None
+        usercode_name_state.state if usercode_name_state is not None else None
     )
 
     # Get lock state to provide as part of event data
