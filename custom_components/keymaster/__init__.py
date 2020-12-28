@@ -355,7 +355,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         handle_state_change(hass, config_entry, changed_entity, new_state)
 
     # Unsubscribe to any listeners so we can create new ones
-    for unsub_listener in hass.data.domain[DOMAIN].get(UNSUB_LISTENERS, []):
+    for unsub_listener in hass.data[DOMAIN].get(UNSUB_LISTENERS, []):
         unsub_listener()
 
     # Create new listeners
