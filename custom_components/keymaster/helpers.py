@@ -200,7 +200,7 @@ def handle_state_change(
             or int(alarm_level_state.state) != 0
             or (
                 dt_util.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
-                < timedelta(seconds=2)
+                < timedelta(seconds=5)
             )
         ):
             return
