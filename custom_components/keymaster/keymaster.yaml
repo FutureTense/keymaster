@@ -239,13 +239,13 @@ binary_sensor:
         {% for day in ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat') if not smtwtfs.check %}
           {% if
             is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on') and 
-            (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a')|lower == day) and
+            strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == day and
             is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on') and
             (
               states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM') == states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM') or
               (
-                states('sensor.time') >= states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5] and
-                states('sensor.time') <= states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]
+                states('sensor.time').replace(':', '') | int >= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int and
+                states('sensor.time').replace(':', '') | int <= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
               )
             )
           %}
@@ -261,8 +261,8 @@ binary_sensor:
           (
             is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'off') or 
             (
-              states.input_datetime.start_date_LOCKNAME_TEMPLATENUM.attributes.timestamp|int|timestamp_custom('%Y%m%d', False)|int <= now().strftime('%Y%m%d')|int and 
-              states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp|int|timestamp_custom('%Y%m%d', False)|int >=  now().strftime('%Y%m%d')|int
+              states.input_datetime.start_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False) | int <= now().strftime('%Y%m%d') | int and 
+              states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False)| int >=  now().strftime('%Y%m%d') | int
             )
           ) and
           smtwtfs.check
