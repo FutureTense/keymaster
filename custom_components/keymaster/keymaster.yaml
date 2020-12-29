@@ -174,13 +174,13 @@ automation:
       entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
       to: 'off'
     - platform: state
-      entity_id: "binary_sensor.allow_automation"
+      entity_id: "input_boolean.allow_automation_execution"
       to: 'on'
     - platform: state
       entity_id: "sensor.LOCKNAME_code_slot_TEMPLATENUM"
   condition:
     - condition: state
-      entity_id: "binary_sensor.allow_automation"
+      entity_id: "input_boolean.allow_automation_execution"
       state: "on"
     - condition: state
       entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
@@ -222,136 +222,9 @@ automation:
     platform: state
     to: 'on'
   action:
-    - service: input_text.set_value
+    - service: script.reset_codeslot_LOCKNAME
       data_template:
-        entity_id: input_text.LOCKNAME_name_TEMPLATENUM
-        value: ""
-    - service: input_text.set_value
-      data_template:
-        entity_id: input_text.LOCKNAME_pin_TEMPLATENUM
-        value: ""
-    - service: input_boolean.turn_off
-      entity_id: input_boolean.notify_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_off
-      entity_id: input_boolean.enabled_LOCKNAME_TEMPLATENUM
-    - service: input_number.set_value
-      data_template:
-        entity_id: input_number.accesscount_LOCKNAME_TEMPLATENUM
-        value: "0"
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.sun_start_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.sun_end_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.mon_start_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.mon_end_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.tue_start_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.tue_end_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.wed_start_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.wed_end_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.thu_start_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.thu_end_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.fri_start_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.fri_end_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.sat_start_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.sat_end_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        time: >
-          {{  (("00:00")  | timestamp_custom("%H:%M"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.start_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        date: >
-          {{  (("1980-01-01")  | timestamp_custom("%Y %m %d"))  }}      
-    - service: input_datetime.set_datetime
-      entity_id: input_datetime.end_date_LOCKNAME_TEMPLATENUM
-      data_template:
-        date: >
-          {{  (("1980-01-01")  | timestamp_custom("%Y %m %d"))  }}      
-    - service: input_boolean.turn_off
-      entity_id: input_boolean.daterange_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_off
-      entity_id: input_boolean.accesslimit_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_off
-      entity_id: input_boolean.reset_codeslot_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.sun_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.mon_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.tue_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.wed_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.thu_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.fri_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.sat_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.sun_inc_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.mon_inc_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.tue_inc_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.wed_inc_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.thu_inc_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.fri_inc_LOCKNAME_TEMPLATENUM
-    - service: input_boolean.turn_on
-      entity_id: input_boolean.sat_inc_LOCKNAME_TEMPLATENUM
+        code_slot: TEMPLATENUM
       
 ################  binary_sensor: #################  
 binary_sensor:
@@ -359,80 +232,53 @@ binary_sensor:
 - platform: template
   sensors:
 
-    enabled_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ is_state('input_boolean.enabled_LOCKNAME_TEMPLATENUM', 'on') }}"
-
-    daterange_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ (is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'off') or ((states.input_datetime.start_date_LOCKNAME_TEMPLATENUM.attributes.timestamp| int | timestamp_custom('%Y%m%d', False)|int)|string <= now().strftime('%Y%m%d')) and (states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp| int | timestamp_custom('%Y%m%d', False)|int)|string >=  now().strftime('%Y%m%d'))}}"
-
-    sun_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ (( is_state('input_boolean.sun_LOCKNAME_TEMPLATENUM', 'on'))) and (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == 'sun') and (is_state('input_boolean.sun_inc_LOCKNAME_TEMPLATENUM', 'on')) == ((states.input_datetime.sun_start_date_LOCKNAME_TEMPLATENUM.state == states.input_datetime.sun_end_date_LOCKNAME_TEMPLATENUM.state) or ((states('sensor.time') >= states('input_datetime.sun_start_date_LOCKNAME_TEMPLATENUM')[0:5]) and (states('sensor.time') <= states('input_datetime.sun_end_date_LOCKNAME_TEMPLATENUM')[0:5])) )}}"
-
-    mon_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ (( is_state('input_boolean.mon_LOCKNAME_TEMPLATENUM', 'on'))) and (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == 'mon') and (is_state('input_boolean.mon_inc_LOCKNAME_TEMPLATENUM', 'on')) == ((states.input_datetime.mon_start_date_LOCKNAME_TEMPLATENUM.state == states.input_datetime.mon_end_date_LOCKNAME_TEMPLATENUM.state) or ((states('sensor.time') >= states('input_datetime.mon_start_date_LOCKNAME_TEMPLATENUM')[0:5]) and (states('sensor.time') <= states('input_datetime.mon_end_date_LOCKNAME_TEMPLATENUM')[0:5])) )}}"
-
-    tue_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ (( is_state('input_boolean.tue_LOCKNAME_TEMPLATENUM', 'on'))) and (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == 'tue') and (is_state('input_boolean.tue_inc_LOCKNAME_TEMPLATENUM', 'on')) == ((states.input_datetime.tue_start_date_LOCKNAME_TEMPLATENUM.state == states.input_datetime.tue_end_date_LOCKNAME_TEMPLATENUM.state) or ((states('sensor.time') >= states('input_datetime.tue_start_date_LOCKNAME_TEMPLATENUM')[0:5]) and (states('sensor.time') <= states('input_datetime.tue_end_date_LOCKNAME_TEMPLATENUM')[0:5])) )}}"
-
-    wed_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ (( is_state('input_boolean.wed_LOCKNAME_TEMPLATENUM', 'on'))) and (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == 'wed') and (is_state('input_boolean.wed_inc_LOCKNAME_TEMPLATENUM', 'on')) == ((states.input_datetime.wed_start_date_LOCKNAME_TEMPLATENUM.state == states.input_datetime.wed_end_date_LOCKNAME_TEMPLATENUM.state) or ((states('sensor.time') >= states('input_datetime.wed_start_date_LOCKNAME_TEMPLATENUM')[0:5]) and (states('sensor.time') <= states('input_datetime.wed_end_date_LOCKNAME_TEMPLATENUM')[0:5])) )}}"
-
-    thu_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ (( is_state('input_boolean.thu_LOCKNAME_TEMPLATENUM', 'on'))) and (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == 'thu') and (is_state('input_boolean.thu_inc_LOCKNAME_TEMPLATENUM', 'on')) == ((states.input_datetime.thu_start_date_LOCKNAME_TEMPLATENUM.state == states.input_datetime.thu_end_date_LOCKNAME_TEMPLATENUM.state) or ((states('sensor.time') >= states('input_datetime.thu_start_date_LOCKNAME_TEMPLATENUM')[0:5]) and (states('sensor.time') <= states('input_datetime.thu_end_date_LOCKNAME_TEMPLATENUM')[0:5])) )}}"
-
-    fri_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ (( is_state('input_boolean.fri_LOCKNAME_TEMPLATENUM', 'on'))) and (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == 'fri') and (is_state('input_boolean.fri_inc_LOCKNAME_TEMPLATENUM', 'on')) == ((states.input_datetime.fri_start_date_LOCKNAME_TEMPLATENUM.state == states.input_datetime.fri_end_date_LOCKNAME_TEMPLATENUM.state) or ((states('sensor.time') >= states('input_datetime.fri_start_date_LOCKNAME_TEMPLATENUM')[0:5]) and (states('sensor.time') <= states('input_datetime.fri_end_date_LOCKNAME_TEMPLATENUM')[0:5])) )}}"
-
-    sat_LOCKNAME_TEMPLATENUM:
-      value_template: "{{ (( is_state('input_boolean.sat_LOCKNAME_TEMPLATENUM', 'on'))) and (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == 'sat') and (is_state('input_boolean.sat_inc_LOCKNAME_TEMPLATENUM', 'on')) == ((states.input_datetime.sat_start_date_LOCKNAME_TEMPLATENUM.state == states.input_datetime.sat_end_date_LOCKNAME_TEMPLATENUM.state) or ((states('sensor.time') >= states('input_datetime.sat_start_date_LOCKNAME_TEMPLATENUM')[0:5]) and (states('sensor.time') <= states('input_datetime.sat_end_date_LOCKNAME_TEMPLATENUM')[0:5])) )}}"
-
-    smtwtfs_LOCKNAME_TEMPLATENUM:
-      friendly_name: "Status"
-      value_template: >- 
-         {{
-            is_state('binary_sensor.sun_LOCKNAME_TEMPLATENUM', 'on')  or  
-            is_state('binary_sensor.mon_LOCKNAME_TEMPLATENUM', 'on')  or  
-            is_state('binary_sensor.tue_LOCKNAME_TEMPLATENUM', 'on')  or  
-            is_state('binary_sensor.wed_LOCKNAME_TEMPLATENUM', 'on')  or  
-            is_state('binary_sensor.thu_LOCKNAME_TEMPLATENUM', 'on')  or  
-            is_state('binary_sensor.fri_LOCKNAME_TEMPLATENUM', 'on')  or  
-            is_state('binary_sensor.sat_LOCKNAME_TEMPLATENUM', 'on')   
-         }}
-    
-    access_count_LOCKNAME_TEMPLATENUM:
-      friendly_name: "Access Count"
-      value_template: >-
-         {{
-            (is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'off'))  or  
-            (states.input_number.accesscount_LOCKNAME_TEMPLATENUM.state | int > 0)
-         }}
-
     active_LOCKNAME_TEMPLATENUM:
       friendly_name: "Desired PIN State"
       value_template: >-
-         {{
-            is_state('binary_sensor.enabled_LOCKNAME_TEMPLATENUM', 'on')  and  
-            is_state('binary_sensor.access_count_LOCKNAME_TEMPLATENUM', 'on')  and  
-            is_state('binary_sensor.daterange_LOCKNAME_TEMPLATENUM', 'on') and
-            is_state('binary_sensor.smtwtfs_LOCKNAME_TEMPLATENUM', 'on')  
-         }}
+        {% set smtwtfs = namespace(check=False) %}
+        {% for day in ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat') if not smtwtfs.check %}
+          {% if
+            is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on') and 
+            (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a')|lower == day) and
+            is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on') and
+            (
+              states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM') == states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM') or
+              (
+                states('sensor.time') >= states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5] and
+                states('sensor.time') <= states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]
+              )
+            )
+          %}
+            {% set smtwtfs.check = True %}
+          {% endif %}
+        {% endfor %}
+        {{
+          is_state('input_boolean.enabled_LOCKNAME_TEMPLATENUM', 'on') and
+          (
+            is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'off') or
+            states.input_number.accesscount_LOCKNAME_TEMPLATENUM.state|int > 0
+          ) and
+          (
+            is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'off') or 
+            (
+              states.input_datetime.start_date_LOCKNAME_TEMPLATENUM.attributes.timestamp|int|timestamp_custom('%Y%m%d', False)|int <= now().strftime('%Y%m%d')|int and 
+              states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp|int|timestamp_custom('%Y%m%d', False)|int >=  now().strftime('%Y%m%d')|int
+            )
+          ) and
+          smtwtfs.check
+        }}
 
     pin_synched_LOCKNAME_TEMPLATENUM:
       friendly_name: 'PIN synchronized with lock'
       value_template: >
-        {% set lock = 'sensor.LOCKNAME_code_slot_TEMPLATENUM' %}
-        {% set local = 'input_text.LOCKNAME_pin_TEMPLATENUM' %}
-        {% set status = 'binary_sensor.active_LOCKNAME_TEMPLATENUM' %}
-        {% set lockpin = states(lock).strip()  %}
-        {% set localpin = states(local).strip()  %}
-        {% set pinstatus = states(status)  %}
+        {% set lockpin = states('sensor.LOCKNAME_code_slot_TEMPLATENUM')  %}
         {% if lockpin == "0000" %}
-        {%   set lockpin = "" %}
+          {% set lockpin = "" %}
         {% endif %}
-        {% if pinstatus == 'on' %}
-        {% set correct = localpin == lockpin %}
+        {% if is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on') %}
+          {% set correct = states('input_text.LOCKNAME_pin_TEMPLATENUM') == lockpin %}
         {% else %}
-        {% set correct = lockpin == "" %}
+          {% set correct = lockpin == "" %}
         {% endif %}
         {{ correct }}
 
@@ -446,31 +292,29 @@ sensor:
       # icon: mdi:glassdoor
       friendly_name: "PIN Status"
       value_template: >-
-        {% set pinstatus = states('binary_sensor.active_LOCKNAME_TEMPLATENUM')  %}      
         {% set syncstatus = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM')  %}      
-        {% if pinstatus == 'on' %}
+        {% if is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on') %}
+          {% set prefix = 'C' %}
+        {% else %}
+          {% set prefix = 'Disc' %}
+        {% endif %}
+        {% if syncstatus == 'on' %}
+          {{ prefix + 'onnected' }}
+        {% else %}
+          {{ prefix + 'onnecting' }}
+        {% endif %}
+      icon_template: >
+        {% set syncstatus = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM')  %}      
+        {% if is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on') %}
           {% if syncstatus == 'on' %}
-            {% set report = 'Connected' %}
+            mdi:folder-key
           {% else %}
-            {% set report = 'Connecting' %}
+            mdi:folder-key-network
           {% endif %}
         {% else %}
           {% if syncstatus == 'on' %}
-            {% set report = 'Disconnected' %}
+            mdi:folder-open
           {% else %}
-            {% set report = 'Disconnecting' %}
+            mdi:wiper-wash
           {% endif %}
-        {% endif %}
-        {{
-          report
-        }}
-      icon_template: >
-        {% if (states('sensor.connected_LOCKNAME_TEMPLATENUM') | lower) == 'connected' %}
-          mdi:folder-key
-        {% elif (states('sensor.connected_LOCKNAME_TEMPLATENUM') | lower) == 'connecting' %}
-          mdi:folder-key-network
-        {% elif (states('sensor.connected_LOCKNAME_TEMPLATENUM') | lower) == 'disconnected' %}
-          mdi:folder-open
-        {% elif (states('sensor.connected_LOCKNAME_TEMPLATENUM') | lower) == 'disconnecting' %}
-          mdi:wiper-wash
         {% endif %}

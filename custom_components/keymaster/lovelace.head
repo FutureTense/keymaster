@@ -5,9 +5,6 @@
     badges:
       - input_boolean.LOCKNAME_lock_notifications
       - input_boolean.LOCKNAME_dooraccess_notifications
-      - input_boolean.LOCKNAME_garageacess_notifications
-      - entity: >-
-          LOCKENTITYNAME
-      - entity: >-
-          DOORSENSORENTITYNAME
+      - entity: LOCKENTITYNAME
+      - entity: DOORSENSORENTITYNAME
     cards:

@@ -12,8 +12,6 @@ input_boolean:
     name: CASE_LOCK_NAME Lock Notifications
   LOCKNAME_dooraccess_notifications:
     name: CASE_LOCK_NAME Door Notifications
-  LOCKNAME_garageacess_notifications:
-    name: CASE_LOCK_NAME Garage Notifications
   LOCKNAME_reset_lock:
     name: CASE_LOCK_NAME reset lock
 
@@ -33,21 +31,6 @@ script:
           title: "reset"
           message: "LOCKNAME"
 
-  LOCKNAME_conditional_notify:
-    sequence:
-      - condition: template
-        value_template: >-
-          {% set inputbool = boolean %}
-          {% if states(inputbool) == 'on'%}
-            true
-          {% else %}
-            false
-          {% endif %}
-      - service: script.LOCKNAME_manual_notify
-        data_template:
-          title: "{{title}}"
-          message: "{{message}}"
-
   LOCKNAME_refreshnodeinfo:
     description:  'Send MQTT RefreshNodeInfo command'
     sequence:
@@ -62,6 +45,66 @@ script:
             {% set node_id = state_attr('LOCKENTITYNAME','node_id') %}
             { "node": {{ node_id }} }
           retain: true
+
+  reset_codeslot_LOCKNAME:
+    variables:
+      days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+      code_slot: 1
+    sequence:
+      - service: input_text.set_value
+        data_template:
+          entity_id: "input_text.LOCKNAME_name_{{ code_slot | string }}"
+          value: ""
+      - service: input_text.set_value
+        data_template:
+          entity_id: "input_text.LOCKNAME_pin_{{ code_slot | string }}"
+          value: ""
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.notify_LOCKNAME_{{ code_slot | string }}"
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.enabled_LOCKNAME_{{ code_slot | string }}"
+      - service: input_number.set_value
+        data_template:
+          entity_id: "input_number.accesscount_LOCKNAME_{{ code_slot | string }}"
+          value: "0"
+      - service: input_datetime.set_datetime
+        data_template:
+          entity_id: "input_datetime.start_date_LOCKNAME_{{ code_slot | string }}"
+          date: >
+            {{  (("1980-01-01")  | timestamp_custom("%Y %m %d"))  }}      
+      - service: input_datetime.set_datetime
+        data_template:
+          entity_id: "input_datetime.end_date_LOCKNAME_{{ code_slot | string }}"
+          date: >
+            {{  (("1980-01-01")  | timestamp_custom("%Y %m %d"))  }} 
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.daterange_LOCKNAME_{{ code_slot | string }}"
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.accesslimit_LOCKNAME_{{ code_slot | string }}"
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.reset_codeslot_LOCKNAME_{{ code_slot | string }}"
+      - repeat:
+          count: 7
+          sequence:
+            - service: input_datetime.set_datetime
+              data_template:
+                entity_id: "input_datetime.{{ days[repeat.index - 1] }}_start_date_LOCKNAME_{{ code_slot | string }}"
+                time: "{{ '00:00' | timestamp_custom('%H:%M') }}"
+            - service: input_datetime.set_datetime
+              data_template:
+                entity_id: "input_datetime.{{ days[repeat.index - 1] }}_end_date_LOCKNAME_{{ code_slot | string }}"
+                time: "{{ '00:00' | timestamp_custom('%H:%M') }}"
+            - service: input_boolean.turn_on
+              data_template:
+                entity_id: "input_boolean.{{ days[repeat.index - 1] }}_LOCKNAME_{{ code_slot | string }}"
+            - service: input_boolean.turn_on
+              data_template:
+                entity_id: "input_boolean.{{ days[repeat.index - 1] }}_inc_LOCKNAME_{{ code_slot | string }}"
           
 ###################  automation:  ####################
 automation:
@@ -73,12 +116,14 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
+        state: "on"
+      - condition: state
+        entity_id: "input_boolean.LOCKNAME_lock_notifications"
         state: "on"
     action:
-      - service: script.LOCKNAME_conditional_notify
+      - service: script.LOCKNAME_manual_notify
         data_template:
-          boolean: input_boolean.LOCKNAME_lock_notifications
           title: CASE_LOCK_NAME
           message: "{{ trigger.event.data.action_text }}"
 
@@ -90,7 +135,7 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
       - condition: template
         value_template: "{{ trigger.event.data.code_slot > 0 }}"
@@ -102,35 +147,39 @@ automation:
           title: "{{ trigger.event.data.action_text }}"
           message: "{{ trigger.event.data.code_slot_name }}"
 
-  - alias: CASE_LOCK_NAME Sensor Close
-    condition:
-      - condition: state
-        entity_id: "binary_sensor.allow_automation"
-        state: "on"
+  - alias: CASE_LOCK_NAME Sensor Closed
     trigger:
       entity_id: DOORSENSORENTITYNAME
       platform: state
       to: "off"
+    condition:
+      - condition: state
+        entity_id: "input_boolean.allow_automation_execution"
+        state: "on"
+      - condition: state
+        entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
+        state: "on"
     action:
-      - service: script.LOCKNAME_conditional_notify
+      - service: script.LOCKNAME_manual_notify
         data_template:
-          boolean: input_boolean.LOCKNAME_dooraccess_notifications
           title: CASE_LOCK_NAME
           message: "Closed"
 
   - alias: CASE_LOCK_NAME Sensor Opened
-    condition:
-      - condition: state
-        entity_id: "binary_sensor.allow_automation"
-        state: "on"
     trigger:
       entity_id: DOORSENSORENTITYNAME
       platform: state
       to: "on"
+    condition:
+      - condition: state
+        entity_id: "input_boolean.allow_automation_execution"
+        state: "on"
+      - condition: state
+        entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
+        state: "on"
     action:
-      - service: script.LOCKNAME_conditional_notify
+      - service: script.LOCKNAME_manual_notify
         data_template:
-          boolean: input_boolean.LOCKNAME_dooraccess_notifications
           title: CASE_LOCK_NAME
           message: "Opened"
 
@@ -140,7 +189,7 @@ automation:
       platform: state
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
       - condition: template
         value_template: >-
@@ -169,7 +218,7 @@ automation:
   - alias: CASE_LOCK_NAME Reset
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
     trigger:
       entity_id: input_boolean.LOCKNAME_reset_lock
@@ -189,7 +238,7 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
       - condition: template
         # make sure decrementing access entries is enabled 
