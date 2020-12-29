@@ -47,9 +47,13 @@ script:
           retain: true
 
   reset_codeslot_LOCKNAME:
+    fields:
+      code_slot:
+        description: The code slot to reset
+        example: 1
     variables:
+      # Constant used later to loop through day specific entities
       days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-      code_slot: 1
     sequence:
       - service: input_text.set_value
         data_template:
@@ -88,6 +92,7 @@ script:
       - service: input_boolean.turn_off
         data_template:
           entity_id: "input_boolean.reset_codeslot_LOCKNAME_{{ code_slot | string }}"
+      # Loop through each day of the week and reset the entities related to each one
       - repeat:
           count: 7
           sequence:
