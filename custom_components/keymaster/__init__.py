@@ -10,8 +10,8 @@ import voluptuous as vol
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import Config, HomeAssistant, ServiceCall, State
+from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import Config, Event, HomeAssistant, ServiceCall, State
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -215,14 +215,20 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     async def async_entity_state_listener(
         changed_entity: str, old_state: State, new_state: State
     ) -> None:
-        """Listener to track state changes to lock entities."""
+        """Listener to handle state changes to lock entities."""
         handle_state_change(hass, config_entry, changed_entity, new_state)
 
-    # Listen to lock state changes so we can fire an event
-    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-        async_track_state_change(
-            hass, primary_lock.lock_entity_id, async_entity_state_listener
+    async def async_homeassistant_started_listener(evt: Event):
+        """Start tracking state changes after HomeAssistant has started."""
+        # Listen to lock state changes so we can fire an event
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            async_track_state_change(
+                hass, primary_lock.lock_entity_id, async_entity_state_listener
+            )
         )
+
+    hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STARTED, async_homeassistant_started_listener
     )
 
     return True
