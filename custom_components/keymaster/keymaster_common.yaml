@@ -198,27 +198,17 @@ automation:
         state: "on"
       - condition: template
         value_template: >-
-          {% set object_id = trigger.to_state.object_id %}
-          {% set index = object_id.rfind('_') + 1 %}
-          {% set code_slot = object_id[index:] %}
-          {% set b = 'input_boolean.enabled_LOCKNAME_' + code_slot | string %}
-          {{ is_state(b, 'on') and (trigger.from_state.state != trigger.to_state.state)}}
+          {{ is_state('input_boolean.enabled_LOCKNAME_' + trigger.entity_id.split('_')[-1:], 'on') and (trigger.from_state.state != trigger.to_state.state)}}
     action:
       - service: persistent_notification.create
         data_template:
           title: CASE_LOCK_NAME LOCK MANAGER
           message: >-
-            {% set object_id = trigger.to_state.object_id %}
-            {% set index = object_id.rfind('_') + 1 %}
-            {% set code_slot = object_id[index:] %}
-            {{ 'You changed the PIN for code  ' + code_slot | string + '. Please enable it in order to make it active.'}}
+            {{ 'You changed the PIN for code  ' + trigger.entity_id.split('_')[-1:] + '. Please enable it in order to make it active.'}}
       - service: input_boolean.turn_off
         data_template:
           entity_id: >-
-            {% set object_id = trigger.to_state.object_id %}
-            {% set index = object_id.rfind('_') + 1 %}
-            {% set code_slot = object_id[index:] %}
-            {{ 'input_boolean.enabled_LOCKNAME_' + code_slot | string }}
+            {{ 'input_boolean.enabled_LOCKNAME_' + trigger.entity_id.split('_')[-1:] }}
 
   - alias: CASE_LOCK_NAME Reset
     condition:

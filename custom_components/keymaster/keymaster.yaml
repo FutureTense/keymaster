@@ -238,14 +238,31 @@ binary_sensor:
         {% set smtwtfs = namespace(check=False) %}
         {% for day in ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat') if not smtwtfs.check %}
           {% if
-            is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on') and 
-            strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == day and
-            is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on') and
+            is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on')
+            and 
+            strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == day
+            and
             (
-              states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM') == states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM') or
               (
-                states('sensor.time').replace(':', '') | int >= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int and
-                states('sensor.time').replace(':', '') | int <= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+                is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on')
+                and
+                (
+                  states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM') == states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')
+                  or
+                  (
+                    states('sensor.time').replace(':', '') | int >= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+                    and
+                    states('sensor.time').replace(':', '') | int <= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+                  )
+                )
+              )
+              or
+              (
+                is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'off')
+                and
+                states('sensor.time').replace(':', '') | int <= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+                and
+                states('sensor.time').replace(':', '') | int >= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
               )
             )
           %}
@@ -292,29 +309,30 @@ sensor:
       # icon: mdi:glassdoor
       friendly_name: "PIN Status"
       value_template: >-
-        {% set syncstatus = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM')  %}      
-        {% if is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on') %}
-          {% set prefix = 'C' %}
-        {% else %}
-          {% set prefix = 'Disc' %}
-        {% endif %}
-        {% if syncstatus == 'on' %}
-          {{ prefix + 'onnected' }}
-        {% else %}
-          {{ prefix + 'onnecting' }}
-        {% endif %}
+        {% set value_map = {
+          'on': {
+            'on': 'Connected',
+            'off': 'Connecting',
+          },
+          'off': {
+            'on': 'Disconnected',
+            'off': 'Disconnecting',
+          },
+        } %}
+        {% set slot_active = states('binary_sensor.active_LOCKNAME_TEMPLATENUM') %}
+        {% set pin_synched = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM') %}
+        {{ value_map[slot_active][pin_synched] }}
       icon_template: >
-        {% set syncstatus = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM')  %}      
-        {% if is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on') %}
-          {% if syncstatus == 'on' %}
-            mdi:folder-key
-          {% else %}
-            mdi:folder-key-network
-          {% endif %}
-        {% else %}
-          {% if syncstatus == 'on' %}
-            mdi:folder-open
-          {% else %}
-            mdi:wiper-wash
-          {% endif %}
-        {% endif %}
+        {% set icon_map = {
+          'on': {
+            'on': 'mdi:folder-key',
+            'off': 'mdi:folder-key-network',
+          },
+          'off': {
+            'on': 'mdi:folder-open',
+            'off': 'mdi:wiper-watch',
+          },
+        } %}
+        {% set slot_active = states('binary_sensor.active_LOCKNAME_TEMPLATENUM') %}
+        {% set pin_synched = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM') %}
+        {{ icon_map[slot_active][pin_synched] }}
