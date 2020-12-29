@@ -279,7 +279,8 @@ binary_sensor:
           )
         ) %}
         {{
-          is_state('input_boolean.enabled_LOCKNAME_TEMPLATENUM', 'on') and
+          is_state('input_boolean.enabled_LOCKNAME_TEMPLATENUM', 'on')
+          and
           access_count_check
           and
           in_date_range_check
