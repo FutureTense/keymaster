@@ -36,7 +36,7 @@ script:
     sequence:
       - service: system_log.write
         data_template:
-          message: "LOCKNAME_TEMPLATENUM started noderefreshinfo: {{ now() }}"
+          message: "LOCKNAME started noderefreshinfo: {{ now() }}"
           level: debug  
       - service: mqtt.publish
         data:
