@@ -56,10 +56,6 @@ def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
     if state:
         return state.attributes[ATTR_NODE_ID]
 
-    _LOGGER.error(
-        "Problem retrieving node_id from entity %s because the entity doesn't exist.",
-        entity_id,
-    )
     return None
 
 

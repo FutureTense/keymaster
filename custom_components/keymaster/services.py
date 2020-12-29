@@ -40,6 +40,10 @@ async def refresh_codes(
     """Refresh lock codes."""
     node_id = get_node_id(hass, entity_id)
     if node_id is None:
+        _LOGGER.error(
+            "Problem retrieving node_id from entity %s because the entity doesn't exist.",
+            entity_id,
+        )
         return
 
     # OZW Button press (experimental)
@@ -78,6 +82,10 @@ async def add_code(
     elif using_zwave(hass):
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
+            _LOGGER.error(
+                "Problem retrieving node_id from entity %s because the entity doesn't exist.",
+                entity_id,
+            )
             return
 
         servicedata[ATTR_NODE_ID] = node_id

@@ -377,6 +377,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=5),
             update_method=self.async_update_usercodes,
         )
+        self.data = {}
 
     def _invalid_code(self, code_slot):
         """Return the PIN slot value as we are unable to read the slot value
@@ -393,7 +394,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         pin = self.hass.states.get(pin_data)
 
         # If slot is enabled return the PIN
-        if enabled is not None:
+        if enabled is not None and pin is not None:
             if enabled.state == "on" and pin.state.isnumeric():
                 _LOGGER.debug("Utilizing BE469 work around code.")
                 data = pin.state
@@ -421,7 +422,10 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         instance_id = 1  # default
         data = {}
         data[CONF_LOCK_ENTITY_ID] = self._lock.lock_entity_id
-        data[ATTR_NODE_ID] = get_node_id(self.hass, self._lock.lock_entity_id)
+        node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+        if node_id is None:
+            return data
+        data[ATTR_NODE_ID] = node_id
 
         if data[ATTR_NODE_ID] is None:
             raise NoNodeSpecifiedError
@@ -433,11 +437,15 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         # pull the codes for ozw
         if using_ozw(self.hass):
             # Raises exception when node not found
-            node = get_node_from_manager(
-                self.hass.data[OZW_DOMAIN][MANAGER],
-                instance_id,
-                data[ATTR_NODE_ID],
-            )
+            try:
+                node = get_node_from_manager(
+                    self.hass.data[OZW_DOMAIN][MANAGER],
+                    instance_id,
+                    data[ATTR_NODE_ID],
+                )
+            except NotFoundError:
+                return data
+
             command_class = node.get_command_class(CommandClass.USER_CODE)
 
             if not command_class:
