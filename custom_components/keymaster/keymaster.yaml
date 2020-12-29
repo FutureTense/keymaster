@@ -236,53 +236,55 @@ binary_sensor:
       friendly_name: "Desired PIN State"
       value_template: >-
         {% set smtwtfs = namespace(check=False) %}
-        {% for day in ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat') if not smtwtfs.check %}
-          {% if
-            is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on')
-            and 
-            strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower == day
-            and
+        {% set day = strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') %}
+        {% set day_check = (
+          is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on')
+          and 
+          (
             (
+              is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on')
+              and
               (
-                is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on')
-                and
+                states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM') == states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')
+                or
                 (
-                  states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM') == states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')
-                  or
-                  (
-                    states('sensor.time').replace(':', '') | int >= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
-                    and
-                    states('sensor.time').replace(':', '') | int <= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
-                  )
+                  states('sensor.time').replace(':', '') | int >= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+                  and
+                  states('sensor.time').replace(':', '') | int <= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
                 )
               )
-              or
-              (
-                is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'off')
-                and
-                states('sensor.time').replace(':', '') | int <= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
-                and
-                states('sensor.time').replace(':', '') | int >= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
-              )
             )
-          %}
-            {% set smtwtfs.check = True %}
-          {% endif %}
-        {% endfor %}
+            or
+            (
+              is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'off')
+              and
+              states('sensor.time').replace(':', '') | int <= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+              and
+              states('sensor.time').replace(':', '') | int >= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+            )
+          )
+        ) %}
+        {% set access_count_check = (
+          is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'off')
+          or
+          states.input_number.accesscount_LOCKNAME_TEMPLATENUM.state|int > 0
+        ) %}
+        {% set in_date_range_check = (
+          is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'off')
+          or 
+          (
+            states.input_datetime.start_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False) | int <= now().strftime('%Y%m%d') | int
+            and 
+            states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False)| int >=  now().strftime('%Y%m%d') | int
+          )
+        ) %}
         {{
           is_state('input_boolean.enabled_LOCKNAME_TEMPLATENUM', 'on') and
-          (
-            is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'off') or
-            states.input_number.accesscount_LOCKNAME_TEMPLATENUM.state|int > 0
-          ) and
-          (
-            is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'off') or 
-            (
-              states.input_datetime.start_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False) | int <= now().strftime('%Y%m%d') | int and 
-              states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False)| int >=  now().strftime('%Y%m%d') | int
-            )
-          ) and
-          smtwtfs.check
+          access_count_check
+          and
+          in_date_range_check
+          and
+          day_check
         }}
 
     pin_synched_LOCKNAME_TEMPLATENUM:
