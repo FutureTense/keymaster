@@ -24,7 +24,7 @@ EVENT_KEYMASTER_LOCK_STATE_CHANGED = "keymaster_lock_state_changed"
 # Event data constants
 ATTR_ACTION_CODE = "action_code"
 ATTR_ACTION_TEXT = "action_text"
-ATTR_USER_CODE_NAME = "usercode_name"
+ATTR_CODE_SLOT_NAME = "code_slot_name"
 
 # Attributes
 ATTR_NAME = "lockname"

@@ -93,14 +93,14 @@ automation:
         entity_id: "binary_sensor.allow_automation"
         state: "on"
       - condition: template
-        value_template: "{{ trigger.event.data.usercode > 0 }}"
+        value_template: "{{ trigger.event.data.code_slot > 0 }}"
       - condition: template
-        value_template: "{{ states['input_boolean']['notify_LOCKNAME_' + trigger.event.data.usercode].state == 'on' }}"
+        value_template: "{{ states['input_boolean']['notify_LOCKNAME_' + trigger.event.data.code_slot].state == 'on' }}"
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
           title: "{{ trigger.event.data.action_text }}"
-          message: "{{ trigger.event.data.usercode_name }}"
+          message: "{{ trigger.event.data.code_slot_name }}"
 
   - alias: CASE_LOCK_NAME Sensor Close
     condition:
@@ -193,11 +193,11 @@ automation:
         state: "on"
       - condition: template
         # make sure decrementing access entries is enabled 
-        value_template: "{{ states('input_boolean.accesslimit_LOCKNAME_' + trigger.event.data.usercode)=='on' }}"
+        value_template: "{{ states('input_boolean.accesslimit_LOCKNAME_' + trigger.event.data.code_slot)=='on' }}"
       - condition: template
         # Check for Keypad Unlock code
-        value_template: "{{ trigger.event.data.usercode > 0 and trigger.event.data.action_code in (6, 19)}}"
+        value_template: "{{ trigger.event.data.code_slot > 0 and trigger.event.data.action_code in (6, 19)}}"
     action:
       - service: input_number.decrement
         data_template:
-          entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event.data.usercode }}"
+          entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event.data.code_slot }}"

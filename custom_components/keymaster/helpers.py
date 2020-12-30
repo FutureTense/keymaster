@@ -4,6 +4,8 @@ import logging
 import os
 from typing import Dict, List, Optional, Union
 
+from openzwavemqtt.const import ATTR_CODE_SLOT
+
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
 from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
@@ -25,10 +27,9 @@ from .const import (
     ALARM_TYPE,
     ATTR_ACTION_CODE,
     ATTR_ACTION_TEXT,
+    ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
     ATTR_NODE_ID,
-    ATTR_USER_CODE,
-    ATTR_USER_CODE_NAME,
     CONF_PATH,
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
@@ -207,11 +208,11 @@ def handle_state_change(
     )
 
     # Lookup name for usercode
-    usercode_name_state = hass.states.get(
+    code_slot_name_state = hass.states.get(
         f"input_text.{primary_lock.lock_name}_name_{alarm_level_value}"
     )
-    usercode_name = (
-        usercode_name_state.state if usercode_name_state is not None else None
+    code_slot_name = (
+        code_slot_name_state.state if code_slot_name_state is not None else None
     )
 
     # Get lock state to provide as part of event data
@@ -225,7 +226,7 @@ def handle_state_change(
             ATTR_STATE: lock_state.state if lock_state else None,
             ATTR_ACTION_CODE: alarm_type_value,
             ATTR_ACTION_TEXT: action_text,
-            ATTR_USER_CODE: alarm_level_value,
-            ATTR_USER_CODE_NAME: usercode_name,
+            ATTR_CODE_SLOT: alarm_level_value,
+            ATTR_CODE_SLOT_NAME: code_slot_name,
         },
     )
