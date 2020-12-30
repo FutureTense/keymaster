@@ -235,7 +235,6 @@ binary_sensor:
     active_LOCKNAME_TEMPLATENUM:
       friendly_name: "Desired PIN State"
       value_template: >-
-        {% set smtwtfs = namespace(check=False) %}
         {% set day = strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') %}
         {% set day_check = (
           is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on')
