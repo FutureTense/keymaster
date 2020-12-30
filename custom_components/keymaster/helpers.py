@@ -161,13 +161,19 @@ def handle_state_change(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     changed_entity: str,
+    old_state: State,
     new_state: State,
 ) -> None:
     """Listener to track state changes to lock entities."""
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
 
-    # If listener was called for entity that is not for this entry, ignore
-    if changed_entity != primary_lock.lock_entity_id:
+    # If listener was called for entity that is not for this entry,
+    # or lock state is coming from or going to a weird state, ignore
+    if (
+        changed_entity != primary_lock.lock_entity_id
+        or new_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
+        or old_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
+    ):
         return
 
     # Determine action type to set appropriate action text using ACTION_MAP
@@ -193,7 +199,6 @@ def handle_state_change(
         and int(alarm_level_state.state) == 0
         and dt_util.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
         > timedelta(seconds=5)
-        and new_state.state in (STATE_LOCKED, STATE_UNLOCKED)
         and action_type in LOCK_STATE_MAP
     ):
         alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]

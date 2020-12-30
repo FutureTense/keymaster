@@ -216,7 +216,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         changed_entity: str, old_state: State, new_state: State
     ) -> None:
         """Listener to handle state changes to lock entities."""
-        handle_state_change(hass, config_entry, changed_entity, new_state)
+        handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
 
     async def async_homeassistant_started_listener(evt: Event):
         """Start tracking state changes after HomeAssistant has started."""
@@ -354,7 +354,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         changed_entity: str, old_state: State, new_state: State
     ) -> None:
         """Listener to track state changes to lock entities."""
-        handle_state_change(hass, config_entry, changed_entity, new_state)
+        handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
 
     # Unsubscribe to any listeners so we can create new ones
     for unsub_listener in hass.data[DOMAIN].get(UNSUB_LISTENERS, []):
