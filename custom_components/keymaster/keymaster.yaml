@@ -266,7 +266,7 @@ binary_sensor:
         {% set access_count_check = (
           is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'off')
           or
-          states.input_number.accesscount_LOCKNAME_TEMPLATENUM.state|int > 0
+          states.input_number.accesscount_LOCKNAME_TEMPLATENUM.state | int > 0
         ) %}
         {% set in_date_range_check = (
           is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'off')
@@ -274,7 +274,7 @@ binary_sensor:
           (
             states.input_datetime.start_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False) | int <= now().strftime('%Y%m%d') | int
             and 
-            states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False)| int >=  now().strftime('%Y%m%d') | int
+            states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False) | int >= now().strftime('%Y%m%d') | int
           )
         ) %}
         {{

@@ -42,8 +42,7 @@ script:
         data:
           topic: 'OpenZWave/1/command/refreshnodeinfo/'
           payload: >-
-            {% set node_id = state_attr('LOCKENTITYNAME','node_id') %}
-            { "node": {{ node_id }} }
+            { "node": {{ state_attr('LOCKENTITYNAME','node_id') }} }
           retain: true
 
   reset_codeslot_LOCKNAME:
