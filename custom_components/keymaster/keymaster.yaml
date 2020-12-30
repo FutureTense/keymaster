@@ -1,5 +1,5 @@
 
-############  input_number:  #####################  
+############  input_number:  #####################
 input_number:
   accesscount_LOCKNAME_TEMPLATENUM:
     name: 'Unlock events'
@@ -8,7 +8,7 @@ input_number:
     step: 1
     mode: box
 
-#################  input_datetime:  ##############  
+#################  input_datetime:  ##############
 input_datetime:
   end_date_LOCKNAME_TEMPLATENUM:
     name: 'End'
@@ -83,7 +83,7 @@ input_datetime:
     has_date: false
 
 
-####################  input_text:  ###############  
+####################  input_text:  ###############
 input_text:
   LOCKNAME_name_TEMPLATENUM:
     name: 'Name'
@@ -91,7 +91,7 @@ input_text:
     name: 'PIN'
     mode: HIDE_PINS
 
-#################  input_boolean: ################  
+#################  input_boolean:  ################
 input_boolean:
   notify_LOCKNAME_TEMPLATENUM:
     name: 'Notifications'
@@ -164,7 +164,7 @@ input_boolean:
     name: 'include (on)/exclude (off)'
     initial: on
 
-################  automation: #################  
+################  automation:  #################
 automation:
 
 - alias: synchronize_codeslot_LOCKNAME_TEMPLATENUM
@@ -226,7 +226,7 @@ automation:
       data_template:
         code_slot: TEMPLATENUM
       
-################  binary_sensor: #################  
+################  binary_sensor:  #################
 binary_sensor:
 
 - platform: template
@@ -290,7 +290,7 @@ binary_sensor:
     pin_synched_LOCKNAME_TEMPLATENUM:
       friendly_name: 'PIN synchronized with lock'
       value_template: >
-        {% set lockpin = states('sensor.LOCKNAME_code_slot_TEMPLATENUM')  %}
+        {% set lockpin = states('sensor.LOCKNAME_code_slot_TEMPLATENUM') %}
         {% if lockpin == "0000" %}
           {% set lockpin = "" %}
         {% endif %}
@@ -300,7 +300,7 @@ binary_sensor:
           {{ lockpin == "" }}
         {% endif %}
 
-###################  sensor:  ####################  
+###################  sensor:  ####################
 sensor:
 
 - platform: template
