@@ -292,29 +292,29 @@ sensor:
       friendly_name: "PIN Status"
       value_template: >-
         {% set value_map = {
-          'on': {
-            'on': 'Connected',
-            'off': 'Connecting',
+          True: {
+            True: 'Connected',
+            False: 'Connecting',
           },
-          'off': {
-            'on': 'Disconnected',
-            'off': 'Disconnecting',
+          False: {
+            True: 'Disconnected',
+            False: 'Disconnecting',
           },
         } %}
-        {% set slot_active = states('binary_sensor.active_LOCKNAME_TEMPLATENUM') %}
-        {% set pin_synched = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM') %}
-        {{ value_map.get(slot_active, {}).get(pin_synched) }}
+        {% set slot_active = is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on') %}
+        {% set pin_synched = is_state('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM', 'on') %}
+        {{ value_map[slot_active][pin_synched] }}
       icon_template: >
         {% set icon_map = {
-          'on': {
-            'on': 'mdi:folder-key',
-            'off': 'mdi:folder-key-network',
+          True: {
+            True: 'mdi:folder-key',
+            False: 'mdi:folder-key-network',
           },
-          'off': {
-            'on': 'mdi:folder-open',
-            'off': 'mdi:wiper-watch',
+          False: {
+            True: 'mdi:folder-open',
+            False: 'mdi:wiper-watch',
           },
         } %}
-        {% set slot_active = states('binary_sensor.active_LOCKNAME_TEMPLATENUM') %}
-        {% set pin_synched = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM') %}
-        {{ icon_map.get(slot_active, {}).get(pin_synched) }}
+        {% set slot_active = is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on') %}
+        {% set pin_synched = is_state('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM', 'on') %}
+        {{ icon_map[slot_active][pin_synched] }}
