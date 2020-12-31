@@ -243,16 +243,16 @@ binary_sensor:
         {% set is_in_date_range = (current_date >= configured_start_date and current_date <= configured_end_date) %}
 
         {% set is_time_range_enabled = (configured_start_time != configured_end_time) %}
-        {% set is_inclusive = is_state('input_boolean.' + current_day + '_inc_LOCKNAME_TEMPLATENUM', 'on') %}
+        {% set is_time_range_inclusive = is_state('input_boolean.' + current_day + '_inc_LOCKNAME_TEMPLATENUM', 'on') %}
         {% set is_in_time_range = (
           (
-            is_inclusive
+            is_time_range_inclusive
             and
             current_time >= configured_start_time and current_time <= configured_end_time)
           )
           or
           (
-            not is_inclusive
+            not is_time_range_inclusive
             and
             (current_time < configured_start_time or current_time > configured_end_time)
           )
