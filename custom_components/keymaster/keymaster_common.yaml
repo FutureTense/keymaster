@@ -15,6 +15,13 @@ input_boolean:
   LOCKNAME_reset_lock:
     name: CASE_LOCK_NAME reset lock
 
+###################  sensor:  ####################
+sensor:	
+  - platform: time_date	
+    display_options:	
+      - "time"	
+      - "date"
+
 ###################  script:  ####################
 script:
   LOCKNAME_reset_lock:
