@@ -232,6 +232,7 @@ binary_sensor:
       value_template: >-
         {## This template checks whether the PIN should be considered active based on ##}
         {## all of the different ways the PIN can be conditionally disabled ##}
+
         {% set now = now() %}
 
         {% set current_day = now.strftime('%a')[0:3] | lower %}
