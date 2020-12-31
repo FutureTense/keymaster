@@ -235,45 +235,7 @@ binary_sensor:
     active_LOCKNAME_TEMPLATENUM:
       friendly_name: "Desired PIN State"
       value_template: >-
-        {% set day = now().strftime('%a') | lower %}
-        {## day_check checks that the day is enabled, and if the day is marked as ##}
-        {## included, we check that either the time is within the specified range or ##}
-        {## no range is specified. If the day is marked as excluded, we check that ##}
-        {## the time is outside the specified range ##}
-        {% set day_check = (
-          is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on')
-          and 
-          (
-            (
-              is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on')
-              and
-              (
-                states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM') == states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')
-                or
-                (
-                  now().strftime('%H%M') | int >= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
-                  and
-                  now().strftime('%H%M') | int | int <= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
-                )
-              )
-            )
-            or
-            (
-              is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'off')
-              and
-              now().strftime('%H%M') | int | int <= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
-              and
-              now().strftime('%H%M') | int | int >= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
-            )
-          )
-        ) %}
-        {## access_count_check checks that either the access limit is disabled or ##}
-        {## the access count > 0 ##}
-        {% set access_count_check = (
-          is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'off')
-          or
-          states.input_number.accesscount_LOCKNAME_TEMPLATENUM.state | int > 0
-        ) %}
+        {% set day = now().strftime('%a')[0:3] | lower %}
         {## in_date_range checks that the daterange boolean is disabled or the ##}
         {## current date is within the configured date range ##}
         {% set in_date_range_check = (
@@ -285,14 +247,48 @@ binary_sensor:
             now().strftime('%Y%m%d') | int <= states.input_datetime.end_date_LOCKNAME_TEMPLATENUM.attributes.timestamp | int | timestamp_custom('%Y%m%d', False) | int
           )
         ) %}
+        {## in_time_range_check checks that the current time is in the appropriate ##}
+        {## depending on whether the day is marked as inclusive or exclusive. ##}
+        {% set in_time_range_check = (
+          (
+            is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on')
+            and
+            (
+              states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM') == states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')
+              or
+              (
+                now().strftime('%H%M') | int >= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+                and
+                now().strftime('%H%M') | int <= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+              )
+            )
+          )
+          or
+          (
+            is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'off')
+            and
+            now().strftime('%H%M') | int <= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+            and
+            now().strftime('%H%M') | int >= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+          )
+        ) %}
+        {## access_count_check checks that either the access limit is disabled or ##}
+        {## the access count > 0 ##}
+        {% set access_count_check = (
+          is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'off')
+          or
+          states.input_number.accesscount_LOCKNAME_TEMPLATENUM.state | int > 0
+        ) %}
         {{
           is_state('input_boolean.enabled_LOCKNAME_TEMPLATENUM', 'on')
           and
-          access_count_check
+          is_state('input_boolean.' + day + '_LOCKNAME_TEMPLATENUM', 'on')
           and
           in_date_range_check
           and
-          day_check
+          in_time_range_check
+          and
+          access_count_check
         }}
 
     pin_synched_LOCKNAME_TEMPLATENUM:
