@@ -248,7 +248,7 @@ binary_sensor:
           )
         ) %}
         {## in_time_range_check checks that the current time is in the appropriate ##}
-        {## depending on whether the day is marked as inclusive or exclusive. ##}
+        {## depending on whether the range is marked as inclusive or exclusive. ##}
         {% set in_time_range_check = (
           (
             is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'on')
@@ -267,9 +267,9 @@ binary_sensor:
           (
             is_state('input_boolean.' + day + '_inc_LOCKNAME_TEMPLATENUM', 'off')
             and
-            now().strftime('%H%M') | int <= (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+            now().strftime('%H%M') | int < (states('input_datetime.' + day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
             and
-            now().strftime('%H%M') | int >= (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
+            now().strftime('%H%M') | int > (states('input_datetime.' + day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int
           )
         ) %}
         {## access_count_check checks that either the access limit is disabled or ##}
