@@ -248,7 +248,7 @@ binary_sensor:
           (
             is_time_range_inclusive
             and
-            current_time >= configured_start_time and current_time <= configured_end_time)
+            (current_time >= configured_start_time and current_time <= configured_end_time)
           )
           or
           (
@@ -258,7 +258,7 @@ binary_sensor:
           )
         ) %}
 
-        {% is_access_limit_enabled = is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'on') %}
+        {% set is_access_limit_enabled = is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'on') %}
         {% set is_access_count_valid = states('input_number.accesscount_LOCKNAME_TEMPLATENUM') | int > 0 %}
 
         {{
