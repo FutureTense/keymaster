@@ -278,7 +278,7 @@ binary_sensor:
         {% if is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on') %}
           {{ is_state('input_text.LOCKNAME_pin_TEMPLATENUM', lockpin) }}
         {% else %}
-          {{ lockpin in ("", "0000" }}
+          {{ lockpin in ("", "0000") }}
         {% endif %}
 
 ###################  sensor:  ####################
