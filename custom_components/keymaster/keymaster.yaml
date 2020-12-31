@@ -234,8 +234,8 @@ binary_sensor:
     active_LOCKNAME_TEMPLATENUM:
       friendly_name: "Desired PIN State"
       value_template: >-
-        {% set current_day = (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower %}
-        {% set current_date = (strptime(states('sensor.date'), '%Y-%m-%d').strftime('%Y%m%d') | int %}
+        {% set current_day = strptime(states('sensor.date'), '%Y-%m-%d').strftime('%a') | lower %}
+        {% set current_date = strptime(states('sensor.date'), '%Y-%m-%d').strftime('%Y%m%d') | int %}
         {% set current_time = states('sensor.time').replace(":","") | int %}
         {% set configured_start_time = (states('input_datetime.' + current_day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int %}
         {% set configured_end_time = (states('input_datetime.' + current_day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int %}
@@ -340,7 +340,7 @@ sensor:
         } %}
         {% set slot_active = states('binary_sensor.active_LOCKNAME_TEMPLATENUM') %}
         {% set pin_synched = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM') %}
-        {{ value_map[slot_active][pin_synched] }}
+        {{ value_map.get(slot_active, {}).get(pin_synched) }}
       icon_template: >
         {% set icon_map = {
           'on': {
@@ -354,4 +354,4 @@ sensor:
         } %}
         {% set slot_active = states('binary_sensor.active_LOCKNAME_TEMPLATENUM') %}
         {% set pin_synched = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM') %}
-        {{ icon_map[slot_active][pin_synched] }}
+        {{ icon_map.get(slot_active, {}).get(pin_synched) }}

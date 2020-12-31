@@ -16,10 +16,10 @@ input_boolean:
     name: CASE_LOCK_NAME reset lock
 
 ###################  sensor:  ####################
-sensor:	
-  - platform: time_date	
-    display_options:	
-      - "time"	
+sensor:
+  - platform: time_date
+    display_options:
+      - "time"
       - "date"
 
 ###################  script:  ####################
