@@ -233,9 +233,11 @@ binary_sensor:
         {## This template checks whether the PIN should be considered active based on ##}
         {## all of the different ways the PIN can be conditionally disabled ##}
         {% set now = now() %}
+
         {% set current_day = now.strftime('%a')[0:3] | lower %}
         {% set current_date = now.strftime('%Y%m%d') | int %}
         {% set current_time = now.strftime('%H%M') | int %}
+
         {% set start_date = states('input_datetime.start_date_LOCKNAME_TEMPLATENUM').replace('-', '') | int %}
         {% set end_date = states('input_datetime.end_date_LOCKNAME_TEMPLATENUM').replace('-', '') | int %}
         {% set current_day_start_time = (states('input_datetime.' + current_day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int %}
