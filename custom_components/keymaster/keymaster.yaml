@@ -239,67 +239,38 @@ binary_sensor:
         {% set configured_start_date = state_attr('input_datetime.start_date_LOCKNAME_TEMPLATENUM', 'timestamp') | int | timestamp_custom('%Y%m%d', False) | int %}
         {% set configured_end_date = state_attr('input_datetime.end_date_LOCKNAME_TEMPLATENUM', 'timestamp') | int | timestamp_custom('%Y%m%d', False) | int %}
 
-        {## in_date_range checks that the daterange boolean is disabled or the ##}
-        {## current date is within the configured date range ##}
+        {% set is_date_range_enabled = is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'on') %}
+        {% set is_in_date_range = (current_date >= configured_start_date and current_date <= configured_end_date) %}
 
-        {% set in_date_range_check = (
-          is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'off')
-          or 
+        {% set is_time_range_enabled = (configured_start_time != configured_end_time) %}
+        {% set is_inclusive = is_state('input_boolean.' + current_day + '_inc_LOCKNAME_TEMPLATENUM', 'on') %}
+        {% set is_in_time_range = (
           (
-            current_date >= configured_start_date
-            and 
-            current_date <= configured_end_date
-          )
-        ) %}
-
-        {## in_time_range_check checks that the current time is in the appropriate ##}
-        {## depending on whether the range is marked as inclusive or exclusive. ##}
-
-        {% set in_time_range_check = (
-          (
-            is_state('input_boolean.' + current_day + '_inc_LOCKNAME_TEMPLATENUM', 'on')
+            is_inclusive
             and
-            (
-              configured_start_time == configured_end_time
-              or
-              (
-                current_time >= configured_start_time
-                and
-                current_time <= configured_end_time
-              )
-            )
+            current_time >= configured_start_time and current_time <= configured_end_time)
           )
           or
           (
-            is_state('input_boolean.' + current_day + '_inc_LOCKNAME_TEMPLATENUM', 'off')
+            not is_inclusive
             and
-            (
-              current_time < configured_start_time
-              or
-              current_time > configured_end_time
-            )
+            (current_time < configured_start_time or current_time > configured_end_time)
           )
         ) %}
 
-        {## access_count_check checks that either the access limit is disabled or ##}
-        {## the access count > 0 ##}
-
-        {% set access_count_check = (
-          is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'off')
-          or
-          states('input_number.accesscount_LOCKNAME_TEMPLATENUM') | int > 0
-        ) %}
+        {% is_access_limit_enabled = is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'on') %}
+        {% set is_access_count_valid = states('input_number.accesscount_LOCKNAME_TEMPLATENUM') | int > 0 %}
 
         {{
           is_state('input_boolean.enabled_LOCKNAME_TEMPLATENUM', 'on')
           and
           is_state('input_boolean.' + current_day + '_LOCKNAME_TEMPLATENUM', 'on')
           and
-          in_date_range_check
+          (not is_date_range_enabled or is_in_date_range)
           and
-          in_time_range_check
+          (not is_time_range_enabled or is_in_time_range)
           and
-          access_count_check
+          (not is_access_limit_enabled or is_access_count_valid)
         }}
 
     pin_synched_LOCKNAME_TEMPLATENUM:
