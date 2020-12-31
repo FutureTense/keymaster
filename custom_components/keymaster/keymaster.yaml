@@ -2,7 +2,7 @@
 ############  input_number:  #####################  
 input_number:
   accesscount_LOCKNAME_TEMPLATENUM:
-    name: 'Unlock events '
+    name: 'Unlock events'
     min: 0
     max: 100
     step: 1

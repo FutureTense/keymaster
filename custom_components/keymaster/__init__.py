@@ -10,8 +10,9 @@ import voluptuous as vol
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import Config, HomeAssistant, ServiceCall
+from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import Config, Event, HomeAssistant, ServiceCall, State
+from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -24,6 +25,7 @@ from .const import (
     CONF_ALARM_TYPE,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_CHILD_LOCKS,
+    CONF_CHILD_LOCKS_FILE,
     CONF_ENTITY_ID,
     CONF_GENERATE,
     CONF_HIDE_PINS,
@@ -40,6 +42,7 @@ from .const import (
     MANAGER,
     PLATFORM,
     PRIMARY_LOCK,
+    UNSUB_LISTENERS,
     VERSION,
     ZWAVE_NETWORK,
 )
@@ -48,6 +51,7 @@ from .helpers import (
     delete_folder,
     delete_lock_and_base_folder,
     get_node_id,
+    handle_state_change,
     remove_generated_entities,
     using_ozw,
     using_zwave,
@@ -119,6 +123,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     hass.data[DOMAIN][config_entry.entry_id] = {
         PRIMARY_LOCK: primary_lock,
         CHILD_LOCKS: child_locks,
+        UNSUB_LISTENERS: [],
     }
     coordinator = LockUsercodeUpdateCoordinator(hass, config_entry)
     hass.data[DOMAIN][config_entry.entry_id][COORDINATOR] = coordinator
@@ -207,6 +212,25 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         servicedata = {"lockname": primary_lock.lock_name}
         await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
+    async def async_entity_state_listener(
+        changed_entity: str, old_state: State, new_state: State
+    ) -> None:
+        """Listener to handle state changes to lock entities."""
+        handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
+
+    async def async_homeassistant_started_listener(evt: Event):
+        """Start tracking state changes after HomeAssistant has started."""
+        # Listen to lock state changes so we can fire an event
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            async_track_state_change(
+                hass, primary_lock.lock_entity_id, async_entity_state_listener
+            )
+        )
+
+    hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STARTED, async_homeassistant_started_listener
+    )
+
     return True
 
 
@@ -231,6 +255,11 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
             delete_lock_and_base_folder, hass, config_entry
         )
 
+        # Unsubscribe to any listeners
+        for unsub_listener in hass.data[DOMAIN].get(UNSUB_LISTENERS, []):
+            unsub_listener()
+        hass.data[DOMAIN].get(UNSUB_LISTENERS, []).clear()
+
         hass.data[DOMAIN].pop(config_entry.entry_id)
 
     return unload_ok
@@ -250,8 +279,9 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_ENTITY_ID)
         if CONF_HIDE_PINS not in data:
             data[CONF_HIDE_PINS] = DEFAULT_HIDE_PINS
+        data[CONF_CHILD_LOCKS_FILE] = data.get(CONF_CHILD_LOCKS_FILE, "")
 
-        await hass.config_entries.async_update_entry(entry=config_entry, data=data)
+        hass.config_entries.async_update_entry(entry=config_entry, data=data)
         config_entry.version = 2
         _LOGGER.debug("Migration to version %s complete", config_entry.version)
 
@@ -320,6 +350,24 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     servicedata = {"lockname": primary_lock.lock_name}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
+    async def async_entity_state_listener(
+        changed_entity: str, old_state: State, new_state: State
+    ) -> None:
+        """Listener to track state changes to lock entities."""
+        handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
+
+    # Unsubscribe to any listeners so we can create new ones
+    for unsub_listener in hass.data[DOMAIN].get(UNSUB_LISTENERS, []):
+        unsub_listener()
+    hass.data[DOMAIN].get(UNSUB_LISTENERS, []).clear()
+
+    # Create new listeners
+    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+        async_track_state_change(
+            hass, primary_lock.lock_entity_id, async_entity_state_listener
+        )
+    )
+
 
 class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage usercode updates."""
@@ -335,6 +383,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=5),
             update_method=self.async_update_usercodes,
         )
+        self.data = {}
 
     def _invalid_code(self, code_slot):
         """Return the PIN slot value as we are unable to read the slot value
@@ -351,7 +400,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         pin = self.hass.states.get(pin_data)
 
         # If slot is enabled return the PIN
-        if enabled is not None:
+        if enabled is not None and pin is not None:
             if enabled.state == "on" and pin.state.isnumeric():
                 _LOGGER.debug("Utilizing BE469 work around code.")
                 data = pin.state
@@ -379,7 +428,10 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         instance_id = 1  # default
         data = {}
         data[CONF_LOCK_ENTITY_ID] = self._lock.lock_entity_id
-        data[ATTR_NODE_ID] = get_node_id(self.hass, self._lock.lock_entity_id)
+        node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+        if node_id is None:
+            return data
+        data[ATTR_NODE_ID] = node_id
 
         if data[ATTR_NODE_ID] is None:
             raise NoNodeSpecifiedError
@@ -391,11 +443,15 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         # pull the codes for ozw
         if using_ozw(self.hass):
             # Raises exception when node not found
-            node = get_node_from_manager(
-                self.hass.data[OZW_DOMAIN][MANAGER],
-                instance_id,
-                data[ATTR_NODE_ID],
-            )
+            try:
+                node = get_node_from_manager(
+                    self.hass.data[OZW_DOMAIN][MANAGER],
+                    instance_id,
+                    data[ATTR_NODE_ID],
+                )
+            except NotFoundError:
+                return data
+
             command_class = node.get_command_class(CommandClass.USER_CODE)
 
             if not command_class:

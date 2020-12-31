@@ -138,7 +138,6 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
         self, user_input: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """Handle a flow initialized by the user."""
-
         return await _start_config_flow(
             self, "init", "", user_input, self.config_entry.data
         )

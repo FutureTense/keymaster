@@ -48,7 +48,7 @@ class CodesSensor(CoordinatorEntity):
     def state(self):
         """Return the state of the sensor."""
         try:
-            return self.coordinator.data[self._code_slot]
+            return self.coordinator.data.get(self._code_slot)
         except Exception as err:
             _LOGGER.warning("Code slot %s had no value: %s", str(self._name), str(err))
 
