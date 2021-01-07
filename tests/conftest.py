@@ -1,8 +1,6 @@
 """ Fixtures for keymaster tests. """
-from unittest import mock
-
 import pytest
-from pytest_homeassistant_custom_component.async_mock import patch
+from unittest.mock import patch
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 

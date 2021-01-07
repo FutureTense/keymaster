@@ -1,6 +1,6 @@
 """ Test keymaster init """
 import pytest
-from pytest_homeassistant_custom_component.async_mock import call, patch
+from unittest.mock import call, patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN

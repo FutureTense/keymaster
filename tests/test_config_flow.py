@@ -2,7 +2,7 @@
 import logging
 
 import pytest
-from pytest_homeassistant_custom_component.async_mock import patch
+from unittest.mock import patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.config_flow import (
