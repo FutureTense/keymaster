@@ -19,8 +19,8 @@ from .const import (
     CONF_PATH,
     CONF_SLOTS,
     CONF_START,
-    DOMAIN,
     DEFAULT_HIDE_PINS,
+    DOMAIN,
     MANAGER,
     PRIMARY_LOCK,
 )
