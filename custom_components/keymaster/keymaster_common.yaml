@@ -17,13 +17,6 @@ input_boolean:
 
 ###################  script:  ####################
 script:
-  LOCKNAME_reset_lock:
-    sequence:
-      - service: script.LOCKNAME_manual_notify
-        data_template:
-          title: "reset"
-          message: "LOCKNAME"
-
   LOCKNAME_refreshnodeinfo:
     description: 'Send MQTT RefreshNodeInfo command'
     sequence:
@@ -208,6 +201,9 @@ automation:
             {{ 'input_boolean.enabled_LOCKNAME_' + trigger.entity_id.split('_')[-1:] }}
 
   - alias: CASE_LOCK_NAME Reset
+    variables:
+      # Constant used to loop through resetting all code slots
+      code_slots: [ALL_CODE_SLOTS]
     condition:
       - condition: state
         entity_id: "input_boolean.allow_automation_execution"
@@ -218,7 +214,12 @@ automation:
       from: "off"
       to: "on"
     action:
-      - service: script.LOCKNAME_reset_lock
+      - repeat:
+          sequence:
+            - service: script.reset_codeslot_LOCKNAME
+              data_template:
+                code_slot: "{{ code_slots[repeat.index - 1] | string }}"
+          until: "{{ repeat.index == code_slots | length }}"
       - service: input_boolean.turn_off
         entity_id: input_boolean.LOCKNAME_reset_lock
 
