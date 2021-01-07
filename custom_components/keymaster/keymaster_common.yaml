@@ -135,8 +135,8 @@ automation:
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
-          title: "{{ trigger.event.data.action_text }}"
-          message: "{{ trigger.event.data.code_slot_name }}"
+          title: CASE_LOCK_NAME
+          message: "{{ trigger.event.data.action_text }} by {{ trigger.event.data.code_slot_name }}"
 
   - alias: CASE_LOCK_NAME Sensor Closed
     trigger:

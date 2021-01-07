@@ -231,7 +231,7 @@ binary_sensor:
       friendly_name: "Desired PIN State"
       value_template: >-
         {## This template checks whether the PIN should be considered active based on ##}
-        {## all of the different ways the PIN can be conditionally disabled ##}
+        {## all of the different ways the PIN can be conditionally enabled/disabled ##}
 
         {% set now = now() %}
 
