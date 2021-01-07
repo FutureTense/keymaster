@@ -39,6 +39,7 @@ script:
           retain: true
 
   reset_codeslot_LOCKNAME:
+    mode: queued
     fields:
       code_slot:
         description: The code slot to reset
