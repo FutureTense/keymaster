@@ -41,6 +41,9 @@ script:
       # Constant used later to loop through day specific entities
       days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
     sequence:
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.enabled_LOCKNAME_{{ code_slot | string }}"
       - service: input_text.set_value
         data_template:
           entity_id: "input_text.LOCKNAME_name_{{ code_slot | string }}"
@@ -52,9 +55,6 @@ script:
       - service: input_boolean.turn_off
         data_template:
           entity_id: "input_boolean.notify_LOCKNAME_{{ code_slot | string }}"
-      - service: input_boolean.turn_off
-        data_template:
-          entity_id: "input_boolean.enabled_LOCKNAME_{{ code_slot | string }}"
       - service: input_number.set_value
         data_template:
           entity_id: "input_number.accesscount_LOCKNAME_{{ code_slot | string }}"
