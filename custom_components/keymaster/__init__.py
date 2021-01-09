@@ -256,9 +256,9 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         )
 
         # Unsubscribe to any listeners
-        for unsub_listener in hass.data[DOMAIN].get(UNSUB_LISTENERS, []):
+        for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []):
             unsub_listener()
-        hass.data[DOMAIN].get(UNSUB_LISTENERS, []).clear()
+        hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
         hass.data[DOMAIN].pop(config_entry.entry_id)
 
@@ -331,7 +331,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
         config_entry.data[CONF_SENSOR_NAME],
     )
-    hass.data[DOMAIN].update(
+    hass.data[DOMAIN][config_entry.entry_id].update(
         {
             PRIMARY_LOCK: primary_lock,
             CHILD_LOCKS: [
@@ -357,9 +357,9 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
 
     # Unsubscribe to any listeners so we can create new ones
-    for unsub_listener in hass.data[DOMAIN].get(UNSUB_LISTENERS, []):
+    for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []):
         unsub_listener()
-    hass.data[DOMAIN].get(UNSUB_LISTENERS, []).clear()
+    hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
     # Create new listeners
     hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
