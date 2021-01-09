@@ -107,7 +107,7 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: state
         entity_id: "input_boolean.LOCKNAME_lock_notifications"
@@ -126,7 +126,7 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: template
         value_template: "{{ trigger.event.data.code_slot > 0 }}"
@@ -145,7 +145,7 @@ automation:
       to: "off"
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: state
         entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
@@ -163,7 +163,7 @@ automation:
       to: "on"
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: state
         entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
@@ -180,7 +180,7 @@ automation:
       platform: state
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: template
         value_template: >-
@@ -206,7 +206,7 @@ automation:
       code_slots: [ALL_CODE_SLOTS]
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
     trigger:
       entity_id: input_boolean.LOCKNAME_reset_lock
@@ -231,7 +231,7 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: template
         # make sure decrementing access entries is enabled 

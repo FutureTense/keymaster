@@ -1,5 +1,5 @@
 input_boolean:
-    allow_automation_execution:
+    keymaster_allow_automation_execution:
         name: 'Allow Automation'
         initial: off
 
@@ -22,7 +22,7 @@ automation:
           to: "off"
       action:
         - service: homeassistant.turn_off
-          entity_id: input_boolean.allow_automation_execution
+          entity_id: input_boolean.keymaster_allow_automation_execution
 
     - alias: open_zwave_network_up
       initial_state: true
@@ -38,4 +38,4 @@ automation:
           state: "on"
       action:
         - service: homeassistant.turn_on
-          entity_id: input_boolean.allow_automation_execution
+          entity_id: input_boolean.keymaster_allow_automation_execution
