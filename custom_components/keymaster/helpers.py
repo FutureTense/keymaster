@@ -18,7 +18,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_STATE, STATE_LOCKED, STATE_UNLOCKED
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_registry import async_get_registry
-from homeassistant.util import datetime as dt_util
+from homeassistant.util import dt
 from homeassistant.util.yaml.loader import load_yaml
 
 from .const import (
@@ -198,7 +198,7 @@ def handle_state_change(
     if (
         alarm_level_state is not None
         and int(alarm_level_state.state) == 0
-        and dt_util.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
+        and dt.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
         > timedelta(seconds=5)
         and action_type in LOCK_STATE_MAP
     ):
