@@ -256,7 +256,9 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         )
 
         # Unsubscribe to any listeners
-        for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []):
+        for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(
+            UNSUB_LISTENERS, []
+        ):
             unsub_listener()
         hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
@@ -357,7 +359,9 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
 
     # Unsubscribe to any listeners so we can create new ones
-    for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []):
+    for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(
+        UNSUB_LISTENERS, []
+    ):
         unsub_listener()
     hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 

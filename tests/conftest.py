@@ -49,15 +49,15 @@ def mock_listdir():
 @pytest.fixture
 def mock_osremove():
     """Fixture to mock remove file."""
-    with patch("os.remove", return_value=True):
-        yield
+    with patch("os.remove", return_value=True) as mock_osremove:
+        yield mock_osremove
 
 
 @pytest.fixture
 def mock_osrmdir():
     """Fixture to mock remove directory."""
-    with patch("os.rmdir", return_value=True):
-        yield
+    with patch("os.rmdir", return_value=True) as mock_osrmdir:
+        yield mock_osrmdir
 
 
 @pytest.fixture
@@ -78,4 +78,11 @@ def mock_delete_folder():
 def mock_delete_lock_and_base_folder():
     """Fixture to mock delete_lock_and_base_folder helper function."""
     with patch("custom_components.keymaster.delete_lock_and_base_folder"):
+        yield
+
+
+@pytest.fixture
+def mock_os_path_join():
+    """ Fixture to mock splitext """
+    with patch("os.path.join"):
         yield
