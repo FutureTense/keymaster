@@ -149,18 +149,12 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
     @property
     def is_slot_active(self):
         """Indicates whether the slot is enabled via the input_boolean."""
-        state = self.get_state(self._is_slot_active_entity)
-        if state is None:
-            return False
-        return state
+        return self.get_state(self._is_slot_active_entity)
 
     @property
     def is_current_day_active(self):
         """Indicates whether current day is enabled via the input_boolean."""
-        state = self.get_state(self._is_current_day_active_entity)
-        if state is None:
-            return False
-        return state
+        return self.get_state(self._is_current_day_active_entity)
 
     @property
     def is_current_day_valid(self):
@@ -170,14 +164,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         end_date = self.get_state(self._end_date_entity)
 
         # If any of the states haven't been set yet, bail out
-        if any(
-            var is None
-            for var in (
-                is_date_range_enabled,
-                start_date,
-                end_date,
-            )
-        ):
+        if start_date is None or end_date is None:
             return False
 
         current_date = int(dt.now().strftime("%Y%m%d"))
@@ -195,14 +182,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         current_day_end_time = self.get_state(self._current_day_end_time_entity)
 
         # If any of the states haven't been set yet, bail out
-        if any(
-            var is None
-            for var in (
-                is_time_range_inclusive,
-                current_day_start_time,
-                current_day_end_time,
-            )
-        ):
+        if current_day_start_time is None or current_day_end_time is None:
             return False
 
         current_time = int(dt.now().strftime("%H%M"))
@@ -231,17 +211,9 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         is_access_limit_enabled = self.get_state(self._is_access_limit_enabled_entity)
         access_count = self.get_state(self._access_count_entity)
 
-        # If any of the states haven't been set yet, bail out
-        if any(
-            var is None
-            for var in (
-                is_access_limit_enabled,
-                access_count,
-            )
-        ):
-            return False
-
-        return not is_access_limit_enabled or int(access_count) > 0
+        return not is_access_limit_enabled or (
+            access_count is not None and int(access_count) > 0
+        )
 
     @property
     def is_on(self):
@@ -271,8 +243,10 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
             ):
                 end_time_split = self.get_state(self._current_day_end_time_entity)
                 start_time_split = self.get_state(self._current_day_start_time_entity)
-                if any(var is None for var in (end_time_split, start_time_split)):
+
+                if end_time_split is None or start_time_split is None:
                     return
+
                 end_time_split = end_time_split.split(":")
                 start_time_split = start_time_split.split(":")
                 self._current_day_time_range_unsub_listener = async_track_time_change(
