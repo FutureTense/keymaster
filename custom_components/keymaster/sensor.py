@@ -3,6 +3,7 @@ import logging
 
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
+from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -74,9 +75,9 @@ class ConnectedSensor(KeymasterTemplateEntity):
         KeymasterTemplateEntity.__init__(
             self, hass, entry, SENSOR_DOMAIN, code_slot, "Connected", "Status"
         )
-        self._active_entity = self.generate_entity_id("binary_sensor", "active")
-        self._pin_synched_entity = self.generate_entity_id(
-            "binary_sensor", "pin_synched"
+        self._active_entity = self.get_entity_id(BINARY_SENSOR_DOMAIN, "active")
+        self._pin_synched_entity = self.get_entity_id(
+            BINARY_SENSOR_DOMAIN, "pin_synched"
         )
         self._entities_to_watch = [self._active_entity, self._pin_synched_entity]
 

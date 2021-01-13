@@ -1,11 +1,11 @@
 """Base entity classes for keymaster."""
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Union
 
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_FRIENDLY_NAME, STATE_ON
+from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity, async_generate_entity_id
 from homeassistant.util import slugify
@@ -42,7 +42,7 @@ class KeymasterTemplateEntity(Entity):
             hass=hass,
         )
 
-    def generate_entity_id(self, domain: str, name: str = None, curr_day: str = None):
+    def get_entity_id(self, domain: str, name: str = None, curr_day: str = None):
         """Return generated entity ID."""
         entity_id = slugify(f"{self._lock_name}")
         if curr_day:

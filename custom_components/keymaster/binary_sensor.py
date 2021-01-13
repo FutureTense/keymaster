@@ -7,6 +7,11 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     DOMAIN as BINARY_SENSOR_DOMAIN,
 )
+from homeassistant.components.input_boolean import DOMAIN as INPUT_BOOL_DOMAIN
+from homeassistant.components.input_datetime import DOMAIN as INPUT_DT_DOMAIN
+from homeassistant.components.input_number import DOMAIN as INPUT_NUM_DOMAIN
+from homeassistant.components.input_text import DOMAIN as INPUT_TXT_DOMAIN
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_FRIENDLY_NAME
 from homeassistant.core import HomeAssistant
@@ -52,9 +57,9 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
             "PIN Synched",
             "PIN synchronized with lock",
         )
-        self._lock_pin_entity = self.generate_entity_id("sensor", "code_slot")
-        self._input_pin_entity = self.generate_entity_id("input_text", "pin")
-        self._active_entity = self.generate_entity_id("binary_sensor", "active")
+        self._lock_pin_entity = self.get_entity_id(SENSOR_DOMAIN, "code_slot")
+        self._input_pin_entity = self.get_entity_id(INPUT_TXT_DOMAIN, "pin")
+        self._active_entity = self.get_entity_id(BINARY_SENSOR_DOMAIN, "active")
         self._entities_to_watch = [
             self._lock_pin_entity,
             self._input_pin_entity,
@@ -70,10 +75,11 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
 
         return (
             active is not None
+            and lock_pin is not None
             and input_pin is not None
             and (
                 (active and input_pin == lock_pin)
-                or (not active and lock_pin in (None, "", "0000"))
+                or (not active and lock_pin in ("", "0000"))
             )
         )
 
@@ -106,33 +112,29 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         )
         self._current_day = dt.now().strftime("%a")[0:3].lower()
 
-        self._start_date_entity = self.generate_entity_id(
-            "input_datetime", "start_date"
+        self._start_date_entity = self.get_entity_id(INPUT_DT_DOMAIN, "start_date")
+        self._end_date_entity = self.get_entity_id(INPUT_DT_DOMAIN, "end_date")
+        self._is_slot_active_entity = self.get_entity_id(INPUT_BOOL_DOMAIN, "enabled")
+        self._is_date_range_enabled_entity = self.get_entity_id(
+            INPUT_BOOL_DOMAIN, "daterange"
         )
-        self._end_date_entity = self.generate_entity_id("input_datetime", "end_date")
-        self._is_slot_active_entity = self.generate_entity_id(
-            "input_boolean", "enabled"
+        self._is_access_limit_enabled_entity = self.get_entity_id(
+            INPUT_BOOL_DOMAIN, "accesslimit"
         )
-        self._is_date_range_enabled_entity = self.generate_entity_id(
-            "input_boolean", "daterange"
+        self._is_access_count_valid_entity = self.get_entity_id(
+            INPUT_NUM_DOMAIN, "accesscount"
         )
-        self._is_access_limit_enabled_entity = self.generate_entity_id(
-            "input_boolean", "accesslimit"
+        self._is_current_day_active_entity = self.get_entity_id(
+            INPUT_BOOL_DOMAIN, None, self._current_day
         )
-        self._is_access_count_valid_entity = self.generate_entity_id(
-            "input_number", "accesscount"
+        self._is_time_range_inclusive_entity = self.get_entity_id(
+            INPUT_BOOL_DOMAIN, "inc", self._current_day
         )
-        self._is_current_day_active_entity = self.generate_entity_id(
-            "input_boolean", None, self._current_day
+        self._current_day_start_time_entity = self.get_entity_id(
+            INPUT_DT_DOMAIN, "start_date", self._current_day
         )
-        self._is_time_range_inclusive_entity = self.generate_entity_id(
-            "input_boolean", "inc", self._current_day
-        )
-        self._current_day_start_time_entity = self.generate_entity_id(
-            "input_datetime", "start_date", self._current_day
-        )
-        self._current_day_end_time_entity = self.generate_entity_id(
-            "input_datetime", "end_date", self._current_day
+        self._current_day_end_time_entity = self.get_entity_id(
+            INPUT_DT_DOMAIN, "end_date", self._current_day
         )
         self._entities_to_watch = [
             self._start_date_entity,
@@ -147,54 +149,67 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         self._current_day_time_range_unsub_listener = None
 
     @property
-    def is_on(self):
-        """Return true if the binary sensor is on."""
-        now = dt.now()
-        is_slot_active = self.get_state(self._is_slot_active_entity)
-        is_current_day_active = self.get_state(self._is_current_day_active_entity)
+    def is_slot_active(self):
+        """Indicates whether the slot is enabled via the input_boolean."""
+        state = self.get_state(self._is_slot_active_entity)
+        if state is None:
+            return False
+        return state
 
+    @property
+    def is_current_day_active(self):
+        """Indicates whether current day is enabled via the input_boolean."""
+        state = self.get_state(self._is_current_day_active_entity)
+        if state is None:
+            return False
+        return state
+
+    @property
+    def is_current_day_valid(self):
+        """Indicates whether current day is within the expected date range."""
         is_date_range_enabled = self.get_state(self._is_date_range_enabled_entity)
-
-        current_date = int(now.strftime("%Y%m%d"))
-
         start_date = self.get_state(self._start_date_entity)
         end_date = self.get_state(self._end_date_entity)
-
-        is_time_range_inclusive = self.get_state(self._is_time_range_inclusive_entity)
-
-        current_time = int(now.strftime("%H%M"))
-
-        current_day_start_time = self.get_state(self._current_day_start_time_entity)
-        current_day_end_time = self.get_state(self._current_day_end_time_entity)
-
-        is_access_limit_enabled = self.get_state(self._is_access_limit_enabled_entity)
-        is_access_count_valid = self.get_state(self._is_access_count_valid_entity)
 
         # If any of the states haven't been set yet, bail out
         if any(
             var is None
             for var in (
-                is_slot_active,
-                is_current_day_active,
                 is_date_range_enabled,
                 start_date,
                 end_date,
-                is_time_range_inclusive,
-                current_day_start_time,
-                current_day_end_time,
-                is_access_count_valid,
-                is_access_limit_enabled,
             )
         ):
             return False
 
-        # format dates and times into comparable integers
+        current_date = int(dt.now().strftime("%Y%m%d"))
         start_date = int(start_date.replace("-", ""))
         end_date = int(end_date.replace("-", ""))
+        is_in_date_range = current_date >= start_date and current_date <= end_date
+
+        return not is_date_range_enabled or is_in_date_range
+
+    @property
+    def is_current_time_valid(self):
+        """Indicates whether the current time is within the expected time range."""
+        is_time_range_inclusive = self.get_state(self._is_time_range_inclusive_entity)
+        current_day_start_time = self.get_state(self._current_day_start_time_entity)
+        current_day_end_time = self.get_state(self._current_day_end_time_entity)
+
+        # If any of the states haven't been set yet, bail out
+        if any(
+            var is None
+            for var in (
+                is_time_range_inclusive,
+                current_day_start_time,
+                current_day_end_time,
+            )
+        ):
+            return False
+
+        current_time = int(dt.now().strftime("%H%M"))
         current_day_start_time = int(current_day_start_time[0:5].replace(":", ""))
         current_day_end_time = int(current_day_end_time[0:5].replace(":", ""))
-
-        is_in_date_range = current_date >= start_date and current_date <= end_date
         is_time_range_enabled = current_day_start_time != current_day_end_time
         is_in_time_range = (
             is_time_range_inclusive
@@ -210,12 +225,35 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
             )
         )
 
+        return not is_time_range_enabled or is_in_time_range
+
+    @property
+    def is_access_limit_ok(self):
+        """Return whether the access limit for the code slot is valid."""
+        is_access_limit_enabled = self.get_state(self._is_access_limit_enabled_entity)
+        is_access_count_valid = self.get_state(self._is_access_count_valid_entity)
+
+        # If any of the states haven't been set yet, bail out
+        if any(
+            var is None
+            for var in (
+                is_access_limit_enabled,
+                is_access_count_valid,
+            )
+        ):
+            return False
+
+        return not is_access_limit_enabled or is_access_count_valid
+
+    @property
+    def is_on(self):
+        """Return true if the binary sensor is on."""
         return (
-            is_slot_active
-            and is_current_day_active
-            and (not is_date_range_enabled or is_in_date_range)
-            and (not is_time_range_enabled or is_in_time_range)
-            and (not is_access_limit_enabled or is_access_count_valid)
+            self.is_slot_active
+            and self.is_current_day_active
+            and self.is_current_day_valid
+            and self.is_current_time_valid
+            and self.is_access_limit_ok
         )
 
     async def async_added_to_hass(self) -> None:
@@ -231,16 +269,19 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         )
 
         def day_change_handler(now: datetime):
+            # Unsubscribe to previous day listeners if set
             if self._current_day_unsub_listener is not None:
                 self._current_day_unsub_listener()
             if self._current_day_time_range_unsub_listener is not None:
                 self._current_day_time_range_unsub_listener()
+
+            # Calculate new current day entities and start listening to state changes
             self._current_day = now.strftime("%a")[0:3].lower()
-            self._is_current_day_active_entity = self.generate_entity_id(
-                "input_boolean", None, self._current_day
+            self._is_current_day_active_entity = self.get_entity_id(
+                INPUT_BOOL_DOMAIN, None, self._current_day
             )
-            self._is_time_range_inclusive_entity = self.generate_entity_id(
-                "input_boolean", "inc", self._current_day
+            self._is_time_range_inclusive_entity = self.get_entity_id(
+                INPUT_BOOL_DOMAIN, "inc", self._current_day
             )
             self._current_day_unsub_listener = async_track_state_change_event(
                 self._hass,
@@ -251,12 +292,15 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
                 state_change_handler,
             )
 
-            self._current_day_start_time_entity = self.generate_entity_id(
-                "input_datetime", "start_date", self._current_day
+            # Calculate new current day time range entities
+            self._current_day_start_time_entity = self.get_entity_id(
+                INPUT_DT_DOMAIN, "start_date", self._current_day
             )
-            self._current_day_end_time_entity = self.generate_entity_id(
-                "input_datetime", "end_date", self._current_day
+            self._current_day_end_time_entity = self.get_entity_id(
+                INPUT_DT_DOMAIN, "end_date", self._current_day
             )
+
+            # If time ranges have been set, listen to time changes for the start and end time
             if self.get_state(self._current_day_end_time_entity) != self.get_state(
                 self._current_day_start_time_entity
             ):
