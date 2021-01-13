@@ -20,7 +20,12 @@ class KeymasterTemplateEntity(Entity):
     """Base class for a keymaster templated entity."""
 
     def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int, name: str
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        code_slot: int,
+        name: str,
+        friendly_name: str = None,
     ):
         """Initialize the entity."""
         self._hass = hass
@@ -28,7 +33,8 @@ class KeymasterTemplateEntity(Entity):
         self._config_entry = entry
         self._code_slot = code_slot
         self._lock_name = self._lock.lock_name
-        self._name = f"{name} {self._code_slot}"
+        self._name = name
+        self._friendly_name = friendly_name
 
     def generate_entity_id(self, domain: str, name: str = None, curr_day: str = None):
         """Return generated entity ID."""
@@ -57,9 +63,9 @@ class KeymasterTemplateEntity(Entity):
     @property
     def unique_id(self):
         """Return a unique, Home Assistant friendly identifier for this entity."""
-        return slugify(f"{self._lock_name} {self._name}")
+        return slugify(f"{self._lock_name} {self._name} {self._code_slot}")
 
     @property
     def name(self):
         """Return the name of the sensor."""
-        return f"{self._lock_name} {self._name}"
+        return self._friendly_name if self._friendly_name else self._name

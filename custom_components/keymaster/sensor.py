@@ -48,6 +48,11 @@ class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
             )
 
     @property
+    def name(self):
+        """Return the entity name."""
+        return f"{self._lock_name} {self._name} {self._code_slot}"
+
+    @property
     def icon(self):
         """Return the icon."""
         return "mdi:lock-smart"
@@ -63,7 +68,9 @@ class ConnectedSensor(KeymasterTemplateEntity):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
         """Initialize the sensor."""
-        KeymasterTemplateEntity.__init__(self, hass, entry, code_slot, "Connected")
+        KeymasterTemplateEntity.__init__(
+            self, hass, entry, code_slot, "Connected", "Status"
+        )
         self._active_entity = self.generate_entity_id("binary_sensor", "active")
         self._pin_synched_entity = self.generate_entity_id(
             "binary_sensor", "pin_synched"
