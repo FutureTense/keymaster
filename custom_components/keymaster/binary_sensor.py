@@ -3,7 +3,10 @@ from datetime import datetime
 import logging
 from typing import Any, Dict, Optional
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorEntity,
+    DOMAIN as BINARY_SENSOR_DOMAIN,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_FRIENDLY_NAME
 from homeassistant.core import HomeAssistant
@@ -41,7 +44,13 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
-            self, hass, entry, code_slot, "PIN Synched", "PIN synchronized with lock"
+            self,
+            hass,
+            entry,
+            BINARY_SENSOR_DOMAIN,
+            code_slot,
+            "PIN Synched",
+            "PIN synchronized with lock",
         )
         self._lock_pin_entity = self.generate_entity_id("sensor", "code_slot")
         self._input_pin_entity = self.generate_entity_id("input_text", "pin")
@@ -80,11 +89,6 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
             )
         )
 
-    @property
-    def state_attributes(self) -> Optional[Dict[str, Any]]:
-        """Return the state attributes."""
-        return {ATTR_FRIENDLY_NAME: "PIN synchronized with lock"}
-
 
 class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
     """Binary sensor class for code slot PIN synched status."""
@@ -92,7 +96,13 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
-            self, hass, entry, code_slot, "Active", "Desired PIN State"
+            self,
+            hass,
+            entry,
+            BINARY_SENSOR_DOMAIN,
+            code_slot,
+            "Active",
+            "Desired PIN State",
         )
         self._current_day = dt.now().strftime("%a")[0:3].lower()
 

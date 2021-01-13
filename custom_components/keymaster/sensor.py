@@ -3,6 +3,7 @@ import logging
 
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import Event, async_track_state_change_event
@@ -34,7 +35,9 @@ class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
         """Initialize the sensor."""
-        KeymasterTemplateEntity.__init__(self, hass, entry, code_slot, "Code Slot")
+        KeymasterTemplateEntity.__init__(
+            self, hass, entry, SENSOR_DOMAIN, code_slot, "Code Slot"
+        )
         CoordinatorEntity.__init__(self, hass.data[DOMAIN][entry.entry_id][COORDINATOR])
 
     @property
@@ -69,7 +72,7 @@ class ConnectedSensor(KeymasterTemplateEntity):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
-            self, hass, entry, code_slot, "Connected", "Status"
+            self, hass, entry, SENSOR_DOMAIN, code_slot, "Connected", "Status"
         )
         self._active_entity = self.generate_entity_id("binary_sensor", "active")
         self._pin_synched_entity = self.generate_entity_id(

@@ -1,13 +1,13 @@
 """Base entity classes for keymaster."""
 import logging
-from typing import Union
+from typing import Any, Dict, Optional, Union
 
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON
+from homeassistant.const import ATTR_FRIENDLY_NAME, STATE_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity import Entity, async_generate_entity_id
 from homeassistant.util import slugify
 
 from .const import DOMAIN, PRIMARY_LOCK
@@ -23,6 +23,7 @@ class KeymasterTemplateEntity(Entity):
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
+        domain: str,
         code_slot: int,
         name: str,
         friendly_name: str = None,
@@ -35,6 +36,11 @@ class KeymasterTemplateEntity(Entity):
         self._lock_name = self._lock.lock_name
         self._name = name
         self._friendly_name = friendly_name
+        self.entity_id = async_generate_entity_id(
+            domain + ".{}",
+            f"{self._lock_name} {self._name} {self._code_slot}",
+            hass=hass,
+        )
 
     def generate_entity_id(self, domain: str, name: str = None, curr_day: str = None):
         """Return generated entity ID."""
@@ -68,4 +74,8 @@ class KeymasterTemplateEntity(Entity):
     @property
     def name(self):
         """Return the name of the sensor."""
-        return self._friendly_name if self._friendly_name else self._name
+        return (
+            self._friendly_name
+            if self._friendly_name
+            else f"{self._lock_name} {self._name} {self._code_slot}"
+        )
