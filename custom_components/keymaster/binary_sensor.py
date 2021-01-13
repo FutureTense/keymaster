@@ -121,9 +121,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         self._is_access_limit_enabled_entity = self.get_entity_id(
             INPUT_BOOL_DOMAIN, "accesslimit"
         )
-        self._is_access_count_valid_entity = self.get_entity_id(
-            INPUT_NUM_DOMAIN, "accesscount"
-        )
+        self._access_count_entity = self.get_entity_id(INPUT_NUM_DOMAIN, "accesscount")
         self._is_current_day_active_entity = self.get_entity_id(
             INPUT_BOOL_DOMAIN, None, self._current_day
         )
@@ -142,10 +140,10 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
             self._is_slot_active_entity,
             self._is_date_range_enabled_entity,
             self._is_access_limit_enabled_entity,
-            self._is_access_count_valid_entity,
+            self._access_count_entity,
         ]
         self._daily_entities = []
-        self._current_day_unsub_listener = None
+        self._current_day_unsub_listeners = []
         self._current_day_time_range_unsub_listener = None
 
     @property
@@ -231,19 +229,19 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
     def is_access_limit_ok(self):
         """Return whether the access limit for the code slot is valid."""
         is_access_limit_enabled = self.get_state(self._is_access_limit_enabled_entity)
-        is_access_count_valid = self.get_state(self._is_access_count_valid_entity)
+        access_count = self.get_state(self._access_count_entity)
 
         # If any of the states haven't been set yet, bail out
         if any(
             var is None
             for var in (
                 is_access_limit_enabled,
-                is_access_count_valid,
+                access_count,
             )
         ):
             return False
 
-        return not is_access_limit_enabled or is_access_count_valid
+        return not is_access_limit_enabled or int(access_count) > 0
 
     @property
     def is_on(self):
@@ -262,43 +260,9 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         def state_change_handler(evt: Event = None) -> None:
             self.async_write_ha_state()
 
-        self.async_on_remove(
-            async_track_state_change_event(
-                self._hass, self._entities_to_watch, state_change_handler
-            )
-        )
-
-        def day_change_handler(now: datetime):
-            # Unsubscribe to previous day listeners if set
-            if self._current_day_unsub_listener is not None:
-                self._current_day_unsub_listener()
+        def time_range_change_handler(evt: Event = None) -> None:
             if self._current_day_time_range_unsub_listener is not None:
                 self._current_day_time_range_unsub_listener()
-
-            # Calculate new current day entities and start listening to state changes
-            self._current_day = now.strftime("%a")[0:3].lower()
-            self._is_current_day_active_entity = self.get_entity_id(
-                INPUT_BOOL_DOMAIN, None, self._current_day
-            )
-            self._is_time_range_inclusive_entity = self.get_entity_id(
-                INPUT_BOOL_DOMAIN, "inc", self._current_day
-            )
-            self._current_day_unsub_listener = async_track_state_change_event(
-                self._hass,
-                [
-                    self._is_current_day_active_entity,
-                    self._is_time_range_inclusive_entity,
-                ],
-                state_change_handler,
-            )
-
-            # Calculate new current day time range entities
-            self._current_day_start_time_entity = self.get_entity_id(
-                INPUT_DT_DOMAIN, "start_date", self._current_day
-            )
-            self._current_day_end_time_entity = self.get_entity_id(
-                INPUT_DT_DOMAIN, "end_date", self._current_day
-            )
 
             # If time ranges have been set, listen to time changes for the start
             # and end time
@@ -309,8 +273,8 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
                 start_time_split = self.get_state(self._current_day_start_time_entity)
                 if any(var is None for var in (end_time_split, start_time_split)):
                     return
-                end_time_split = end_time_split.state.split(":")
-                start_time_split = start_time_split.state.split(":")
+                end_time_split = end_time_split.split(":")
+                start_time_split = start_time_split.split(":")
                 self._current_day_time_range_unsub_listener = async_track_time_change(
                     self._hass,
                     state_change_handler,
@@ -319,8 +283,58 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
                     second=[0],
                 )
 
-            # Update the state
-            self.async_write_ha_state()
+            state_change_handler()
+
+        self.async_on_remove(
+            async_track_state_change_event(
+                self._hass, self._entities_to_watch, state_change_handler
+            )
+        )
+
+        def day_change_handler(now: datetime):
+            # Unsubscribe to previous day listeners if set
+            for unsub_listener in self._current_day_unsub_listeners:
+                unsub_listener()
+            self._current_day_unsub_listeners.clear()
+
+            # Calculate new current day entities
+            self._current_day = now.strftime("%a")[0:3].lower()
+            self._is_current_day_active_entity = self.get_entity_id(
+                INPUT_BOOL_DOMAIN, None, self._current_day
+            )
+            self._is_time_range_inclusive_entity = self.get_entity_id(
+                INPUT_BOOL_DOMAIN, "inc", self._current_day
+            )
+
+            # Calculate new current day time range entities
+            self._current_day_start_time_entity = self.get_entity_id(
+                INPUT_DT_DOMAIN, "start_date", self._current_day
+            )
+            self._current_day_end_time_entity = self.get_entity_id(
+                INPUT_DT_DOMAIN, "end_date", self._current_day
+            )
+
+            # Start listening to state changes
+            self._current_day_unsub_listeners = [
+                async_track_state_change_event(
+                    self._hass,
+                    [
+                        self._is_current_day_active_entity,
+                        self._is_time_range_inclusive_entity,
+                    ],
+                    state_change_handler,
+                ),
+                async_track_state_change_event(
+                    self._hass,
+                    [
+                        self._current_day_start_time_entity,
+                        self._current_day_end_time_entity,
+                    ],
+                    time_range_change_handler,
+                ),
+            ]
+
+            time_range_change_handler()
 
         self.async_on_remove(
             async_track_time_change(
