@@ -300,7 +300,8 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
                 INPUT_DT_DOMAIN, "end_date", self._current_day
             )
 
-            # If time ranges have been set, listen to time changes for the start and end time
+            # If time ranges have been set, listen to time changes for the start
+            # and end time
             if self.get_state(self._current_day_end_time_entity) != self.get_state(
                 self._current_day_start_time_entity
             ):
@@ -318,6 +319,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
                     second=[0],
                 )
 
+            # Update the state
             self.async_write_ha_state()
 
         self.async_on_remove(
