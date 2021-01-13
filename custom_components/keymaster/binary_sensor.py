@@ -305,12 +305,11 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
                 self._current_day_start_time_entity
             ):
                 end_time_split = self.get_state(self._current_day_end_time_entity)
-                end_time_split = (
-                    end_time_split.state.split(":") if end_time_split else None
-                )
                 start_time_split = self.get_state(self._current_day_start_time_entity)
                 if any(var is None for var in (end_time_split, start_time_split)):
                     return
+                end_time_split = end_time_split.state.split(":")
+                start_time_split = start_time_split.state.split(":")
                 self._current_day_time_range_unsub_listener = async_track_time_change(
                     self._hass,
                     state_change_handler,
