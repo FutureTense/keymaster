@@ -314,8 +314,8 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
                 self._current_day_time_range_unsub_listener = async_track_time_change(
                     self._hass,
                     state_change_handler,
-                    hour=[int(end_time_split[0], int(start_time_split[0]))],
-                    minute=[int(end_time_split[1], int(start_time_split[1]))],
+                    hour=[int(end_time_split[0]), int(start_time_split[0])],
+                    minute=[int(end_time_split[1]), int(start_time_split[1])],
                     second=[0],
                 )
 
