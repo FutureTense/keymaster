@@ -4,7 +4,6 @@ import logging
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import Event, async_track_state_change_event
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -23,12 +22,10 @@ async def async_setup_entry(
     sensors = [
         CodesSensor(hass, entry, x)
         for x in range(entry.data[CONF_START], entry.data[CONF_SLOTS] + 1)
-    ].extend(
-        [
-            ConnectedSensor(hass, entry, x)
-            for x in range(entry.data[CONF_START], entry.data[CONF_SLOTS] + 1)
-        ]
-    )
+    ] + [
+        ConnectedSensor(hass, entry, x)
+        for x in range(entry.data[CONF_START], entry.data[CONF_SLOTS] + 1)
+    ]
     async_add_entities(sensors, True)
 
 
@@ -67,8 +64,10 @@ class ConnectedSensor(KeymasterTemplateEntity):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(self, hass, entry, code_slot, "Connected")
-        self._active_entity = self.get_entity_id("binary_sensor", "active")
-        self._pin_synched_entity = self.get_entity_id("binary_sensor", "pin_synched")
+        self._active_entity = self.generate_entity_id("binary_sensor", "active")
+        self._pin_synched_entity = self.generate_entity_id(
+            "binary_sensor", "pin_synched"
+        )
         self._entities_to_watch = [self._active_entity, self._pin_synched_entity]
 
     async def async_added_to_hass(self) -> None:
@@ -96,9 +95,9 @@ class ConnectedSensor(KeymasterTemplateEntity):
                 False: "Disconnecting",
             },
         }
-        a = self._hass.states.get(self._active_entity)
-        ps = self._hass.states.get(self._pin_synched_entity)
-        return map[a and a.state == STATE_ON][ps and ps.state == STATE_ON]
+        active = self.get_state(self._active_entity)
+        pin_synched = self.get_state(self._pin_synched_entity)
+        return map[active][pin_synched]
 
     @property
     def icon(self):
@@ -113,6 +112,6 @@ class ConnectedSensor(KeymasterTemplateEntity):
                 False: "mdi:wiper-watch",
             },
         }
-        a = self._hass.states.get(self._active_entity)
-        ps = self._hass.states.get(self._pin_synched_entity)
-        return map[a and a.state == STATE_ON][ps and ps.state == STATE_ON]
+        active = self.get_state(self._active_entity)
+        pin_synched = self.get_state(self._pin_synched_entity)
+        return map[active][pin_synched]
