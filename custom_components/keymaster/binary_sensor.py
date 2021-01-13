@@ -144,7 +144,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         ]
         self._daily_entities = []
         self._current_day_unsub_listeners = []
-        self._current_day_time_range_unsub_listener = None
+        self._current_day_time_range_unsub_listeners = []
 
     @property
     def is_slot_active(self):
@@ -233,8 +233,9 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
             self.async_write_ha_state()
 
         def time_range_change_handler(evt: Event = None) -> None:
-            if self._current_day_time_range_unsub_listener is not None:
-                self._current_day_time_range_unsub_listener()
+            for unsub_listener in self._current_day_time_range_unsub_listeners:
+                unsub_listener()
+            self._current_day_time_range_unsub_listeners.clear()
 
             # If time ranges have been set, listen to time changes for the start
             # and end time
@@ -249,13 +250,22 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
 
                 end_time_split = end_time_split.split(":")
                 start_time_split = start_time_split.split(":")
-                self._current_day_time_range_unsub_listener = async_track_time_change(
-                    self._hass,
-                    state_change_handler,
-                    hour=[int(end_time_split[0]), int(start_time_split[0])],
-                    minute=[int(end_time_split[1]), int(start_time_split[1])],
-                    second=[0],
-                )
+                self._current_day_time_range_unsub_listeners = [
+                    async_track_time_change(
+                        self._hass,
+                        state_change_handler,
+                        hour=[int(end_time_split[0])],
+                        minute=[int(end_time_split[1])],
+                        second=[0],
+                    ),
+                    async_track_time_change(
+                        self._hass,
+                        state_change_handler,
+                        hour=[int(start_time_split[0])],
+                        minute=[int(start_time_split[1])],
+                        second=[0],
+                    ),
+                ]
 
             state_change_handler()
 
