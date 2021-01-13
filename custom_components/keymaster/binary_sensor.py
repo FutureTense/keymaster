@@ -56,9 +56,6 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
         input_pin = self.get_state(self._input_pin_entity)
         lock_pin = self.get_state(self._lock_pin_entity)
         active = self.get_state(self._active_entity)
-        _LOGGER.error(
-            f"Input: {self._input_pin_entity} {input_pin} Lock:{self._lock_pin_entity} {lock_pin} Active: {self._active_entity} {active}"
-        )
 
         return (
             active is not None
