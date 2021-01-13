@@ -1,5 +1,5 @@
 """Tests for keymaster binary sensors."""
-from datetime import datetime, timedelta
+from datetime import timedelta
 import logging
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -7,9 +7,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.keymaster.const import DOMAIN
-from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.const import STATE_OFF, STATE_ON, TIME_HOURS
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt
 
