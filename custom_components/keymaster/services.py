@@ -7,7 +7,6 @@ from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
@@ -91,7 +90,7 @@ async def add_code(
         servicedata[ATTR_NODE_ID] = node_id
 
         try:
-            await hass.services.async_call(ZWAVE_DOMAIN, SET_USERCODE, servicedata)
+            await hass.services.async_call(LOCK_DOMAIN, SET_USERCODE, servicedata)
         except Exception as err:
             _LOGGER.error("Error calling lock.set_usercode service call: %s", str(err))
             return

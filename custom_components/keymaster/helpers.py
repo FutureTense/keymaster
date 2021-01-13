@@ -171,6 +171,7 @@ def handle_state_change(
     # or lock state is coming from or going to a weird state, ignore
     if (
         changed_entity != primary_lock.lock_entity_id
+        or new_state is None
         or new_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
         or old_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
     ):
