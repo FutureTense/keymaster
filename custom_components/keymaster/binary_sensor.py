@@ -4,8 +4,8 @@ import logging
 from typing import Any, Dict, Optional
 
 from homeassistant.components.binary_sensor import (
-    BinarySensorEntity,
     DOMAIN as BINARY_SENSOR_DOMAIN,
+    BinarySensorEntity,
 )
 from homeassistant.components.input_boolean import DOMAIN as INPUT_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as INPUT_DT_DOMAIN

@@ -1,6 +1,7 @@
 """Tests for keymaster binary sensors."""
 from datetime import timedelta
 import logging
+
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
