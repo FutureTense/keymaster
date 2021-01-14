@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant import config_entries
+from homeassistant import config_entries, core as ha
 from homeassistant.components.ozw.const import DOMAIN
 
 
@@ -67,3 +67,16 @@ class MQTTMessage:
     def encode(self):
         """Encode message payload into a string."""
         self.payload = json.dumps(self.payload)
+
+
+def async_capture_events(hass, event_name):
+    """Create a helper that captures events."""
+    events = []
+
+    @ha.callback
+    def capture_events(event):
+        events.append(event)
+
+    hass.bus.async_listen(event_name, capture_events)
+
+    return events
