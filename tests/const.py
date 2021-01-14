@@ -11,3 +11,15 @@ CONFIG_DATA = {
     "slots": 6,
     "start_from": 1,
 }
+
+CONFIG_DATA_OLD = {
+    "alarm_level": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+    "alarm_type": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+    "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+    "lockname": "frontdoor",
+    "generate_package": True,
+    "packages_path": "/config/packages/keymaster",
+    "sensorname": "binary_sensor.frontdoor",
+    "slots": 6,
+    "start_from": 1,
+}
