@@ -1,7 +1,10 @@
 """ Fixtures for keymaster tests. """
+import json
 from unittest.mock import patch
 
 import pytest
+
+from .common import load_fixture
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -86,3 +89,23 @@ def mock_os_path_join():
     """ Fixture to mock splitext """
     with patch("os.path.join"):
         yield
+
+
+@pytest.fixture(name="lock_data", scope="session")
+def lock_data_fixture():
+    """Load lock MQTT data and return it."""
+    return load_fixture("lock.json")
+
+
+@pytest.fixture(name="sent_messages")
+def sent_messages_fixture():
+    """Fixture to capture sent messages."""
+    sent_messages = []
+
+    with patch(
+        "homeassistant.components.mqtt.async_publish",
+        side_effect=lambda hass, topic, payload: sent_messages.append(
+            {"topic": topic, "payload": json.loads(payload)}
+        ),
+    ):
+        yield sent_messages
