@@ -23,3 +23,15 @@ CONFIG_DATA_OLD = {
     "slots": 6,
     "start_from": 1,
 }
+
+CONFIG_DATA_REAL = {
+    "alarm_level_or_user_code_entity_id": "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_level",
+    "alarm_type_or_access_control_entity_id": "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_type",
+    "lock_entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
+    "lockname": "frontdoor",
+    "generate_package": True,
+    "packages_path": "packages/keymaster",
+    "sensorname": "binary_sensor.frontdoor",
+    "slots": 6,
+    "start_from": 1,
+}

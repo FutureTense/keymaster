@@ -8,6 +8,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant import config_entries
 from homeassistant.components.ozw.const import DOMAIN
+from homeassistant import core as ha
 
 
 def load_fixture(filename):
@@ -67,3 +68,16 @@ class MQTTMessage:
     def encode(self):
         """Encode message payload into a string."""
         self.payload = json.dumps(self.payload)
+
+
+def async_capture_events(hass, event_name):
+    """Create a helper that captures events."""
+    events = []
+
+    @ha.callback
+    def capture_events(event):
+        events.append(event)
+
+    hass.bus.async_listen(event_name, capture_events)
+
+    return events
