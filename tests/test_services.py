@@ -7,8 +7,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.keymaster import (
     SERVICE_ADD_CODE,
     SERVICE_CLEAR_CODE,
-    SERVICE_REFRESH_CODES,
     SERVICE_GENERATE_PACKAGE,
+    SERVICE_REFRESH_CODES,
 )
 from custom_components.keymaster.const import DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
