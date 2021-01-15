@@ -9,11 +9,14 @@ from custom_components.keymaster.config_flow import (
     KeyMasterFlowHandler,
     _get_schema,
     _parse_child_locks_file,
+    _get_entities,
 )
 from custom_components.keymaster.const import CONF_PATH, DOMAIN
 from homeassistant import config_entries, setup
+from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 
 from tests.const import CONFIG_DATA
+from .common import setup_ozw
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -289,3 +292,18 @@ def test_parsing_child_locks_file():
         return_value={"test": {"invalid_key": "test"}},
     ):
         assert "File data is invalid: " in _parse_child_locks_file("test.yaml")[1]
+
+
+async def test_get_entities(hass, lock_data):
+    """Test function that returns entities by domain."""
+    await setup_ozw(hass, fixture=lock_data)
+
+    # Make sure the lock loaded
+    state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
+    assert state is not None
+    assert state.state == "locked"
+    assert state.attributes["node_id"] == 14
+
+    assert "lock.smartcode_10_touchpad_electronic_deadbolt_locked" in _get_entities(
+        hass, LOCK_DOMAIN
+    )
