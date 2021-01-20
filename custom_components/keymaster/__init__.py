@@ -1,4 +1,5 @@
 """keymaster Integration."""
+import asyncio
 from datetime import timedelta
 import logging
 from typing import Any, Dict
@@ -40,7 +41,7 @@ from .const import (
     DOMAIN,
     ISSUE_URL,
     MANAGER,
-    PLATFORM,
+    PLATFORMS,
     PRIMARY_LOCK,
     UNSUB_LISTENERS,
     VERSION,
@@ -203,9 +204,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
     )
 
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(config_entry, PLATFORM)
-    )
+    for platform in PLATFORMS:
+        hass.async_create_task(
+            hass.config_entries.async_forward_entry_setup(config_entry, platform)
+        )
 
     # if the use turned on the bool generate the files
     if should_generate_package:
@@ -237,8 +239,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
 
-    unload_ok = await hass.config_entries.async_forward_entry_unload(
-        config_entry, PLATFORM
+    unload_ok = all(
+        await asyncio.gather(
+            *[
+                hass.config_entries.async_forward_entry_unload(config_entry, component)
+                for component in PLATFORMS
+            ]
+        )
     )
 
     if unload_ok:
