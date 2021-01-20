@@ -267,18 +267,14 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
             for x in range(start_from, start_from + code_slots)
         ]
     )
-    input_reset_code_slot_headers = ",".join(
-        [
-            f"{input_reset_code_slot_header}_{x}"
-            for x in range(start_from, start_from + code_slots)
-        ]
-    )
+    all_code_slots = ", ".join([f"{x}" for x in range(start_from, code_slots + 1)])
 
     _LOGGER.debug("Creating common YAML files...")
     replacements = {
         "LOCKNAME": lockname,
         "CASE_LOCK_NAME": lockname,
         "INPUTLOCKPINHEADER": inputlockpinheaders,
+        "ALL_CODE_SLOTS": all_code_slots,
         "ACTIVELOCKHEADER": activelockheaders,
         "INPUT_RESET_CODE_SLOT_HEADER": input_reset_code_slot_headers,
         "LOCKENTITYNAME": lockentityname,

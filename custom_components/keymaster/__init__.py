@@ -500,9 +500,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         data = ""
 
         # Build data from entities
-        enabled_bool = (
-            f"input_boolean.enabled_{self._primary_lock.lock_name}_{code_slot}"
-        )
+        enabled_bool = f"input_boolean.{self._lock.lock_name}_enabled_{code_slot}"
         enabled = self.hass.states.get(enabled_bool)
         pin_data = f"input_text.{self._primary_lock.lock_name}_pin_{code_slot}"
         pin = self.hass.states.get(pin_data)
@@ -644,7 +642,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     code = self._invalid_code(value.index)
 
                 # Build data from entities
-                enabled_bool = f"input_boolean.enabled_{self._primary_lock.lock_name}_{value.index}"
+                enabled_bool = (
+                    f"input_boolean.{self._lock.lock_name}_enabled_{value.index}"
+                )
                 enabled = self.hass.states.get(enabled_bool)
 
                 # Report blank slot if occupied by random code
