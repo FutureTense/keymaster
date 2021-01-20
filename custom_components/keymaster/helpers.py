@@ -15,21 +15,11 @@ from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_ENTITY_ID,
-    ATTR_STATE,
-    SERVICE_RELOAD,
-    STATE_UNKNOWN,
-)
-from homeassistant.core import Event, HomeAssistant, State
-from homeassistant.exceptions import ServiceNotFound
-from homeassistant.helpers.device_registry import (
-    async_get_registry as async_get_device_registry,
-)
-from homeassistant.helpers.entity_registry import (
-    async_get_registry as async_get_entity_registry,
-)
-from homeassistant.util import dt as dt_util
+from homeassistant.const import ATTR_STATE, SERVICE_RELOAD, STATE_LOCKED, STATE_UNLOCKED
+from homeassistant.core import HomeAssistant, State
+from homeassistant.helpers.entity_registry import async_get_registry
+from homeassistant.util import dt
+from homeassistant.util.yaml.loader import load_yaml
 
 from .const import (
     ACCESS_CONTROL,
@@ -268,58 +258,48 @@ def handle_state_change(
 ) -> None:
     """Listener to track state changes to lock entities."""
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
-        CHILD_LOCKS
-    ]
 
-    for lock in [primary_lock, *child_locks]:
-        # Don't do anything if the changed entity is not this lock
-        if changed_entity != lock.lock_entity_id:
-            continue
+    # If listener was called for entity that is not for this entry,
+    # or lock state is coming from or going to a weird state, ignore
+    if (
+        changed_entity != primary_lock.lock_entity_id
+        or new_state is None
+        or new_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
+        or old_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
+    ):
+        return
 
-        # Determine action type to set appropriate action text using ACTION_MAP
-        action_type = ""
-        if lock.alarm_type_or_access_control_entity_id and (
-            ALARM_TYPE in lock.alarm_type_or_access_control_entity_id
-            or ALARM_TYPE.replace("_", "")
-            in lock.alarm_type_or_access_control_entity_id
-        ):
-            action_type = ALARM_TYPE
-        if (
-            lock.alarm_type_or_access_control_entity_id
-            and ACCESS_CONTROL in lock.alarm_type_or_access_control_entity_id
-        ):
-            action_type = ACCESS_CONTROL
+    # Determine action type to set appropriate action text using ACTION_MAP
+    action_type = ""
+    if ALARM_TYPE in primary_lock.alarm_type_or_access_control_entity_id:
+        action_type = ALARM_TYPE
+    if ACCESS_CONTROL in primary_lock.alarm_type_or_access_control_entity_id:
+        action_type = ACCESS_CONTROL
 
-        # Get alarm_level/usercode and alarm_type/access_control  states
-        alarm_level_state = hass.states.get(lock.alarm_level_or_user_code_entity_id)
-        alarm_level_value = int(alarm_level_state.state) if alarm_level_state else None
+    # Get alarm_level/usercode and alarm_type/access_control  states
+    alarm_level_state = hass.states.get(primary_lock.alarm_level_or_user_code_entity_id)
+    alarm_level_value = int(alarm_level_state.state) if alarm_level_state else None
 
-        alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
-        alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
+    alarm_type_state = hass.states.get(
+        primary_lock.alarm_type_or_access_control_entity_id
+    )
+    alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
 
-        # Bail out if we can't use the sensors to provide a meaningful message
-        if alarm_level_value is None or alarm_type_value is None:
-            return
+    # If lock has changed state but alarm_type/access_control state hasn't changed in a while
+    # set action_value to RF lock/unlock
+    if (
+        alarm_level_state is not None
+        and int(alarm_level_state.state) == 0
+        and dt.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
+        > timedelta(seconds=5)
+        and action_type in LOCK_STATE_MAP
+    ):
+        alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
 
-        # If lock has changed state but alarm_type/access_control state hasn't changed
-        # in a while set action_value to RF lock/unlock
-        if (
-            alarm_level_state is not None
-            and int(alarm_level_state.state) == 0
-            and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
-            > timedelta(seconds=5)
-            and action_type in LOCK_STATE_MAP
-        ):
-            alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
-
-        # Lookup action text based on alarm type value
-        action_text = (
-            ACTION_MAP.get(action_type, {}).get(
-                alarm_type_value, "Unknown Alarm Type Value"
-            )
-            if alarm_type_value is not None
-            else None
+    # Lookup action text based on alarm type value
+    action_text = (
+        ACTION_MAP.get(action_type, {}).get(
+            alarm_type_value, "Unknown Alarm Type Value"
         )
 
         # Lookup name for usercode

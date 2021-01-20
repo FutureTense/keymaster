@@ -243,13 +243,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
     )
 
-    await async_reset_code_slot_if_pin_unknown(
-        hass,
-        primary_lock.lock_name,
-        config_entry.data[CONF_SLOTS],
-        config_entry.data[CONF_START],
-    )
-
     for platform in PLATFORMS:
         hass.async_create_task(
             hass.config_entries.async_forward_entry_setup(config_entry, platform)
@@ -317,8 +310,8 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     unload_ok = all(
         await asyncio.gather(
             *[
-                hass.config_entries.async_forward_entry_unload(config_entry, platform)
-                for platform in PLATFORMS
+                hass.config_entries.async_forward_entry_unload(config_entry, component)
+                for component in PLATFORMS
             ]
         )
     )
