@@ -61,6 +61,6 @@ async def test_setup_migration_with_old_path(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 12
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
