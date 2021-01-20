@@ -207,12 +207,14 @@ def generate_package_files(
     inputlockpinheaders = ",".join(
         [f"{inputlockpinheader}_{x}" for x in range(start_from, code_slots + 1)]
     )
+    all_code_slots = ", ".join([f"{x}" for x in range(start_from, code_slots + 1)])
 
     _LOGGER.debug("Creating common YAML files...")
     replacements = {
         "LOCKNAME": lockname,
         "CASE_LOCK_NAME": lockname,
         "INPUTLOCKPINHEADER": inputlockpinheaders,
+        "ALL_CODE_SLOTS": all_code_slots,
         "ACTIVELOCKHEADER": activelockheaders,
         "LOCKENTITYNAME": lockentityname,
         "SENSORNAME": sensorname,

@@ -1,23 +1,7 @@
 input_boolean:
-    allow_automation_execution:
+    keymaster_allow_automation_execution:
         name: 'Allow Automation'
         initial: off
-
-    system_ready:
-        name: 'System Ready'
-        initial: off
-
-binary_sensor:
-    - platform: template
-      sensors:
-
-        allow_automation:
-          friendly_name: "Allow Automation"
-          value_template: "{{ is_state('input_boolean.allow_automation_execution', 'on') }}"    
-
-        system_ready:
-          friendly_name: "System ready"
-          value_template: "{{ is_state('input_boolean.system_ready', 'on') }}"
 
 automation:
     - alias: open_zwave_network_down
@@ -27,7 +11,7 @@ automation:
         event_type: zwave.network_stop
       action:
         - service: homeassistant.turn_off
-          entity_id: input_boolean.allow_automation_execution
+          entity_id: input_boolean.keymaster_allow_automation_execution
 
     - alias: open_zwave_network_up
       initial_state: true
@@ -40,4 +24,4 @@ automation:
           event_type: zwave.network_complete_some_dead
       action:
         - service: homeassistant.turn_on
-          entity_id: input_boolean.allow_automation_execution
+          entity_id: input_boolean.keymaster_allow_automation_execution

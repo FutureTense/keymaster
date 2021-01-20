@@ -12,56 +12,90 @@ input_boolean:
     name: CASE_LOCK_NAME Lock Notifications
   LOCKNAME_dooraccess_notifications:
     name: CASE_LOCK_NAME Door Notifications
-  LOCKNAME_garageacess_notifications:
-    name: CASE_LOCK_NAME Garage Notifications
   LOCKNAME_reset_lock:
     name: CASE_LOCK_NAME reset lock
 
-###################  sensor:  ####################
-sensor:
-  - platform: time_date
-    display_options:
-      - "time"
-      - "date"
-
-###################  script    :  ####################
+###################  script:  ####################
 script:
-  LOCKNAME_reset_lock:
-    sequence:
-      - service: script.LOCKNAME_manual_notify
-        data_template:
-          title: "reset"
-          message: "LOCKNAME"
-
-  LOCKNAME_conditional_notify:
-    sequence:
-      - condition: template
-        value_template: >-
-          {% set inputbool = boolean %}
-          {% if states(inputbool) == 'on'%}
-            true
-          {% else %}
-            false
-          {% endif %}
-      - service: script.LOCKNAME_manual_notify
-        data_template:
-          title: "{{title}}"
-          message: "{{message}}"
-
   LOCKNAME_refreshnodeinfo:
-    description:  'Send MQTT RefreshNodeInfo command'
+    description: 'Send MQTT RefreshNodeInfo command'
     sequence:
       - service: system_log.write
         data_template:
-          message: "LOCKNAME_TEMPLATENUM started noderefreshinfo: {{ now() }}"
-          level: debug  
+          message: "LOCKNAME started noderefreshinfo: {{ now() }}"
+          level: debug
       - service: mqtt.publish
         data:
           topic: 'OpenZWave/1/command/refreshnodeinfo/'
           payload: >-
-            {% set node_id = state_attr('LOCKENTITYNAME','node_id') %}
-            { "node": {{ node_id }} }
+            { "node": {{ state_attr('LOCKENTITYNAME','node_id') }} }
           retain: true
+
+  LOCKNAME_reset_codeslot:
+    mode: queued
+    fields:
+      code_slot:
+        description: The code slot to reset
+        example: 1
+    variables:
+      # Constant used later to loop through day specific entities
+      days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+    sequence:
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.LOCKNAME_enabled_{{ code_slot | string }}"
+      - service: input_text.set_value
+        data_template:
+          entity_id: "input_text.LOCKNAME_name_{{ code_slot | string }}"
+          value: ""
+      - service: input_text.set_value
+        data_template:
+          entity_id: "input_text.LOCKNAME_pin_{{ code_slot | string }}"
+          value: ""
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.LOCKNAME_notify_{{ code_slot | string }}"
+      - service: input_number.set_value
+        data_template:
+          entity_id: "input_number.LOCKNAME_accesscount_{{ code_slot | string }}"
+          value: "0"
+      - service: input_datetime.set_datetime
+        data_template:
+          entity_id: "input_datetime.LOCKNAME_start_date_{{ code_slot | string }}"
+          date: >
+            {{ (("1980-01-01") | timestamp_custom("%Y %m %d")) }}
+      - service: input_datetime.set_datetime
+        data_template:
+          entity_id: "input_datetime.LOCKNAME_end_date_{{ code_slot | string }}"
+          date: >
+            {{ (("1980-01-01") | timestamp_custom("%Y %m %d")) }} 
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.LOCKNAME_daterange_{{ code_slot | string }}"
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.LOCKNAME_accesslimit_{{ code_slot | string }}"
+      - service: input_boolean.turn_off
+        data_template:
+          entity_id: "input_boolean.LOCKNAME_reset_codeslot_{{ code_slot | string }}"
+      # Loop through each day of the week and reset the entities related to each one
+      - repeat:
+          count: 7
+          sequence:
+            - service: input_datetime.set_datetime
+              data_template:
+                entity_id: "input_datetime.LOCKNAME_{{ days[repeat.index - 1] }}_start_date_{{ code_slot | string }}"
+                time: "{{ '00:00' | timestamp_custom('%H:%M') }}"
+            - service: input_datetime.set_datetime
+              data_template:
+                entity_id: "input_datetime.LOCKNAME_{{ days[repeat.index - 1] }}_end_date_{{ code_slot | string }}"
+                time: "{{ '00:00' | timestamp_custom('%H:%M') }}"
+            - service: input_boolean.turn_on
+              data_template:
+                entity_id: "input_boolean.LOCKNAME_{{ days[repeat.index - 1] }}_{{ code_slot | string }}"
+            - service: input_boolean.turn_on
+              data_template:
+                entity_id: "input_boolean.LOCKNAME_{{ days[repeat.index - 1] }}_inc_{{ code_slot | string }}"
           
 ###################  automation:  ####################
 automation:
@@ -73,12 +107,14 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
+        state: "on"
+      - condition: state
+        entity_id: "input_boolean.LOCKNAME_lock_notifications"
         state: "on"
     action:
-      - service: script.LOCKNAME_conditional_notify
+      - service: script.LOCKNAME_manual_notify
         data_template:
-          boolean: input_boolean.LOCKNAME_lock_notifications
           title: CASE_LOCK_NAME
           message: "{{ trigger.event.data.action_text }}"
 
@@ -90,47 +126,51 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: template
         value_template: "{{ trigger.event.data.code_slot > 0 }}"
       - condition: template
-        value_template: "{{ states['input_boolean']['notify_LOCKNAME_' + trigger.event.data.code_slot | string].state == 'on' }}"
+        value_template: "{{ is_state('input_boolean.LOCKNAME_notify_' + trigger.event.data.code_slot | string, 'on') }}"
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
-          title: "{{ trigger.event.data.action_text }}"
-          message: "{{ trigger.event.data.code_slot_name }}"
+          title: CASE_LOCK_NAME
+          message: "{{ trigger.event.data.action_text }} by {{ trigger.event.data.code_slot_name }}"
 
-  - alias: CASE_LOCK_NAME Sensor Close
-    condition:
-      - condition: state
-        entity_id: "binary_sensor.allow_automation"
-        state: "on"
+  - alias: CASE_LOCK_NAME Sensor Closed
     trigger:
       entity_id: DOORSENSORENTITYNAME
       platform: state
       to: "off"
+    condition:
+      - condition: state
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
+        state: "on"
+      - condition: state
+        entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
+        state: "on"
     action:
-      - service: script.LOCKNAME_conditional_notify
+      - service: script.LOCKNAME_manual_notify
         data_template:
-          boolean: input_boolean.LOCKNAME_dooraccess_notifications
           title: CASE_LOCK_NAME
           message: "Closed"
 
   - alias: CASE_LOCK_NAME Sensor Opened
-    condition:
-      - condition: state
-        entity_id: "binary_sensor.allow_automation"
-        state: "on"
     trigger:
       entity_id: DOORSENSORENTITYNAME
       platform: state
       to: "on"
+    condition:
+      - condition: state
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
+        state: "on"
+      - condition: state
+        entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
+        state: "on"
     action:
-      - service: script.LOCKNAME_conditional_notify
+      - service: script.LOCKNAME_manual_notify
         data_template:
-          boolean: input_boolean.LOCKNAME_dooraccess_notifications
           title: CASE_LOCK_NAME
           message: "Opened"
 
@@ -140,36 +180,33 @@ automation:
       platform: state
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: template
         value_template: >-
-          {% set object_id = trigger.to_state.object_id %}
-          {% set index = object_id.rfind('_') + 1 %}
-          {% set code_slot = object_id[index:] %}
-          {% set b = 'input_boolean.enabled_LOCKNAME_' + code_slot | string %}
-          {{ is_state(b, 'on') and (trigger.from_state.state != trigger.to_state.state)}}
+          {{
+            is_state('input_boolean.LOCKNAME_enabled_' + trigger.entity_id.split('_')[-1:], 'on')
+            and
+            (trigger.from_state.state != trigger.to_state.state)
+          }}
     action:
       - service: persistent_notification.create
         data_template:
           title: CASE_LOCK_NAME LOCK MANAGER
           message: >-
-            {% set object_id = trigger.to_state.object_id %}
-            {% set index = object_id.rfind('_') + 1 %}
-            {% set code_slot = object_id[index:] %}
-            {{ 'You changed the PIN for code  ' + code_slot | string + '. Please enable it in order to make it active.'}}
+            {{ 'You changed the PIN for code ' + trigger.entity_id.split('_')[-1:] + '. Please enable it in order to make it active.'}}
       - service: input_boolean.turn_off
         data_template:
           entity_id: >-
-            {% set object_id = trigger.to_state.object_id %}
-            {% set index = object_id.rfind('_') + 1 %}
-            {% set code_slot = object_id[index:] %}
-            {{ 'input_boolean.enabled_LOCKNAME_' + code_slot | string }}
+            {{ 'input_boolean.LOCKNAME_enabled_' + trigger.entity_id.split('_')[-1:] }}
 
   - alias: CASE_LOCK_NAME Reset
+    variables:
+      # Constant used to loop through resetting all code slots
+      code_slots: [ALL_CODE_SLOTS]
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
     trigger:
       entity_id: input_boolean.LOCKNAME_reset_lock
@@ -177,7 +214,12 @@ automation:
       from: "off"
       to: "on"
     action:
-      - service: script.LOCKNAME_reset_lock
+      - repeat:
+          sequence:
+            - service: script.LOCKNAME_reset_codeslot
+              data_template:
+                code_slot: "{{ code_slots[repeat.index - 1] | string }}"
+          until: "{{ repeat.index == code_slots | length }}"
       - service: input_boolean.turn_off
         entity_id: input_boolean.LOCKNAME_reset_lock
 
@@ -189,15 +231,15 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.keymaster_allow_automation_execution"
         state: "on"
       - condition: template
         # make sure decrementing access entries is enabled 
-        value_template: "{{ states('input_boolean.accesslimit_LOCKNAME_' + trigger.event.data.code_slot | string)=='on' }}"
+        value_template: "{{ is_state('input_boolean.LOCKNAME_accesslimit_' + trigger.event.data.code_slot | string, 'on') }}"
       - condition: template
         # Check for Keypad Unlock code
         value_template: "{{ trigger.event.data.code_slot > 0 and trigger.event.data.action_code in (6, 19)}}"
     action:
       - service: input_number.decrement
         data_template:
-          entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event.data.code_slot | string }}"
+          entity_id: "{{ 'input_number.LOCKNAME_accesscount_' + trigger.event.data.code_slot | string }}"
