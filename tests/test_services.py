@@ -128,7 +128,7 @@ async def test_add_code(hass, lock_data, sent_messages, caplog):
         await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
         await hass.async_block_till_done()
         assert (
-            "Error calling lock.set_usercode service call: Unable to find service lock/set_usercode"
+            "Error calling lock.set_usercode service call: Unable to find service"
             in caplog.text
         )
 
@@ -213,7 +213,7 @@ async def test_clear_code(hass, lock_data, sent_messages, caplog):
         await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
         await hass.async_block_till_done()
         assert (
-            "Error calling lock.clear_usercode service call: Unable to find service lock/clear_usercode"
+            "Error calling lock.clear_usercode service call: Unable to find service"
             in caplog.text
         )
 
