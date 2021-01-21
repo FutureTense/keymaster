@@ -195,7 +195,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         """Generate the package files."""
         _LOGGER.debug("DEBUG: %s", service)
         name = service.data[ATTR_NAME]
-        generate_package_files(hass, config_entry, name)
+        generate_package_files(hass, name)
 
     hass.services.async_register(
         DOMAIN,
