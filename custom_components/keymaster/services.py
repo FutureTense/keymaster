@@ -150,19 +150,26 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
         raise ZWaveIntegrationNotConfiguredError
 
 
-def generate_package_files(
-    hass: HomeAssistant, config_entry: ConfigEntry, name: str
-) -> None:
+def generate_package_files(hass: HomeAssistant, name: str) -> None:
     """Generate the package files."""
+    # Attempt to find lock
+    config_entry = next(
+        (
+            hass.config_entries.async_get_entry(entry_id)
+            for entry_id in hass.data[DOMAIN]
+            if hass.data[DOMAIN][entry_id][PRIMARY_LOCK].lock_name == name
+        ),
+        None,
+    )
+    if not config_entry:
+        raise ValueError(f"Couldn't find existing lock entry for {name}")
+
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     lockname = primary_lock.lock_name
 
     _LOGGER.debug("Starting file generation...")
 
     _LOGGER.debug("DEBUG conf_lock: %s name: %s", lockname, name)
-
-    if lockname != name:
-        return
 
     inputlockpinheader = f"input_text.{lockname}_pin"
     activelockheader = f"binary_sensor.active_{lockname}"
