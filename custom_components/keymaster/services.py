@@ -188,6 +188,7 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
 
 def generate_package_files(hass: HomeAssistant, name: str) -> None:
     """Generate the package files."""
+    # Attempt to find lock
     config_entry = next(
         (
             hass.config_entries.async_get_entry(entry_id)
@@ -215,9 +216,6 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     )
 
     _LOGGER.debug("DEBUG conf_lock: %s name: %s", lockname, name)
-
-    if lockname != name:
-        return
 
     inputlockpinheader = f"input_text.{lockname}_pin"
     activelockheader = f"binary_sensor.active_{lockname}"
