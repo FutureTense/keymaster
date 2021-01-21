@@ -131,7 +131,7 @@ automation:
       - condition: template
         value_template: "{{ trigger.event.data.code_slot > 0 }}"
       - condition: template
-        value_template: "{{ is_state('input_boolean.LOCKNAME_notify_' + (trigger.event.data.code_slot | string), 'on') }}"
+        value_template: "{{ is_state('input_boolean.LOCKNAME_notify_' + trigger.event.data.code_slot | string, 'on') }}"
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
