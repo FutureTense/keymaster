@@ -290,7 +290,7 @@ def handle_state_change(
     if (
         alarm_level_state is not None
         and int(alarm_level_state.state) == 0
-        and dt.utcnow() - alarm_type_state.last_changed.replace(tzinfo=None)
+        and dt.utcnow() - dt.as_utc(alarm_type_state.last_changed)
         > timedelta(seconds=5)
         and action_type in LOCK_STATE_MAP
     ):
