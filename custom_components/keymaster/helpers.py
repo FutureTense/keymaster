@@ -85,7 +85,7 @@ def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
 async def generate_keymaster_locks(
     hass: HomeAssistant, config_entry: ConfigEntry
 ) -> Tuple[KeymasterLock, List[KeymasterLock]]:
-    """Generate keymaster locks from config entry."""
+    """Generate primary and child keymaster locks from config entry."""
     primary_lock = KeymasterLock(
         config_entry.data[CONF_LOCK_NAME],
         config_entry.data[CONF_LOCK_ENTITY_ID],
@@ -104,14 +104,13 @@ async def generate_keymaster_locks(
     ]
 
     # If we are using zwave_js, we need to grab the node for the locks so we can
-    # use it later. To do this, we look up the node_id from the entity, then grab
-    # the zwave_js client being used by the config entry associated with the lock.
-    # Once we have the client, we can lookup the node.
+    # use it later. To do this, we use the zwave_js client being used by the config
+    # entry associated with the lock to lookup and store the node. To get the node
+    # we need to get the node ID which we get from the device registry.
     if using_zwave_js(hass):
         ent_reg = await async_get_entity_registry(hass)
         dev_reg = await async_get_device_registry(hass)
         for lock in [primary_lock, *child_locks]:
-            node_id = int(hass.states.get(lock.lock_entity_id).attributes[ATTR_NODE_ID])
             lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
             lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
             node_id = int(lock_dev_reg_entry.identifiers[0][1].split("-")[1])
