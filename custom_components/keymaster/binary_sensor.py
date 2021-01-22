@@ -108,7 +108,7 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
 class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
     """Binary sensor class for code slot PIN synched status."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
             self,
@@ -156,17 +156,17 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         self._current_day_time_range_unsub_listeners = []
 
     @property
-    def is_slot_active(self):
+    def is_slot_active(self) -> bool:
         """Indicates whether the slot is enabled via the input_boolean."""
         return self.get_state(self._is_slot_active_entity)
 
     @property
-    def is_current_day_active(self):
+    def is_current_day_active(self) -> bool:
         """Indicates whether current day is enabled via the input_boolean."""
         return self.get_state(self._is_current_day_active_entity)
 
     @property
-    def is_current_day_valid(self):
+    def is_current_day_valid(self) -> bool:
         """Indicates whether current day is within the expected date range."""
         is_date_range_enabled = self.get_state(self._is_date_range_enabled_entity)
         start_date = self.get_state(self._start_date_entity)
@@ -184,7 +184,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         return not is_date_range_enabled or is_in_date_range
 
     @property
-    def is_current_time_valid(self):
+    def is_current_time_valid(self) -> bool:
         """Indicates whether the current time is within the expected time range."""
         is_time_range_inclusive = self.get_state(self._is_time_range_inclusive_entity)
         current_day_start_time = self.get_state(self._current_day_start_time_entity)
@@ -215,7 +215,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         return not is_time_range_enabled or is_in_time_range
 
     @property
-    def is_access_limit_ok(self):
+    def is_access_limit_ok(self) -> bool:
         """Return whether the access limit for the code slot is valid."""
         is_access_limit_enabled = self.get_state(self._is_access_limit_enabled_entity)
         access_count = self.get_state(self._access_count_entity)
@@ -225,7 +225,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         )
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         """Return true if the binary sensor is on."""
         _LOGGER.debug("Updating state for %s...", self.entity_id)
         _LOGGER.debug("Input: Is slot active? %s", self.is_slot_active)

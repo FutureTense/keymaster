@@ -27,7 +27,7 @@ class KeymasterTemplateEntity(Entity):
         code_slot: int,
         name: str,
         friendly_name: str = None,
-    ):
+    ) -> None:
         """Initialize the entity."""
         self._hass = hass
         self._lock: KeymasterLock = hass.data[DOMAIN][entry.entry_id][PRIMARY_LOCK]
@@ -42,7 +42,7 @@ class KeymasterTemplateEntity(Entity):
             hass=hass,
         )
 
-    def get_entity_id(self, domain: str, name: str, curr_day: str = None):
+    def get_entity_id(self, domain: str, name: str, curr_day: str = None) -> str:
         """Return generated entity ID."""
         entity_id = slugify(f"{self._lock_name}")
         if curr_day:
@@ -62,17 +62,17 @@ class KeymasterTemplateEntity(Entity):
             return state.state if state else None
 
     @property
-    def should_poll(self):
+    def should_poll(self) -> bool:
         """Return whether entity should be polled for updates."""
         return False
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return a unique, Home Assistant friendly identifier for this entity."""
         return slugify(f"{self._lock_name} {self._name} {self._code_slot}")
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of the sensor."""
         return (
             self._friendly_name

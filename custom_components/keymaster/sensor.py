@@ -1,5 +1,6 @@
 """Sensors for keymaster."""
 import logging
+from typing import Dict, Optional
 
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
@@ -35,13 +36,13 @@ async def async_setup_entry(
         ConnectedSensor(hass, entry, x)
         for x in range(entry.data[CONF_START], entry.data[CONF_SLOTS] + 1)
     ]
-    async_add_entities(sensors, True)
+    async_add_entities(sensors)
 
 
 class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
     """Sensor class for code slot PINs."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
             self, hass, entry, SENSOR_DOMAIN, code_slot, "Code Slot"
@@ -49,7 +50,7 @@ class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
         CoordinatorEntity.__init__(self, hass.data[DOMAIN][entry.entry_id][COORDINATOR])
 
     @property
-    def state(self):
+    def state(self) -> Optional[str]:
         """Return the state of the sensor."""
         try:
             return self.coordinator.data.get(self._code_slot)
@@ -59,17 +60,17 @@ class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
             )
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the entity name."""
         return f"{self._lock_name} {self._name} {self._code_slot}"
 
     @property
-    def icon(self):
+    def icon(self) -> str:
         """Return the icon."""
         return "mdi:lock-smart"
 
     @property
-    def device_state_attributes(self):
+    def device_state_attributes(self) -> Dict[str, int]:
         """Return device specific state attributes."""
         return {ATTR_CODE_SLOT: self._code_slot}
 
@@ -77,7 +78,7 @@ class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
 class ConnectedSensor(KeymasterTemplateEntity):
     """Sensor class for code slot connections."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
             self, hass, entry, SENSOR_DOMAIN, code_slot, "Connected", "Status"
@@ -101,7 +102,7 @@ class ConnectedSensor(KeymasterTemplateEntity):
         )
 
     @property
-    def state(self):
+    def state(self) -> str:
         """Return the state of the sensor."""
         active = self.get_state(self._active_entity)
         pin_synched = self.get_state(self._pin_synched_entity)
@@ -115,7 +116,7 @@ class ConnectedSensor(KeymasterTemplateEntity):
         return state
 
     @property
-    def icon(self):
+    def icon(self) -> str:
         """Return the icon."""
         active = self.get_state(self._active_entity)
         pin_synched = self.get_state(self._pin_synched_entity)
