@@ -230,7 +230,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         access_count = self.get_state(self._access_count_entity)
 
         return not is_access_limit_enabled or (
-            access_count is not None and int(access_count) > 0
+            access_count is not None and float(access_count) > 0
         )
 
     @property
