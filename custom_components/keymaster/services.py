@@ -171,6 +171,15 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
             SET_USERCODE,
             {**servicedata, ATTR_USER_CODE: str(random.randint(1000, 9999))},
         )
+        try:
+            await hass.services.async_call(
+                LOCK_DOMAIN,
+                SET_USERCODE,
+                {**servicedata, ATTR_USER_CODE: str(random.randint(1000, 9999))},
+            )
+        except Exception as err:
+            _LOGGER.error("Error calling lock.set_usercode service call: %s", str(err))
+            return
 
         await call_service(hass, LOCK_DOMAIN, CLEAR_USERCODE, servicedata)
     else:
