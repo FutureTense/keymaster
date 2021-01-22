@@ -173,7 +173,7 @@ automation:
     platform: state
     to: 'on'
   action:
-    - service: keymaster.reset_codeslot
+    - service: keymaster.reset_code_slot
       data_template:
         code_slot: TEMPLATENUM
         lockname: LOCKNAME

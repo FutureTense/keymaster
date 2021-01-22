@@ -150,7 +150,7 @@ automation:
     action:
       - repeat:
           sequence:
-            - service: keymaster.reset_codeslot
+            - service: keymaster.reset_code_slot
               data_template:
                 lockname: LOCKNAME
                 code_slot: "{{ code_slots[repeat.index - 1] | string }}"
