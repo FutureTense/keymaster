@@ -73,12 +73,7 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
         lock_pin = self.get_state(self._lock_pin_entity)
         active = self.get_state(self._active_entity)
 
-        _LOGGER.debug("Updating state for %s...", self.entity_id)
-        _LOGGER.debug("Input state for %s is %s", self._input_pin_entity, input_pin)
-        _LOGGER.debug("Input state for %s is %s", self._lock_pin_entity, lock_pin)
-        _LOGGER.debug("Input state for %s is %s", self._active_entity, active)
-
-        is_on = (
+        return (
             active is not None
             and lock_pin is not None
             and input_pin is not None
@@ -87,10 +82,6 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
                 or (not active and lock_pin in ("", "0000"))
             )
         )
-
-        _LOGGER.debug("Output state for %s is %s", self.entity_id, is_on)
-
-        return is_on
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -102,6 +93,14 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
                     self.entity_id,
                     evt.data.get("entity_id"),
                 )
+            self.log_states(
+                _LOGGER,
+                [
+                    self._input_pin_entity,
+                    self._lock_pin_entity,
+                    self._active_entity,
+                ],
+            )
             self.async_write_ha_state()
 
         self.async_on_remove(
@@ -233,31 +232,13 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the binary sensor is on."""
-        _LOGGER.debug("Updating state for %s...", self.entity_id)
-        _LOGGER.debug("Input: Is slot active? %s", self.is_slot_active)
-        _LOGGER.debug("Input: Is current day active? %s", self.is_current_day_active)
-        _LOGGER.debug(
-            "Input: Is current day within date range? %s", self.is_current_day_valid
-        )
-        _LOGGER.debug(
-            "Input: Is current time within time range? %s", self.is_current_time_valid
-        )
-        _LOGGER.debug(
-            "Input: Is access limit disabled or not breached? %s",
-            self.is_access_limit_ok,
-        )
-
-        is_on = (
+        return (
             self.is_slot_active
             and self.is_current_day_active
             and self.is_current_day_valid
             and self.is_current_time_valid
             and self.is_access_limit_ok
         )
-
-        _LOGGER.debug("Ouput state for %s is %s", self.entity_id, is_on)
-
-        return is_on
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -269,6 +250,16 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
                     self.entity_id,
                     evt.data.get("entity_id"),
                 )
+            self.log_states(
+                _LOGGER,
+                {
+                    "`is slot active?`": self.is_slot_active,
+                    "`is current day active?`": self.is_current_day_active,
+                    "`is current day within date range?`": self.is_current_day_valid,
+                    "`is current time within time range?`": self.is_current_time_valid,
+                    "`is access limit OK?`": self.is_access_limit_ok,
+                },
+            )
             self.async_write_ha_state()
 
         def time_range_change_handler(evt: Event = None) -> None:
@@ -322,6 +313,11 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         )
 
         def day_change_handler(now: datetime):
+            _LOGGER.debug(
+                "State change for %s triggered by day change: %s",
+                self.entity_id,
+                dt.utcnow(),
+            )
             # Unsubscribe to previous day listeners if set
             for unsub_listener in self._current_day_unsub_listeners:
                 unsub_listener()
