@@ -93,6 +93,11 @@ class ConnectedSensor(KeymasterTemplateEntity):
         """Run when entity about to be added to hass."""
 
         def state_change_handler(evt: Event) -> None:
+            _LOGGER.debug(
+                "State change for %s triggered by state change for %s",
+                self.entity_id,
+                evt.data["entity_id"],
+            )
             self.async_write_ha_state()
 
         self.async_on_remove(
