@@ -363,6 +363,7 @@ async def test_rest_code_slots(hass):
     )
     await hass.async_block_till_done()
 
+    # Assert that all states have been reset
     for entity in [
         enabled_entity,
         notify_entity,
