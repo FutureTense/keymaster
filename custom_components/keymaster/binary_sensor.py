@@ -73,13 +73,16 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
         lock_pin = self.get_state(self._lock_pin_entity)
         active = self.get_state(self._active_entity)
 
+        if lock_pin == "0000":
+            lock_pin = ""
+
         return (
             active is not None
             and lock_pin is not None
             and input_pin is not None
             and (
                 (active and input_pin == lock_pin)
-                or (not active and (lock_pin in ("", "0000") or lock_pin != input_pin))
+                or (not active and lock_pin == "")
             )
         )
 
