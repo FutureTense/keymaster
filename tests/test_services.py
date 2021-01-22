@@ -70,7 +70,7 @@ async def test_refresh_codes(hass, lock_data, caplog):
     await hass.async_block_till_done()
 
     assert (
-        "Problem retrieving node_id from entity lock.kwikset_touchpad_electronic_deadbolt_frontdoor because the entity doesn't exist."
+        "Problem retrieving node_id from entity lock.kwikset_touchpad_electronic_deadbolt_frontdoor"
         in caplog.text
     )
 
@@ -115,7 +115,7 @@ async def test_add_code(hass, lock_data, sent_messages, caplog):
         await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
         await hass.async_block_till_done()
         assert (
-            "Problem retrieving node_id from entity lock.kwikset_touchpad_electronic_deadbolt_frontdoor because the entity doesn't exist."
+            "Problem retrieving node_id from entity lock.kwikset_touchpad_electronic_deadbolt_frontdoor"
             in caplog.text
         )
 
@@ -201,7 +201,7 @@ async def test_clear_code(hass, lock_data, sent_messages, caplog):
         await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
         await hass.async_block_till_done()
         assert (
-            "Problem retrieving node_id from entity lock.kwikset_touchpad_electronic_deadbolt_frontdoor because the entity doesn't exist."
+            "Problem retrieving node_id from entity lock.kwikset_touchpad_electronic_deadbolt_frontdoor"
             in caplog.text
         )
 
