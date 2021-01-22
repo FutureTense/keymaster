@@ -79,7 +79,7 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
             and input_pin is not None
             and (
                 (active and input_pin == lock_pin)
-                or (not active and lock_pin in ("", "0000"))
+                or (not active and (lock_pin in ("", "0000") or lock_pin != input_pin))
             )
         )
 
