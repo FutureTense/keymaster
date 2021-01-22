@@ -12,4 +12,4 @@ jobs:
     steps:
       - uses: jpetrucciani/mypy-check@master
         with:
-          path: "/home/runner/work/keymaster/keymaster/custom_components/keymaster/"
+          path: "custom_components/keymaster/"
