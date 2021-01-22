@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release_zip_file:
+    name: Prepare release asset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v1
+
+      - name: "Set version numbmer"
+        run: |
+          sed -i '/VERSION = /c\VERSION = "${{ github.ref }}"' /home/runner/work/keymaster/keymaster/custom_components/keymaster/const.py
+      # Pack the keymaster dir as a zip and upload to the release
+      - name: ZIP Keymaster Dir
+        run: |
+          cd /home/runner/work/keymaster/keymaster/custom_components/keymaster
+          zip keymaster.zip -r ./
+      - name: Upload zip to release
+        uses: svenstaro/upload-release-action@v1-release
+
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: /home/runner/work/keymaster/keymaster/custom_components/keymaster/keymaster.zip
+          asset_name: keymaster.zip
+          tag: ${{ github.ref }}
+          overwrite: true
