@@ -2,20 +2,28 @@
 import logging
 import os
 import random
+from typing import Any, Dict, List, Optional
 
 from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 
 from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
-from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
-from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
-from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
+from homeassistant.components.input_boolean import DOMAIN as INPUT_BOOL_DOMAIN
+from homeassistant.components.input_datetime import DOMAIN as INPUT_DT_DOMAIN
+from homeassistant.components.input_number import (
+    ATTR_VALUE as INPUT_NUM_ATTR_VALUE,
+    DOMAIN as INPUT_NUM_DOMAIN,
+    SERVICE_SET_VALUE as INPUT_NUM_SERVICE_SET_VALUE,
+)
 from homeassistant.components.input_text import (
-    DOMAIN as IN_TXT_DOMAIN,
+    ATTR_VALUE as INPUT_TEXT_ATTR_VALUE,
+    DOMAIN as INPUT_TEXT_DOMAIN,
     MODE_PASSWORD,
     MODE_TEXT,
+    SERVICE_SET_VALUE as INPUT_TEXT_SERVICE_SET_VALUE,
 )
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.persistent_notification import (
     ATTR_MESSAGE,
     ATTR_NOTIFICATION_ID,
@@ -23,8 +31,14 @@ from homeassistant.components.persistent_notification import (
     DOMAIN as NOTIFICATION_DOMAIN,
     SERVICE_CREATE,
 )
-from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID, SERVICE_RELOAD
+from homeassistant.const import (
+    ATTR_DATE,
+    ATTR_ENTITY_ID,
+    ATTR_TIME,
+    SERVICE_RELOAD,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+)
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -40,7 +54,13 @@ from .const import (
     PRIMARY_LOCK,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
-from .helpers import get_node_id, output_to_file_from_template, using_ozw, using_zwave
+from .helpers import (
+    find_config_entry_from_lock_name,
+    get_node_id,
+    output_to_file_from_template,
+    using_ozw,
+    using_zwave,
+)
 from .lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
@@ -173,20 +193,9 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
         raise ZWaveIntegrationNotConfiguredError
 
 
-def generate_package_files(hass: HomeAssistant, name: str) -> None:
+def generate_package_files(hass: HomeAssistant, name: Optional[str]) -> None:
     """Generate the package files."""
-    # Attempt to find lock
-    config_entry = next(
-        (
-            hass.config_entries.async_get_entry(entry_id)
-            for entry_id in hass.data[DOMAIN]
-            if hass.data[DOMAIN][entry_id][PRIMARY_LOCK].lock_name == name
-        ),
-        None,
-    )
-    if not config_entry:
-        raise ValueError(f"Couldn't find existing lock entry for {name}")
-
+    config_entry = find_config_entry_from_lock_name(hass, name)
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     lockname = primary_lock.lock_name
 
@@ -285,11 +294,93 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     }
     for domain in [
         AUTO_DOMAIN,
-        IN_BOOL_DOMAIN,
-        IN_DT_DOMAIN,
-        IN_NUM_DOMAIN,
-        IN_TXT_DOMAIN,
+        INPUT_BOOL_DOMAIN,
+        INPUT_DT_DOMAIN,
+        INPUT_NUM_DOMAIN,
+        INPUT_TEXT_DOMAIN,
         SCRIPT_DOMAIN,
     ]:
         hass.services.call(domain, SERVICE_RELOAD)
     hass.services.call(NOTIFICATION_DOMAIN, SERVICE_CREATE, notify_data)
+
+
+async def reset_code_slot(
+    hass: HomeAssistant, name: Optional[str], code_slot: int
+) -> None:
+    """Reset a code slot."""
+    config_entry = find_config_entry_from_lock_name(hass, name)
+    primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+    lock_name = primary_lock.lock_name
+
+    async def process_map(list_of_dicts: List[Dict[str, Any]]) -> None:
+        """
+        Process service call mappings from input list of dictionaries.
+
+        Expects the following schema for each dictionary:
+        {
+            "domain": <ENTITY DOMAIN NAME>,
+            "entities": [<LIST OF PARTIAL ENTITY NAMES TO GENERATE NAMES FOR>],
+            "service": <NAME OF SERVICE TO CALL>,
+            "service_data": <OPTIONAL EXTRA SERVICE DATA TO INCLUDE IN CALL>,
+        }
+        """
+        for curr_dict in list_of_dicts:
+            domain = curr_dict["domain"]
+            for entity in curr_dict["entities"]:
+                service_name = curr_dict["service"]
+                service_data = {
+                    ATTR_ENTITY_ID: f"{domain}.{lock_name}_{entity}_{code_slot}",
+                    **curr_dict.get("service_data", {}),
+                }
+                await hass.services.async_call(domain, service_name, service_data)
+
+    await process_map(
+        [
+            {
+                "domain": INPUT_BOOL_DOMAIN,
+                "entities": [
+                    "enabled",
+                    "notify",
+                    "daterange",
+                    "accesslimit",
+                    "reset_codeslot",
+                ],
+                "service": SERVICE_TURN_OFF,
+            },
+            {
+                "domain": INPUT_TEXT_DOMAIN,
+                "entities": ["name", "pin"],
+                "service": INPUT_TEXT_SERVICE_SET_VALUE,
+                "service_data": {INPUT_TEXT_ATTR_VALUE: ""},
+            },
+            {
+                "domain": INPUT_NUM_DOMAIN,
+                "entities": ["accesscount"],
+                "service": INPUT_NUM_SERVICE_SET_VALUE,
+                "service_data": {INPUT_NUM_ATTR_VALUE: 0},
+            },
+            {
+                "domain": INPUT_DT_DOMAIN,
+                "entities": ["start_date", "end_date"],
+                "service": "set_datetime",
+                "service_data": {ATTR_DATE: "1970-01-01"},
+            },
+        ]
+    )
+
+    for day in ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]:
+        await process_map(
+            [
+                {
+                    "domain": INPUT_DT_DOMAIN,
+                    "entities": [f"{day}_start_date", f"{day}_end_date"],
+                    "service": "set_datetime",
+                    "service_data": {ATTR_TIME: "00:00"},
+                },
+                {
+                    "domain": INPUT_BOOL_DOMAIN,
+                    "entities": [day, f"{day}_inc"],
+                    "service": SERVICE_TURN_ON,
+                },
+            ]
+        )

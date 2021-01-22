@@ -58,7 +58,13 @@ from .helpers import (
     using_zwave,
 )
 from .lock import KeymasterLock
-from .services import add_code, clear_code, generate_package_files, refresh_codes
+from .services import (
+    add_code,
+    clear_code,
+    generate_package_files,
+    refresh_codes,
+    reset_code_slot,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +72,7 @@ SERVICE_GENERATE_PACKAGE = "generate_package"
 SERVICE_ADD_CODE = "add_code"
 SERVICE_CLEAR_CODE = "clear_code"
 SERVICE_REFRESH_CODES = "refresh_codes"
+SERVICE_RESET_CODE_SLOT = "reset_code_slot"
 
 SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
@@ -194,7 +201,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     def _generate_package(service: ServiceCall) -> None:
         """Generate the package files."""
         _LOGGER.debug("DEBUG: %s", service)
-        name = service.data[ATTR_NAME]
+        name = service.data.get(ATTR_NAME)
         generate_package_files(hass, name)
 
     hass.services.async_register(
@@ -202,6 +209,26 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         SERVICE_GENERATE_PACKAGE,
         _generate_package,
         schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
+    )
+
+    # Reset code slot
+    async def _reset_code_slot(service: ServiceCall) -> None:
+        """Reset a code slot."""
+        _LOGGER.debug("DEBUG: %s", service)
+        name = service.data.get(ATTR_NAME)
+        code_slot = service.data[ATTR_CODE_SLOT]
+        await reset_code_slot(hass, name, code_slot)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_CODE_SLOT,
+        _reset_code_slot,
+        schema=vol.Schema(
+            {
+                vol.Optional(ATTR_NAME): vol.Coerce(str),
+                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
+            }
+        ),
     )
 
     for platform in PLATFORMS:

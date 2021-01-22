@@ -16,7 +16,7 @@ from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_STATE, STATE_LOCKED, STATE_UNLOCKED
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.entity_registry import async_get_registry
 from homeassistant.util import dt
 from homeassistant.util.yaml.loader import load_yaml
@@ -235,3 +235,28 @@ def handle_state_change(
             ATTR_CODE_SLOT_NAME: code_slot_name,
         },
     )
+
+
+@callback
+def find_config_entry_from_lock_name(
+    hass: HomeAssistant, name: Optional[str]
+) -> Optional[ConfigEntry]:
+    """Get a config entry from a primary lock name."""
+    if not name:
+        if len(hass.config_entries.async_entries(DOMAIN)) != 1:
+            raise ValueError(
+                "Lock name must be specified when multiple config entries exist"
+            )
+        return hass.config_entries.async_entries(DOMAIN)[0]
+    else:
+        # Attempt to find lock if a lock name is provided
+        try:
+            return next(
+                (
+                    hass.config_entries.async_get_entry(entry_id)
+                    for entry_id in hass.data[DOMAIN]
+                    if hass.data[DOMAIN][entry_id][PRIMARY_LOCK].lock_name == name
+                ),
+            )
+        except StopIteration:
+            raise ValueError(f"Couldn't find existing lock entry for {name}")
