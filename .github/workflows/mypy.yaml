@@ -11,3 +11,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: jpetrucciani/mypy-check@master
+        with:
+          path: "/home/runner/work/keymaster/keymaster/custom_components/keymaster/"
