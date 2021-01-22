@@ -80,10 +80,7 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
             active is not None
             and lock_pin is not None
             and input_pin is not None
-            and (
-                (active and input_pin == lock_pin)
-                or (not active and lock_pin == "")
-            )
+            and ((active and input_pin == lock_pin) or (not active and lock_pin == ""))
         )
 
     async def async_added_to_hass(self) -> None:
