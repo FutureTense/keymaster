@@ -42,7 +42,7 @@ class KeymasterTemplateEntity(Entity):
             hass=hass,
         )
 
-    def get_entity_id(self, domain: str, name: str = None, curr_day: str = None):
+    def get_entity_id(self, domain: str, name: str, curr_day: str = None):
         """Return generated entity ID."""
         entity_id = slugify(f"{self._lock_name}")
         if curr_day:

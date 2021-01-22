@@ -7,7 +7,6 @@ from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
