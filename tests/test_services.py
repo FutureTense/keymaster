@@ -302,19 +302,13 @@ async def test_rest_code_slots(hass):
     ]:
         bool_entity_dict[entity.split(".")[1]] = {"initial": True}
 
-    # Make input texts
+    # Set up input texts
     entity_dict = {}
     for entity in [name_entity, pin_entity]:
         entity_dict[entity.split(".")[1]] = {"initial": "9999"}
-    await async_setup_component(
-        hass,
-        "input_text",
-        {
-            "input_text": entity_dict,
-        },
-    )
+    await async_setup_component(hass, "input_text", {"input_text": entity_dict})
 
-    # Make input numbers
+    # Set up input numbers
     await async_setup_component(
         hass,
         "input_number",
@@ -351,20 +345,12 @@ async def test_rest_code_slots(hass):
 
     # set up input booleans
     await async_setup_component(
-        hass,
-        "input_boolean",
-        {
-            "input_boolean": bool_entity_dict,
-        },
+        hass, "input_boolean", {"input_boolean": bool_entity_dict}
     )
 
     # set up input datetimes
     await async_setup_component(
-        hass,
-        "input_datetime",
-        {
-            "input_datetime": dt_entity_dict,
-        },
+        hass, "input_datetime", {"input_datetime": dt_entity_dict}
     )
 
     await hass.async_block_till_done()
