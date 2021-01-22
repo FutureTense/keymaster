@@ -1,7 +1,7 @@
 """Binary sensors for keymaster."""
 from datetime import datetime
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from homeassistant.components.binary_sensor import (
     DOMAIN as BINARY_SENSOR_DOMAIN,
@@ -87,6 +87,7 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
         """Run when entity about to be added to hass."""
 
         def state_change_handler(evt: Event) -> None:
+            """Handle state change events for watched entities."""
             if evt:
                 _LOGGER.debug(
                     "State change for %s triggered by state change for %s",
@@ -162,17 +163,17 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
 
     @property
     def is_slot_active(self) -> bool:
-        """Indicates whether the slot is enabled via the input_boolean."""
+        """Return whether the slot is enabled via the input_boolean."""
         return self.get_state(self._is_slot_active_entity)
 
     @property
     def is_current_day_active(self) -> bool:
-        """Indicates whether current day is enabled via the input_boolean."""
+        """Return whether current day is enabled via the input_boolean."""
         return self.get_state(self._is_current_day_active_entity)
 
     @property
     def is_current_day_valid(self) -> bool:
-        """Indicates whether current day is within the expected date range."""
+        """Return whether current day is within the expected date range."""
         is_date_range_enabled = self.get_state(self._is_date_range_enabled_entity)
         start_date = self.get_state(self._start_date_entity)
         end_date = self.get_state(self._end_date_entity)
@@ -190,7 +191,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
 
     @property
     def is_current_time_valid(self) -> bool:
-        """Indicates whether the current time is within the expected time range."""
+        """Return whether the current time is within the expected time range."""
         is_time_range_inclusive = self.get_state(self._is_time_range_inclusive_entity)
         current_day_start_time = self.get_state(self._current_day_start_time_entity)
         current_day_end_time = self.get_state(self._current_day_end_time_entity)
@@ -244,6 +245,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         """Run when entity about to be added to hass."""
 
         def state_change_handler(evt: Event = None) -> None:
+            """Handle state change events for watched entities."""
             if evt:
                 _LOGGER.debug(
                     "State change for %s triggered by state change for %s",
@@ -263,6 +265,11 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
             self.async_write_ha_state()
 
         def time_range_change_handler(evt: Event = None) -> None:
+            """
+            Handle state changes to time range entity states.
+
+            Sets up time tracking for start and end times and updates the current state.
+            """
             if evt:
                 _LOGGER.debug(
                     "State change for %s triggered by time change: %s",
@@ -312,7 +319,13 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
             )
         )
 
-        def day_change_handler(now: datetime):
+        def day_change_handler(now: datetime) -> None:
+            """
+            Handle day of week state changes.
+
+            Sets up new current day entities to watch, updates watched entities, and
+            updates the current state.
+            """
             _LOGGER.debug(
                 "State change for %s triggered by day change: %s",
                 self.entity_id,
@@ -371,6 +384,6 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         day_change_handler(dt.now())
 
     @property
-    def state_attributes(self) -> Optional[Dict[str, Any]]:
+    def state_attributes(self) -> Dict[str, Any]:
         """Return the state attributes."""
         return {ATTR_FRIENDLY_NAME: "Desired PIN State"}

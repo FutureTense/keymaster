@@ -384,6 +384,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage usercode updates."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+        """Initalize the data update coordinator."""
         self._lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
             PRIMARY_LOCK
         ]
@@ -396,7 +397,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         )
         self.data = {}
 
-    def _invalid_code(self, code_slot):
+    def _invalid_code(self, code_slot) -> str:
         """Return the PIN slot value as we are unable to read the slot value
         from the lock."""
 
