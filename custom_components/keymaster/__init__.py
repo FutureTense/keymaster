@@ -3,19 +3,18 @@ from datetime import timedelta
 import logging
 from typing import Any, Dict
 
-from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
+from openzwavemqtt.const import CommandClass
 from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
 from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
+from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_USERCODE
 from zwave_js_server.util.lock import get_usercodes
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
-from homeassistant.components.zwave_js.const import DATA_CLIENT
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Config, Event, HomeAssistant, ServiceCall, State
-from homeassistant.helpers.entity_registry import async_get_registry, EntityRegistry
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -28,7 +27,6 @@ from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_CHILD_LOCKS,
     CONF_CHILD_LOCKS_FILE,
     CONF_ENTITY_ID,
     CONF_GENERATE,
@@ -36,7 +34,6 @@ from .const import (
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
-    CONF_SENSOR_NAME,
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
@@ -53,6 +50,7 @@ from .helpers import (
     async_reload_package_platforms,
     delete_folder,
     delete_lock_and_base_folder,
+    generate_keymaster_locks,
     get_node_id,
     handle_state_change,
     using_ozw,
@@ -107,35 +105,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     config_entry.add_update_listener(update_listener)
 
-    primary_lock = KeymasterLock(
-        config_entry.data[CONF_LOCK_NAME],
-        config_entry.data[CONF_LOCK_ENTITY_ID],
-        config_entry.data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-        config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-        config_entry.data[CONF_SENSOR_NAME],
-    )
-    child_locks = [
-        KeymasterLock(
-            lock_name,
-            lock[CONF_LOCK_ENTITY_ID],
-            lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-            lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-        )
-        for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
-    ]
-
-    # If we are using zwave_js, we need to grab the node for the locks so we can
-    # use it later. To do this, we look up the node_id from the entity, then grab
-    # the zwave_js client being used by the config entry associated with the lock.
-    # Once we have the client, we can lookup the node.
-    if using_zwave_js(hass):
-        ent_reg: EntityRegistry = await async_get_registry(hass)
-        for lock in [primary_lock, *child_locks]:
-            node_id = int(hass.states.get(lock.lock_entity_id).attributes[ATTR_NODE_ID])
-            lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
-            lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-            client = hass.data[DOMAIN][lock_config_entry_id][DATA_CLIENT]
-            lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+    primary_lock, child_locks = generate_keymaster_locks(hass, config_entry)
 
     hass.data[DOMAIN][config_entry.entry_id] = {
         PRIMARY_LOCK: primary_lock,
@@ -340,35 +310,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         data=new_data,
     )
 
-    primary_lock = KeymasterLock(
-        config_entry.data[CONF_LOCK_NAME],
-        config_entry.data[CONF_LOCK_ENTITY_ID],
-        config_entry.data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-        config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-        config_entry.data[CONF_SENSOR_NAME],
-    )
-    child_locks = [
-        KeymasterLock(
-            lock_name,
-            lock[CONF_LOCK_ENTITY_ID],
-            lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-            lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-        )
-        for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
-    ]
-
-    # If we are using zwave_js, we need to grab the node for the locks so we can
-    # use it later. To do this, we look up the node_id from the entity, then grab
-    # the zwave_js client being used by the config entry associated with the lock.
-    # Once we have the client, we can lookup the node.
-    if using_zwave_js(hass):
-        ent_reg: EntityRegistry = await async_get_registry(hass)
-        for lock in [primary_lock, *child_locks]:
-            node_id = int(hass.states.get(lock.lock_entity_id).attributes[ATTR_NODE_ID])
-            lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
-            lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-            client = hass.data[DOMAIN][lock_config_entry_id][DATA_CLIENT]
-            lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+    primary_lock, child_locks = generate_keymaster_locks(hass, config_entry)
 
     hass.data[DOMAIN][config_entry.entry_id].update(
         {

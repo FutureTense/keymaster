@@ -3,7 +3,7 @@ import asyncio
 from datetime import timedelta
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
@@ -16,11 +16,20 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
-from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
+from homeassistant.components.zwave_js.const import (
+    DATA_CLIENT,
+    DOMAIN as ZWAVE_JS_DOMAIN,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_STATE, SERVICE_RELOAD, STATE_LOCKED, STATE_UNLOCKED
 from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import ServiceNotFound
+from homeassistant.helpers.device_registry import (
+    async_get_registry as async_get_device_registry,
+)
+from homeassistant.helpers.entity_registry import (
+    async_get_registry as async_get_entity_registry,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -32,7 +41,13 @@ from .const import (
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
     ATTR_NODE_ID,
+    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_CHILD_LOCKS,
+    CONF_LOCK_ENTITY_ID,
+    CONF_LOCK_NAME,
     CONF_PATH,
+    CONF_SENSOR_NAME,
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     LOCK_STATE_MAP,
@@ -53,7 +68,7 @@ def using_zwave(hass: HomeAssistant) -> bool:
     return DATA_ZWAVE_CONFIG in hass.data
 
 
-def uzing_zwave_js(hass: HomeAssistant) -> bool:
+def using_zwave_js(hass: HomeAssistant) -> bool:
     """Returns whether the zwave_js integration is configured."""
     return ZWAVE_JS_DOMAIN in hass.data
 
@@ -65,6 +80,46 @@ def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
         return state.attributes[ATTR_NODE_ID]
 
     return None
+
+
+async def generate_keymaster_locks(
+    hass: HomeAssistant, config_entry: ConfigEntry
+) -> Tuple[KeymasterLock, List[KeymasterLock]]:
+    """Generate keymaster locks from config entry."""
+    primary_lock = KeymasterLock(
+        config_entry.data[CONF_LOCK_NAME],
+        config_entry.data[CONF_LOCK_ENTITY_ID],
+        config_entry.data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
+        config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
+        config_entry.data[CONF_SENSOR_NAME],
+    )
+    child_locks = [
+        KeymasterLock(
+            lock_name,
+            lock[CONF_LOCK_ENTITY_ID],
+            lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
+            lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
+        )
+        for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
+    ]
+
+    # If we are using zwave_js, we need to grab the node for the locks so we can
+    # use it later. To do this, we look up the node_id from the entity, then grab
+    # the zwave_js client being used by the config entry associated with the lock.
+    # Once we have the client, we can lookup the node.
+    if using_zwave_js(hass):
+        ent_reg = await async_get_entity_registry(hass)
+        dev_reg = await async_get_device_registry(hass)
+        for lock in [primary_lock, *child_locks]:
+            node_id = int(hass.states.get(lock.lock_entity_id).attributes[ATTR_NODE_ID])
+            lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
+            lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
+            node_id = int(lock_dev_reg_entry.identifiers[0][1].split("-")[1])
+            lock_config_entry_id = lock_ent_reg_entry.config_entry_id
+            client = hass.data[DOMAIN][lock_config_entry_id][DATA_CLIENT]
+            lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+
+    return primary_lock, child_locks
 
 
 def output_to_file_from_template(
