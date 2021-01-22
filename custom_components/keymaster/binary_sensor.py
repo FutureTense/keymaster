@@ -13,7 +13,7 @@ from homeassistant.components.input_number import DOMAIN as INPUT_NUM_DOMAIN
 from homeassistant.components.input_text import DOMAIN as INPUT_TXT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_FRIENDLY_NAME
+from homeassistant.const import ATTR_FRIENDLY_NAME, ATTR_NOW
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import (
     Event,
@@ -96,6 +96,12 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
         """Run when entity about to be added to hass."""
 
         def state_change_handler(evt: Event) -> None:
+            if evt:
+                _LOGGER.debug(
+                    "State change for %s triggered by state change for %s",
+                    self.entity_id,
+                    evt.data.get("entity_id"),
+                )
             self.async_write_ha_state()
 
         self.async_on_remove(
@@ -257,9 +263,22 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         """Run when entity about to be added to hass."""
 
         def state_change_handler(evt: Event = None) -> None:
+            if evt:
+                _LOGGER.debug(
+                    "State change for %s triggered by state change for %s",
+                    self.entity_id,
+                    evt.data.get("entity_id"),
+                )
             self.async_write_ha_state()
 
         def time_range_change_handler(evt: Event = None) -> None:
+            if evt:
+                _LOGGER.debug(
+                    "State change for %s triggered by time change: %s",
+                    self.entity_id,
+                    evt.data.get(ATTR_NOW),
+                )
+
             for unsub_listener in self._current_day_time_range_unsub_listeners:
                 unsub_listener()
             self._current_day_time_range_unsub_listeners.clear()
