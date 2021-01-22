@@ -59,14 +59,28 @@ DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"
 DEFAULT_ALARM_TYPE_SENSOR = "sensor.fake"
 DEFAULT_HIDE_PINS = False
 
-# OZW constants
-OZW_STATUS_TOPIC = "OpenZWave/1/status/"
-OZW_STATUS_KEY = "Status"
-OZW_READY_STATUSES = [
-    "driverAwakeNodesQueried",
-    "driverAllNodesQueriedSomeDead",
-    "driverAllNodesQueried",
-]
+# Connected sensor maps
+CONNECTED_STATE_MAP = {
+    True: {
+        True: "Connected",
+        False: "Connecting",
+    },
+    False: {
+        True: "Disconnected",
+        False: "Disconnecting",
+    },
+}
+
+CONNECTED_ICON_MAP = {
+    True: {
+        True: "mdi:folder-key",
+        False: "mdi:folder-key-network",
+    },
+    False: {
+        True: "mdi:folder-open",
+        False: "mdi:wiper-watch",
+    },
+}
 
 # Action maps
 ACTION_MAP = {

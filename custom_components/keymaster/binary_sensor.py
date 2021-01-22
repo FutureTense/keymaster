@@ -40,13 +40,13 @@ async def async_setup_entry(
         PinSynchedSensor(hass, entry, x)
         for x in range(entry.data[CONF_START], entry.data[CONF_SLOTS] + 1)
     ]
-    async_add_entities(sensors, True)
+    async_add_entities(sensors)
 
 
 class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
     """Binary sensor class for code slot PIN synched status."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
             self,
@@ -67,13 +67,18 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
         ]
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         """Return true if the binary sensor is on."""
         input_pin = self.get_state(self._input_pin_entity)
         lock_pin = self.get_state(self._lock_pin_entity)
         active = self.get_state(self._active_entity)
 
-        return (
+        _LOGGER.debug("Updating state for %s...", self.entity_id)
+        _LOGGER.debug("Input state for %s is %s", self._input_pin_entity, input_pin)
+        _LOGGER.debug("Input state for %s is %s", self._lock_pin_entity, lock_pin)
+        _LOGGER.debug("Input state for %s is %s", self._active_entity, active)
+
+        is_on = (
             active is not None
             and lock_pin is not None
             and input_pin is not None
@@ -82,6 +87,10 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
                 or (not active and lock_pin in ("", "0000"))
             )
         )
+
+        _LOGGER.debug("Output state for %s is %s", self.entity_id, is_on)
+
+        return is_on
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -99,7 +108,7 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
 class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
     """Binary sensor class for code slot PIN synched status."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
             self,
@@ -147,17 +156,17 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         self._current_day_time_range_unsub_listeners = []
 
     @property
-    def is_slot_active(self):
+    def is_slot_active(self) -> bool:
         """Indicates whether the slot is enabled via the input_boolean."""
         return self.get_state(self._is_slot_active_entity)
 
     @property
-    def is_current_day_active(self):
+    def is_current_day_active(self) -> bool:
         """Indicates whether current day is enabled via the input_boolean."""
         return self.get_state(self._is_current_day_active_entity)
 
     @property
-    def is_current_day_valid(self):
+    def is_current_day_valid(self) -> bool:
         """Indicates whether current day is within the expected date range."""
         is_date_range_enabled = self.get_state(self._is_date_range_enabled_entity)
         start_date = self.get_state(self._start_date_entity)
@@ -175,7 +184,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         return not is_date_range_enabled or is_in_date_range
 
     @property
-    def is_current_time_valid(self):
+    def is_current_time_valid(self) -> bool:
         """Indicates whether the current time is within the expected time range."""
         is_time_range_inclusive = self.get_state(self._is_time_range_inclusive_entity)
         current_day_start_time = self.get_state(self._current_day_start_time_entity)
@@ -206,7 +215,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         return not is_time_range_enabled or is_in_time_range
 
     @property
-    def is_access_limit_ok(self):
+    def is_access_limit_ok(self) -> bool:
         """Return whether the access limit for the code slot is valid."""
         is_access_limit_enabled = self.get_state(self._is_access_limit_enabled_entity)
         access_count = self.get_state(self._access_count_entity)
@@ -216,15 +225,33 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         )
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         """Return true if the binary sensor is on."""
-        return (
+        _LOGGER.debug("Updating state for %s...", self.entity_id)
+        _LOGGER.debug("Input: Is slot active? %s", self.is_slot_active)
+        _LOGGER.debug("Input: Is current day active? %s", self.is_current_day_active)
+        _LOGGER.debug(
+            "Input: Is current day within date range? %s", self.is_current_day_valid
+        )
+        _LOGGER.debug(
+            "Input: Is current time within time range? %s", self.is_current_time_valid
+        )
+        _LOGGER.debug(
+            "Input: Is access limit disabled or not breached? %s",
+            self.is_access_limit_ok,
+        )
+
+        is_on = (
             self.is_slot_active
             and self.is_current_day_active
             and self.is_current_day_valid
             and self.is_current_time_valid
             and self.is_access_limit_ok
         )
+
+        _LOGGER.debug("Ouput state for %s is %s", self.entity_id, is_on)
+
+        return is_on
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""

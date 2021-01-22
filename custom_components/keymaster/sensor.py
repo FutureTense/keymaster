@@ -1,6 +1,8 @@
 """Sensors for keymaster."""
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, Optional
+
+from openzwavemqtt.const import ATTR_CODE_SLOT
 
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -10,7 +12,14 @@ from homeassistant.helpers.event import Event, async_track_state_change_event
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
-from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from .const import (
+    CONF_SLOTS,
+    CONF_START,
+    CONNECTED_ICON_MAP,
+    CONNECTED_STATE_MAP,
+    COORDINATOR,
+    DOMAIN,
+)
 from .entity import KeymasterTemplateEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,7 +37,7 @@ async def async_setup_entry(
         ConnectedSensor(hass, entry, x)
         for x in range(entry.data[CONF_START], entry.data[CONF_SLOTS] + 1)
     ]
-    async_add_entities(sensors, True)
+    async_add_entities(sensors)
 
     async def code_slots_changed(
         ent_reg: EntityRegistry,
@@ -71,7 +80,7 @@ async def async_setup_entry(
 class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
     """Sensor class for code slot PINs."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
             self, hass, entry, SENSOR_DOMAIN, code_slot, "Code Slot"
@@ -89,7 +98,7 @@ class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
             )
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the entity name."""
         return f"{self._lock_name} {self._name} {self._code_slot}"
 
@@ -107,7 +116,7 @@ class CodesSensor(CoordinatorEntity, KeymasterTemplateEntity):
 class ConnectedSensor(KeymasterTemplateEntity):
     """Sensor class for code slot connections."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
         """Initialize the sensor."""
         KeymasterTemplateEntity.__init__(
             self, hass, entry, SENSOR_DOMAIN, code_slot, "Connected", "Status"
@@ -131,35 +140,22 @@ class ConnectedSensor(KeymasterTemplateEntity):
         )
 
     @property
-    def state(self):
+    def state(self) -> str:
         """Return the state of the sensor."""
-        map = {
-            True: {
-                True: "Connected",
-                False: "Connecting",
-            },
-            False: {
-                True: "Disconnected",
-                False: "Disconnecting",
-            },
-        }
         active = self.get_state(self._active_entity)
         pin_synched = self.get_state(self._pin_synched_entity)
-        return map[active][pin_synched]
+        state = CONNECTED_STATE_MAP[active][pin_synched]
+
+        _LOGGER.debug("Updating state for %s...", self.entity_id)
+        _LOGGER.debug("Input state for %s is %s", self._active_entity, active)
+        _LOGGER.debug("Input state for %s is %s", self._pin_synched_entity, pin_synched)
+        _LOGGER.debug("Output state for %s is %s", self.entity_id, state)
+
+        return state
 
     @property
-    def icon(self):
+    def icon(self) -> str:
         """Return the icon."""
-        map = {
-            True: {
-                True: "mdi:folder-key",
-                False: "mdi:folder-key-network",
-            },
-            False: {
-                True: "mdi:folder-open",
-                False: "mdi:wiper-watch",
-            },
-        }
         active = self.get_state(self._active_entity)
         pin_synched = self.get_state(self._pin_synched_entity)
-        return map[active][pin_synched]
+        return CONNECTED_ICON_MAP[active][pin_synched]
