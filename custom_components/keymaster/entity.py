@@ -66,7 +66,7 @@ class KeymasterTemplateEntity(Entity):
         logger: logging.Logger,
         inputs: Union[List[str], Dict[str, Optional[Union[bool, str]]]],
     ) -> None:
-        """Log states."""
+        """Log input and output states for a template entity."""
         logger.debug("Updating state for %s...", self.entity_id)
         for input_entity in inputs:
             if isinstance(inputs, list):
