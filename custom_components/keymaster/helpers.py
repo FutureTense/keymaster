@@ -16,6 +16,7 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
+from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_STATE, SERVICE_RELOAD, STATE_LOCKED, STATE_UNLOCKED
 from homeassistant.core import HomeAssistant, State
@@ -50,6 +51,11 @@ def using_ozw(hass: HomeAssistant) -> bool:
 def using_zwave(hass: HomeAssistant) -> bool:
     """Returns whether the zwave integration is configured."""
     return DATA_ZWAVE_CONFIG in hass.data
+
+
+def uzing_zwave_js(hass: HomeAssistant) -> bool:
+    """Returns whether the zwave_js integration is configured."""
+    return ZWAVE_JS_DOMAIN in hass.data
 
 
 def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:

@@ -1,2 +1,3 @@
 homeassistant
 python-openzwave-mqtt
+zwave-js-server-python

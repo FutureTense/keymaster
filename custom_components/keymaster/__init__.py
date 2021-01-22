@@ -7,12 +7,15 @@ from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
 from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
+from zwave_js_server.util.lock import get_usercodes
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
+from homeassistant.components.zwave_js.const import DATA_CLIENT
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Config, Event, HomeAssistant, ServiceCall, State
+from homeassistant.helpers.entity_registry import async_get_registry, EntityRegistry
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -54,6 +57,7 @@ from .helpers import (
     handle_state_change,
     using_ozw,
     using_zwave,
+    using_zwave_js,
 )
 from .lock import KeymasterLock
 from .services import add_code, clear_code, generate_package_files, refresh_codes
@@ -119,6 +123,20 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         )
         for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
     ]
+
+    # If we are using zwave_js, we need to grab the node for the locks so we can
+    # use it later. To do this, we look up the node_id from the entity, then grab
+    # the zwave_js client being used by the config entry associated with the lock.
+    # Once we have the client, we can lookup the node.
+    if using_zwave_js(hass):
+        ent_reg: EntityRegistry = await async_get_registry(hass)
+        for lock in [primary_lock, *child_locks]:
+            node_id = int(hass.states.get(lock.lock_entity_id).attributes[ATTR_NODE_ID])
+            lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
+            lock_config_entry_id = lock_ent_reg_entry.config_entry_id
+            client = hass.data[DOMAIN][lock_config_entry_id][DATA_CLIENT]
+            lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+
     hass.data[DOMAIN][config_entry.entry_id] = {
         PRIMARY_LOCK: primary_lock,
         CHILD_LOCKS: child_locks,
@@ -329,20 +347,33 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
         config_entry.data[CONF_SENSOR_NAME],
     )
+    child_locks = [
+        KeymasterLock(
+            lock_name,
+            lock[CONF_LOCK_ENTITY_ID],
+            lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
+            lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
+        )
+        for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
+    ]
+
+    # If we are using zwave_js, we need to grab the node for the locks so we can
+    # use it later. To do this, we look up the node_id from the entity, then grab
+    # the zwave_js client being used by the config entry associated with the lock.
+    # Once we have the client, we can lookup the node.
+    if using_zwave_js(hass):
+        ent_reg: EntityRegistry = await async_get_registry(hass)
+        for lock in [primary_lock, *child_locks]:
+            node_id = int(hass.states.get(lock.lock_entity_id).attributes[ATTR_NODE_ID])
+            lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
+            lock_config_entry_id = lock_ent_reg_entry.config_entry_id
+            client = hass.data[DOMAIN][lock_config_entry_id][DATA_CLIENT]
+            lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+
     hass.data[DOMAIN][config_entry.entry_id].update(
         {
             PRIMARY_LOCK: primary_lock,
-            CHILD_LOCKS: [
-                KeymasterLock(
-                    lock_name,
-                    lock[CONF_LOCK_ENTITY_ID],
-                    lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-                    lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-                )
-                for lock_name, lock in config_entry.data.get(
-                    CONF_CHILD_LOCKS, {}
-                ).items()
-            ],
+            CHILD_LOCKS: child_locks,
         }
     )
     servicedata = {"lockname": primary_lock.lock_name}
@@ -440,8 +471,20 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         # servicedata = {"entity_id": self._entity_id}
         # await self.hass.services.async_call(DOMAIN, SERVICE_REFRESH_CODES, servicedata)
 
+        if using_zwave_js(self.hass):
+            node = self._lock.zwave_js_lock_node
+            for slot in get_usercodes(node):
+                code_slot = slot[ATTR_CODE_SLOT]
+                usercode = slot[ATTR_USERCODE]
+                _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
+                if usercode and "*" in str(usercode):
+                    _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
+                    data[code_slot] = self._invalid_code(code_slot)
+                else:
+                    data[code_slot] = usercode
+
         # pull the codes for ozw
-        if using_ozw(self.hass):
+        elif using_ozw(self.hass):
             # Raises exception when node not found
             try:
                 node = get_node_from_manager(
