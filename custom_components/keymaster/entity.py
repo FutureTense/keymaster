@@ -1,6 +1,6 @@
 """Base entity classes for keymaster."""
 import logging
-from typing import Union
+from typing import Dict, List, Optional, Union
 
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
@@ -60,6 +60,26 @@ class KeymasterTemplateEntity(Entity):
             return state is not None and state.state == STATE_ON
         else:
             return state.state if state else None
+
+    def log_states(
+        self,
+        logger: logging.Logger,
+        inputs: Union[List[str], Dict[str, Optional[Union[bool, str]]]],
+    ) -> None:
+        """Log states."""
+        logger.debug("Updating state for %s...", self.entity_id)
+        for input_entity in inputs:
+            if isinstance(inputs, list):
+                input_state = self.get_state(input_entity)
+            else:
+                input_state = inputs[input_entity]
+            logger.debug(
+                "Input state to output entity %s from input entity %s is %s",
+                self.entity_id,
+                input_entity,
+                input_state,
+            )
+        logger.debug("Output state for %s is %s", self.entity_id, self.state)
 
     @property
     def should_poll(self) -> bool:
