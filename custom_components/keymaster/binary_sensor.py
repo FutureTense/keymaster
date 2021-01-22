@@ -1,7 +1,7 @@
 """Binary sensors for keymaster."""
 from datetime import datetime
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from homeassistant.components.binary_sensor import (
     DOMAIN as BINARY_SENSOR_DOMAIN,
@@ -163,17 +163,17 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
 
     @property
     def is_slot_active(self) -> bool:
-        """Indicates whether the slot is enabled via the input_boolean."""
+        """Return whether the slot is enabled via the input_boolean."""
         return self.get_state(self._is_slot_active_entity)
 
     @property
     def is_current_day_active(self) -> bool:
-        """Indicates whether current day is enabled via the input_boolean."""
+        """Return whether current day is enabled via the input_boolean."""
         return self.get_state(self._is_current_day_active_entity)
 
     @property
     def is_current_day_valid(self) -> bool:
-        """Indicates whether current day is within the expected date range."""
+        """Return whether current day is within the expected date range."""
         is_date_range_enabled = self.get_state(self._is_date_range_enabled_entity)
         start_date = self.get_state(self._start_date_entity)
         end_date = self.get_state(self._end_date_entity)
@@ -191,7 +191,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
 
     @property
     def is_current_time_valid(self) -> bool:
-        """Indicates whether the current time is within the expected time range."""
+        """Return whether the current time is within the expected time range."""
         is_time_range_inclusive = self.get_state(self._is_time_range_inclusive_entity)
         current_day_start_time = self.get_state(self._current_day_start_time_entity)
         current_day_end_time = self.get_state(self._current_day_end_time_entity)
