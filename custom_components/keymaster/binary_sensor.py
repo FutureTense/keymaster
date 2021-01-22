@@ -313,6 +313,11 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         )
 
         def day_change_handler(now: datetime):
+            _LOGGER.debug(
+                    "State change for %s triggered by day change: %s",
+                    self.entity_id,
+                    dt.utcnow(),
+                )
             # Unsubscribe to previous day listeners if set
             for unsub_listener in self._current_day_unsub_listeners:
                 unsub_listener()
