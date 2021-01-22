@@ -87,6 +87,7 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
         """Run when entity about to be added to hass."""
 
         def state_change_handler(evt: Event) -> None:
+            """Handle state change events for watched entities."""
             if evt:
                 _LOGGER.debug(
                     "State change for %s triggered by state change for %s",
@@ -244,6 +245,7 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         """Run when entity about to be added to hass."""
 
         def state_change_handler(evt: Event = None) -> None:
+            """Handle state change events for watched entities."""
             if evt:
                 _LOGGER.debug(
                     "State change for %s triggered by state change for %s",
@@ -263,6 +265,11 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
             self.async_write_ha_state()
 
         def time_range_change_handler(evt: Event = None) -> None:
+            """
+            Handle state changes to time range entity states.
+
+            Sets up time tracking for start and end times and updates the current state.
+            """
             if evt:
                 _LOGGER.debug(
                     "State change for %s triggered by time change: %s",
@@ -312,7 +319,13 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
             )
         )
 
-        def day_change_handler(now: datetime):
+        def day_change_handler(now: datetime) -> None:
+            """
+            Handle day of week state changes.
+
+            Sets up new current day entities to watch, updates watched entities, and
+            updates the current state.
+            """
             _LOGGER.debug(
                 "State change for %s triggered by day change: %s",
                 self.entity_id,
@@ -371,6 +384,6 @@ class ActiveSensor(BinarySensorEntity, KeymasterTemplateEntity):
         day_change_handler(dt.now())
 
     @property
-    def state_attributes(self) -> Optional[Dict[str, Any]]:
+    def state_attributes(self) -> Dict[str, Any]:
         """Return the state attributes."""
         return {ATTR_FRIENDLY_NAME: "Desired PIN State"}

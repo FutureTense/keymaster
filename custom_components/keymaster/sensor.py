@@ -93,6 +93,7 @@ class ConnectedSensor(KeymasterTemplateEntity):
         """Run when entity about to be added to hass."""
 
         def state_change_handler(evt: Event) -> None:
+            """Handle state change events for watched entities."""
             if evt:
                 _LOGGER.debug(
                     "State change for %s triggered by state change for %s",
