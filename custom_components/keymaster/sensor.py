@@ -137,6 +137,10 @@ class ConnectedSensor(KeymasterTemplateEntity):
                     self.entity_id,
                     evt.data.get("entity_id"),
                 )
+            self.log_states(
+                _LOGGER,
+                [self._active_entity, self._pin_synched_entity],
+            )
             self.async_write_ha_state()
 
         self.async_on_remove(
@@ -150,14 +154,7 @@ class ConnectedSensor(KeymasterTemplateEntity):
         """Return the state of the sensor."""
         active = self.get_state(self._active_entity)
         pin_synched = self.get_state(self._pin_synched_entity)
-        state = CONNECTED_STATE_MAP[active][pin_synched]
-
-        _LOGGER.debug("Updating state for %s...", self.entity_id)
-        _LOGGER.debug("Input state for %s is %s", self._active_entity, active)
-        _LOGGER.debug("Input state for %s is %s", self._pin_synched_entity, pin_synched)
-        _LOGGER.debug("Output state for %s is %s", self.entity_id, state)
-
-        return state
+        return CONNECTED_STATE_MAP[active][pin_synched]
 
     @property
     def icon(self) -> str:

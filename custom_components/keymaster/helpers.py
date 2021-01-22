@@ -100,11 +100,10 @@ def using_zwave_js(hass: HomeAssistant) -> bool:
 
 def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
     """Get node ID from entity."""
-    state = hass.states.get(entity_id)
-    if state:
-        return state.attributes[ATTR_NODE_ID]
-
-    return None
+    try:
+        return hass.states.get(entity_id).attributes[ATTR_NODE_ID]
+    except (AttributeError, KeyError):
+        return None
 
 
 async def generate_keymaster_locks(
@@ -285,8 +284,8 @@ def handle_state_change(
     )
     alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
 
-    # If lock has changed state but alarm_type/access_control state hasn't changed in a while
-    # set action_value to RF lock/unlock
+    # If lock has changed state but alarm_type/access_control state hasn't changed in a
+    # while set action_value to RF lock/unlock
     if (
         alarm_level_state is not None
         and int(alarm_level_state.state) == 0
