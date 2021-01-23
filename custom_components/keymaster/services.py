@@ -10,6 +10,10 @@ from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import create
 from homeassistant.components.zwave_js import DOMAIN as ZWAVE_JS_DOMAIN
+from homeassistant.components.zwave_js.lock import (
+    SERVICE_CLEAR_LOCK_USERCODE,
+    SERVICE_SET_LOCK_USERCODE,
+)
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
@@ -82,7 +86,9 @@ async def add_code(
         servicedata[ATTR_ENTITY_ID] = entity_id
 
         try:
-            await hass.services.async_call(ZWAVE_JS_DOMAIN, SET_USERCODE, servicedata)
+            await hass.services.async_call(
+                ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
+            )
         except Exception as err:
             _LOGGER.error("Error calling ozw.set_usercode service call: %s", str(err))
             return
@@ -129,7 +135,9 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
         }
 
         try:
-            await hass.services.async_call(ZWAVE_JS_DOMAIN, CLEAR_USERCODE, servicedata)
+            await hass.services.async_call(
+                ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
+            )
         except Exception as err:
             _LOGGER.error("Error calling ozw.clear_usercode service call: %s", str(err))
 
