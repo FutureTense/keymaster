@@ -213,22 +213,10 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     )
     input_path = os.path.dirname(__file__)
 
-    hot_reload = False
-    existing_lock = False
-    old_code_slots = []
-
     # If packages folder exists, delete it so we can recreate it
     if os.path.isdir(output_path):
         _LOGGER.debug("Directory %s already exists, cleaning it up", output_path)
-        existing_lock = True
         for file in os.listdir(output_path):
-            # Store list of previous slots so we can decide whether or not
-            old_code_slot = file[len(f"{lockname}_keymaster_") : -len(".yaml")]
-            try:
-                if old_code_slot != "common":
-                    old_code_slots.append(int(old_code_slot))
-            except ValueError:
-                pass
             os.remove(os.path.join(output_path, file))
     else:
         _LOGGER.debug("Creating packages directory %s", output_path)
@@ -242,13 +230,6 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     # Generate list of code slots
     code_slots = config_entry.data[CONF_SLOTS]
     start_from = config_entry.data[CONF_START]
-
-    # If we are regenerating files for an existing lock and there are no new
-    # code slots being generated, we can hot reload the files
-    if existing_lock and not list(
-        set(range(start_from, code_slots + 1)) - set(old_code_slots)
-    ):
-        hot_reload = True
 
     activelockheaders = ",".join(
         [f"{activelockheader}_{x}" for x in range(start_from, code_slots + 1)]
@@ -295,27 +276,20 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
                 input_path, in_f, output_path, out_f, replacements, write_mode
             )
 
-    _LOGGER.debug("Package generation complete")
+    _LOGGER.debug("Package generation complete and all changes have been hot reloaded")
 
     notify_data = {
         ATTR_TITLE: f"{DOMAIN.title()} package generation complete!",
+        ATTR_MESSAGE: "Any changes have been hot reloaded, so no restart needed!",
         ATTR_NOTIFICATION_ID: f"{DOMAIN}_generate_package_files",
     }
-    if hot_reload:
-        notify_data[
-            ATTR_MESSAGE
-        ] = "Any changes have been hot reloaded, so no restart needed!"
-        for domain in [
-            AUTO_DOMAIN,
-            IN_BOOL_DOMAIN,
-            IN_DT_DOMAIN,
-            IN_NUM_DOMAIN,
-            IN_TXT_DOMAIN,
-            SCRIPT_DOMAIN,
-        ]:
-            hass.services.call(domain, SERVICE_RELOAD)
-    else:
-        notify_data[
-            ATTR_MESSAGE
-        ] = "Please restart your Home Assistant instance so the changes can be picked up"
+    for domain in [
+        AUTO_DOMAIN,
+        IN_BOOL_DOMAIN,
+        IN_DT_DOMAIN,
+        IN_NUM_DOMAIN,
+        IN_TXT_DOMAIN,
+        SCRIPT_DOMAIN,
+    ]:
+        hass.services.call(domain, SERVICE_RELOAD)
     hass.services.call(NOTIFICATION_DOMAIN, SERVICE_CREATE, notify_data)
