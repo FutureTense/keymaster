@@ -128,6 +128,7 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
         async def automation_allowed_handler() -> None:
             """Handle state change event when automation is allowed."""
             self._automation_allowed_unsub()
+            self._automation_allowed_unsub = None
             self.call_code_slot_service()
 
         async def state_change_handler(evt: Event) -> None:
@@ -149,15 +150,16 @@ class PinSynchedSensor(BinarySensorEntity, KeymasterTemplateEntity):
             self.async_write_ha_state()
 
             # Handle active entity state change by setting or clearing code
-            if evt.data.get("entity_id") == self._active_entity:
+            if (
+                evt.data.get("entity_id") == self._active_entity
+                and evt.data["old_state"] is not None
+            ):
                 active = evt.data["new_state"].state
-                # if automation isn't allowed yet, set up execution for later
-                if (
-                    self.get_state("input_boolean.keymaster_allow_automation_execution")
-                    == STATE_ON
-                ):
+                # if automation isn't allowed yet, set up execution for later if we
+                # haven't already
+                if self.get_state(self._automation_allowed_entity):
                     await self.call_code_slot_service(active)
-                else:
+                elif not self._automation_allowed_unsub:
                     self._automation_allowed_unsub = async_track_state_change(
                         self._hass,
                         self._automation_allowed_entity,
