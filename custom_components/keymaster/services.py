@@ -5,10 +5,26 @@ import random
 
 from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 
-from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
+from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
+from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
+from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
+from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
+from homeassistant.components.input_text import (
+    DOMAIN as IN_TXT_DOMAIN,
+    MODE_PASSWORD,
+    MODE_TEXT,
+)
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.components.persistent_notification import (
+    ATTR_MESSAGE,
+    ATTR_NOTIFICATION_ID,
+    ATTR_TITLE,
+    DOMAIN as NOTIFICATION_DOMAIN,
+    SERVICE_CREATE,
+)
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.const import ATTR_ENTITY_ID, SERVICE_RELOAD
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -260,4 +276,20 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
                 input_path, in_f, output_path, out_f, replacements, write_mode
             )
 
-    _LOGGER.debug("Package generation complete")
+    _LOGGER.debug("Package generation complete and all changes have been hot reloaded")
+
+    notify_data = {
+        ATTR_TITLE: f"{DOMAIN.title()} package generation complete!",
+        ATTR_MESSAGE: "Any changes have been hot reloaded, so no restart needed!",
+        ATTR_NOTIFICATION_ID: f"{DOMAIN}_generate_package_files",
+    }
+    for domain in [
+        AUTO_DOMAIN,
+        IN_BOOL_DOMAIN,
+        IN_DT_DOMAIN,
+        IN_NUM_DOMAIN,
+        IN_TXT_DOMAIN,
+        SCRIPT_DOMAIN,
+    ]:
+        hass.services.call(domain, SERVICE_RELOAD)
+    hass.services.call(NOTIFICATION_DOMAIN, SERVICE_CREATE, notify_data)
