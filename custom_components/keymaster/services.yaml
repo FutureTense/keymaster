@@ -2,7 +2,7 @@ generate_package:
   description: Generate lock manager files.
   fields:
     lockname:
-      description: Lock name to generate files for.
+      description: Lock name to generate files for. Only needed if you are using keymaster for multiple locks.
       example: frontdoor
 
 add_code:
@@ -34,3 +34,13 @@ refresh_codes:
     entity_id: 
       description: The entity_id of the lock you are attempting to refresh the codes of
       example: lock.frontdoor_locked
+
+reset_code_slot:
+  description: Reset input helpers for code slot.
+  fields:
+    lockname:
+      description: Lock name to reset input helpers for. Only needed if you are using keymaster for multiple locks.
+      example: frontdoor
+    code_slot:
+      description: The code slot you are attempting to reset
+      example: 2      

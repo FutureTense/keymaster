@@ -31,72 +31,6 @@ script:
             { "node": {{ state_attr('LOCKENTITYNAME','node_id') }} }
           retain: true
 
-  LOCKNAME_reset_codeslot:
-    mode: queued
-    fields:
-      code_slot:
-        description: The code slot to reset
-        example: 1
-    variables:
-      # Constant used later to loop through day specific entities
-      days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-    sequence:
-      - service: input_boolean.turn_off
-        data_template:
-          entity_id: "input_boolean.LOCKNAME_enabled_{{ code_slot | string }}"
-      - service: input_text.set_value
-        data_template:
-          entity_id: "input_text.LOCKNAME_name_{{ code_slot | string }}"
-          value: ""
-      - service: input_text.set_value
-        data_template:
-          entity_id: "input_text.LOCKNAME_pin_{{ code_slot | string }}"
-          value: ""
-      - service: input_boolean.turn_off
-        data_template:
-          entity_id: "input_boolean.LOCKNAME_notify_{{ code_slot | string }}"
-      - service: input_number.set_value
-        data_template:
-          entity_id: "input_number.LOCKNAME_accesscount_{{ code_slot | string }}"
-          value: "0"
-      - service: input_datetime.set_datetime
-        data_template:
-          entity_id: "input_datetime.LOCKNAME_start_date_{{ code_slot | string }}"
-          date: >
-            {{ (("1980-01-01") | timestamp_custom("%Y %m %d")) }}
-      - service: input_datetime.set_datetime
-        data_template:
-          entity_id: "input_datetime.LOCKNAME_end_date_{{ code_slot | string }}"
-          date: >
-            {{ (("1980-01-01") | timestamp_custom("%Y %m %d")) }} 
-      - service: input_boolean.turn_off
-        data_template:
-          entity_id: "input_boolean.LOCKNAME_daterange_{{ code_slot | string }}"
-      - service: input_boolean.turn_off
-        data_template:
-          entity_id: "input_boolean.LOCKNAME_accesslimit_{{ code_slot | string }}"
-      - service: input_boolean.turn_off
-        data_template:
-          entity_id: "input_boolean.LOCKNAME_reset_codeslot_{{ code_slot | string }}"
-      # Loop through each day of the week and reset the entities related to each one
-      - repeat:
-          count: 7
-          sequence:
-            - service: input_datetime.set_datetime
-              data_template:
-                entity_id: "input_datetime.LOCKNAME_{{ days[repeat.index - 1] }}_start_date_{{ code_slot | string }}"
-                time: "{{ '00:00' | timestamp_custom('%H:%M') }}"
-            - service: input_datetime.set_datetime
-              data_template:
-                entity_id: "input_datetime.LOCKNAME_{{ days[repeat.index - 1] }}_end_date_{{ code_slot | string }}"
-                time: "{{ '00:00' | timestamp_custom('%H:%M') }}"
-            - service: input_boolean.turn_on
-              data_template:
-                entity_id: "input_boolean.LOCKNAME_{{ days[repeat.index - 1] }}_{{ code_slot | string }}"
-            - service: input_boolean.turn_on
-              data_template:
-                entity_id: "input_boolean.LOCKNAME_{{ days[repeat.index - 1] }}_inc_{{ code_slot | string }}"
-          
 ###################  automation:  ####################
 automation:
   - alias: CASE_LOCK_NAME Lock Notifications
@@ -216,8 +150,9 @@ automation:
     action:
       - repeat:
           sequence:
-            - service: script.LOCKNAME_reset_codeslot
+            - service: keymaster.reset_code_slot
               data_template:
+                lockname: LOCKNAME
                 code_slot: "{{ code_slots[repeat.index - 1] | string }}"
           until: "{{ repeat.index == code_slots | length }}"
       - service: input_boolean.turn_off
