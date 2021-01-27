@@ -166,17 +166,6 @@ input_boolean:
 
 ################  automation:  #################
 automation:
-          
-- alias: LOCKNAME_reset_codeslot_TEMPLATENUM
-  trigger:
-    entity_id: input_boolean.LOCKNAME_reset_codeslot_TEMPLATENUM
-    platform: state
-    to: 'on'
-  action:
-    - service: keymaster.reset_code_slot
-      data_template:
-        code_slot: TEMPLATENUM
-        lockname: LOCKNAME
 
 - alias: LOCKNAME_synchronize_codeslot_TEMPLATENUM
   initial_state: true
@@ -221,6 +210,17 @@ automation:
               data_template:
                 entity_id: LOCKENTITYNAME
                 code_slot: "{{ TEMPLATENUM }}"
+
+- alias: LOCKNAME_reset_codeslot_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.LOCKNAME_reset_codeslot_TEMPLATENUM
+    platform: state
+    to: 'on'
+  action:
+    - service: keymaster.reset_code_slot
+      data_template:
+        code_slot: TEMPLATENUM
+        lockname: LOCKNAME
 
 ################  binary_sensor:  #################
 binary_sensor:
