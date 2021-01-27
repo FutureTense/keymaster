@@ -4,7 +4,7 @@ from homeassistant.const import STATE_LOCKED, STATE_UNLOCKED
 DOMAIN = "keymaster"
 VERSION = "0.0.01"
 ISSUE_URL = "https://github.com/FutureTense/keypaster"
-PLATFORMS = ["binary_sensor", "sensor"]
+PLATFORMS = ["sensor"]
 ZWAVE_NETWORK = "zwave_network"
 MANAGER = "manager"
 
@@ -56,29 +56,6 @@ DEFAULT_START = 1
 DEFAULT_GENERATE = True
 DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
 DEFAULT_HIDE_PINS = False
-
-# Connected sensor maps
-CONNECTED_STATE_MAP = {
-    True: {
-        True: "Connected",
-        False: "Connecting",
-    },
-    False: {
-        True: "Disconnected",
-        False: "Disconnecting",
-    },
-}
-
-CONNECTED_ICON_MAP = {
-    True: {
-        True: "mdi:folder-key",
-        False: "mdi:folder-key-network",
-    },
-    False: {
-        True: "mdi:folder-open",
-        False: "mdi:wiper-watch",
-    },
-}
 
 # Action maps
 ACTION_MAP = {

@@ -23,7 +23,6 @@ from homeassistant.components.input_text import (
 )
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.persistent_notification import (
     ATTR_MESSAGE,
     ATTR_NOTIFICATION_ID,
@@ -31,6 +30,7 @@ from homeassistant.components.persistent_notification import (
     DOMAIN as NOTIFICATION_DOMAIN,
     SERVICE_CREATE,
 )
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.const import (
     ATTR_DATE,
     ATTR_ENTITY_ID,
