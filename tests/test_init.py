@@ -2,7 +2,6 @@
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
-from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD
@@ -19,7 +18,6 @@ async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
     await hass.async_block_till_done()
 
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
-    assert len(hass.states.async_entity_ids(BINARY_SENSOR_DOMAIN)) == 6
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
 
