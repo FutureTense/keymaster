@@ -31,6 +31,7 @@ from homeassistant.components.persistent_notification import (
     SERVICE_CREATE,
 )
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.const import (
     ATTR_DATE,
     ATTR_ENTITY_ID,
@@ -299,6 +300,7 @@ def generate_package_files(hass: HomeAssistant, name: Optional[str]) -> None:
         INPUT_NUM_DOMAIN,
         INPUT_TEXT_DOMAIN,
         SCRIPT_DOMAIN,
+        TEMPLATE_DOMAIN,
     ]:
         hass.services.call(domain, SERVICE_RELOAD)
     hass.services.call(NOTIFICATION_DOMAIN, SERVICE_CREATE, notify_data)
