@@ -18,8 +18,8 @@ async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 12
-    assert len(hass.states.async_entity_ids(BINARY_SENSOR_DOMAIN)) == 12
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
+    assert len(hass.states.async_entity_ids(BINARY_SENSOR_DOMAIN)) == 6
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
 
@@ -39,7 +39,7 @@ async def test_unload_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 12
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
 
@@ -61,6 +61,6 @@ async def test_setup_migration_with_old_path(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 12
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
