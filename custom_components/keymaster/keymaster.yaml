@@ -178,6 +178,50 @@ automation:
         code_slot: TEMPLATENUM
         lockname: LOCKNAME
 
+- alias: LOCKNAME_synchronize_codeslot_TEMPLATENUM
+  initial_state: true
+  trigger:
+    - platform: state
+      entity_id: "binary_sensor.LOCKNAME_pin_synched_TEMPLATENUM"
+      to: 'off'
+    - platform: state
+      entity_id: "input_boolean.keymaster_allow_automation_execution"
+      to: 'on'
+    - platform: state
+      entity_id: "sensor.LOCKNAME_code_slot_TEMPLATENUM"
+  condition:
+    - condition: state
+      entity_id: "input_boolean.keymaster_allow_automation_execution"
+      state: "on"
+    - condition: state
+      entity_id: "binary_sensor.LOCKNAME_pin_synched_TEMPLATENUM"
+      state: "off"
+    - condition: template
+      value_template: "{{ not is_state('sensor.LOCKNAME_code_slot_TEMPLATENUM', 'unavailable') }}"
+  action:
+    - choose:
+
+        # The code should be added to the lock's slot
+        - conditions:
+            - condition: template
+              value_template: "{{ is_state('binary_sensor.LOCKNAME_active_TEMPLATENUM', 'on') }}"
+          sequence:
+            - service: keymaster.add_code
+              data_template:
+                entity_id: LOCKENTITYNAME
+                code_slot: "{{ TEMPLATENUM }}"
+                usercode: "{{ states('input_text.LOCKNAME_pin_TEMPLATENUM').strip() }}"
+
+        # The code should be removed from the lock's slot
+        - conditions:
+            - condition: template
+              value_template: "{{ is_state('binary_sensor.LOCKNAME_active_TEMPLATENUM', 'off') }}"
+          sequence:
+            - service: keymaster.clear_code
+              data_template:
+                entity_id: LOCKENTITYNAME
+                code_slot: "{{ TEMPLATENUM }}"
+
 ################  binary_sensor:  #################
 binary_sensor:
 
