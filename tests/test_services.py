@@ -1,7 +1,7 @@
 """ Test keymaster services """
-from unittest import mock
 from unittest.mock import patch
 
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster import (
@@ -18,7 +18,7 @@ from .common import setup_ozw
 from tests.const import CONFIG_DATA
 
 
-async def test_generate_package_files(hass, caplog):
+async def test_generate_package_files(hass):
     """Test generate_package_files"""
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
@@ -31,10 +31,11 @@ async def test_generate_package_files(hass, caplog):
     servicedata = {
         "lockname": "backdoor",
     }
-    await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
+    with pytest.raises(ValueError):
+        await hass.services.async_call(
+            DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata, blocking=True
+        )
     await hass.async_block_till_done()
-
-    assert "DEBUG conf_lock: frontdoor name: backdoor" in caplog.text
 
     # TODO: Fix os.makedirs mock to produce exception
     # with patch("custom_components.keymaster.services.os", autospec=True) as mock_os:

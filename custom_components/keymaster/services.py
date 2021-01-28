@@ -8,7 +8,6 @@ from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
@@ -167,10 +166,19 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
         raise ZWaveIntegrationNotConfiguredError
 
 
-def generate_package_files(
-    hass: HomeAssistant, config_entry: ConfigEntry, name: str
-) -> None:
+def generate_package_files(hass: HomeAssistant, name: str) -> None:
     """Generate the package files."""
+    config_entry = next(
+        (
+            hass.config_entries.async_get_entry(entry_id)
+            for entry_id in hass.data[DOMAIN]
+            if hass.data[DOMAIN][entry_id][PRIMARY_LOCK].lock_name == name
+        ),
+        None,
+    )
+    if not config_entry:
+        raise ValueError(f"Couldn't find existing lock entry for {name}")
+
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     lockname = primary_lock.lock_name
 
