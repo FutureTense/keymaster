@@ -29,6 +29,8 @@ from .const import (
     CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
+    DEFAULT_ALARM_LEVEL_SENSOR,
+    DEFAULT_ALARM_TYPE_SENSOR,
     DEFAULT_CODE_SLOTS,
     DEFAULT_DOOR_SENSOR,
     DEFAULT_GENERATE,
@@ -190,22 +192,33 @@ def _get_schema(
                 CONF_SENSOR_NAME,
                 default=_get_default(CONF_SENSOR_NAME, DEFAULT_DOOR_SENSOR),
             ): vol.In(
-                _get_entities(
-                    hass, BINARY_DOMAIN, extra_entities=["binary_sensor.fake"]
-                )
+                _get_entities(hass, BINARY_DOMAIN, extra_entities=[DEFAULT_DOOR_SENSOR])
             ),
             vol.Optional(
                 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-                default=_get_default(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
+                default=_get_default(
+                    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, DEFAULT_ALARM_LEVEL_SENSOR
+                ),
             ): vol.In(
-                _get_entities(hass, SENSORS_DOMAIN, search=["alarm_level", "user_code"])
+                _get_entities(
+                    hass,
+                    SENSORS_DOMAIN,
+                    search=["alarm_level", "user_code"],
+                    extra_entities=[DEFAULT_ALARM_LEVEL_SENSOR],
+                )
             ),
             vol.Optional(
                 CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-                default=_get_default(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
+                default=_get_default(
+                    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+                    DEFAULT_ALARM_TYPE_SENSOR,
+                ),
             ): vol.In(
                 _get_entities(
-                    hass, SENSORS_DOMAIN, search=["alarm_type", "access_control"]
+                    hass,
+                    SENSORS_DOMAIN,
+                    search=["alarm_type", "access_control"],
+                    extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
                 )
             ),
             vol.Required(
@@ -284,7 +297,7 @@ async def _start_config_flow(
 
         # Update options if no errors
         if not errors:
-            user_input.pop(CONF_CHILD_LOCKS_FILE)
+            user_input.pop(CONF_CHILD_LOCKS_FILE, None)
             if child_locks:
                 user_input[CONF_CHILD_LOCKS] = child_locks
             return cls.async_create_entry(title=title, data=user_input)
