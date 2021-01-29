@@ -134,9 +134,13 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
         }
 
         try:
-            await hass.services.async_call(ZWAVE_JS_DOMAIN, CLEAR_USERCODE, servicedata)
+            await hass.services.async_call(
+                ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
+            )
         except Exception as err:
-            _LOGGER.error("Error calling ozw.clear_usercode service call: %s", str(err))
+            _LOGGER.error(
+                "Error calling zwave_js.clear_lock_usercode service call: %s", str(err)
+            )
 
     elif using_ozw(hass):
         # workaround to call dummy slot
