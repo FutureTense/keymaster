@@ -2,7 +2,6 @@
 import logging
 import os
 import random
-from typing import Dict
 
 from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 
@@ -11,11 +10,11 @@ from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import (
     ATTR_MESSAGE,
-    ATTR_NOTIFICATION_ID,
     ATTR_TITLE,
     DOMAIN as NOTIFICATION_DOMAIN,
     SERVICE_CREATE,
 )
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -195,6 +194,19 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     lockname = primary_lock.lock_name
 
+    hass.services.call(
+        NOTIFICATION_DOMAIN,
+        SERVICE_CREATE,
+        {
+            ATTR_TITLE: f"{DOMAIN.title()} - Starting package file generation",
+            ATTR_MESSAGE: (
+                f"Package file generation for `{lockname}` has started. Once complete, "
+                "we will attempt to automatically update Home Assistant to avoid "
+                "requiring a full restart."
+            ),
+        },
+    )
+
     _LOGGER.debug("Starting file generation...")
 
     _LOGGER.debug("DEBUG conf_lock: %s name: %s", lockname, name)
@@ -282,18 +294,16 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
                 input_path, in_f, output_path, out_f, replacements, write_mode
             )
 
-    notify_data = {
-        ATTR_TITLE: f"{DOMAIN.title()} package generation complete!",
-        ATTR_NOTIFICATION_ID: f"{DOMAIN}_generate_package_files",
-    }
-
     if reload_package_platforms(hass):
         hass.services.call(
             NOTIFICATION_DOMAIN,
             SERVICE_CREATE,
             {
-                **notify_data,
-                ATTR_MESSAGE: "Any changes have been hot reloaded, no restart needed",
+                ATTR_TITLE: f"{DOMAIN.title()} - Package file generation complete!",
+                ATTR_MESSAGE: (
+                    f"Package generation for `{lockname}` complete!\n\n"
+                    "All changes have been automatically applied, so no restart is needed."
+                ),
             },
         )
         _LOGGER.debug(
@@ -304,8 +314,12 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
             NOTIFICATION_DOMAIN,
             SERVICE_CREATE,
             {
-                **notify_data,
-                ATTR_MESSAGE: "Changes couldn't be hot reloaded, Home Assistant restart needed",
+                ATTR_TITLE: f"{DOMAIN.title()} - Package file generation complete!",
+                ATTR_MESSAGE: (
+                    f"Package generation for `{lockname}` complete!\n\n"
+                    "Changes couldn't be automatically applied, so a Home Assistant "
+                    "restart is needed to fully apply the changes."
+                ),
             },
         )
         _LOGGER.debug("Package generation complete, Home Assistant restart needed")

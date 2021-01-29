@@ -33,8 +33,6 @@ from .const import (
     CONF_LOCK_NAME,
     CONF_PATH,
     CONF_SENSOR_NAME,
-    CONF_SLOTS,
-    CONF_START,
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
@@ -53,7 +51,6 @@ from .helpers import (
     delete_lock_and_base_folder,
     get_node_id,
     handle_state_change,
-    remove_generated_entities,
     using_ozw,
     using_zwave,
 )
@@ -237,20 +234,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
-
     unload_ok = await hass.config_entries.async_forward_entry_unload(
         config_entry, PLATFORM
     )
 
     if unload_ok:
-        # Remove all generated helper entries
-        await remove_generated_entities(
-            hass,
-            config_entry,
-            range(config_entry.data[CONF_START], config_entry.data[CONF_SLOTS] + 1),
-            True,
-        )
-
         # Remove all package files and the base folder if needed
         await hass.async_add_executor_job(
             delete_lock_and_base_folder, hass, config_entry
@@ -295,17 +283,6 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
 async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Update listener."""
-    # Get current code slots and new code slots, and remove entities for current code
-    # slots that are being removed
-    curr_slots = range(config_entry.data[CONF_START], config_entry.data[CONF_SLOTS] + 1)
-    new_slots = range(
-        config_entry.options[CONF_START], config_entry.options[CONF_SLOTS] + 1
-    )
-
-    await remove_generated_entities(
-        hass, config_entry, list(set(curr_slots) - set(new_slots)), False
-    )
-
     # If the path has changed delete the old base folder, otherwise if the lock name
     # has changed only delete the old lock folder
     if config_entry.options[CONF_PATH] != config_entry.data[CONF_PATH]:
