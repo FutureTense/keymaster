@@ -11,7 +11,6 @@ from custom_components.keymaster import (
     SERVICE_REFRESH_CODES,
 )
 from custom_components.keymaster.const import DOMAIN
-from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 
 from .common import setup_ozw
 
