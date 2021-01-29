@@ -90,7 +90,7 @@ async def add_code(
                 ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
             )
         except Exception as err:
-            _LOGGER.error("Error calling ozw.set_usercode service call: %s", str(err))
+            _LOGGER.error("Error calling zwave_js.set_lock_usercode service call: %s", str(err))
             return
 
     elif using_ozw(hass):
