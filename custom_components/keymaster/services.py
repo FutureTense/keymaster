@@ -2,13 +2,32 @@
 import logging
 import os
 import random
+from typing import Dict
 
 from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 
-from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
+from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
+from homeassistant.exceptions import ServiceNotFound
+from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
+from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
+from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
+from homeassistant.components.input_text import (
+    DOMAIN as IN_TXT_DOMAIN,
+    MODE_PASSWORD,
+    MODE_TEXT,
+)
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.components.persistent_notification import (
+    ATTR_MESSAGE,
+    ATTR_NOTIFICATION_ID,
+    ATTR_TITLE,
+    DOMAIN as NOTIFICATION_DOMAIN,
+    SERVICE_CREATE,
+)
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
+from homeassistant.const import ATTR_ENTITY_ID, SERVICE_RELOAD
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -269,4 +288,44 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
                 input_path, in_f, output_path, out_f, replacements, write_mode
             )
 
-    _LOGGER.debug("Package generation complete")
+    need_restart = False
+
+    def notify_data(msg: str) -> Dict[str, str]:
+        """Return notify service payload."""
+        return {
+            ATTR_TITLE: f"{DOMAIN.title()} package generation complete!",
+            ATTR_NOTIFICATION_ID: f"{DOMAIN}_generate_package_files",
+            ATTR_MESSAGE: msg,
+        }
+
+    for domain in [
+        AUTO_DOMAIN,
+        IN_BOOL_DOMAIN,
+        IN_DT_DOMAIN,
+        IN_NUM_DOMAIN,
+        IN_TXT_DOMAIN,
+        SCRIPT_DOMAIN,
+        TEMPLATE_DOMAIN,
+    ]:
+        try:
+            hass.services.call(domain, SERVICE_RELOAD, blocking=True)
+        except ServiceNotFound:
+            need_restart = True
+            break
+
+    if need_restart:
+        hass.services.call(
+            NOTIFICATION_DOMAIN,
+            SERVICE_CREATE,
+            notify_data(
+                "Please restart your Home Assistant instance so the files can be picked up"
+            ),
+        )
+        _LOGGER.debug("Package generation complete, Home Assistant restart needed")
+    else:
+        hass.services.call(
+            NOTIFICATION_DOMAIN,
+            SERVICE_CREATE,
+            notify_data("Any changes have been hot reloaded, so no restart needed!"),
+        )
+        _LOGGER.debug("Package generation complete and all changes have been hot reloaded")
