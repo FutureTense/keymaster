@@ -1,4 +1,5 @@
 """Helpers for keymaster."""
+import asyncio
 from datetime import timedelta
 import logging
 import os
@@ -6,16 +7,20 @@ from typing import Dict, List, Optional, Union
 
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
+from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
+from homeassistant.exceptions import ServiceNotFound
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
 from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
 from homeassistant.components.input_select import DOMAIN as IN_SELECT_DOMAIN
 from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_STATE, STATE_LOCKED, STATE_UNLOCKED
+from homeassistant.const import ATTR_STATE, STATE_LOCKED, SERVICE_RELOAD, STATE_UNLOCKED
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_registry import async_get_registry
 from homeassistant.util import dt as dt_util
@@ -236,3 +241,28 @@ def handle_state_change(
             ATTR_CODE_SLOT_NAME: code_slot_name,
         },
     )
+
+
+def reload_package_platforms(self, hass: HomeAssistant) -> bool:
+    """Reload package platforms to pick up any changes to package files."""
+    return asyncio.run_coroutine_threadsafe(
+        async_reload_package_platforms(hass), hass.loop
+    ).result()
+
+
+async def async_reload_package_platforms(self, hass: HomeAssistant) -> bool:
+    """Reload package platforms to pick up any changes to package files."""
+    for domain in [
+        AUTO_DOMAIN,
+        IN_BOOL_DOMAIN,
+        IN_DT_DOMAIN,
+        IN_NUM_DOMAIN,
+        IN_TXT_DOMAIN,
+        SCRIPT_DOMAIN,
+        TEMPLATE_DOMAIN,
+    ]:
+        try:
+            await hass.services.async_call(domain, SERVICE_RELOAD, blocking=True)
+        except ServiceNotFound:
+            return False
+    return True

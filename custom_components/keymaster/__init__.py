@@ -48,6 +48,7 @@ from .const import (
 )
 from .exceptions import NoNodeSpecifiedError, ZWaveIntegrationNotConfiguredError
 from .helpers import (
+    async_reload_package_platforms,
     delete_folder,
     delete_lock_and_base_folder,
     get_node_id,
@@ -254,6 +255,8 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         await hass.async_add_executor_job(
             delete_lock_and_base_folder, hass, config_entry
         )
+
+        await async_reload_package_platforms(hass)
 
         # Unsubscribe to any listeners
         for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(
