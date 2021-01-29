@@ -1,5 +1,5 @@
-name-template: "$RESOLVED_VERSION"
-tag-template: "$RESOLVED_VERSION"
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
 change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
 sort-direction: ascending
 categories:
@@ -18,7 +18,7 @@ categories:
       - "bugfix"
       - "bug"
 template: |
-  [![Downloads for this release](https://img.shields.io/github/downloads/FutureTense/keymaster/$RESOLVED_VERSION/total.svg)](https://github.com/FutureTense/keymaster/releases/$RESOLVED_VERSION)
+  [![Downloads for this release](https://img.shields.io/github/downloads/FutureTense/keymaster/v$RESOLVED_VERSION/total.svg)](https://github.com/FutureTense/keymaster/releases/v$RESOLVED_VERSION)
 
   $CHANGES
 
