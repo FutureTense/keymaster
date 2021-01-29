@@ -128,19 +128,6 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
     _LOGGER.debug("Attempting to call clear_usercode...")
 
     if using_zwave_js(hass):
-        # workaround to call dummy slot
-        servicedata = {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_CODE_SLOT: 999,
-        }
-
-        try:
-            await hass.services.async_call(
-                ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
-            )
-        except Exception as err:
-            _LOGGER.error("Error calling ozw.clear_usercode service call: %s", str(err))
-
         servicedata = {
             ATTR_ENTITY_ID: entity_id,
             ATTR_CODE_SLOT: code_slot,
