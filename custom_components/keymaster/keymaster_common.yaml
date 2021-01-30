@@ -73,12 +73,12 @@ script:
         data_template:
           entity_id: "input_datetime.start_date_LOCKNAME_{{ code_slot | string }}"
           date: >
-            {{ (("1980-01-01") | timestamp_custom("%Y %m %d")) }}
+            {{ now().strftime('%Y-%m-%d') }}
       - service: input_datetime.set_datetime
         data_template:
           entity_id: "input_datetime.end_date_LOCKNAME_{{ code_slot | string }}"
           date: >
-            {{ (("1980-01-01") | timestamp_custom("%Y %m %d")) }} 
+            {{ now().strftime('%Y-%m-%d') }} 
       - service: input_boolean.turn_off
         data_template:
           entity_id: "input_boolean.daterange_LOCKNAME_{{ code_slot | string }}"
