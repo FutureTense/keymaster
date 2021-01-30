@@ -113,9 +113,12 @@ async def generate_keymaster_locks(
         for lock in [primary_lock, *child_locks]:
             lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
             lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
-            node_id = int(lock_dev_reg_entry.identifiers[0][1].split("-")[1])
+            node_id: int = 0
+            for identifier in lock_dev_reg_entry.identifiers:
+                if identifier[0] == ZWAVE_JS_DOMAIN:
+                    node_id = int(identifier[1].split("-")[1])
             lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-            client = hass.data[DOMAIN][lock_config_entry_id][DATA_CLIENT]
+            client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][DATA_CLIENT]
             lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
 
     return primary_lock, child_locks
