@@ -105,7 +105,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     config_entry.add_update_listener(update_listener)
 
-    primary_lock, child_locks = generate_keymaster_locks(hass, config_entry)
+    primary_lock, child_locks = await generate_keymaster_locks(hass, config_entry)
 
     hass.data[DOMAIN][config_entry.entry_id] = {
         PRIMARY_LOCK: primary_lock,
@@ -310,7 +310,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         data=new_data,
     )
 
-    primary_lock, child_locks = generate_keymaster_locks(hass, config_entry)
+    primary_lock, child_locks = await generate_keymaster_locks(hass, config_entry)
 
     hass.data[DOMAIN][config_entry.entry_id].update(
         {
