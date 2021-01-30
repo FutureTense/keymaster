@@ -11,21 +11,28 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v1
-
-      - name: "Set version numbmer"
+      - name: Get Version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+      - name: Update versions
         run: |
-          sed -i '/VERSION = /c\VERSION = "${{ github.ref }}"' /home/runner/work/keymaster/keymaster/custom_components/keymaster/const.py
+          sed -i '/VERSION = /c\VERSION = "${{ steps.get_version.outputs.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
+          sed -i '/version/c\     \"version\" : \"${{ steps.get_version.outputs.VERSION }}\",' ${{ github.workspace }}/custom_components/keymaster/manifest.json
+      - name: Commit Changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Bump version for release
+          branch: main
       # Pack the keymaster dir as a zip and upload to the release
       - name: ZIP Keymaster Dir
         run: |
-          cd /home/runner/work/keymaster/keymaster/custom_components/keymaster
+          cd ${{ github.workspace }}/custom_components/keymaster
           zip keymaster.zip -r ./
       - name: Upload zip to release
         uses: svenstaro/upload-release-action@v1-release
-
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: /home/runner/work/keymaster/keymaster/custom_components/keymaster/keymaster.zip
+          file: ${{ github.workspace }}/custom_components/keymaster/keymaster.zip
           asset_name: keymaster.zip
           tag: ${{ github.ref }}
           overwrite: true
