@@ -286,11 +286,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
                 input_path, in_f, output_path, out_f, replacements, write_mode
             )
 
-    if (
-        reload_package_platforms(hass)
-        and hass.states.get("sensor.time")  # TODO: Remove if we get rid of sensor.time
-        and hass.states.get("sensor.date")  # TODO:    and sensor.date requirements
-    ):
+    if reload_package_platforms(hass):
         create(
             hass,
             (
