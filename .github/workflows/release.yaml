@@ -17,7 +17,7 @@ jobs:
       - name: Update versions
         run: |
           sed -i '/VERSION = /c\VERSION = "${{ steps.get_version.outputs.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
-          sed -i '/version/c\     \"version\" : \"${{ steps.get_version.outputs.VERSION }}\",' ${{ github.workspace }}/custom_components/keymaster/manifest.json
+          sed -i '/version/c\  \"version\" : \"${{ steps.get_version.outputs.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
       - name: Commit files
         run: |
           if [ $(git diff HEAD | wc -l) -gt 0 ]
