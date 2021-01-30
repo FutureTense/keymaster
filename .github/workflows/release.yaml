@@ -17,7 +17,7 @@ jobs:
       - name: Update versions
         run: |
           sed -i '/VERSION = /c\VERSION = "${{ steps.get_version.outputs.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
-          sed -i '/version/c\  \"version\" : \"${{ steps.get_version.outputs.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
+          sed -i '/version/c\  \"version\": \"${{ steps.get_version.outputs.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
       # Pack the keymaster dir as a zip and upload to the release
       - name: ZIP Keymaster Dir
         run: |
