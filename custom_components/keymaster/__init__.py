@@ -418,6 +418,8 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     data[code_slot] = usercode
 
+            return data
+
         # pull the codes for ozw
         elif using_ozw(self.hass):
             node_id = get_node_id(self.hass, self._lock.lock_entity_id)
