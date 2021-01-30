@@ -9,6 +9,7 @@ from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
+from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Config, Event, HomeAssistant, ServiceCall, State
@@ -234,6 +235,19 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
+    lockname = config_entry.data[CONF_LOCK_NAME]
+    notification_id = f"{DOMAIN}_{lockname}_unload"
+    await async_create(
+        hass,
+        (
+            f"Removing `{lockname}` and all of the files that were generated for it. "
+            "This may take some time so don't panic. This message will automatically "
+            "clear when removal is complete."
+        ),
+        title=f"{DOMAIN.title()} - Removing `{lockname}`",
+        notification_id=notification_id,
+    )
+
     unload_ok = await hass.config_entries.async_forward_entry_unload(
         config_entry, PLATFORM
     )
@@ -254,6 +268,8 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
         hass.data[DOMAIN].pop(config_entry.entry_id)
+
+    await async_dismiss(hass, notification_id)
 
     return unload_ok
 
