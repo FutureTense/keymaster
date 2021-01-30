@@ -258,8 +258,8 @@ binary_sensor:
         {% set is_current_day_enabled = is_state('input_boolean.' + current_day + '_LOCKNAME_TEMPLATENUM', 'on') %}
 
         {## Check if access limit is enabled and if there are access counts left. ##}
-        {% set is_access_limit_enabled = is_state('input_boolean.LOCKNAME_accesslimit_TEMPLATENUM', 'on') %}
-        {% set is_access_count_valid = states('input_number.LOCKNAME_accesscount_TEMPLATENUM') | int > 0 %}
+        {% set is_access_limit_enabled = is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'on') %}
+        {% set is_access_count_valid = states('input_number.accesscount_LOCKNAME_TEMPLATENUM') | int > 0 %}
 
         {## Code slot is active if slot is enabled + current day is enabled + date range is not enabled or current date is within date range ##}
         {## + time range is not enabled or current time is within time range (based on include/exclude) + access limit is not enabled or there are more access counts left ##}
