@@ -181,10 +181,10 @@ def _get_schema(
             ): vol.In(_get_entities(hass, LOCK_DOMAIN)),
             vol.Required(
                 CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)
-            ): vol.Coerce(int),
+            ): vol.All(vol.Coerce(int), vol.Range(min=1)),
             vol.Required(
                 CONF_START, default=_get_default(CONF_START, DEFAULT_START)
-            ): vol.Coerce(int),
+            ): vol.All(vol.Coerce(int), vol.Range(min=1)),
             vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
             vol.Optional(
                 CONF_SENSOR_NAME,
