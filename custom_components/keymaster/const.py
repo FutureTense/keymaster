@@ -55,6 +55,8 @@ DEFAULT_PACKAGES_PATH = "packages/keymaster/"
 DEFAULT_START = 1
 DEFAULT_GENERATE = True
 DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
+DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"
+DEFAULT_ALARM_TYPE_SENSOR = "sensor.fake"
 DEFAULT_HIDE_PINS = False
 
 # Action maps

@@ -37,9 +37,7 @@ async def test_template_sensors(hass: HomeAssistant):
 
     keymaster_file = json.loads(
         json.dumps(
-            await hass.async_add_executor_job(
-                load_yaml, f"{FILE_PATH}/keymaster.yaml"
-            )
+            await hass.async_add_executor_job(load_yaml, f"{FILE_PATH}/keymaster.yaml")
         )
         .replace("LOCKNAME", "lockname")
         .replace("TEMPLATENUM", "templatenum")
@@ -47,9 +45,7 @@ async def test_template_sensors(hass: HomeAssistant):
 
     # Set a fixed point in time for the tests so that the tests make sense
     ts = datetime(2021, 1, 30, 12, 0, 0)
-    with patch(
-        "homeassistant.util.dt.now", return_value=ts
-    ):
+    with patch("homeassistant.util.dt.now", return_value=ts):
         await async_setup_component(hass, binary_sensor.DOMAIN, keymaster_file)
         await hass.async_block_till_done()
         await async_setup_component(hass, sensor.DOMAIN, keymaster_file)
@@ -228,9 +224,7 @@ async def test_rest_code_slots(hass):
 
     # Set a fixed point in time for the tests so that the tests make sense
     ts = datetime(2021, 1, 30, 12, 0, 0)
-    with patch(
-        "homeassistant.util.dt.now", return_value=ts
-    ):
+    with patch("homeassistant.util.dt.now", return_value=ts):
         await async_setup_component(hass, "automation", keymaster_file)
         await hass.async_block_till_done()
         await async_setup_component(hass, "script", keymaster_file)
