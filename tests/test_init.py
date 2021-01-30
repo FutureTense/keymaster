@@ -1,7 +1,4 @@
 """ Test keymaster init """
-from unittest.mock import call, patch
-
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
@@ -28,7 +25,6 @@ async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
 async def test_unload_entry(
     hass,
     mock_delete_folder,
-    mock_get_entities_to_remove,
     mock_delete_lock_and_base_folder,
 ):
     """Test unloading entities."""

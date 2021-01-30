@@ -1,6 +1,5 @@
 """ Fixtures for keymaster tests. """
 import json
-from unittest import mock
 from unittest.mock import patch
 
 import pytest
@@ -24,16 +23,6 @@ def mock_get_entities():
             "binary_sensor.frontdoor",
         ]
         yield mock_get_entities
-
-
-@pytest.fixture()
-def mock_get_entities_to_remove():
-    """Mock email data update class values."""
-    with patch(
-        "custom_components.keymaster.helpers._get_entities_to_remove", autospec=True
-    ) as mock_get_entities_to_remove:
-        mock_get_entities_to_remove.return_value = []
-        yield mock_get_entities_to_remove
 
 
 @pytest.fixture

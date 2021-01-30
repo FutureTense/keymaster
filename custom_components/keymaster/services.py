@@ -8,6 +8,7 @@ from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
+from homeassistant.components.persistent_notification import create
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
@@ -24,7 +25,13 @@ from .const import (
     PRIMARY_LOCK,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
-from .helpers import get_node_id, output_to_file_from_template, using_ozw, using_zwave
+from .helpers import (
+    get_node_id,
+    output_to_file_from_template,
+    reload_package_platforms,
+    using_ozw,
+    using_zwave,
+)
 from .lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
@@ -184,6 +191,16 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
 
     _LOGGER.debug("Starting file generation...")
 
+    create(
+        hass,
+        (
+            f"Package file generation for `{lockname}` has started. Once complete, we "
+            "will attempt to automatically update Home Assistant to avoid requiring "
+            "a full restart."
+        ),
+        title=f"{DOMAIN.title()} - Starting package file generation",
+    )
+
     _LOGGER.debug("DEBUG conf_lock: %s name: %s", lockname, name)
 
     if lockname != name:
@@ -277,4 +294,26 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
                 input_path, in_f, output_path, out_f, replacements, write_mode
             )
 
-    _LOGGER.debug("Package generation complete")
+    if reload_package_platforms(hass):
+        create(
+            hass,
+            (
+                f"Package generation for `{lockname}` complete!\n\n"
+                "All changes have been automatically applied, so no restart is needed."
+            ),
+            title=f"{DOMAIN.title()} - Package file generation complete!",
+        )
+        _LOGGER.debug(
+            "Package generation complete and all changes have been hot reloaded"
+        )
+    else:
+        create(
+            hass,
+            (
+                f"Package generation for `{lockname}` complete!\n\n"
+                "Changes couldn't be automatically applied, so a Home Assistant "
+                "restart is needed to fully apply the changes."
+            ),
+            title=f"{DOMAIN.title()} - Package file generation complete!",
+        )
+        _LOGGER.debug("Package generation complete, Home Assistant restart needed")

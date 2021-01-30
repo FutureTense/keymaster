@@ -1,25 +1,26 @@
 """Helpers for keymaster."""
+import asyncio
 from datetime import timedelta
 import logging
 import os
-from typing import Dict, List, Optional, Union
+from typing import Dict, Optional
 
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
+from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
 from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
-from homeassistant.components.input_select import DOMAIN as IN_SELECT_DOMAIN
 from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_STATE, STATE_LOCKED, STATE_UNLOCKED
+from homeassistant.const import ATTR_STATE, SERVICE_RELOAD, STATE_LOCKED, STATE_UNLOCKED
 from homeassistant.core import HomeAssistant, State
-from homeassistant.helpers.entity_registry import async_get_registry
+from homeassistant.exceptions import ServiceNotFound
 from homeassistant.util import dt as dt_util
-from homeassistant.util.yaml.loader import load_yaml
 
 from .const import (
     ACCESS_CONTROL,
@@ -78,62 +79,6 @@ def output_to_file_from_template(
                 line = line.replace(src, target)
             outfile.write(line)
     _LOGGER.debug("Completed generation of %s from %s", output_filename, input_filename)
-
-
-def _get_entities_to_remove(
-    lock_name: str,
-    file_path: str,
-    code_slots_to_remove: Union[List[int], range],
-    remove_common_file: bool,
-) -> List[str]:
-    """Gets list of entities to remove."""
-    output_path = os.path.join(file_path, lock_name)
-    filenames = [f"{lock_name}_keymaster_{x}.yaml" for x in code_slots_to_remove]
-    if remove_common_file:
-        filenames.append(f"{lock_name}_keymaster_common.yaml")
-
-    entities = []
-    for filename in filenames:
-        file_dict = load_yaml(os.path.join(output_path, filename))
-        # get all entities from all helper domains that exist in package files
-        for domain in (
-            IN_BOOL_DOMAIN,
-            IN_DT_DOMAIN,
-            IN_NUM_DOMAIN,
-            IN_SELECT_DOMAIN,
-            IN_TXT_DOMAIN,
-            TIMER_DOMAIN,
-        ):
-            entities.extend(
-                [f"{domain}.{ent_id}" for ent_id in file_dict.get(domain, {})]
-            )
-
-    return entities
-
-
-async def remove_generated_entities(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    code_slots_to_remove: Union[List[int], range],
-    remove_common_file: bool,
-) -> List[str]:
-    """Remove entities and return removed list."""
-    ent_reg = await async_get_registry(hass)
-    lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-
-    entities_to_remove = await hass.async_add_executor_job(
-        _get_entities_to_remove,
-        lock.lock_name,
-        os.path.join(hass.config.path(), config_entry.data[CONF_PATH]),
-        code_slots_to_remove,
-        remove_common_file,
-    )
-
-    for entity_id in entities_to_remove:
-        if ent_reg.async_get(entity_id):
-            ent_reg.async_remove(entity_id)
-
-    return entities_to_remove
 
 
 def delete_lock_and_base_folder(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
@@ -236,3 +181,28 @@ def handle_state_change(
             ATTR_CODE_SLOT_NAME: code_slot_name,
         },
     )
+
+
+def reload_package_platforms(hass: HomeAssistant) -> bool:
+    """Reload package platforms to pick up any changes to package files."""
+    return asyncio.run_coroutine_threadsafe(
+        async_reload_package_platforms(hass), hass.loop
+    ).result()
+
+
+async def async_reload_package_platforms(hass: HomeAssistant) -> bool:
+    """Reload package platforms to pick up any changes to package files."""
+    for domain in [
+        AUTO_DOMAIN,
+        IN_BOOL_DOMAIN,
+        IN_DT_DOMAIN,
+        IN_NUM_DOMAIN,
+        IN_TXT_DOMAIN,
+        SCRIPT_DOMAIN,
+        TEMPLATE_DOMAIN,
+    ]:
+        try:
+            await hass.services.async_call(domain, SERVICE_RELOAD, blocking=True)
+        except ServiceNotFound:
+            return False
+    return True
