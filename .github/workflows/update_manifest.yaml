@@ -18,7 +18,7 @@ jobs:
 
       - name: Update manifest.json
         run: |
-          sed -i '/version/c\     \"version\" : \"$VERSION\",' /home/runner/work/keymaster/manifest.json
+          sed -i '/version/c\     \"version\" : \"$VERSION\",' /home/runner/work/keymaster/keymaster/custom_components/keymaster/manifest.json
         env:
           VERSION: ${{ github.ref }}
 
