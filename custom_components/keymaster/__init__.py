@@ -237,7 +237,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     """Handle removal of an entry."""
     lockname = config_entry.data[CONF_LOCK_NAME]
     notification_id = f"{DOMAIN}_{lockname}_unload"
-    await async_create(
+    async_create(
         hass,
         (
             f"Removing `{lockname}` and all of the files that were generated for it. "
@@ -269,7 +269,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
         hass.data[DOMAIN].pop(config_entry.entry_id)
 
-    await async_dismiss(hass, notification_id)
+    async_dismiss(hass, notification_id)
 
     return unload_ok
 
