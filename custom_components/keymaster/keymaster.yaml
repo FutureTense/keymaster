@@ -283,11 +283,10 @@ binary_sensor:
         {%   set lockpin = "" %}
         {% endif %}
         {% if pin_active %}
-        {% set correct = localpin == lockpin %}
+          {{ localpin == lockpin }}
         {% else %}
-        {% set correct = lockpin == "" %}
+          {{ lockpin == "" }}
         {% endif %}
-        {{ correct }}
 
 ###################  sensor:  ####################  
 sensor:
@@ -314,16 +313,16 @@ sensor:
           {% endif %}
         {% endif %}
       icon_template: >
-        {% set pin_active = states('binary_sensor.active_LOCKNAME_TEMPLATENUM')  %}      
-        {% set synched = states('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM')  %}      
-        {% if pin_active == 'on' %}
-          {% if synched == 'on' %}
+        {% set pin_active = is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on')  %}      
+        {% set synched = is_state('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM', 'on')  %}      
+        {% if pin_active %}
+          {% if synched %}
             mdi:folder-key
           {% else %}
             mdi:folder-key-network
           {% endif %}
         {% else %}
-          {% if synched == 'on' %}
+          {% if synched %}
             mdi:folder-open
           {% else %}
             mdi:wiper-wash
