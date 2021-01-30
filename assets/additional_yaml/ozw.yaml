@@ -20,10 +20,6 @@ binary_sensor:
     - platform: template
       sensors:
 
-        allow_automation:
-          friendly_name: "Allow Automation"
-          value_template: "{{ is_state('input_boolean.allow_automation_execution', 'on') }}"   
-
         system_ready:
           friendly_name: "System ready"
           value_template: "{{ is_state('input_boolean.system_ready', 'on') }}"

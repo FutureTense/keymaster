@@ -143,7 +143,7 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
     action:
       - service: script.LOCKNAME_conditional_notify
@@ -160,7 +160,7 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
       - condition: template
         value_template: "{{ trigger.event.data.code_slot > 0 }}"
@@ -175,7 +175,7 @@ automation:
   - alias: CASE_LOCK_NAME Sensor Close
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
     trigger:
       entity_id: DOORSENSORENTITYNAME
@@ -191,7 +191,7 @@ automation:
   - alias: CASE_LOCK_NAME Sensor Opened
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
     trigger:
       entity_id: DOORSENSORENTITYNAME
@@ -210,7 +210,7 @@ automation:
       platform: state
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
       - condition: template
         value_template: >-
@@ -233,7 +233,7 @@ automation:
   - alias: CASE_LOCK_NAME Reset
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
     trigger:
       entity_id: input_boolean.LOCKNAME_reset_lock
@@ -253,7 +253,7 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "binary_sensor.allow_automation"
+        entity_id: "input_boolean.allow_automation_execution"
         state: "on"
       - condition: template
         # make sure decrementing access entries is enabled 
