@@ -401,13 +401,6 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         instance_id = 1  # default
         data = {}
         data[CONF_LOCK_ENTITY_ID] = self._lock.lock_entity_id
-        node_id = get_node_id(self.hass, self._lock.lock_entity_id)
-        if node_id is None:
-            return data
-        data[ATTR_NODE_ID] = node_id
-
-        if data[ATTR_NODE_ID] is None:
-            raise NoNodeSpecifiedError
 
         # # make button call
         # servicedata = {"entity_id": self._entity_id}
@@ -427,6 +420,13 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         # pull the codes for ozw
         elif using_ozw(self.hass):
+            node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+            if node_id is None:
+                return data
+            data[ATTR_NODE_ID] = node_id
+
+            if data[ATTR_NODE_ID] is None:
+                raise NoNodeSpecifiedError
             # Raises exception when node not found
             try:
                 node = get_node_from_manager(
@@ -457,6 +457,14 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         # pull codes for zwave
         elif using_zwave(self.hass):
+            node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+            if node_id is None:
+                return data
+            data[ATTR_NODE_ID] = node_id
+
+            if data[ATTR_NODE_ID] is None:
+                raise NoNodeSpecifiedError
+
             network = self.hass.data[ZWAVE_NETWORK]
             node = network.nodes.get(data[ATTR_NODE_ID])
             if not node:
