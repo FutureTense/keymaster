@@ -191,6 +191,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
 
     inputlockpinheader = f"input_text.{lockname}_pin"
     activelockheader = f"binary_sensor.active_{lockname}"
+    input_reset_code_slot_header = f"input_boolean.reset_codeslot_{lockname}"
     lockentityname = primary_lock.lock_entity_id
     sensorname = lockname
     doorsensorentityname = primary_lock.door_sensor_entity_id or ""
@@ -232,6 +233,12 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     inputlockpinheaders = ",".join(
         [f"{inputlockpinheader}_{x}" for x in range(start_from, code_slots + 1)]
     )
+    input_reset_code_slot_headers = ",".join(
+        [
+            f"{input_reset_code_slot_header}_{x}"
+            for x in range(start_from, code_slots + 1)
+        ]
+    )
 
     _LOGGER.debug("Creating common YAML files...")
     replacements = {
@@ -239,6 +246,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "CASE_LOCK_NAME": lockname,
         "INPUTLOCKPINHEADER": inputlockpinheaders,
         "ACTIVELOCKHEADER": activelockheaders,
+        "INPUT_RESET_CODE_SLOT_HEADER": input_reset_code_slot_headers,
         "LOCKENTITYNAME": lockentityname,
         "SENSORNAME": sensorname,
         "DOORSENSORENTITYNAME": doorsensorentityname,
