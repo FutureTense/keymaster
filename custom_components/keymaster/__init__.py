@@ -7,7 +7,7 @@ from openzwavemqtt.const import CommandClass
 from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
 from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
-from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_USERCODE
+from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
 from zwave_js_server.util.lock import get_usercodes
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
@@ -412,7 +412,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 code_slot = slot[ATTR_CODE_SLOT]
                 usercode = slot[ATTR_USERCODE]
                 _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
-                if usercode and "*" in str(usercode):
+                if not slot[ATTR_IN_USE]:
+                    data[code_slot] = ""
+                elif usercode and "*" in str(usercode):
                     _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
                     data[code_slot] = self._invalid_code(code_slot)
                 else:
