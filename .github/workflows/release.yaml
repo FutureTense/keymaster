@@ -18,15 +18,6 @@ jobs:
         run: |
           sed -i '/VERSION = /c\VERSION = "${{ steps.get_version.outputs.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
           sed -i '/version/c\  \"version\" : \"${{ steps.get_version.outputs.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
-      - name: Commit files
-        run: |
-          if [ $(git diff HEAD | wc -l) -gt 0 ]
-          then
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git config user.name "GitHub Actions"
-            git commit -a --amend --no-edit || true
-            git push --force || true
-          fi
       # Pack the keymaster dir as a zip and upload to the release
       - name: ZIP Keymaster Dir
         run: |
