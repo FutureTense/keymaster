@@ -16,7 +16,7 @@ jobs:
         run: |
           sed -i '/VERSION = /c\VERSION = "${{ github.ref }}"' /home/runner/work/keymaster/keymaster/custom_components/keymaster/const.py
 
-      - name: Update mainifest.json
+      - name: Update manifest.json
         run: |
           sed -i '/version/c\     \"version\" : \"$VERSION\",' /home/runner/work/keymaster/keymaster/manifest.json
         env:
