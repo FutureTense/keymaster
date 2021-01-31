@@ -5,8 +5,6 @@ import logging
 import os
 from typing import Dict, List, Optional, Tuple
 
-from openzwavemqtt.const import ATTR_CODE_SLOT
-
 from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
@@ -16,10 +14,6 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
-from homeassistant.components.zwave_js.const import (
-    DATA_CLIENT,
-    DOMAIN as ZWAVE_JS_DOMAIN,
-)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_STATE, SERVICE_RELOAD, STATE_LOCKED, STATE_UNLOCKED
 from homeassistant.core import HomeAssistant, State
@@ -55,6 +49,24 @@ from .const import (
 )
 from .lock import KeymasterLock
 
+# TODO: At some point we should assume that users have upgraded to the latest
+# Home Assistant instance and that we can safely import these, so we can move
+# these back to standard imports at that point.
+try:
+    from zwave_js_server.const import ATTR_CODE_SLOT
+    from homeassistant.components.zwave_js.const import (
+        DATA_CLIENT,
+        DOMAIN as ZWAVE_JS_DOMAIN,
+    )
+
+    zwave_supported = True
+except ModuleNotFoundError:
+    from openzwavemqtt.const import ATTR_CODE_SLOT
+
+    DATA_CLIENT = ""
+    ZWAVE_JS_DOMAIN = ""
+    zwave_supported = False
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -70,7 +82,7 @@ def using_zwave(hass: HomeAssistant) -> bool:
 
 def using_zwave_js(hass: HomeAssistant) -> bool:
     """Returns whether the zwave_js integration is configured."""
-    return ZWAVE_JS_DOMAIN in hass.data
+    return zwave_supported and ZWAVE_JS_DOMAIN in hass.data
 
 
 def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
