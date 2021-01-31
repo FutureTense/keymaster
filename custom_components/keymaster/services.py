@@ -4,17 +4,12 @@ import os
 import random
 from typing import Any, Dict
 
-from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
+from openzwavemqtt.const import CommandClass
 
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import create
-from homeassistant.components.zwave_js import DOMAIN as ZWAVE_JS_DOMAIN
-from homeassistant.components.zwave_js.lock import (
-    SERVICE_CLEAR_LOCK_USERCODE,
-    SERVICE_SET_LOCK_USERCODE,
-)
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
@@ -40,6 +35,23 @@ from .helpers import (
     using_zwave_js,
 )
 from .lock import KeymasterLock
+
+# TODO: At some point we should assume that users have upgraded to the latest
+# Home Assistant instance and that we can safely import these, so we can move
+# these back to standard imports at that point.
+try:
+    from zwave_js_server.const import ATTR_CODE_SLOT
+    from homeassistant.components.zwave_js import DOMAIN as ZWAVE_JS_DOMAIN
+    from homeassistant.components.zwave_js.lock import (
+        SERVICE_CLEAR_LOCK_USERCODE,
+        SERVICE_SET_LOCK_USERCODE,
+    )
+except ModuleNotFoundError:
+    from openzwavemqtt.const import ATTR_CODE_SLOT
+
+    ZWAVE_JS_DOMAIN = ""
+    SERVICE_CLEAR_LOCK_USERCODE = ""
+    SERVICE_SET_LOCK_USERCODE = ""
 
 _LOGGER = logging.getLogger(__name__)
 

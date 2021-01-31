@@ -7,8 +7,6 @@ from openzwavemqtt.const import CommandClass
 from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
 from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
-from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
-from zwave_js_server.util.lock import get_usercodes
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
@@ -59,6 +57,18 @@ from .helpers import (
 )
 from .lock import KeymasterLock
 from .services import add_code, clear_code, generate_package_files, refresh_codes
+
+# TODO: At some point we should assume that users have upgraded to the latest
+# Home Assistant instance and that we can safely import these, so we can move
+# these back to standard imports at that point.
+try:
+    from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
+    from zwave_js_server.util.lock import get_usercodes
+except ModuleNotFoundError:
+    from openzwavemqtt.const import ATTR_CODE_SLOT
+
+    ATTR_IN_USE = "in_use"
+    ATTR_USERCODE = "usercode"
 
 _LOGGER = logging.getLogger(__name__)
 
