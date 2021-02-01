@@ -2,7 +2,7 @@
 from homeassistant.const import STATE_LOCKED, STATE_UNLOCKED
 
 DOMAIN = "keymaster"
-VERSION = "0.0.8"
+VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
 PLATFORM = "sensor"
 ZWAVE_NETWORK = "zwave_network"
