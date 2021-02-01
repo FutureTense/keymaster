@@ -3,7 +3,7 @@ from datetime import timedelta
 import logging
 from typing import Any, Dict
 
-from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
+from openzwavemqtt.const import CommandClass
 from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
 from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
@@ -25,7 +25,6 @@ from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_CHILD_LOCKS,
     CONF_CHILD_LOCKS_FILE,
     CONF_ENTITY_ID,
     CONF_GENERATE,
@@ -33,7 +32,6 @@ from .const import (
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
-    CONF_SENSOR_NAME,
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
@@ -50,13 +48,27 @@ from .helpers import (
     async_reload_package_platforms,
     delete_folder,
     delete_lock_and_base_folder,
+    generate_keymaster_locks,
     get_node_id,
     handle_state_change,
     using_ozw,
     using_zwave,
+    using_zwave_js,
 )
 from .lock import KeymasterLock
 from .services import add_code, clear_code, generate_package_files, refresh_codes
+
+# TODO: At some point we should assume that users have upgraded to the latest
+# Home Assistant instance and that we can safely import these, so we can move
+# these back to standard imports at that point.
+try:
+    from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
+    from zwave_js_server.util.lock import get_usercodes
+except ModuleNotFoundError:
+    from openzwavemqtt.const import ATTR_CODE_SLOT
+
+    ATTR_IN_USE = "in_use"
+    ATTR_USERCODE = "usercode"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,22 +115,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     config_entry.add_update_listener(update_listener)
 
-    primary_lock = KeymasterLock(
-        config_entry.data[CONF_LOCK_NAME],
-        config_entry.data[CONF_LOCK_ENTITY_ID],
-        config_entry.data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-        config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-        config_entry.data[CONF_SENSOR_NAME],
-    )
-    child_locks = [
-        KeymasterLock(
-            lock_name,
-            lock[CONF_LOCK_ENTITY_ID],
-            lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-            lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-        )
-        for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
-    ]
+    primary_lock, child_locks = await generate_keymaster_locks(hass, config_entry)
+
     hass.data[DOMAIN][config_entry.entry_id] = {
         PRIMARY_LOCK: primary_lock,
         CHILD_LOCKS: child_locks,
@@ -322,27 +320,12 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         data=new_data,
     )
 
-    primary_lock = KeymasterLock(
-        config_entry.data[CONF_LOCK_NAME],
-        config_entry.data[CONF_LOCK_ENTITY_ID],
-        config_entry.data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-        config_entry.data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-        config_entry.data[CONF_SENSOR_NAME],
-    )
+    primary_lock, child_locks = await generate_keymaster_locks(hass, config_entry)
+
     hass.data[DOMAIN][config_entry.entry_id].update(
         {
             PRIMARY_LOCK: primary_lock,
-            CHILD_LOCKS: [
-                KeymasterLock(
-                    lock_name,
-                    lock[CONF_LOCK_ENTITY_ID],
-                    lock[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID],
-                    lock[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID],
-                )
-                for lock_name, lock in config_entry.data.get(
-                    CONF_CHILD_LOCKS, {}
-                ).items()
-            ],
+            CHILD_LOCKS: child_locks,
         }
     )
     servicedata = {"lockname": primary_lock.lock_name}
@@ -428,20 +411,36 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         instance_id = 1  # default
         data = {}
         data[CONF_LOCK_ENTITY_ID] = self._lock.lock_entity_id
-        node_id = get_node_id(self.hass, self._lock.lock_entity_id)
-        if node_id is None:
-            return data
-        data[ATTR_NODE_ID] = node_id
-
-        if data[ATTR_NODE_ID] is None:
-            raise NoNodeSpecifiedError
 
         # # make button call
         # servicedata = {"entity_id": self._entity_id}
         # await self.hass.services.async_call(DOMAIN, SERVICE_REFRESH_CODES, servicedata)
 
+        if using_zwave_js(self.hass):
+            node = self._lock.zwave_js_lock_node
+            for slot in get_usercodes(node):
+                code_slot = slot[ATTR_CODE_SLOT]
+                usercode = slot[ATTR_USERCODE]
+                _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
+                if not slot[ATTR_IN_USE]:
+                    data[code_slot] = ""
+                elif usercode and "*" in str(usercode):
+                    _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
+                    data[code_slot] = self._invalid_code(code_slot)
+                else:
+                    data[code_slot] = usercode
+
+            return data
+
         # pull the codes for ozw
-        if using_ozw(self.hass):
+        elif using_ozw(self.hass):
+            node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+            if node_id is None:
+                return data
+            data[ATTR_NODE_ID] = node_id
+
+            if data[ATTR_NODE_ID] is None:
+                raise NoNodeSpecifiedError
             # Raises exception when node not found
             try:
                 node = get_node_from_manager(
@@ -472,6 +471,14 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         # pull codes for zwave
         elif using_zwave(self.hass):
+            node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+            if node_id is None:
+                return data
+            data[ATTR_NODE_ID] = node_id
+
+            if data[ATTR_NODE_ID] is None:
+                raise NoNodeSpecifiedError
+
             network = self.hass.data[ZWAVE_NETWORK]
             node = network.nodes.get(data[ATTR_NODE_ID])
             if not node:
