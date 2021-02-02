@@ -409,8 +409,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         """Update usercodes."""
         # loop to get user code data from entity_id node
         instance_id = 1  # default
-        data = {}
-        data[CONF_LOCK_ENTITY_ID] = self._lock.lock_entity_id
+        data = {CONF_LOCK_ENTITY_ID: self._lock.lock_entity_id}
 
         # # make button call
         # servicedata = {"entity_id": self._entity_id}
