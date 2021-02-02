@@ -55,17 +55,17 @@ from .lock import KeymasterLock
 try:
     from zwave_js_server.const import ATTR_CODE_SLOT
     from homeassistant.components.zwave_js.const import (
-        DATA_CLIENT,
+        DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
         DOMAIN as ZWAVE_JS_DOMAIN,
     )
 
-    zwave_supported = True
+    zwave_js_supported = True
 except ModuleNotFoundError:
     from openzwavemqtt.const import ATTR_CODE_SLOT
 
-    DATA_CLIENT = ""
-    ZWAVE_JS_DOMAIN = ""
-    zwave_supported = False
+    ZWAVE_JS_DATA_CLIENT = "client"
+    ZWAVE_JS_DOMAIN = "zwave_js"
+    zwave_js_supported = False
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ def using_zwave(hass: HomeAssistant) -> bool:
 
 def using_zwave_js(hass: HomeAssistant) -> bool:
     """Returns whether the zwave_js integration is configured."""
-    return zwave_supported and ZWAVE_JS_DOMAIN in hass.data
+    return zwave_js_supported and ZWAVE_JS_DOMAIN in hass.data
 
 
 def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
@@ -130,7 +130,7 @@ async def generate_keymaster_locks(
                 if identifier[0] == ZWAVE_JS_DOMAIN:
                     node_id = int(identifier[1].split("-")[1])
             lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-            client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][DATA_CLIENT]
+            client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][ZWAVE_JS_DATA_CLIENT]
             lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
 
     return primary_lock, child_locks
