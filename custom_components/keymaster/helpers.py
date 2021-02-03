@@ -53,7 +53,6 @@ from .lock import KeymasterLock
 # these back to standard imports at that point.
 try:
     from zwave_js_server.const import ATTR_CODE_SLOT
-    from zwave_js_server.client import Client
     from homeassistant.components.zwave_js.const import (
         ATTR_DEVICE_ID,
         ATTR_LABEL,
@@ -145,7 +144,7 @@ async def generate_keymaster_locks(
                 if identifier[0] == ZWAVE_JS_DOMAIN:
                     node_id = int(identifier[1].split("-")[1])
             lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-            client: Client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][
+            client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][
                 ZWAVE_JS_DATA_CLIENT
             ]
             while lock.zwave_js_lock_device is None and lock.zwave_js_lock_node is None:

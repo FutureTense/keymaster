@@ -12,7 +12,7 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import Config, Event, HomeAssistant, ServiceCall, State
+from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall, State
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -229,7 +229,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         """Listener to handle Z-Wave JS events."""
         handle_zwave_js_event(hass, config_entry, evt)
 
-    def homeassistant_started_listener(evt: Event):
+    def homeassistant_started_listener(evt: Event = None):
         """Start tracking state changes after HomeAssistant has started."""
         if not using_zwave_js(hass):
             # Listen to lock state changes so we can fire an event
@@ -238,15 +238,18 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                     hass, primary_lock.lock_entity_id, entity_state_listener
                 )
             )
-        else:
-            # Listen to Z-Wave JS events sow e can fire our own events
-            hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-                hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
-            )
 
-    hass.bus.async_listen_once(
-        EVENT_HOMEASSISTANT_STARTED, homeassistant_started_listener
-    )
+    if using_zwave_js:
+        # Listen to Z-Wave JS events sow e can fire our own events
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
+        )
+    elif hass.state == CoreState.running:
+        homeassistant_started_listener()
+    else:
+        hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED, homeassistant_started_listener
+        )
 
     return True
 
