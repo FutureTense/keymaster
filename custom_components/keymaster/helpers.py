@@ -53,6 +53,7 @@ from .lock import KeymasterLock
 # these back to standard imports at that point.
 try:
     from zwave_js_server.const import ATTR_CODE_SLOT
+
     from homeassistant.components.zwave_js.const import (
         ATTR_DEVICE_ID,
         ATTR_LABEL,

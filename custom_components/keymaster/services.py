@@ -41,6 +41,7 @@ from .lock import KeymasterLock
 # these back to standard imports at that point.
 try:
     from zwave_js_server.const import ATTR_CODE_SLOT
+
     from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
     from homeassistant.components.zwave_js.lock import (
         SERVICE_CLEAR_LOCK_USERCODE,

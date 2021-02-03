@@ -12,7 +12,14 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall, State
+from homeassistant.core import (
+    Config,
+    CoreState,
+    Event,
+    HomeAssistant,
+    ServiceCall,
+    State,
+)
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -65,8 +72,8 @@ from .services import add_code, clear_code, generate_package_files, refresh_code
 try:
     from zwave_js_server.const import (
         ATTR_CODE_SLOT,
-        LOCK_USERCODE_STATUS_PROPERTY,
         LOCK_USERCODE_PROPERTY,
+        LOCK_USERCODE_STATUS_PROPERTY,
         CodeSlotStatus,
     )
     from zwave_js_server.exceptions import NotFoundError as ZWaveJSNotFoundError
