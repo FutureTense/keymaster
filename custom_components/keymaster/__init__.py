@@ -51,6 +51,7 @@ from .helpers import (
     generate_keymaster_locks,
     get_node_id,
     handle_state_change,
+    handle_zwave_js_event,
     using_ozw,
     using_zwave,
     using_zwave_js,
@@ -62,13 +63,22 @@ from .services import add_code, clear_code, generate_package_files, refresh_code
 # Home Assistant instance and that we can safely import these, so we can move
 # these back to standard imports at that point.
 try:
-    from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
-    from zwave_js_server.util.lock import get_usercodes
-except ModuleNotFoundError:
+    from zwave_js_server.const import (
+        ATTR_CODE_SLOT,
+        LOCK_USERCODE_STATUS_PROPERTY,
+        LOCK_USERCODE_PROPERTY,
+        CodeSlotStatus,
+    )
+    from zwave_js_server.exceptions import NotFoundError as ZWaveJSNotFoundError
+    from zwave_js_server.util.lock import get_code_slot_value
+
+    from homeassistant.componets.zwave_js import ZWAVE_JS_EVENT
+except (ModuleNotFoundError, ImportError):
     from openzwavemqtt.const import ATTR_CODE_SLOT
 
     ATTR_IN_USE = "in_use"
     ATTR_USERCODE = "usercode"
+    ZWAVE_JS_EVENT = "zwave_js_event"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -209,23 +219,33 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         servicedata = {"lockname": primary_lock.lock_name}
         await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
-    async def async_entity_state_listener(
+    def entity_state_listener(
         changed_entity: str, old_state: State, new_state: State
     ) -> None:
         """Listener to handle state changes to lock entities."""
         handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
 
-    async def async_homeassistant_started_listener(evt: Event):
+    def zwave_js_event_listener(evt: Event):
+        """Listener to handle Z-Wave JS events."""
+        handle_zwave_js_event(hass, config_entry, evt)
+
+    def homeassistant_started_listener(evt: Event):
         """Start tracking state changes after HomeAssistant has started."""
-        # Listen to lock state changes so we can fire an event
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            async_track_state_change(
-                hass, primary_lock.lock_entity_id, async_entity_state_listener
+        if not using_zwave_js(hass):
+            # Listen to lock state changes so we can fire an event
+            hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+                async_track_state_change(
+                    hass, primary_lock.lock_entity_id, entity_state_listener
+                )
             )
-        )
+        else:
+            # Listen to Z-Wave JS events sow e can fire our own events
+            hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+                hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
+            )
 
     hass.bus.async_listen_once(
-        EVENT_HOMEASSISTANT_STARTED, async_homeassistant_started_listener
+        EVENT_HOMEASSISTANT_STARTED, homeassistant_started_listener
     )
 
     return True
@@ -281,8 +301,10 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         _LOGGER.debug("Migrating from version %s", version)
         data = config_entry.data.copy()
 
-        data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL)
-        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(CONF_ALARM_TYPE)
+        data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL, None)
+        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(
+            CONF_ALARM_TYPE, None
+        )
         data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_ENTITY_ID)
         if CONF_HIDE_PINS not in data:
             data[CONF_HIDE_PINS] = DEFAULT_HIDE_PINS
@@ -331,7 +353,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     servicedata = {"lockname": primary_lock.lock_name}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
-    async def async_entity_state_listener(
+    def entity_state_listener(
         changed_entity: str, old_state: State, new_state: State
     ) -> None:
         """Listener to track state changes to lock entities."""
@@ -344,12 +366,21 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         unsub_listener()
     hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
-    # Create new listeners
-    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-        async_track_state_change(
-            hass, primary_lock.lock_entity_id, async_entity_state_listener
+    def zwave_js_event_listener(evt: Event):
+        """Listener to handle Z-Wave JS events."""
+        handle_zwave_js_event(hass, config_entry, evt)
+
+    # Create new listeners for lock state changes
+    if not using_zwave_js(hass):
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            async_track_state_change(
+                hass, primary_lock.lock_entity_id, entity_state_listener
+            )
         )
-    )
+    else:
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
+        )
 
 
 class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
@@ -417,19 +448,37 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         if using_zwave_js(self.hass):
             node = self._lock.zwave_js_lock_node
-            for slot in get_usercodes(node):
-                code_slot = slot[ATTR_CODE_SLOT]
-                usercode = slot[ATTR_USERCODE]
-                _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
-                if not slot[ATTR_IN_USE]:
+            code_slot = 1
+
+            # Loop until we can't find a code slot
+            while True:
+                try:
+                    value = get_code_slot_value(node, code_slot, LOCK_USERCODE_PROPERTY)
+                    status_value = get_code_slot_value(
+                        node, code_slot, LOCK_USERCODE_STATUS_PROPERTY
+                    )
+                except ZWaveJSNotFoundError:
+                    return data
+
+                code_slot = int(value.property_key or value.property_key_name)
+                usercode = value.value if value.value else None
+
+                if status_value.value != CodeSlotStatus.ENABLED:
+                    _LOGGER.debug(
+                        "DEBUG: Code slot %s not enabled", code_slot, usercode
+                    )
                     data[code_slot] = ""
                 elif usercode and "*" in str(usercode):
-                    _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
+                    _LOGGER.debug(
+                        "DEBUG: Ignoring code slot with * in value for code slot %s.",
+                        code_slot,
+                    )
                     data[code_slot] = self._invalid_code(code_slot)
                 else:
+                    _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
                     data[code_slot] = usercode
 
-            return data
+                code_slot += 1
 
         # pull the codes for ozw
         elif using_ozw(self.hass):

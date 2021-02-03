@@ -41,12 +41,12 @@ from .lock import KeymasterLock
 # these back to standard imports at that point.
 try:
     from zwave_js_server.const import ATTR_CODE_SLOT
-    from homeassistant.components.zwave_js import DOMAIN as ZWAVE_JS_DOMAIN
+    from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
     from homeassistant.components.zwave_js.lock import (
         SERVICE_CLEAR_LOCK_USERCODE,
         SERVICE_SET_LOCK_USERCODE,
     )
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     from openzwavemqtt.const import ATTR_CODE_SLOT
 
     ZWAVE_JS_DOMAIN = ""
@@ -224,8 +224,10 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     lockentityname = primary_lock.lock_entity_id
     sensorname = lockname
     doorsensorentityname = primary_lock.door_sensor_entity_id or ""
-    sensoralarmlevel = primary_lock.alarm_level_or_user_code_entity_id
-    sensoralarmtype = primary_lock.alarm_type_or_access_control_entity_id
+    sensoralarmlevel = primary_lock.alarm_level_or_user_code_entity_id or "sensor.fake"
+    sensoralarmtype = (
+        primary_lock.alarm_type_or_access_control_entity_id or "sensor.fake"
+    )
     hide_pins = (
         MODE_PASSWORD
         if config_entry.data.get(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)

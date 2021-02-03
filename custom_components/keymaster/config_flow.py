@@ -39,6 +39,7 @@ from .const import (
     DEFAULT_START,
     DOMAIN,
 )
+from .helpers import using_zwave_js
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -152,6 +153,9 @@ def _get_entities(
     extra_entities: List[str] = None,
 ) -> List[str]:
     data = []
+    if domain not in hass.data:
+        return data
+
     for entity in hass.data[domain].entities:
         if search is not None and not any(map(entity.entity_id.__contains__, search)):
             continue
@@ -176,6 +180,44 @@ def _get_schema(
         """Gets default value for key."""
         return user_input.get(key, default_dict.get(key, fallback_default))
 
+    # Z-Wave JS uses events instead of sensors when the door is locked or unlocked
+    if using_zwave_js:
+        return vol.Schema(
+            {
+                vol.Required(
+                    CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
+                ): vol.In(_get_entities(hass, LOCK_DOMAIN)),
+                vol.Required(
+                    CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)
+                ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                vol.Required(
+                    CONF_START, default=_get_default(CONF_START, DEFAULT_START)
+                ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
+                vol.Optional(
+                    CONF_SENSOR_NAME,
+                    default=_get_default(CONF_SENSOR_NAME, DEFAULT_DOOR_SENSOR),
+                ): vol.In(
+                    _get_entities(
+                        hass, BINARY_DOMAIN, extra_entities=[DEFAULT_DOOR_SENSOR]
+                    )
+                ),
+                vol.Required(
+                    CONF_PATH, default=_get_default(CONF_PATH, DEFAULT_PACKAGES_PATH)
+                ): str,
+                vol.Required(
+                    CONF_HIDE_PINS,
+                    default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS),
+                ): bool,
+                vol.Optional(
+                    CONF_CHILD_LOCKS_FILE,
+                    default=_get_default(CONF_CHILD_LOCKS_FILE, ""),
+                ): str,
+            },
+            extra=ALLOW_EXTRA,
+        )
+
+    # `zwave` and `ozw` use sensors when the door is locked or unlocked
     return vol.Schema(
         {
             vol.Required(
@@ -267,6 +309,7 @@ async def _start_config_flow(
     if user_input is not None:
         user_input[CONF_GENERATE] = DEFAULT_GENERATE
         user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
+        _LOGGER.error("test 1")
 
         # Regular flow has an async function, options flow has a sync function
         # so we need to handle them conditionally
@@ -275,10 +318,12 @@ async def _start_config_flow(
         else:
             errors.update(cls._get_unique_name_error(user_input))
 
+        _LOGGER.error("test 2")
         # Validate that package path is relative
         if os.path.isabs(user_input[CONF_PATH]):
             errors[CONF_PATH] = "invalid_path"
 
+        _LOGGER.error("test 3")
         # Validate that child locks file path is relative and follows valid schema
         if user_input.get(CONF_CHILD_LOCKS_FILE):
             if os.path.isabs(user_input[CONF_CHILD_LOCKS_FILE]):
@@ -295,11 +340,13 @@ async def _start_config_flow(
                     errors[CONF_CHILD_LOCKS_FILE] = "invalid_child_locks_file"
                     description_placeholders["error"] = "invalid_child_locks_file"
 
+        _LOGGER.error("test 4")
         # Update options if no errors
         if not errors:
             user_input.pop(CONF_CHILD_LOCKS_FILE, None)
             if child_locks:
                 user_input[CONF_CHILD_LOCKS] = child_locks
+            _LOGGER.error("test 5")
             return cls.async_create_entry(title=title, data=user_input)
 
         return _show_config_form(
