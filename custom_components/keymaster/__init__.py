@@ -239,13 +239,17 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             )
         )
 
-    if using_zwave_js:
+    if using_zwave_js(hass):
         # Listen to Z-Wave JS events sow e can fire our own events
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
         )
     elif hass.state == CoreState.running:
-        homeassistant_started_listener()
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            async_track_state_change(
+                hass, primary_lock.lock_entity_id, entity_state_listener
+            )
+        )
     else:
         hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STARTED, homeassistant_started_listener
