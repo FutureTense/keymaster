@@ -8,7 +8,7 @@ automation:
       initial_state: true
       trigger:
         - platform: homeassistant
-          event: stop
+          event: shutdown
       action:
         - service: homeassistant.turn_off
           entity_id: input_boolean.allow_automation_execution
