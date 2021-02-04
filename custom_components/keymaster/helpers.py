@@ -222,7 +222,8 @@ def handle_zwave_js_event(hass, config_entry: ConfigEntry, evt: Event):
     # Get lock state to provide as part of event data
     lock_state = hass.states.get(primary_lock.lock_entity_id)
 
-    code_slot = evt.data.get(ATTR_PARAMETERS, {}).get("userId")
+    params = evt.data.get(ATTR_PARAMETERS) or {}
+    code_slot = params.get("userId")
 
     # Lookup name for usercode
     code_slot_name_state = (
@@ -253,7 +254,6 @@ def handle_state_change(
     new_state: State,
 ) -> None:
     """Listener to track state changes to lock entities."""
-    _LOGGER.error("test")
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
 
     # If listener was called for entity that is not for this entry,
