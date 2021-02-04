@@ -1,0 +1,23 @@
+input_boolean:
+    allow_automation_execution:
+        name: 'Allow Automation'
+        initial: off
+
+automation:
+    - alias: zwave_js_homeassistant_stop
+      initial_state: true
+      trigger:
+        - platform: homeassistant
+          event: stop
+      action:
+        - service: homeassistant.turn_off
+          entity_id: input_boolean.allow_automation_execution
+
+    - alias: zwave_js_homeassistant_up
+      initial_state: true
+      trigger:
+        - platform: homeassistant
+          event: start
+      action:
+        - service: homeassistant.turn_on
+          entity_id: input_boolean.allow_automation_execution

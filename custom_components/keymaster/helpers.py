@@ -48,6 +48,10 @@ from .const import (
 )
 from .lock import KeymasterLock
 
+zwave_supported = True
+ozw_supported = True
+zwave_js_supported = True
+
 # TODO: At some point we should assume that users have upgraded to the latest
 # Home Assistant instance and that we can safely import these, so we can move
 # these back to standard imports at that point.
@@ -83,12 +87,12 @@ _LOGGER = logging.getLogger(__name__)
 
 def using_ozw(hass: HomeAssistant) -> bool:
     """Returns whether the ozw integration is configured."""
-    return OZW_DOMAIN in hass.data
+    return ozw_supported and OZW_DOMAIN in hass.data
 
 
 def using_zwave(hass: HomeAssistant) -> bool:
     """Returns whether the zwave integration is configured."""
-    return DATA_ZWAVE_CONFIG in hass.data
+    return zwave_supported and DATA_ZWAVE_CONFIG in hass.data
 
 
 def using_zwave_js(hass: HomeAssistant) -> bool:
