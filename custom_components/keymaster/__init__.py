@@ -70,14 +70,8 @@ from .services import add_code, clear_code, generate_package_files, refresh_code
 # Home Assistant instance and that we can safely import these, so we can move
 # these back to standard imports at that point.
 try:
-    from zwave_js_server.const import (
-        ATTR_CODE_SLOT,
-        LOCK_USERCODE_PROPERTY,
-        LOCK_USERCODE_STATUS_PROPERTY,
-        CodeSlotStatus,
-    )
-    from zwave_js_server.exceptions import NotFoundError as ZWaveJSNotFoundError
-    from zwave_js_server.util.lock import get_code_slot_value
+    from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
+    from zwave_js_server.util.lock import get_usercodes
 
     from homeassistant.componets.zwave_js import ZWAVE_JS_EVENT
 except (ModuleNotFoundError, ImportError):
@@ -460,23 +454,11 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             node = self._lock.zwave_js_lock_node
             code_slot = 1
 
-            # Loop until we can't find a code slot
-            while True:
-                try:
-                    value = get_code_slot_value(node, code_slot, LOCK_USERCODE_PROPERTY)
-                    status_value = get_code_slot_value(
-                        node, code_slot, LOCK_USERCODE_STATUS_PROPERTY
-                    )
-                except ZWaveJSNotFoundError:
-                    return data
-
-                code_slot = int(value.property_key or value.property_key_name)
-                usercode = value.value if value.value else None
-
-                if status_value.value != CodeSlotStatus.ENABLED:
-                    _LOGGER.debug(
-                        "DEBUG: Code slot %s not enabled", code_slot, usercode
-                    )
+            for slot in get_usercodes(node):
+                code_slot = int(slot[ATTR_CODE_SLOT])
+                usercode = slot[ATTR_USERCODE]
+                if not slot[ATTR_IN_USE]:
+                    _LOGGER.debug("DEBUG: Code slot %s not enabled", code_slot)
                     data[code_slot] = ""
                 elif usercode and "*" in str(usercode):
                     _LOGGER.debug(
@@ -487,8 +469,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
                     data[code_slot] = usercode
-
-                code_slot += 1
+            return data
 
         # pull the codes for ozw
         elif using_ozw(self.hass):
