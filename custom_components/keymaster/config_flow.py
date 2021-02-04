@@ -309,7 +309,6 @@ async def _start_config_flow(
     if user_input is not None:
         user_input[CONF_GENERATE] = DEFAULT_GENERATE
         user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
-        _LOGGER.error("test 1")
 
         # Regular flow has an async function, options flow has a sync function
         # so we need to handle them conditionally
@@ -318,12 +317,10 @@ async def _start_config_flow(
         else:
             errors.update(cls._get_unique_name_error(user_input))
 
-        _LOGGER.error("test 2")
         # Validate that package path is relative
         if os.path.isabs(user_input[CONF_PATH]):
             errors[CONF_PATH] = "invalid_path"
 
-        _LOGGER.error("test 3")
         # Validate that child locks file path is relative and follows valid schema
         if user_input.get(CONF_CHILD_LOCKS_FILE):
             if os.path.isabs(user_input[CONF_CHILD_LOCKS_FILE]):
@@ -340,13 +337,11 @@ async def _start_config_flow(
                     errors[CONF_CHILD_LOCKS_FILE] = "invalid_child_locks_file"
                     description_placeholders["error"] = "invalid_child_locks_file"
 
-        _LOGGER.error("test 4")
         # Update options if no errors
         if not errors:
             user_input.pop(CONF_CHILD_LOCKS_FILE, None)
             if child_locks:
                 user_input[CONF_CHILD_LOCKS] = child_locks
-            _LOGGER.error("test 5")
             return cls.async_create_entry(title=title, data=user_input)
 
         return _show_config_form(

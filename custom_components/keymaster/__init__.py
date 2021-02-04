@@ -232,13 +232,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     def homeassistant_started_listener(evt: Event = None):
         """Start tracking state changes after HomeAssistant has started."""
-        if not using_zwave_js(hass):
-            # Listen to lock state changes so we can fire an event
-            hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-                async_track_state_change(
-                    hass, primary_lock.lock_entity_id, entity_state_listener
-                )
+        # Listen to lock state changes so we can fire an event
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            async_track_state_change(
+                hass, primary_lock.lock_entity_id, entity_state_listener
             )
+        )
 
     if using_zwave_js:
         # Listen to Z-Wave JS events sow e can fire our own events
