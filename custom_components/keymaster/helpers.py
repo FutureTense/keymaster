@@ -3,9 +3,7 @@ import asyncio
 from datetime import timedelta
 import logging
 import os
-from typing import Dict, Optional
-
-from openzwavemqtt.const import ATTR_CODE_SLOT
+from typing import Dict, List, Optional, Tuple
 
 from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
@@ -18,8 +16,14 @@ from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_STATE, SERVICE_RELOAD, STATE_LOCKED, STATE_UNLOCKED
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.exceptions import ServiceNotFound
+from homeassistant.helpers.device_registry import (
+    async_get_registry as async_get_device_registry,
+)
+from homeassistant.helpers.entity_registry import (
+    async_get_registry as async_get_entity_registry,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -30,8 +34,13 @@ from .const import (
     ATTR_ACTION_TEXT,
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
-    ATTR_NODE_ID,
+    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_CHILD_LOCKS,
+    CONF_LOCK_ENTITY_ID,
+    CONF_LOCK_NAME,
     CONF_PATH,
+    CONF_SENSOR_NAME,
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     LOCK_STATE_MAP,
@@ -39,17 +48,56 @@ from .const import (
 )
 from .lock import KeymasterLock
 
+zwave_supported = True
+ozw_supported = True
+zwave_js_supported = True
+
+# TODO: At some point we should assume that users have upgraded to the latest
+# Home Assistant instance and that we can safely import these, so we can move
+# these back to standard imports at that point.
+try:
+    from zwave_js_server.const import ATTR_CODE_SLOT
+
+    from homeassistant.components.zwave_js.const import (
+        ATTR_DEVICE_ID,
+        ATTR_LABEL,
+        ATTR_NODE_ID,
+        ATTR_PARAMETERS,
+        ATTR_TYPE,
+        DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
+        DOMAIN as ZWAVE_JS_DOMAIN,
+    )
+
+    zwave_js_supported = True
+except (ModuleNotFoundError, ImportError):
+    from openzwavemqtt.const import ATTR_CODE_SLOT
+
+    from .const import ATTR_NODE_ID
+
+    ATTR_DEVICE_ID = "device_id"
+    ATTR_LABEL = "label"
+    ATTR_PARAMETERS = "parameters"
+    ATTR_TYPE = "type"
+    ZWAVE_JS_DATA_CLIENT = "client"
+    ZWAVE_JS_DOMAIN = "zwave_js"
+    zwave_js_supported = False
+
 _LOGGER = logging.getLogger(__name__)
 
 
 def using_ozw(hass: HomeAssistant) -> bool:
     """Returns whether the ozw integration is configured."""
-    return OZW_DOMAIN in hass.data
+    return ozw_supported and OZW_DOMAIN in hass.data
 
 
 def using_zwave(hass: HomeAssistant) -> bool:
     """Returns whether the zwave integration is configured."""
-    return DATA_ZWAVE_CONFIG in hass.data
+    return zwave_supported and DATA_ZWAVE_CONFIG in hass.data
+
+
+def using_zwave_js(hass: HomeAssistant) -> bool:
+    """Returns whether the zwave_js integration is configured."""
+    return zwave_js_supported and ZWAVE_JS_DOMAIN in hass.data
 
 
 def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
@@ -59,6 +107,67 @@ def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
         return state.attributes[ATTR_NODE_ID]
 
     return None
+
+
+async def generate_keymaster_locks(
+    hass: HomeAssistant, config_entry: ConfigEntry
+) -> Tuple[KeymasterLock, List[KeymasterLock]]:
+    """Generate primary and child keymaster locks from config entry."""
+    primary_lock = KeymasterLock(
+        config_entry.data[CONF_LOCK_NAME],
+        config_entry.data[CONF_LOCK_ENTITY_ID],
+        config_entry.data.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
+        config_entry.data.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
+        config_entry.data[CONF_SENSOR_NAME],
+    )
+    child_locks = [
+        KeymasterLock(
+            lock_name,
+            lock[CONF_LOCK_ENTITY_ID],
+            lock.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
+            lock.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
+        )
+        for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
+    ]
+
+    # If we are using zwave_js, we need to grab the node and device entry for the
+    # locks so we can use them later. To do this, we use the zwave_js client being
+    # used by the config entry associated with the lock to lookup and store the node.
+    # To get the node we need to get the node ID which we get from the device registry.
+    if using_zwave_js(hass):
+        ent_reg = await async_get_entity_registry(hass)
+        dev_reg = await async_get_device_registry(hass)
+        for lock in [primary_lock, *child_locks]:
+            lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
+            if not lock_ent_reg_entry:
+                continue
+            lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
+            if not lock_dev_reg_entry:
+                continue
+            node_id: int = 0
+            for identifier in lock_dev_reg_entry.identifiers:
+                if identifier[0] == ZWAVE_JS_DOMAIN:
+                    node_id = int(identifier[1].split("-")[1])
+            lock_config_entry_id = lock_ent_reg_entry.config_entry_id
+            client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][
+                ZWAVE_JS_DATA_CLIENT
+            ]
+            while lock.zwave_js_lock_device is None and lock.zwave_js_lock_node is None:
+                if (
+                    client.connected
+                    and client.driver
+                    and client.driver.controller
+                    and node_id in client.driver.controller.nodes
+                ):
+                    lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+                    lock.zwave_js_lock_device = lock_dev_reg_entry
+                else:
+                    _LOGGER.info(
+                        "Can't access Z-Wave JS lock node yet. Trying again in 5 seconds"
+                    )
+                    await asyncio.sleep(5)
+
+    return primary_lock, child_locks
 
 
 def output_to_file_from_template(
@@ -100,6 +209,45 @@ def delete_folder(absolute_path: str, *relative_paths: str) -> None:
         for file_or_dir in os.listdir(path):
             delete_folder(path, file_or_dir)
         os.rmdir(path)
+
+
+def handle_zwave_js_event(hass, config_entry: ConfigEntry, evt: Event):
+    """Handle Z-Wave JS event."""
+    primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+
+    # If event doesn't match the type or our device and node, we shouldn't fire an event
+    if (
+        evt.data[ATTR_TYPE] != "notification"
+        or evt.data[ATTR_NODE_ID] != primary_lock.zwave_js_lock_node.node_id
+        or evt.data[ATTR_DEVICE_ID] != primary_lock.zwave_js_lock_device.id
+    ):
+        return
+
+    # Get lock state to provide as part of event data
+    lock_state = hass.states.get(primary_lock.lock_entity_id)
+
+    params = evt.data.get(ATTR_PARAMETERS) or {}
+    code_slot = params.get("userId")
+
+    # Lookup name for usercode
+    code_slot_name_state = (
+        hass.states.get(f"input_text.{primary_lock.lock_name}_name_{code_slot}")
+        if code_slot
+        else None
+    )
+
+    hass.bus.fire(
+        EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+        event_data={
+            ATTR_NAME: primary_lock.lock_name,
+            ATTR_STATE: lock_state.state if lock_state else None,
+            ATTR_ACTION_TEXT: evt.data.get(ATTR_LABEL),
+            ATTR_CODE_SLOT: code_slot,
+            ATTR_CODE_SLOT_NAME: code_slot_name_state.state
+            if code_slot_name_state is not None
+            else None,
+        },
+    )
 
 
 def handle_state_change(
@@ -162,15 +310,12 @@ def handle_state_change(
     code_slot_name_state = hass.states.get(
         f"input_text.{primary_lock.lock_name}_name_{alarm_level_value}"
     )
-    code_slot_name = (
-        code_slot_name_state.state if code_slot_name_state is not None else None
-    )
 
     # Get lock state to provide as part of event data
     lock_state = hass.states.get(primary_lock.lock_entity_id)
 
     # Fire state change event
-    hass.bus.async_fire(
+    hass.bus.fire(
         EVENT_KEYMASTER_LOCK_STATE_CHANGED,
         event_data={
             ATTR_NAME: primary_lock.lock_name,
@@ -178,7 +323,9 @@ def handle_state_change(
             ATTR_ACTION_CODE: alarm_type_value,
             ATTR_ACTION_TEXT: action_text,
             ATTR_CODE_SLOT: alarm_level_value,
-            ATTR_CODE_SLOT_NAME: code_slot_name,
+            ATTR_CODE_SLOT_NAME: code_slot_name_state.state
+            if code_slot_name_state is not None
+            else None,
         },
     )
 

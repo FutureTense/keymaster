@@ -2,11 +2,13 @@
 import json
 import os
 from unittest import mock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant import config_entries, core as ha
+from homeassistant.const import CONF_PORT
+from homeassistant.components.mqtt.const import CONF_BROKER
 from homeassistant.components.ozw.const import DOMAIN
 
 
@@ -19,7 +21,14 @@ def load_fixture(filename):
 
 async def setup_ozw(hass, entry=None, fixture=None):
     """Set up OZW and load a dump."""
-    hass.config.components.add("mqtt")
+    with patch("homeassistant.components.mqtt.MQTT", return_value=AsyncMock()):
+        mqtt_entry = MockConfigEntry(
+            domain="mqtt",
+            title="mqtt",
+            data={CONF_BROKER: "http://127.0.0.1", CONF_PORT: 1883},
+        )
+        mqtt_entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(mqtt_entry.entry_id)
 
     if entry is None:
         entry = MockConfigEntry(

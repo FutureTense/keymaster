@@ -16,7 +16,6 @@
           "sensorname": "Door Sensor",
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
-          "using_ozw": "Using OZW?",
           "child_locks_file": "Path to child locks file",
           "hide_pins": "Hide PINs in UI?"
         },
@@ -49,7 +48,6 @@
           "sensorname": "Door Sensor",
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
-          "using_ozw": "Using OZW?",
           "child_locks_file": "Path to child locks file",
           "hide_pins": "Hide PINs in UI?"
         },

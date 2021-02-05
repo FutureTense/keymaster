@@ -2,8 +2,9 @@
 import logging
 import os
 import random
+from typing import Any, Dict
 
-from openzwavemqtt.const import ATTR_CODE_SLOT, CommandClass
+from openzwavemqtt.const import CommandClass
 
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
@@ -31,13 +32,45 @@ from .helpers import (
     reload_package_platforms,
     using_ozw,
     using_zwave,
+    using_zwave_js,
 )
 from .lock import KeymasterLock
+
+# TODO: At some point we should assume that users have upgraded to the latest
+# Home Assistant instance and that we can safely import these, so we can move
+# these back to standard imports at that point.
+try:
+    from zwave_js_server.const import ATTR_CODE_SLOT
+
+    from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
+    from homeassistant.components.zwave_js.lock import (
+        SERVICE_CLEAR_LOCK_USERCODE,
+        SERVICE_SET_LOCK_USERCODE,
+    )
+except (ModuleNotFoundError, ImportError):
+    from openzwavemqtt.const import ATTR_CODE_SLOT
+
+    ZWAVE_JS_DOMAIN = ""
+    SERVICE_CLEAR_LOCK_USERCODE = ""
+    SERVICE_SET_LOCK_USERCODE = ""
 
 _LOGGER = logging.getLogger(__name__)
 
 SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
+
+
+async def call_service(
+    hass: HomeAssistant, domain: str, service: str, service_data: Dict[str, Any] = None
+):
+    """Call a hass service and log a failure on an error."""
+    try:
+        await hass.services.async_call(
+            domain, service, service_data=service_data, blocking=True
+        )
+    except Exception as err:
+        _LOGGER.error("Error calling %s.%s service call: %s", domain, service, str(err))
+        raise err
 
 
 async def refresh_codes(
@@ -76,14 +109,15 @@ async def add_code(
         ATTR_USER_CODE: usercode,
     }
 
-    if using_ozw(hass):
+    if using_zwave_js(hass):
         servicedata[ATTR_ENTITY_ID] = entity_id
+        await call_service(
+            hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
+        )
 
-        try:
-            await hass.services.async_call(OZW_DOMAIN, SET_USERCODE, servicedata)
-        except Exception as err:
-            _LOGGER.error("Error calling ozw.set_usercode service call: %s", str(err))
-            return
+    elif using_ozw(hass):
+        servicedata[ATTR_ENTITY_ID] = entity_id
+        await call_service(hass, OZW_DOMAIN, SET_USERCODE, servicedata)
 
     elif using_zwave(hass):
         node_id = get_node_id(hass, entity_id)
@@ -95,12 +129,7 @@ async def add_code(
             return
 
         servicedata[ATTR_NODE_ID] = node_id
-
-        try:
-            await hass.services.async_call(LOCK_DOMAIN, SET_USERCODE, servicedata)
-        except Exception as err:
-            _LOGGER.error("Error calling lock.set_usercode service call: %s", str(err))
-            return
+        await call_service(hass, LOCK_DOMAIN, SET_USERCODE, servicedata)
 
     else:
         raise ZWaveIntegrationNotConfiguredError
@@ -110,30 +139,24 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
     """Clear the usercode from a code slot."""
     _LOGGER.debug("Attempting to call clear_usercode...")
 
-    if using_ozw(hass):
-        # workaround to call dummy slot
-        servicedata = {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_CODE_SLOT: 999,
-        }
-
-        try:
-            await hass.services.async_call(
-                OZW_DOMAIN, CLEAR_USERCODE, servicedata, blocking=True
-            )
-        except Exception as err:
-            _LOGGER.error("Error calling ozw.clear_usercode service call: %s", str(err))
-
+    if using_zwave_js(hass):
         servicedata = {
             ATTR_ENTITY_ID: entity_id,
             ATTR_CODE_SLOT: code_slot,
         }
+        await call_service(
+            hass, ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
+        )
 
-        try:
-            await hass.services.async_call(OZW_DOMAIN, CLEAR_USERCODE, servicedata)
-        except Exception as err:
-            _LOGGER.error("Error calling ozw.clear_usercode service call: %s", str(err))
-            return
+    elif using_ozw(hass):
+        # Call dummy slot first as a workaround
+        for curr_code_slot in (999, code_slot):
+            servicedata = {
+                ATTR_ENTITY_ID: entity_id,
+                ATTR_CODE_SLOT: curr_code_slot,
+            }
+            await call_service(hass, OZW_DOMAIN, CLEAR_USERCODE, servicedata)
+
     elif using_zwave(hass):
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
@@ -151,24 +174,14 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
         _LOGGER.debug(
             "Setting code slot value to random PIN as workaround in case clearing code doesn't work"
         )
-        try:
-            await hass.services.async_call(
-                LOCK_DOMAIN,
-                SET_USERCODE,
-                {**servicedata, ATTR_USER_CODE: str(random.randint(1000, 9999))},
-                blocking=True,
-            )
-        except Exception as err:
-            _LOGGER.error("Error calling lock.set_usercode service call: %s", str(err))
-            return
+        await call_service(
+            hass,
+            LOCK_DOMAIN,
+            SET_USERCODE,
+            {**servicedata, ATTR_USER_CODE: str(random.randint(1000, 9999))},
+        )
 
-        try:
-            await hass.services.async_call(LOCK_DOMAIN, CLEAR_USERCODE, servicedata)
-        except Exception as err:
-            _LOGGER.error(
-                "Error calling lock.clear_usercode service call: %s", str(err)
-            )
-            return
+        await call_service(hass, LOCK_DOMAIN, CLEAR_USERCODE, servicedata)
     else:
         raise ZWaveIntegrationNotConfiguredError
 
@@ -212,9 +225,10 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     lockentityname = primary_lock.lock_entity_id
     sensorname = lockname
     doorsensorentityname = primary_lock.door_sensor_entity_id or ""
-    sensoralarmlevel = primary_lock.alarm_level_or_user_code_entity_id
-    sensoralarmtype = primary_lock.alarm_type_or_access_control_entity_id
-    using_ozw_str = f"{using_ozw(hass)}"
+    sensoralarmlevel = primary_lock.alarm_level_or_user_code_entity_id or "sensor.fake"
+    sensoralarmtype = (
+        primary_lock.alarm_type_or_access_control_entity_id or "sensor.fake"
+    )
     hide_pins = (
         MODE_PASSWORD
         if config_entry.data.get(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
@@ -269,7 +283,6 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "DOORSENSORENTITYNAME": doorsensorentityname,
         "SENSORALARMTYPE": sensoralarmtype,
         "SENSORALARMLEVEL": sensoralarmlevel,
-        "USINGOZW": using_ozw_str,
         "HIDE_PINS": hide_pins,
     }
     # Replace variables in common file
