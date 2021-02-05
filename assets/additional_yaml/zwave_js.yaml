@@ -4,7 +4,7 @@ input_boolean:
         initial: off
 
 automation:
-    - alias: zwave_js_homeassistant_stop
+    - alias: zwave_js_homeassistant_shutdown
       initial_state: true
       trigger:
         - platform: homeassistant
