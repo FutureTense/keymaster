@@ -244,7 +244,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
         )
-    elif hass.state == CoreState.running:
+
+    if hass.state == CoreState.running:
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             async_track_state_change(
                 hass, primary_lock.lock_entity_id, entity_state_listener
@@ -378,13 +379,13 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         handle_zwave_js_event(hass, config_entry, evt)
 
     # Create new listeners for lock state changes
-    if not using_zwave_js(hass):
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            async_track_state_change(
-                hass, primary_lock.lock_entity_id, entity_state_listener
-            )
+    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+        async_track_state_change(
+            hass, primary_lock.lock_entity_id, entity_state_listener
         )
-    else:
+    )
+
+    if using_zwave_js(hass):
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
         )

@@ -163,7 +163,7 @@ automation:
         entity_id: "input_boolean.allow_automation_execution"
         state: "on"
       - condition: template
-        value_template: "{{ trigger.event.data.code_slot != None and trigger.event.data.code_slot > 0 }}"
+        value_template: "{{ trigger.event.data.code_slot > 0 }}"
       - condition: template
         value_template: "{{ is_state('input_boolean.notify_LOCKNAME_' + trigger.event.data.code_slot | string, 'on') }}"
     action:
@@ -260,7 +260,7 @@ automation:
         value_template: "{{ is_state('input_boolean.accesslimit_LOCKNAME_' + trigger.event.data.code_slot | string, 'on') }}"
       - condition: template
         # Check for Keypad Unlock code
-        value_template: "{{ trigger.event.data.code_slot != None and trigger.event.data.code_slot > 0 and trigger.event.data.action_code in (6, 19)}}"
+        value_template: "{{ trigger.event.data.code_slot > 0 and trigger.event.data.action_code in (6, 19)}}"
     action:
       - service: input_number.decrement
         data_template:

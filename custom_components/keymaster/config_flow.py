@@ -39,7 +39,6 @@ from .const import (
     DEFAULT_START,
     DOMAIN,
 )
-from .helpers import using_zwave_js
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -180,44 +179,6 @@ def _get_schema(
         """Gets default value for key."""
         return user_input.get(key, default_dict.get(key, fallback_default))
 
-    # Z-Wave JS uses events instead of sensors when the door is locked or unlocked
-    if using_zwave_js:
-        return vol.Schema(
-            {
-                vol.Required(
-                    CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
-                ): vol.In(_get_entities(hass, LOCK_DOMAIN)),
-                vol.Required(
-                    CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)
-                ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-                vol.Required(
-                    CONF_START, default=_get_default(CONF_START, DEFAULT_START)
-                ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-                vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
-                vol.Optional(
-                    CONF_SENSOR_NAME,
-                    default=_get_default(CONF_SENSOR_NAME, DEFAULT_DOOR_SENSOR),
-                ): vol.In(
-                    _get_entities(
-                        hass, BINARY_DOMAIN, extra_entities=[DEFAULT_DOOR_SENSOR]
-                    )
-                ),
-                vol.Required(
-                    CONF_PATH, default=_get_default(CONF_PATH, DEFAULT_PACKAGES_PATH)
-                ): str,
-                vol.Required(
-                    CONF_HIDE_PINS,
-                    default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS),
-                ): bool,
-                vol.Optional(
-                    CONF_CHILD_LOCKS_FILE,
-                    default=_get_default(CONF_CHILD_LOCKS_FILE, ""),
-                ): str,
-            },
-            extra=ALLOW_EXTRA,
-        )
-
-    # `zwave` and `ozw` use sensors when the door is locked or unlocked
     return vol.Schema(
         {
             vol.Required(
@@ -245,7 +206,7 @@ def _get_schema(
                 _get_entities(
                     hass,
                     SENSORS_DOMAIN,
-                    search=["alarm_level", "user_code"],
+                    search=["alarm_level", "user_code", "alarmlevel"],
                     extra_entities=[DEFAULT_ALARM_LEVEL_SENSOR],
                 )
             ),
@@ -259,7 +220,7 @@ def _get_schema(
                 _get_entities(
                     hass,
                     SENSORS_DOMAIN,
-                    search=["alarm_type", "access_control"],
+                    search=["alarm_type", "access_control", "alarmtype"],
                     extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
                 )
             ),
