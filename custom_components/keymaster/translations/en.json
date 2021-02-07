@@ -19,7 +19,7 @@
           "child_locks_file": "Path to child locks file",
           "hide_pins": "Hide PINs in UI?"
         },
-        "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
+        "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
         "title": "KeyMaster"
       },
       "config_2": {
@@ -51,7 +51,7 @@
           "child_locks_file": "Path to child locks file",
           "hide_pins": "Hide PINs in UI?"
         },
-        "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)",
+        "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
         "title": "KeyMaster"
       },
       "options_2": {

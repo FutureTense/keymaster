@@ -163,7 +163,8 @@ async def generate_keymaster_locks(
                     lock.zwave_js_lock_device = lock_dev_reg_entry
                 else:
                     _LOGGER.info(
-                        "Can't access Z-Wave JS lock node yet. Trying again in 5 seconds"
+                        "Can't access Z-Wave JS lock node yet. "
+                        "Trying again in 5 seconds"
                     )
                     await asyncio.sleep(5)
 
@@ -227,12 +228,12 @@ def handle_zwave_js_event(hass, config_entry: ConfigEntry, evt: Event):
     lock_state = hass.states.get(primary_lock.lock_entity_id)
 
     params = evt.data.get(ATTR_PARAMETERS) or {}
-    code_slot = params.get("userId")
+    code_slot = params.get("userId", 0)
 
     # Lookup name for usercode
     code_slot_name_state = (
         hass.states.get(f"input_text.{primary_lock.lock_name}_name_{code_slot}")
-        if code_slot
+        if code_slot and code_slot != 0
         else None
     )
 
@@ -272,7 +273,11 @@ def handle_state_change(
 
     # Determine action type to set appropriate action text using ACTION_MAP
     action_type = ""
-    if ALARM_TYPE in primary_lock.alarm_type_or_access_control_entity_id:
+    if (
+        ALARM_TYPE in primary_lock.alarm_type_or_access_control_entity_id
+        or ALARM_TYPE.replace("_", "")
+        in primary_lock.alarm_type_or_access_control_entity_id
+    ):
         action_type = ALARM_TYPE
     if ACCESS_CONTROL in primary_lock.alarm_type_or_access_control_entity_id:
         action_type = ACCESS_CONTROL
@@ -286,8 +291,8 @@ def handle_state_change(
     )
     alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
 
-    # If lock has changed state but alarm_type/access_control state hasn't changed in a while
-    # set action_value to RF lock/unlock
+    # If lock has changed state but alarm_type/access_control state hasn't changed in a
+    # while set action_value to RF lock/unlock
     if (
         alarm_level_state is not None
         and int(alarm_level_state.state) == 0
