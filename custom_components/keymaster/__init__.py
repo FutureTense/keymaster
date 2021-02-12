@@ -12,7 +12,12 @@ import voluptuous as vol
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    EVENT_HOMEASSISTANT_STARTED,
+    STATE_LOCKED,
+    STATE_UNLOCKED,
+)
 from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -99,6 +104,8 @@ async def homeassistant_started_listener(
             hass,
             [lock.lock_entity_id for lock in locks_to_watch],
             functools.partial(handle_state_change, hass, config_entry),
+            from_state=[STATE_LOCKED, STATE_UNLOCKED],
+            to_state=[STATE_LOCKED, STATE_UNLOCKED],
         )
     )
 
@@ -407,6 +414,8 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
                 hass,
                 [lock.lock_entity_id for lock in locks_to_watch],
                 functools.partial(handle_state_change, hass, config_entry),
+                from_state=[STATE_LOCKED, STATE_UNLOCKED],
+                to_state=[STATE_LOCKED, STATE_UNLOCKED],
             )
         )
 

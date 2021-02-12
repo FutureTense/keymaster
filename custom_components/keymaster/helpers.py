@@ -277,6 +277,7 @@ def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: E
                 else "",
             },
         )
+        return
 
 
 def handle_state_change(
@@ -291,16 +292,6 @@ def handle_state_change(
     child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
         CHILD_LOCKS
     ]
-
-    # If listener was called for entity that is not for this entry,
-    # or lock state is coming from or going to a weird state, ignore
-    if (
-        new_state is None
-        or old_state is None
-        or new_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
-        or old_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
-    ):
-        return
 
     for lock in [primary_lock, *child_locks]:
         # Don't do anything if the changed entity is not this lock
@@ -357,16 +348,13 @@ def handle_state_change(
             f"input_text.{lock.lock_name}_name_{alarm_level_value}"
         )
 
-        # Get lock state to provide as part of event data
-        lock_state = hass.states.get(lock.lock_entity_id)
-
         # Fire state change event
         hass.bus.fire(
             EVENT_KEYMASTER_LOCK_STATE_CHANGED,
             event_data={
                 ATTR_NAME: lock.lock_name,
                 ATTR_ENTITY_ID: lock.lock_entity_id,
-                ATTR_STATE: lock_state.state if lock_state else "",
+                ATTR_STATE: new_state.state,
                 ATTR_ACTION_CODE: alarm_type_value,
                 ATTR_ACTION_TEXT: action_text,
                 ATTR_CODE_SLOT: alarm_level_value or 0,
@@ -375,6 +363,7 @@ def handle_state_change(
                 else "",
             },
         )
+        return
 
 
 def reload_package_platforms(hass: HomeAssistant) -> bool:
