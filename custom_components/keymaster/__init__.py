@@ -385,8 +385,9 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
             )
         )
 
-    # Check if we need to check alarm type/alarm level sensors, in which case
-    # we need to listen for lock state changes
+    # Check if alarm type/alarm level sensors are specified, in which case
+    # we need to listen for lock state changes and derive the action from those
+    # sensors
     locks_to_watch = []
     for lock in [primary_lock, *child_locks]:
         if (
