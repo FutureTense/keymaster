@@ -49,17 +49,21 @@ async def setup_ozw(hass, entry=None, fixture=None):
     receive_message = mock_subscribe.mock_calls[0][1][2]
 
     if fixture is not None:
-        for line in fixture.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            topic, payload = line.split(",", 1)
-            receive_message(mock.Mock(topic=topic, payload=payload))
+        await process_fixture_data(hass, receive_message, fixture)
 
-        await hass.async_block_till_done()
+    return receive_message, entry
 
-    return receive_message
 
+async def process_fixture_data(hass, receive_message, fixture):
+    """Mock receive fixture data."""
+    for line in fixture.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        topic, payload = line.split(",", 1)
+        receive_message(mock.Mock(topic=topic, payload=payload))
+
+    await hass.async_block_till_done()
 
 class MQTTMessage:
     """Represent a mock MQTT message."""
