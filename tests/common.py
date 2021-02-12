@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant import config_entries, core as ha
-from homeassistant.const import CONF_PORT
 from homeassistant.components.mqtt.const import CONF_BROKER
 from homeassistant.components.ozw.const import DOMAIN
+from homeassistant.const import CONF_PORT
 
 
 def load_fixture(filename):
