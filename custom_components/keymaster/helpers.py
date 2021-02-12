@@ -152,13 +152,11 @@ async def generate_keymaster_locks(
             lock_config_entry_id = lock_ent_reg_entry.config_entry_id
 
             client: Client = None
-            client_found = False
-            while not client_found:
+            while client is None:
                 try:
                     client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][
                         ZWAVE_JS_DATA_CLIENT
                     ]
-                    client_found = True
                 except KeyError:
                     _LOGGER.info(
                         "Can't access Z-Wave JS data client yet. "
