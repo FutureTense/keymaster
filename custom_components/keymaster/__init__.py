@@ -1,7 +1,8 @@
 """keymaster Integration."""
 from datetime import timedelta
+import functools
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from openzwavemqtt.const import CommandClass
 from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
@@ -11,15 +12,13 @@ import voluptuous as vol
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import (
-    Config,
-    CoreState,
-    Event,
-    HomeAssistant,
-    ServiceCall,
-    State,
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    EVENT_HOMEASSISTANT_STARTED,
+    STATE_LOCKED,
+    STATE_UNLOCKED,
 )
+from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -90,6 +89,25 @@ SERVICE_REFRESH_CODES = "refresh_codes"
 
 SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
+
+
+async def homeassistant_started_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    locks_to_watch: List[KeymasterLock],
+    evt: Event = None,
+):
+    """Start tracking state changes after HomeAssistant has started."""
+    # Listen to lock state changes so we can fire an event
+    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+        async_track_state_change(
+            hass,
+            [lock.lock_entity_id for lock in locks_to_watch],
+            functools.partial(handle_state_change, hass, config_entry),
+            from_state=[STATE_LOCKED, STATE_UNLOCKED],
+            to_state=[STATE_LOCKED, STATE_UNLOCKED],
+        )
+    )
 
 
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
@@ -220,41 +238,39 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         servicedata = {"lockname": primary_lock.lock_name}
         await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
-    def entity_state_listener(
-        changed_entity: str, old_state: State, new_state: State
-    ) -> None:
-        """Listener to handle state changes to lock entities."""
-        handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
-
-    def zwave_js_event_listener(evt: Event):
-        """Listener to handle Z-Wave JS events."""
-        handle_zwave_js_event(hass, config_entry, evt)
-
-    def homeassistant_started_listener(evt: Event = None):
-        """Start tracking state changes after HomeAssistant has started."""
-        # Listen to lock state changes so we can fire an event
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            async_track_state_change(
-                hass, primary_lock.lock_entity_id, entity_state_listener
-            )
-        )
-
     if using_zwave_js(hass):
-        # Listen to Z-Wave JS events sow e can fire our own events
+        # Listen to Z-Wave JS events so we can fire our own events
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
-        )
-
-    if hass.state == CoreState.running:
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            async_track_state_change(
-                hass, primary_lock.lock_entity_id, entity_state_listener
+            hass.bus.async_listen(
+                ZWAVE_JS_EVENT,
+                functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
-    else:
-        hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_STARTED, homeassistant_started_listener
-        )
+
+    # Check if we need to check alarm type/alarm level sensors, in which case
+    # we need to listen for lock state changes
+    locks_to_watch = []
+    for lock in [primary_lock, *child_locks]:
+        if (
+            lock.alarm_level_or_user_code_entity_id
+            not in (
+                None,
+                "sensor.fake",
+            )
+            and lock.alarm_type_or_access_control_entity_id not in (None, "sensor.fake")
+        ):
+            locks_to_watch.append(lock)
+
+    if locks_to_watch:
+        if hass.state == CoreState.running:
+            await homeassistant_started_listener(hass, config_entry, locks_to_watch)
+        else:
+            hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED,
+                functools.partial(
+                    homeassistant_started_listener, hass, config_entry, locks_to_watch
+                ),
+            )
 
     return True
 
@@ -361,12 +377,6 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     servicedata = {"lockname": primary_lock.lock_name}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
-    def entity_state_listener(
-        changed_entity: str, old_state: State, new_state: State
-    ) -> None:
-        """Listener to track state changes to lock entities."""
-        handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
-
     # Unsubscribe to any listeners so we can create new ones
     for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(
         UNSUB_LISTENERS, []
@@ -374,20 +384,39 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         unsub_listener()
     hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
-    def zwave_js_event_listener(evt: Event):
-        """Listener to handle Z-Wave JS events."""
-        handle_zwave_js_event(hass, config_entry, evt)
-
-    # Create new listeners for lock state changes
-    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-        async_track_state_change(
-            hass, primary_lock.lock_entity_id, entity_state_listener
-        )
-    )
-
     if using_zwave_js(hass):
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
+            hass.bus.async_listen(
+                ZWAVE_JS_EVENT,
+                functools.partial(handle_zwave_js_event, hass, config_entry),
+            )
+        )
+
+    # Check if alarm type/alarm level sensors are specified, in which case
+    # we need to listen for lock state changes and derive the action from those
+    # sensors
+    locks_to_watch = []
+    for lock in [primary_lock, *child_locks]:
+        if (
+            lock.alarm_level_or_user_code_entity_id
+            not in (
+                None,
+                "sensor.fake",
+            )
+            and lock.alarm_type_or_access_control_entity_id not in (None, "sensor.fake")
+        ):
+            locks_to_watch.append(lock)
+
+    if locks_to_watch:
+        # Create new listeners for lock state changes
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            async_track_state_change(
+                hass,
+                [lock.lock_entity_id for lock in locks_to_watch],
+                functools.partial(handle_state_change, hass, config_entry),
+                from_state=[STATE_LOCKED, STATE_UNLOCKED],
+                to_state=[STATE_LOCKED, STATE_UNLOCKED],
+            )
         )
 
 
@@ -452,7 +481,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         # # make button call
         # servicedata = {"entity_id": self._entity_id}
-        # await self.hass.services.async_call(DOMAIN, SERVICE_REFRESH_CODES, servicedata)
+        # await self.hass.services.async_call(
+        #    DOMAIN, SERVICE_REFRESH_CODES, servicedata
+        # )
 
         if using_zwave_js(self.hass):
             node = self._lock.zwave_js_lock_node

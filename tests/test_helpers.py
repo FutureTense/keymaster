@@ -1,4 +1,6 @@
 """ Test keymaster helpers """
+from unittest.mock import Mock, patch
+
 from openzwavemqtt.const import ATTR_CODE_SLOT
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -13,7 +15,7 @@ from custom_components.keymaster.const import (
 from custom_components.keymaster.helpers import delete_lock_and_base_folder
 from homeassistant.const import ATTR_STATE, EVENT_HOMEASSISTANT_STARTED
 
-from .common import MQTTMessage, async_capture_events, setup_ozw
+from .common import MQTTMessage, async_capture_events, process_fixture_data, setup_ozw
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_REAL
 
@@ -41,7 +43,7 @@ async def test_delete_lock_and_base_folder(
 
 async def test_handle_state_change(hass, lock_data, sent_messages):
     """Test handle_state_change"""
-    receive_message = await setup_ozw(hass, fixture=lock_data)
+    receive_message, ozw_entry = await setup_ozw(hass, fixture=lock_data)
     events = async_capture_events(hass, EVENT_KEYMASTER_LOCK_STATE_CHANGED)
 
     # Load the integration
@@ -82,18 +84,27 @@ async def test_handle_state_change(hass, lock_data, sent_messages):
     assert updated_entry.disabled is False
     await hass.async_block_till_done()
 
-    # Commented out until can figure out how to enable sensors via code
-    # state = hass.states.get(
-    #     "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_level"
-    # )
-    # assert state is not None
-    # assert state.state == 1
+    with patch("homeassistant.components.mqtt.async_subscribe") as mock_subscribe:
+        mock_subscribe.return_value = Mock()
+        assert await hass.config_entries.async_reload(ozw_entry.entry_id)
+        await hass.async_block_till_done()
 
-    # state = hass.states.get(
-    #     "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_type"
-    # )
-    # assert state is not None
-    # assert state.state == 21
+    assert "ozw" in hass.config.components
+    assert len(mock_subscribe.mock_calls) == 1
+    receive_message = mock_subscribe.mock_calls[0][1][2]
+    await process_fixture_data(hass, receive_message, lock_data)
+
+    state = hass.states.get(
+        "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_level"
+    )
+    assert state is not None
+    assert state.state == "1"
+
+    state = hass.states.get(
+        "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_type"
+    )
+    assert state is not None
+    assert state.state == "21"
 
     # Unlock the lock
     await hass.services.async_call(
@@ -198,11 +209,7 @@ async def test_handle_state_change(hass, lock_data, sent_messages):
     assert len(events) == 1
     assert events[0].data[ATTR_NAME] == "frontdoor"
     assert events[0].data[ATTR_STATE] == "unlocked"
-    # Uncomment once able to enable sensors via code
-    # assert events[0].data[ATTR_ACTION_CODE] == 25
-    # assert events[0].data[ATTR_ACTION_TEXT] == "RF Unlock"
-    # assert events[0].data[ATTR_CODE_SLOT] == 1
-    assert events[0].data[ATTR_ACTION_CODE] == None
-    assert events[0].data[ATTR_ACTION_TEXT] == None
-    assert events[0].data[ATTR_CODE_SLOT] == None
-    assert events[0].data[ATTR_CODE_SLOT_NAME] is None
+    assert events[0].data[ATTR_ACTION_CODE] == 25
+    assert events[0].data[ATTR_ACTION_TEXT] == "RF Unlock"
+    assert events[0].data[ATTR_CODE_SLOT] == 1
+    assert events[0].data[ATTR_CODE_SLOT_NAME] == ""

@@ -40,9 +40,9 @@ from .const import (
     ATTR_ACTION_TEXT,
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
+    CHILD_LOCKS,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_CHILD_LOCKS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
@@ -133,7 +133,7 @@ async def generate_keymaster_locks(
             lock.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
             lock.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
         )
-        for lock_name, lock in config_entry.data.get(CONF_CHILD_LOCKS, {}).items()
+        for lock_name, lock in config_entry.data.get(CHILD_LOCKS, {}).items()
     ]
 
     # If we are using zwave_js, we need to grab the node and device entry for the
@@ -229,44 +229,55 @@ def delete_folder(absolute_path: str, *relative_paths: str) -> None:
         os.rmdir(path)
 
 
-def handle_zwave_js_event(hass, config_entry: ConfigEntry, evt: Event):
+def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: Event):
     """Handle Z-Wave JS event."""
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+    child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
+        CHILD_LOCKS
+    ]
 
-    # If event doesn't match the type or our device and node, we shouldn't fire an event
-    if (
-        evt.data[ATTR_TYPE] != "notification"
-        or evt.data[ATTR_NODE_ID] != primary_lock.zwave_js_lock_node.node_id
-        or evt.data[ATTR_DEVICE_ID] != primary_lock.zwave_js_lock_device.id
-    ):
+    # If event doesn't match the right type, we shouldn't fire an event
+    if evt.data[ATTR_TYPE] != "notification":
         return
 
-    # Get lock state to provide as part of event data
-    lock_state = hass.states.get(primary_lock.lock_entity_id)
+    for lock in [primary_lock, *child_locks]:
+        # Try to find the lock that we are getting an event for, skipping
+        # ones that don't match
+        if (
+            not lock.zwave_js_lock_node
+            or not lock.zwave_js_lock_device
+            or evt.data[ATTR_NODE_ID] != lock.zwave_js_lock_node.node_id
+            or evt.data[ATTR_DEVICE_ID] != lock.zwave_js_lock_device.id
+        ):
+            continue
 
-    params = evt.data.get(ATTR_PARAMETERS) or {}
-    code_slot = params.get("userId", 0)
+        # Get lock state to provide as part of event data
+        lock_state = hass.states.get(lock.lock_entity_id)
 
-    # Lookup name for usercode
-    code_slot_name_state = (
-        hass.states.get(f"input_text.{primary_lock.lock_name}_name_{code_slot}")
-        if code_slot and code_slot != 0
-        else None
-    )
+        params = evt.data.get(ATTR_PARAMETERS) or {}
+        code_slot = params.get("userId", 0)
 
-    hass.bus.fire(
-        EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-        event_data={
-            ATTR_NAME: primary_lock.lock_name,
-            ATTR_ENTITY_ID: primary_lock.lock_entity_id,
-            ATTR_STATE: lock_state.state if lock_state else None,
-            ATTR_ACTION_TEXT: evt.data.get(ATTR_LABEL),
-            ATTR_CODE_SLOT: code_slot,
-            ATTR_CODE_SLOT_NAME: code_slot_name_state.state
-            if code_slot_name_state is not None
-            else None,
-        },
-    )
+        # Lookup name for usercode
+        code_slot_name_state = (
+            hass.states.get(f"input_text.{lock.lock_name}_name_{code_slot}")
+            if code_slot and code_slot != 0
+            else None
+        )
+
+        hass.bus.fire(
+            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+            event_data={
+                ATTR_NAME: lock.lock_name,
+                ATTR_ENTITY_ID: lock.lock_entity_id,
+                ATTR_STATE: lock_state.state if lock_state else "",
+                ATTR_ACTION_TEXT: evt.data.get(ATTR_LABEL),
+                ATTR_CODE_SLOT: code_slot or 0,
+                ATTR_CODE_SLOT_NAME: code_slot_name_state.state
+                if code_slot_name_state is not None
+                else "",
+            },
+        )
+        return
 
 
 def handle_state_change(
@@ -278,80 +289,81 @@ def handle_state_change(
 ) -> None:
     """Listener to track state changes to lock entities."""
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+    child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
+        CHILD_LOCKS
+    ]
 
-    # If listener was called for entity that is not for this entry,
-    # or lock state is coming from or going to a weird state, ignore
-    if (
-        changed_entity != primary_lock.lock_entity_id
-        or new_state is None
-        or new_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
-        or old_state.state not in (STATE_LOCKED, STATE_UNLOCKED)
-    ):
-        return
+    for lock in [primary_lock, *child_locks]:
+        # Don't do anything if the changed entity is not this lock
+        if changed_entity != lock.lock_entity_id:
+            continue
 
-    # Determine action type to set appropriate action text using ACTION_MAP
-    action_type = ""
-    if (
-        ALARM_TYPE in primary_lock.alarm_type_or_access_control_entity_id
-        or ALARM_TYPE.replace("_", "")
-        in primary_lock.alarm_type_or_access_control_entity_id
-    ):
-        action_type = ALARM_TYPE
-    if ACCESS_CONTROL in primary_lock.alarm_type_or_access_control_entity_id:
-        action_type = ACCESS_CONTROL
+        # Determine action type to set appropriate action text using ACTION_MAP
+        action_type = ""
+        if lock.alarm_type_or_access_control_entity_id and (
+            ALARM_TYPE in lock.alarm_type_or_access_control_entity_id
+            or ALARM_TYPE.replace("_", "")
+            in lock.alarm_type_or_access_control_entity_id
+        ):
+            action_type = ALARM_TYPE
+        if (
+            lock.alarm_type_or_access_control_entity_id
+            and ACCESS_CONTROL in lock.alarm_type_or_access_control_entity_id
+        ):
+            action_type = ACCESS_CONTROL
 
-    # Get alarm_level/usercode and alarm_type/access_control  states
-    alarm_level_state = hass.states.get(primary_lock.alarm_level_or_user_code_entity_id)
-    alarm_level_value = int(alarm_level_state.state) if alarm_level_state else None
+        # Get alarm_level/usercode and alarm_type/access_control  states
+        alarm_level_state = hass.states.get(lock.alarm_level_or_user_code_entity_id)
+        alarm_level_value = int(alarm_level_state.state) if alarm_level_state else None
 
-    alarm_type_state = hass.states.get(
-        primary_lock.alarm_type_or_access_control_entity_id
-    )
-    alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
+        alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
+        alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
 
-    # If lock has changed state but alarm_type/access_control state hasn't changed in a
-    # while set action_value to RF lock/unlock
-    if (
-        alarm_level_state is not None
-        and int(alarm_level_state.state) == 0
-        and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
-        > timedelta(seconds=5)
-        and action_type in LOCK_STATE_MAP
-    ):
-        alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
+        # Bail out if we can't use the sensors to provide a meaningful message
+        if alarm_level_value is None or alarm_type_value is None:
+            return
 
-    # Lookup action text based on alarm type value
-    action_text = (
-        ACTION_MAP.get(action_type, {}).get(
-            alarm_type_value, "Unknown Alarm Type Value"
+        # If lock has changed state but alarm_type/access_control state hasn't changed
+        # in a while set action_value to RF lock/unlock
+        if (
+            alarm_level_state is not None
+            and int(alarm_level_state.state) == 0
+            and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
+            > timedelta(seconds=5)
+            and action_type in LOCK_STATE_MAP
+        ):
+            alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
+
+        # Lookup action text based on alarm type value
+        action_text = (
+            ACTION_MAP.get(action_type, {}).get(
+                alarm_type_value, "Unknown Alarm Type Value"
+            )
+            if alarm_type_value is not None
+            else None
         )
-        if alarm_type_value is not None
-        else None
-    )
 
-    # Lookup name for usercode
-    code_slot_name_state = hass.states.get(
-        f"input_text.{primary_lock.lock_name}_name_{alarm_level_value}"
-    )
+        # Lookup name for usercode
+        code_slot_name_state = hass.states.get(
+            f"input_text.{lock.lock_name}_name_{alarm_level_value}"
+        )
 
-    # Get lock state to provide as part of event data
-    lock_state = hass.states.get(primary_lock.lock_entity_id)
-
-    # Fire state change event
-    hass.bus.fire(
-        EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-        event_data={
-            ATTR_NAME: primary_lock.lock_name,
-            ATTR_ENTITY_ID: primary_lock.lock_entity_id,
-            ATTR_STATE: lock_state.state if lock_state else None,
-            ATTR_ACTION_CODE: alarm_type_value,
-            ATTR_ACTION_TEXT: action_text,
-            ATTR_CODE_SLOT: alarm_level_value,
-            ATTR_CODE_SLOT_NAME: code_slot_name_state.state
-            if code_slot_name_state is not None
-            else None,
-        },
-    )
+        # Fire state change event
+        hass.bus.fire(
+            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+            event_data={
+                ATTR_NAME: lock.lock_name,
+                ATTR_ENTITY_ID: lock.lock_entity_id,
+                ATTR_STATE: new_state.state,
+                ATTR_ACTION_CODE: alarm_type_value,
+                ATTR_ACTION_TEXT: action_text,
+                ATTR_CODE_SLOT: alarm_level_value or 0,
+                ATTR_CODE_SLOT_NAME: code_slot_name_state.state
+                if code_slot_name_state is not None
+                else "",
+            },
+        )
+        return
 
 
 def reload_package_platforms(hass: HomeAssistant) -> bool:
