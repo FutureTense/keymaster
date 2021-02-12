@@ -13,13 +13,7 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import (
-    Config,
-    CoreState,
-    Event,
-    HomeAssistant,
-    ServiceCall,
-)
+from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 

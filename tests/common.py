@@ -65,6 +65,7 @@ async def process_fixture_data(hass, receive_message, fixture):
 
     await hass.async_block_till_done()
 
+
 class MQTTMessage:
     """Represent a mock MQTT message."""
 
