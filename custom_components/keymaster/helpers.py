@@ -236,11 +236,13 @@ def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: E
         CHILD_LOCKS
     ]
 
-    # If event doesn't match the type or our device and node, we shouldn't fire an event
+    # If event doesn't match the right type, we shouldn't fire an event
     if evt.data[ATTR_TYPE] != "notification":
         return
 
     for lock in [primary_lock, *child_locks]:
+        # Try to find the lock that we are getting an event for, skipping
+        # ones that don't match
         if (
             not lock.zwave_js_lock_node
             or not lock.zwave_js_lock_device
