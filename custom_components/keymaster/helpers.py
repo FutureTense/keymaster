@@ -267,12 +267,12 @@ def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: E
             event_data={
                 ATTR_NAME: lock.lock_name,
                 ATTR_ENTITY_ID: lock.lock_entity_id,
-                ATTR_STATE: lock_state.state if lock_state else None,
+                ATTR_STATE: lock_state.state if lock_state else "",
                 ATTR_ACTION_TEXT: evt.data.get(ATTR_LABEL),
-                ATTR_CODE_SLOT: code_slot,
+                ATTR_CODE_SLOT: code_slot or 0,
                 ATTR_CODE_SLOT_NAME: code_slot_name_state.state
                 if code_slot_name_state is not None
-                else None,
+                else "",
             },
         )
 
@@ -300,6 +300,7 @@ def handle_state_change(
         return
 
     for lock in [primary_lock, *child_locks]:
+        # Don't do anything if the changed entity is not this lock
         if changed_entity != lock.lock_entity_id:
             continue
 
@@ -324,8 +325,12 @@ def handle_state_change(
         alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
         alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
 
-        # If lock has changed state but alarm_type/access_control state hasn't changed in a
-        # while set action_value to RF lock/unlock
+        # Bail out if we can't use the sensors to provide a meaningful message
+        if alarm_level_value is None or alarm_type_value is None:
+            return
+
+        # If lock has changed state but alarm_type/access_control state hasn't changed
+        # in a while set action_value to RF lock/unlock
         if (
             alarm_level_state is not None
             and int(alarm_level_state.state) == 0
@@ -358,13 +363,13 @@ def handle_state_change(
             event_data={
                 ATTR_NAME: lock.lock_name,
                 ATTR_ENTITY_ID: lock.lock_entity_id,
-                ATTR_STATE: lock_state.state if lock_state else None,
+                ATTR_STATE: lock_state.state if lock_state else "",
                 ATTR_ACTION_CODE: alarm_type_value,
                 ATTR_ACTION_TEXT: action_text,
-                ATTR_CODE_SLOT: alarm_level_value,
+                ATTR_CODE_SLOT: alarm_level_value or 0,
                 ATTR_CODE_SLOT_NAME: code_slot_name_state.state
                 if code_slot_name_state is not None
-                else None,
+                else "",
             },
         )
 

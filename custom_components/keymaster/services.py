@@ -80,7 +80,7 @@ async def refresh_codes(
     node_id = get_node_id(hass, entity_id)
     if node_id is None:
         _LOGGER.error(
-            "Problem retrieving node_id from entity %s because the entity doesn't exist.",
+            "Problem retrieving node_id from entity %s",
             entity_id,
         )
         return
@@ -123,7 +123,7 @@ async def add_code(
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
             _LOGGER.error(
-                "Problem retrieving node_id from entity %s because the entity doesn't exist.",
+                "Problem retrieving node_id from entity %s",
                 entity_id,
             )
             return
@@ -161,7 +161,7 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
             _LOGGER.error(
-                "Problem retrieving node_id from entity %s because the entity doesn't exist.",
+                "Problem retrieving node_id from entity %s",
                 entity_id,
             )
             return
@@ -172,7 +172,8 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
         }
 
         _LOGGER.debug(
-            "Setting code slot value to random PIN as workaround in case clearing code doesn't work"
+            "Setting code slot value to random PIN as workaround in case clearing code "
+            "doesn't work"
         )
         await call_service(
             hass,

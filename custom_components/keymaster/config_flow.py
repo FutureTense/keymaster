@@ -45,11 +45,11 @@ _LOGGER = logging.getLogger(__name__)
 CHILD_LOCKS_SCHEMA = cv.schema_with_slug_keys(
     {
         vol.Required(CONF_LOCK_ENTITY_ID): cv.entity_id,
-        vol.Optional(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, default=None): vol.Any(
-            None, cv.entity_id
-        ),
         vol.Optional(
-            CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID, default=None
+            CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, default="sensor.fake"
+        ): vol.Any(None, cv.entity_id),
+        vol.Optional(
+            CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID, default="sensor.fake"
         ): vol.Any(None, cv.entity_id),
     }
 )
