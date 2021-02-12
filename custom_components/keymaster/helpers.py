@@ -149,9 +149,20 @@ async def generate_keymaster_locks(
                 if identifier[0] == ZWAVE_JS_DOMAIN:
                     node_id = int(identifier[1].split("-")[1])
             lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-            client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][
-                ZWAVE_JS_DATA_CLIENT
-            ]
+
+            client = None
+            while client is None:
+                try:
+                    client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][
+                        ZWAVE_JS_DATA_CLIENT
+                    ]
+                except KeyError:
+                    _LOGGER.info(
+                        "Can't access Z-Wave JS data client yet. "
+                        "Trying again in 5 seconds"
+                    )
+                    await asyncio.sleep(5)
+
             while lock.zwave_js_lock_device is None and lock.zwave_js_lock_node is None:
                 if (
                     client.connected
