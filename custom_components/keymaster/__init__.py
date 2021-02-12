@@ -220,6 +220,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         servicedata = {"lockname": primary_lock.lock_name}
         await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
+    if using_zwave_js(hass):
+        # Listen to Z-Wave JS events so we can fire our own events
+        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+            hass.bus.async_listen(
+                ZWAVE_JS_EVENT,
+                functools.partial(handle_zwave_js_event, hass, config_entry),
+            )
+        )
+
     async def homeassistant_started_listener(
         hass: HomeAssistant,
         config_entry: ConfigEntry,
@@ -233,15 +242,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 hass,
                 [lock.lock_entity_id for lock in locks_to_watch],
                 functools.partial(handle_state_change, hass, config_entry),
-            )
-        )
-
-    if using_zwave_js(hass):
-        # Listen to Z-Wave JS events so we can fire our own events
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            hass.bus.async_listen(
-                ZWAVE_JS_EVENT,
-                functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
 
