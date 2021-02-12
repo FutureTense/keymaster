@@ -1,5 +1,6 @@
 """keymaster Integration."""
 from datetime import timedelta
+from functools import partial
 import logging
 from typing import Any, Dict
 
@@ -220,40 +221,36 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         servicedata = {"lockname": primary_lock.lock_name}
         await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
-    def entity_state_listener(
-        changed_entity: str, old_state: State, new_state: State
-    ) -> None:
-        """Listener to handle state changes to lock entities."""
-        handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
-
-    def zwave_js_event_listener(evt: Event):
-        """Listener to handle Z-Wave JS events."""
-        handle_zwave_js_event(hass, config_entry, evt)
-
-    def homeassistant_started_listener(evt: Event = None):
+    async def homeassistant_started_listener(
+        hass: HomeAssistant, config_entry: ConfigEntry, evt: Event = None
+    ):
         """Start tracking state changes after HomeAssistant has started."""
         # Listen to lock state changes so we can fire an event
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             async_track_state_change(
-                hass, primary_lock.lock_entity_id, entity_state_listener
+                hass,
+                [
+                    primary_lock.lock_entity_id,
+                    *[child_lock.lock_entity_id for child_lock in child_locks],
+                ],
+                partial(handle_state_change, hass, config_entry),
             )
         )
 
     if using_zwave_js(hass):
         # Listen to Z-Wave JS events sow e can fire our own events
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
+            hass.bus.async_listen(
+                ZWAVE_JS_EVENT, partial(handle_zwave_js_event, hass, config_entry)
+            )
         )
 
     if hass.state == CoreState.running:
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            async_track_state_change(
-                hass, primary_lock.lock_entity_id, entity_state_listener
-            )
-        )
+        await homeassistant_started_listener(hass, config_entry)
     else:
         hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_STARTED, homeassistant_started_listener
+            EVENT_HOMEASSISTANT_STARTED,
+            partial(homeassistant_started_listener, hass, config_entry),
         )
 
     return True
@@ -361,12 +358,6 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     servicedata = {"lockname": primary_lock.lock_name}
     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
 
-    def entity_state_listener(
-        changed_entity: str, old_state: State, new_state: State
-    ) -> None:
-        """Listener to track state changes to lock entities."""
-        handle_state_change(hass, config_entry, changed_entity, old_state, new_state)
-
     # Unsubscribe to any listeners so we can create new ones
     for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(
         UNSUB_LISTENERS, []
@@ -374,20 +365,23 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         unsub_listener()
     hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
-    def zwave_js_event_listener(evt: Event):
-        """Listener to handle Z-Wave JS events."""
-        handle_zwave_js_event(hass, config_entry, evt)
-
     # Create new listeners for lock state changes
     hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
         async_track_state_change(
-            hass, primary_lock.lock_entity_id, entity_state_listener
+            hass,
+            [
+                primary_lock.lock_entity_id,
+                *[child_lock.lock_entity_id for child_lock in child_locks],
+            ],
+            partial(handle_state_change, hass, config_entry),
         )
     )
 
     if using_zwave_js(hass):
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            hass.bus.async_listen(ZWAVE_JS_EVENT, zwave_js_event_listener)
+            hass.bus.async_listen(
+                ZWAVE_JS_EVENT, partial(handle_zwave_js_event, hass, config_entry)
+            )
         )
 
 
