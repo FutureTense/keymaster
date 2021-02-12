@@ -15,7 +15,13 @@ from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_STATE, SERVICE_RELOAD, STATE_LOCKED, STATE_UNLOCKED
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_STATE,
+    SERVICE_RELOAD,
+    STATE_LOCKED,
+    STATE_UNLOCKED,
+)
 from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers.device_registry import (
@@ -252,6 +258,7 @@ def handle_zwave_js_event(hass, config_entry: ConfigEntry, evt: Event):
         EVENT_KEYMASTER_LOCK_STATE_CHANGED,
         event_data={
             ATTR_NAME: primary_lock.lock_name,
+            ATTR_ENTITY_ID: primary_lock.lock_entity_id,
             ATTR_STATE: lock_state.state if lock_state else None,
             ATTR_ACTION_TEXT: evt.data.get(ATTR_LABEL),
             ATTR_CODE_SLOT: code_slot,
@@ -335,6 +342,7 @@ def handle_state_change(
         EVENT_KEYMASTER_LOCK_STATE_CHANGED,
         event_data={
             ATTR_NAME: primary_lock.lock_name,
+            ATTR_ENTITY_ID: primary_lock.lock_entity_id,
             ATTR_STATE: lock_state.state if lock_state else None,
             ATTR_ACTION_CODE: alarm_type_value,
             ATTR_ACTION_TEXT: action_text,
