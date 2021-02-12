@@ -92,6 +92,23 @@ SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
 
 
+async def homeassistant_started_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    locks_to_watch: List[KeymasterLock],
+    evt: Event = None,
+):
+    """Start tracking state changes after HomeAssistant has started."""
+    # Listen to lock state changes so we can fire an event
+    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
+        async_track_state_change(
+            hass,
+            [lock.lock_entity_id for lock in locks_to_watch],
+            functools.partial(handle_state_change, hass, config_entry),
+        )
+    )
+
+
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     """Disallow configuration via YAML."""
     return True
@@ -226,22 +243,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             hass.bus.async_listen(
                 ZWAVE_JS_EVENT,
                 functools.partial(handle_zwave_js_event, hass, config_entry),
-            )
-        )
-
-    async def homeassistant_started_listener(
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-        locks_to_watch: List[KeymasterLock],
-        evt: Event = None,
-    ):
-        """Start tracking state changes after HomeAssistant has started."""
-        # Listen to lock state changes so we can fire an event
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            async_track_state_change(
-                hass,
-                [lock.lock_entity_id for lock in locks_to_watch],
-                functools.partial(handle_state_change, hass, config_entry),
             )
         )
 
