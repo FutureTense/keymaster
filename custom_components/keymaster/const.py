@@ -4,7 +4,7 @@ from homeassistant.const import STATE_LOCKED, STATE_UNLOCKED
 DOMAIN = "keymaster"
 VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
-PLATFORM = "sensor"
+PLATFORMS = ["binary_sensor", "sensor"]
 ZWAVE_NETWORK = "zwave_network"
 MANAGER = "manager"
 
@@ -57,6 +57,15 @@ DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
 DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"
 DEFAULT_ALARM_TYPE_SENSOR = "sensor.fake"
 DEFAULT_HIDE_PINS = False
+
+# OZW constants
+OZW_STATUS_TOPIC = "OpenZWave/1/status/"
+OZW_STATUS_KEY = "Status"
+OZW_READY_STATUSES = [
+    "driverAwakeNodesQueried",
+    "driverAllNodesQueriedSomeDead",
+    "driverAllNodesQueried",
+]
 
 # Action maps
 ACTION_MAP = {

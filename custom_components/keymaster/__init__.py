@@ -1,4 +1,5 @@
 """keymaster Integration."""
+import asyncio
 from datetime import timedelta
 import functools
 import logging
@@ -16,6 +17,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     EVENT_HOMEASSISTANT_STARTED,
     STATE_LOCKED,
+    STATE_ON,
     STATE_UNLOCKED,
 )
 from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
@@ -23,6 +25,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .binary_sensor import ENTITY_ID as NETWORK_READY_ENTITY_ID
 from .const import (
     ATTR_NAME,
     ATTR_NODE_ID,
@@ -46,13 +49,17 @@ from .const import (
     DOMAIN,
     ISSUE_URL,
     MANAGER,
-    PLATFORM,
+    PLATFORMS,
     PRIMARY_LOCK,
     UNSUB_LISTENERS,
     VERSION,
     ZWAVE_NETWORK,
 )
-from .exceptions import NoNodeSpecifiedError, ZWaveIntegrationNotConfiguredError
+from .exceptions import (
+    NoNodeSpecifiedError,
+    ZWaveIntegrationNotConfiguredError,
+    ZWaveNetworkNotReady,
+)
 from .helpers import (
     async_reload_package_platforms,
     async_reset_code_slot_if_pin_unknown,
@@ -69,9 +76,9 @@ from .helpers import (
 from .lock import KeymasterLock
 from .services import add_code, clear_code, generate_package_files, refresh_codes
 
-# TODO: At some point we should assume that users have upgraded to the latest
-# Home Assistant instance and that we can safely import these, so we can move
-# these back to standard imports at that point.
+# TODO: At some point we should deprecate ozw and zwave and require zwave_js.
+# At that point, we will not need this try except logic and can remove a bunch
+# of code.
 try:
     from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.util.lock import get_usercodes
@@ -240,9 +247,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         config_entry.data[CONF_START],
     )
 
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(config_entry, PLATFORM)
-    )
+    for platform in PLATFORMS:
+        hass.async_create_task(
+            hass.config_entries.async_forward_entry_setup(config_entry, platform)
+        )
 
     # if the use turned on the bool generate the files
     if should_generate_package:
@@ -303,8 +311,11 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         notification_id=notification_id,
     )
 
-    unload_ok = await hass.config_entries.async_forward_entry_unload(
-        config_entry, PLATFORM
+    unload_ok = await asyncio.gather(
+        *[
+            hass.config_entries.async_forward_entry_unload(config_entry, platform)
+            for platform in PLATFORMS
+        ]
     )
 
     if unload_ok:
@@ -500,13 +511,20 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     async def async_update_usercodes(self) -> Dict[str, Any]:
         """Async wrapper to update usercodes."""
         try:
+            network_ready = self.hass.states.get(NETWORK_READY_ENTITY_ID)
+            if not network_ready or network_ready.state != STATE_ON:
+                raise ZWaveNetworkNotReady
             return await self.hass.async_add_executor_job(self.update_usercodes)
         except (
             NotFoundError,
             NotSupportedError,
             NoNodeSpecifiedError,
             ZWaveIntegrationNotConfiguredError,
+            ZWaveNetworkNotReady,
         ) as err:
+            # We can silently fail if we've never been able to retrieve data
+            if not self.data:
+                return {}
             raise UpdateFailed from err
 
     def update_usercodes(self) -> Dict[str, Any]:
@@ -523,6 +541,8 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         if using_zwave_js(self.hass):
             node = self._lock.zwave_js_lock_node
+            if node is None:
+                raise NotFoundError
             code_slot = 1
 
             for slot in get_usercodes(node):

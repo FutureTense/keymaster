@@ -14,3 +14,7 @@ class ZWaveIntegrationNotConfiguredError(HomeAssistantError):
 
 class NoNodeSpecifiedError(HomeAssistantError):
     """Raised when a node was not specified as an input parameter."""
+
+
+class ZWaveNetworkNotReady(HomeAssistantError):
+    """Raised when Z-Wave network is not ready."""

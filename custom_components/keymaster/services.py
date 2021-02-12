@@ -37,9 +37,9 @@ from .helpers import (
 )
 from .lock import KeymasterLock
 
-# TODO: At some point we should assume that users have upgraded to the latest
-# Home Assistant instance and that we can safely import these, so we can move
-# these back to standard imports at that point.
+# TODO: At some point we should deprecate ozw and zwave and require zwave_js.
+# At that point, we will not need this try except logic and can remove a bunch
+# of code.
 try:
     from zwave_js_server.const import ATTR_CODE_SLOT
 
