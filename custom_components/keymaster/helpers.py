@@ -23,6 +23,12 @@ from homeassistant.const import (
 )
 from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.exceptions import ServiceNotFound
+from homeassistant.helpers.device_registry import (
+    async_get_registry as async_get_device_registry,
+)
+from homeassistant.helpers.entity_registry import (
+    async_get_registry as async_get_entity_registry,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -63,6 +69,7 @@ try:
         ATTR_NODE_ID,
         ATTR_PARAMETERS,
         ATTR_TYPE,
+        DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
         DOMAIN as ZWAVE_JS_DOMAIN,
     )
 except (ModuleNotFoundError, ImportError):
@@ -132,6 +139,32 @@ async def generate_keymaster_locks(
     ]
 
     return primary_lock, child_locks
+
+
+async def async_update_zwave_js_nodes_and_devices(
+    hass: HomeAssistant,
+    entry_id: str,
+    primary_lock: KeymasterLock,
+    child_locks: List[KeymasterLock],
+) -> None:
+    """Update Z-Wave JS nodes and devices."""
+    client = hass.data[ZWAVE_JS_DOMAIN][entry_id][ZWAVE_JS_DATA_CLIENT]
+    ent_reg = await async_get_entity_registry(hass)
+    dev_reg = await async_get_device_registry(hass)
+    for lock in [primary_lock, *child_locks]:
+        lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
+        if not lock_ent_reg_entry:
+            continue
+        lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
+        if not lock_dev_reg_entry:
+            continue
+        node_id: int = 0
+        for identifier in lock_dev_reg_entry.identifiers:
+            if identifier[0] == ZWAVE_JS_DOMAIN:
+                node_id = int(identifier[1].split("-")[1])
+
+        lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+        lock.zwave_js_lock_device = lock_dev_reg_entry
 
 
 def output_to_file_from_template(

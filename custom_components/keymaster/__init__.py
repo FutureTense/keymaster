@@ -63,6 +63,7 @@ from .exceptions import (
 from .helpers import (
     async_reload_package_platforms,
     async_reset_code_slot_if_pin_unknown,
+    async_update_zwave_js_nodes_and_devices,
     delete_folder,
     delete_lock_and_base_folder,
     generate_keymaster_locks,
@@ -86,10 +87,6 @@ try:
     from homeassistant.components.zwave_js import ZWAVE_JS_EVENT
 except (ModuleNotFoundError, ImportError):
     from openzwavemqtt.const import ATTR_CODE_SLOT
-
-    ATTR_IN_USE = "in_use"
-    ATTR_USERCODE = "usercode"
-    ZWAVE_JS_EVENT = "zwave_js_event"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -471,9 +468,12 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage usercode updates."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-        self._lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
+        self._primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
             PRIMARY_LOCK
         ]
+        self._child_locks: List[KeymasterLock] = hass.data[DOMAIN][
+            config_entry.entry_id
+        ][CHILD_LOCKS]
         super().__init__(
             hass,
             _LOGGER,
@@ -492,9 +492,11 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         data = ""
 
         # Build data from entities
-        enabled_bool = f"input_boolean.enabled_{self._lock.lock_name}_{code_slot}"
+        enabled_bool = (
+            f"input_boolean.enabled_{self._primary_lock.lock_name}_{code_slot}"
+        )
         enabled = self.hass.states.get(enabled_bool)
-        pin_data = f"input_text.{self._lock.lock_name}_pin_{code_slot}"
+        pin_data = f"input_text.{self._primary_lock.lock_name}_pin_{code_slot}"
         pin = self.hass.states.get(pin_data)
 
         # If slot is enabled return the PIN
@@ -514,6 +516,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             network_ready = self.hass.states.get(NETWORK_READY_ENTITY_ID)
             if not network_ready or network_ready.state != STATE_ON:
                 raise ZWaveNetworkNotReady
+
             return await self.hass.async_add_executor_job(self.update_usercodes)
         except (
             NotFoundError,
@@ -531,7 +534,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         """Update usercodes."""
         # loop to get user code data from entity_id node
         instance_id = 1  # default
-        data = {CONF_LOCK_ENTITY_ID: self._lock.lock_entity_id}
+        data = {CONF_LOCK_ENTITY_ID: self._primary_lock.lock_entity_id}
 
         # # make button call
         # servicedata = {"entity_id": self._entity_id}
@@ -540,7 +543,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         # )
 
         if using_zwave_js(self.hass):
-            node = self._lock.zwave_js_lock_node
+            node = self._primary_lock.zwave_js_lock_node
             if node is None:
                 raise NotFoundError
             code_slot = 1
@@ -564,7 +567,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         # pull the codes for ozw
         elif using_ozw(self.hass):
-            node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+            node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
             if node_id is None:
                 return data
             data[ATTR_NODE_ID] = node_id
@@ -601,7 +604,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         # pull codes for zwave
         elif using_zwave(self.hass):
-            node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+            node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
             if node_id is None:
                 return data
             data[ATTR_NODE_ID] = node_id
@@ -633,9 +636,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     code = self._invalid_code(value.index)
 
                 # Build data from entities
-                enabled_bool = (
-                    f"input_boolean.enabled_{self._lock.lock_name}_{value.index}"
-                )
+                enabled_bool = f"input_boolean.enabled_{self._primary_lock.lock_name}_{value.index}"
                 enabled = self.hass.states.get(enabled_bool)
 
                 # Report blank slot if occupied by random code

@@ -20,9 +20,6 @@ from homeassistant.components.zwave_js.const import (
     DOMAIN as ZWAVE_JS_DOMAIN,
 )
 from homeassistant.exceptions import PlatformNotReady
-from homeassistant.helpers.device_registry import (
-    async_get_registry as async_get_device_registry,
-)
 from homeassistant.helpers.entity_registry import (
     async_get_registry as async_get_entity_registry,
 )
@@ -36,7 +33,12 @@ from .const import (
     OZW_STATUS_TOPIC,
     PRIMARY_LOCK,
 )
-from .helpers import using_ozw, using_zwave, using_zwave_js
+from .helpers import (
+    async_update_zwave_js_nodes_and_devices,
+    using_ozw,
+    using_zwave,
+    using_zwave_js,
+)
 from .lock import KeymasterLock
 
 try:
@@ -96,7 +98,9 @@ class BaseNetworkReadySensor(BinarySensorEntity):
         self._is_on = False
 
     @callback
-    def async_set_is_on_property(self, value_to_set: bool) -> None:
+    def async_set_is_on_property(
+        self, value_to_set: bool, write_state: bool = True
+    ) -> None:
         """Update state."""
         # Return immediately if we are not changing state
         if value_to_set == self._is_on:
@@ -108,7 +112,8 @@ class BaseNetworkReadySensor(BinarySensorEntity):
             _LOGGER.debug("Disconnected from %s network", self.integration_name)
 
         self._is_on = value_to_set
-        self.async_write_ha_state()
+        if write_state:
+            self.async_write_ha_state()
 
     @property
     def name(self) -> str:
@@ -144,15 +149,14 @@ class ZwaveJSNetworkReadySensor(BaseNetworkReadySensor):
     ) -> None:
         """Initialize sensor."""
         super().__init__(primary_lock, child_locks, ZWAVE_JS_DOMAIN)
-        self.ent_reg = None
         self.lock_config_entry_id = None
 
     async def async_update(self) -> None:
         """Update sensor."""
         if not self.lock_config_entry_id:
             entity_id = self.primary_lock.lock_entity_id
-            self.ent_reg = await async_get_entity_registry(self.hass)
-            lock_ent_reg_entry = self.ent_reg.async_get(entity_id)
+            ent_reg = await async_get_entity_registry(self.hass)
+            lock_ent_reg_entry = ent_reg.async_get(entity_id)
             if not lock_ent_reg_entry:
                 _LOGGER.error("Can't find your lock %s.", entity_id)
                 return
@@ -176,27 +180,17 @@ class ZwaveJSNetworkReadySensor(BaseNetworkReadySensor):
         if not network_ready ^ self.is_on:
             return
 
-        if network_ready:
-            _LOGGER.debug("Connected to %s network", ZWAVE_JS_DOMAIN)
-            self._is_on = True
-            dev_reg = await async_get_device_registry(self.hass)
-            for lock in [self.primary_lock, *self.child_locks]:
-                lock_ent_reg_entry = self.ent_reg.async_get(lock.lock_entity_id)
-                if not lock_ent_reg_entry:
-                    continue
-                lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
-                if not lock_dev_reg_entry:
-                    continue
-                node_id: int = 0
-                for identifier in lock_dev_reg_entry.identifiers:
-                    if identifier[0] == ZWAVE_JS_DOMAIN:
-                        node_id = int(identifier[1].split("-")[1])
+        self.async_set_is_on_property(network_ready, False)
 
-                lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
-                lock.zwave_js_lock_device = lock_dev_reg_entry
-        else:
-            _LOGGER.debug("Disconnected from %s network", ZWAVE_JS_DOMAIN)
-            self._is_on = False
+        # If we just turned the sensor on, we need to get the latest lock
+        # nodes and devices
+        if self.is_on:
+            await async_update_zwave_js_nodes_and_devices(
+                self.hass,
+                self.lock_config_entry_id,
+                self.primary_lock,
+                self.child_locks,
+            )
 
     @property
     def should_poll(self):
