@@ -194,7 +194,7 @@ async def test_template_sensors(hass: HomeAssistant):
         assert hass.states.get(connected_entity).attributes["icon"] == "mdi:folder-key"
 
 
-async def test_rest_code_slots(hass):
+async def test_reset_code_slots(hass):
     """Test reset_code_slots."""
     enabled_entity = "input_boolean.enabled_lockname_templatenum"
     daterange_entity = "input_boolean.daterange_lockname_templatenum"
