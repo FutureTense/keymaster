@@ -4,7 +4,7 @@
   "documentation": "https://github.com/FutureTense/keymaster",
   "dependencies": [],
   "after_dependencies": ["ozw", "template", "zwave", "zwave_js"],
-  "codeowners": ["@FutureTense", "@firstof9"],
+  "codeowners": ["@FutureTense", "@firstof9", "@raman325"],
   "config_flow": true,
   "issue_tracker": "https://github.com/FutureTense/keymaster/issues",
   "requirements": [],
