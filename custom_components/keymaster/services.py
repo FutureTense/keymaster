@@ -4,8 +4,6 @@ import os
 import random
 from typing import Any, Dict
 
-from openzwavemqtt.const import CommandClass
-
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
@@ -14,6 +12,7 @@ from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    ATTR_CODE_SLOT,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
     CONF_HIDE_PINS,
@@ -41,19 +40,18 @@ from .lock import KeymasterLock
 # At that point, we will not need this try except logic and can remove a bunch
 # of code.
 try:
-    from zwave_js_server.const import ATTR_CODE_SLOT
-
     from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
     from homeassistant.components.zwave_js.lock import (
         SERVICE_CLEAR_LOCK_USERCODE,
         SERVICE_SET_LOCK_USERCODE,
     )
 except (ModuleNotFoundError, ImportError):
-    from openzwavemqtt.const import ATTR_CODE_SLOT
+    pass
 
-    ZWAVE_JS_DOMAIN = ""
-    SERVICE_CLEAR_LOCK_USERCODE = ""
-    SERVICE_SET_LOCK_USERCODE = ""
+try:
+    from openzwavemqtt.const import CommandClass
+except (ModuleNotFoundError, ImportError):
+    pass
 
 _LOGGER = logging.getLogger(__name__)
 

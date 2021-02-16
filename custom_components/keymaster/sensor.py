@@ -3,8 +3,6 @@ from functools import partial
 import logging
 from typing import Dict, List, Optional
 
-from openzwavemqtt.const import ATTR_CODE_SLOT
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
@@ -14,6 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
 from .const import (
+    ATTR_CODE_SLOT,
     CHILD_LOCKS,
     CONF_LOCK_NAME,
     CONF_SLOTS,

@@ -18,3 +18,11 @@ class NoNodeSpecifiedError(HomeAssistantError):
 
 class ZWaveNetworkNotReady(HomeAssistantError):
     """Raised when Z-Wave network is not ready."""
+
+
+class NotFoundError(HomeAssistantError):
+    """Raised when a Z-Wave items is not found."""
+
+
+class NotSupportedError(HomeAssistantError):
+    """Raised when action is not supported."""

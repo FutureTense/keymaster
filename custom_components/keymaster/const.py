@@ -30,6 +30,7 @@ ATTR_CODE_SLOT_NAME = "code_slot_name"
 ATTR_NAME = "lockname"
 ATTR_NODE_ID = "node_id"
 ATTR_USER_CODE = "usercode"
+ATTR_CODE_SLOT = "code_slot"
 
 # Configuration Properties
 CONF_ALARM_LEVEL = "alarm_level"

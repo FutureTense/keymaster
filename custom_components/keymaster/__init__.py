@@ -5,9 +5,6 @@ import functools
 import logging
 from typing import Any, Dict, List
 
-from openzwavemqtt.const import CommandClass
-from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
-from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
@@ -27,6 +24,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .binary_sensor import ENTITY_ID as NETWORK_READY_ENTITY_ID
 from .const import (
+    ATTR_CODE_SLOT,
     ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
@@ -56,6 +54,8 @@ from .const import (
     ZWAVE_NETWORK,
 )
 from .exceptions import (
+    NotFoundError as NativeNotFoundError,
+    NotSupportedError as NativeNotSupportedError,
     NoNodeSpecifiedError,
     ZWaveIntegrationNotConfiguredError,
     ZWaveNetworkNotReady,
@@ -81,12 +81,19 @@ from .services import add_code, clear_code, generate_package_files, refresh_code
 # At that point, we will not need this try except logic and can remove a bunch
 # of code.
 try:
-    from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
+    from zwave_js_server.const import ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.util.lock import get_usercodes
 
     from homeassistant.components.zwave_js import ZWAVE_JS_EVENT
 except (ModuleNotFoundError, ImportError):
-    from openzwavemqtt.const import ATTR_CODE_SLOT
+    pass
+
+try:
+    from openzwavemqtt.const import CommandClass
+    from openzwavemqtt.exceptions import NotFoundError
+    from openzwavemqtt.util.node import get_node_from_manager
+except (ModuleNotFoundError, ImportError):
+    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -519,8 +526,8 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
             return await self.hass.async_add_executor_job(self.update_usercodes)
         except (
-            NotFoundError,
-            NotSupportedError,
+            NativeNotFoundError,
+            NativeNotSupportedError,
             NoNodeSpecifiedError,
             ZWaveIntegrationNotConfiguredError,
             ZWaveNetworkNotReady,
@@ -545,7 +552,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         if using_zwave_js(self.hass):
             node = self._primary_lock.zwave_js_lock_node
             if node is None:
-                raise NotFoundError
+                raise NativeNotFoundError
             code_slot = 1
 
             for slot in get_usercodes(node):
@@ -587,7 +594,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             command_class = node.get_command_class(CommandClass.USER_CODE)
 
             if not command_class:
-                raise NotSupportedError("Node doesn't have code slots")
+                raise NativeNotSupportedError("Node doesn't have code slots")
 
             for value in command_class.values():  # type: ignore
                 code_slot = int(value.index)
@@ -615,7 +622,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             network = self.hass.data[ZWAVE_NETWORK]
             node = network.nodes.get(data[ATTR_NODE_ID])
             if not node:
-                raise NotFoundError
+                raise NativeNotFoundError
 
             lock_values = node.get_values(class_id=CommandClass.USER_CODE).values()
             for value in lock_values:
