@@ -161,7 +161,8 @@ automation:
       - condition: state
         entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
         state: "on"
-      - condition: "{{ trigger.from_state.state in ('on', 'off') and trigger.to_state.state in ('on', 'off') }}"
+      - condition: template
+        value_template: "{{ trigger.from_state.state in ('on', 'off') and trigger.to_state.state in ('on', 'off') }}"
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
