@@ -3,11 +3,10 @@ import json
 import logging
 from typing import List
 
-from homeassistant.core import callback
 from homeassistant.components.binary_sensor import (
-    BinarySensorEntity,
     DEVICE_CLASS_CONNECTIVITY,
     ENTITY_ID_FORMAT,
+    BinarySensorEntity,
 )
 from homeassistant.components.mqtt import async_subscribe, models
 from homeassistant.components.ozw.const import DOMAIN as OZW_DOMAIN
@@ -19,6 +18,7 @@ from homeassistant.components.zwave_js.const import (
     DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
     DOMAIN as ZWAVE_JS_DOMAIN,
 )
+from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.entity_registry import (
     async_get_registry as async_get_entity_registry,
