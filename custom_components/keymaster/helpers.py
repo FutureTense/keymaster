@@ -19,8 +19,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_STATE,
     SERVICE_RELOAD,
-    STATE_LOCKED,
-    STATE_UNLOCKED,
+    STATE_UNKNOWN,
 )
 from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.exceptions import ServiceNotFound
@@ -364,6 +363,43 @@ def handle_state_change(
             },
         )
         return
+
+
+def reset_code_slot_if_pin_unknown(
+    hass, lock_name: str, num_code_slots: int, start_from_code_slot: int
+) -> None:
+    """
+    Reset a code slot if the PIN is unknown.
+
+    Used when a code slot is first generated so we can give all input helpers
+    an initial state.
+    """
+    return asyncio.run_coroutine_threadsafe(
+        async_reset_code_slot_if_pin_unknown(
+            hass, lock_name, num_code_slots, start_from_code_slot
+        ),
+        hass.loop,
+    ).result()
+
+
+async def async_reset_code_slot_if_pin_unknown(
+    hass, lock_name: str, num_code_slots: int, start_from_code_slot: int
+) -> None:
+    """
+    Reset a code slot if the PIN is unknown.
+
+    Used when a code slot is first generated so we can give all input helpers
+    an initial state.
+    """
+    for x in range(start_from_code_slot, num_code_slots + 1):
+        pin_state = hass.states.get(f"input_text.{lock_name}_pin_{x}")
+        if pin_state and pin_state.state == STATE_UNKNOWN:
+            await hass.services.async_call(
+                "script",
+                f"{lock_name}_reset_codeslot",
+                {ATTR_CODE_SLOT: x},
+                blocking=True,
+            )
 
 
 def reload_package_platforms(hass: HomeAssistant) -> bool:

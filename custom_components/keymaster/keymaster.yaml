@@ -101,66 +101,50 @@ input_boolean:
     name: 'Enabled'
   accesslimit_LOCKNAME_TEMPLATENUM:
     name: 'Enforce PIN limit'
-    initial: off
   reset_codeslot_LOCKNAME_TEMPLATENUM:
     name: 'Reset Code Slot'
-    initial: off
 
   sun_LOCKNAME_TEMPLATENUM:
     name: 'Sunday'
-    initial: on
 
   mon_LOCKNAME_TEMPLATENUM:
     name: 'Monday'
-    initial: on
 
   tue_LOCKNAME_TEMPLATENUM:
     name: 'Tuesday'
-    initial: on
 
   wed_LOCKNAME_TEMPLATENUM:
     name: 'Wednesday'
-    initial: on
 
   thu_LOCKNAME_TEMPLATENUM:
     name: 'Thursday'
-    initial: on
 
   fri_LOCKNAME_TEMPLATENUM:
     name: 'Friday'
-    initial: on
 
   sat_LOCKNAME_TEMPLATENUM:
     name: 'Saturday'
-    initial: on
 
   sun_inc_LOCKNAME_TEMPLATENUM:
     name: 'include (on)/exclude (off)'
-    initial: on
 
   mon_inc_LOCKNAME_TEMPLATENUM:
     name: 'include (on)/exclude (off)'
-    initial: on
 
   tue_inc_LOCKNAME_TEMPLATENUM:
     name: 'include (on)/exclude (off)'
-    initial: on
 
   wed_inc_LOCKNAME_TEMPLATENUM:
     name: 'include (on)/exclude (off)'
-    initial: on
 
   thu_inc_LOCKNAME_TEMPLATENUM:
     name: 'include (on)/exclude (off)'
-    initial: on
 
   fri_inc_LOCKNAME_TEMPLATENUM:
     name: 'include (on)/exclude (off)'
-    initial: on
 
   sat_inc_LOCKNAME_TEMPLATENUM:
     name: 'include (on)/exclude (off)'
-    initial: on
 
 ################  automation: #################  
 automation:
