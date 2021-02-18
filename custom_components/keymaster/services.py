@@ -30,6 +30,7 @@ from .helpers import (
     get_node_id,
     output_to_file_from_template,
     reload_package_platforms,
+    reset_code_slot_if_pin_unknown,
     using_ozw,
     using_zwave,
     using_zwave_js,
@@ -320,6 +321,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         _LOGGER.debug(
             "Package generation complete and all changes have been hot reloaded"
         )
+        reset_code_slot_if_pin_unknown(hass, lockname, code_slots, start_from)
     else:
         create(
             hass,

@@ -38,6 +38,8 @@ from .const import (
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PATH,
+    CONF_SLOTS,
+    CONF_START,
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
@@ -52,6 +54,7 @@ from .const import (
 from .exceptions import NoNodeSpecifiedError, ZWaveIntegrationNotConfiguredError
 from .helpers import (
     async_reload_package_platforms,
+    async_reset_code_slot_if_pin_unknown,
     delete_folder,
     delete_lock_and_base_folder,
     generate_keymaster_locks,
@@ -229,6 +232,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
     )
 
+    await async_reset_code_slot_if_pin_unknown(
+        hass,
+        primary_lock.lock_name,
+        config_entry.data[CONF_SLOTS],
+        config_entry.data[CONF_START],
+    )
+
     hass.async_create_task(
         hass.config_entries.async_forward_entry_setup(config_entry, PLATFORM)
     )
@@ -343,6 +353,10 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
 async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Update listener."""
+    # No need to update if the options match the data
+    if all(item in config_entry.data.items() for item in config_entry.options.items()):
+        return
+
     # If the path has changed delete the old base folder, otherwise if the lock name
     # has changed only delete the old lock folder
     if config_entry.options[CONF_PATH] != config_entry.data[CONF_PATH]:
