@@ -262,7 +262,7 @@ class ZwaveNetworkReadySensor(BaseNetworkReadySensor):
     async def async_added_to_hass(self) -> None:
         """Run when entity is added."""
         self.network = self.hass.data[ZWAVE_DATA_NETWORK]
-        self.update_status(self.network.is_ready)
+        self.async_set_is_on_property(self.network.is_ready)
 
         self.async_call_dispatcher(dispatcher.connect, weak=False)
 
