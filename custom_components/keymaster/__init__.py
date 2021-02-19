@@ -63,7 +63,6 @@ from .exceptions import (
 from .helpers import (
     async_reload_package_platforms,
     async_reset_code_slot_if_pin_unknown,
-    async_update_zwave_js_nodes_and_devices,
     delete_folder,
     delete_lock_and_base_folder,
     generate_keymaster_locks,
@@ -591,7 +590,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     data[ATTR_NODE_ID],
                 )
             except NotFoundError:
-                return data
+                raise NativeNotFoundError from None
 
             command_class = node.get_command_class(CommandClass.USER_CODE)
 
