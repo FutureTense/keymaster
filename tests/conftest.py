@@ -70,6 +70,13 @@ def mock_osmakedir():
 
 
 @pytest.fixture
+def mock_generate_package_files():
+    """Fixture to mock generate package files."""
+    with patch("custom_components.keymaster.generate_package_files", return_value=None):
+        yield
+
+
+@pytest.fixture
 def mock_delete_folder():
     """Fixture to mock delete_folder helper function."""
     with patch("custom_components.keymaster.delete_folder"):
