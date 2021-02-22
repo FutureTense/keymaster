@@ -381,14 +381,6 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         range(config_entry.options[CONF_START], config_entry.options[CONF_SLOTS] + 1)
     )
 
-    if old_slots != new_slots:
-        async_dispatcher_send(
-            hass,
-            f"{DOMAIN}_{config_entry.entry_id}_code_slots_changed",
-            old_slots,
-            new_slots,
-        )
-
     new_data = config_entry.options.copy()
     new_data.pop(CONF_GENERATE, None)
 
@@ -408,7 +400,17 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         }
     )
     servicedata = {"lockname": primary_lock.lock_name}
-    await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
+    await hass.services.async_call(
+        DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata, blocking=True
+    )
+
+    if old_slots != new_slots:
+        async_dispatcher_send(
+            hass,
+            f"{DOMAIN}_{config_entry.entry_id}_code_slots_changed",
+            old_slots,
+            new_slots,
+        )
 
     # Unsubscribe to any listeners so we can create new ones
     for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(
