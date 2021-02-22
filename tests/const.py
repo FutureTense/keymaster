@@ -35,3 +35,15 @@ CONFIG_DATA_REAL = {
     "slots": 6,
     "start_from": 1,
 }
+
+CONFIG_DATA_BE469 = {
+    "alarm_level_or_user_code_entity_id": "sensor.touchscreen_deadbolt_access_control_lock_state",
+    "alarm_type_or_access_control_entity_id": "sensor.touchscreen_deadbolt_access_control_lock_state",
+    "lock_entity_id": "lock.touchscreen_deadbolt",
+    "lockname": "frontdoor",
+    "generate_package": True,
+    "packages_path": "packages/keymaster",
+    "sensorname": "binary_sensor.frontdoor",
+    "slots": 6,
+    "start_from": 1,
+}
