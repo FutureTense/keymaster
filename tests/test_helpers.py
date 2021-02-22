@@ -233,11 +233,11 @@ async def test_handle_state_change_zwave_js(
     events = async_capture_events(hass, EVENT_KEYMASTER_LOCK_STATE_CHANGED)
 
     # Load the integration
-    entry = MockConfigEntry(
+    config_entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
     )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
+    config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
 
     # Fire the event
@@ -263,7 +263,7 @@ async def test_handle_state_change_zwave_js(
     await hass.async_block_till_done()
 
     # Reload the config entries ?
-    assert await hass.config_entries.async_reload(entry.entry_id)
+    assert await hass.config_entries.async_reload(config_entry.entry_id)
     await hass.async_block_till_done()
 
     state = hass.states.get("sensor.touchscreen_deadbolt_access_control_lock_state")
