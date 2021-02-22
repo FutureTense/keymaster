@@ -159,9 +159,6 @@ automation:
     - platform: state
       entity_id: "sensor.LOCKNAME_code_slot_TEMPLATENUM"
   condition:
-    - condition: state
-      entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
-      state: "off"
     - condition: template
       value_template: >-
         {{
