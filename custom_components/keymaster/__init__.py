@@ -19,6 +19,7 @@ from homeassistant.const import (
     STATE_UNLOCKED,
 )
 from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -75,7 +76,7 @@ try:
     from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.util.lock import get_usercodes
 
-    from homeassistant.componets.zwave_js import ZWAVE_JS_EVENT
+    from homeassistant.components.zwave_js import ZWAVE_JS_EVENT
 except (ModuleNotFoundError, ImportError):
     from openzwavemqtt.const import ATTR_CODE_SLOT
 
@@ -246,7 +247,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # if the use turned on the bool generate the files
     if should_generate_package:
         servicedata = {"lockname": primary_lock.lock_name}
-        await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
+        await hass.services.async_call(
+            DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata, blocking=True
+        )
 
     if using_zwave_js(hass):
         # Listen to Z-Wave JS events so we can fire our own events
@@ -292,9 +295,9 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     async_create(
         hass,
         (
-            f"Removing `{lockname}` and all of the files that were generated for it. "
-            "This may take some time so don't panic. This message will automatically "
-            "clear when removal is complete."
+            f"Removing `{lockname}` and all of the files that were generated for "
+            "it. This may take some time so don't panic. This message will "
+            "automatically clear when removal is complete."
         ),
         title=f"{DOMAIN.title()} - Removing `{lockname}`",
         notification_id=notification_id,
@@ -354,7 +357,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Update listener."""
     # No need to update if the options match the data
-    if all(item in config_entry.data.items() for item in config_entry.options.items()):
+    if not config_entry.options:
         return
 
     # If the path has changed delete the old base folder, otherwise if the lock name
@@ -371,6 +374,21 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
             config_entry.data[CONF_LOCK_NAME],
         )
 
+    old_slots = list(
+        range(config_entry.data[CONF_START], config_entry.data[CONF_SLOTS] + 1)
+    )
+    new_slots = list(
+        range(config_entry.options[CONF_START], config_entry.options[CONF_SLOTS] + 1)
+    )
+
+    if old_slots != new_slots:
+        async_dispatcher_send(
+            hass,
+            f"{DOMAIN}_{config_entry.entry_id}_code_slots_changed",
+            old_slots,
+            new_slots,
+        )
+
     new_data = config_entry.options.copy()
     new_data.pop(CONF_GENERATE, None)
 
@@ -378,6 +396,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         entry=config_entry,
         unique_id=config_entry.options[CONF_LOCK_NAME],
         data=new_data,
+        options={},
     )
 
     primary_lock, child_locks = await generate_keymaster_locks(hass, config_entry)
