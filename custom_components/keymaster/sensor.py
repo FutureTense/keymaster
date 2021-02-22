@@ -1,9 +1,16 @@
 """Sensor for keymaster."""
+from functools import partial
 import logging
+from typing import List
 
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers import entity_platform
+from homeassistant.helpers.entity_registry import EntityRegistry, async_get_registry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
 from .const import CONF_LOCK_NAME, CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 
@@ -20,6 +27,44 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ],
         True,
     )
+
+    async def code_slots_changed(
+        ent_reg: EntityRegistry,
+        platform: entity_platform.EntityPlatform,
+        config_entry: ConfigEntry,
+        old_slots: List[int],
+        new_slots: List[int],
+    ):
+        """Handle code slots changed."""
+        slots_to_add = list(set(new_slots) - set(old_slots))
+        slots_to_remove = list(set(old_slots) - set(new_slots))
+        for slot in slots_to_remove:
+
+            entity_id = (
+                "sensor."
+                f"{slugify(f'{config_entry.data[CONF_LOCK_NAME]}_code_slot_{slot}')}"
+            )
+            if ent_reg.async_get(entity_id):
+                await platform.async_remove_entity(entity_id)
+                ent_reg.async_remove(entity_id)
+
+        async_add_entities(
+            [CodesSensor(hass, entry, x) for x in slots_to_add],
+            True,
+        )
+
+    async_dispatcher_connect(
+        hass,
+        f"{DOMAIN}_{entry.entry_id}_code_slots_changed",
+        partial(
+            code_slots_changed,
+            await async_get_registry(hass),
+            entity_platform.current_platform.get(),
+            entry,
+        ),
+    )
+
+    return True
 
 
 class CodesSensor(CoordinatorEntity):

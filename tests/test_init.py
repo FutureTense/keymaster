@@ -7,7 +7,7 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD
 
 
-async def test_setup_entry(hass, mock_osremove, mock_osmakedir, mock_listdir):
+async def test_setup_entry(hass, mock_generate_package_files):
     """Test setting up entities."""
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
@@ -46,9 +46,7 @@ async def test_unload_entry(
     assert len(hass.states.async_entity_ids(DOMAIN)) == 0
 
 
-async def test_setup_migration_with_old_path(
-    hass, mock_osremove, mock_osmakedir, mock_listdir
-):
+async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
     """Test setting up entities with old path"""
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_OLD, version=1
