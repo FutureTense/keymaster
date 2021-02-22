@@ -52,11 +52,10 @@ async def async_setup_entry(
         slots_to_add = list(set(new_slots) - set(old_slots))
         slots_to_remove = list(set(old_slots) - set(new_slots))
         for slot in slots_to_remove:
-
-            entity_id = (
-                "sensor."
-                f"{slugify(f'{config_entry.data[CONF_LOCK_NAME]}_code_slot_{slot}')}"
+            sensor_name = slugify(
+                f"{config_entry.data[CONF_LOCK_NAME]}_code_slot_{slot}"
             )
+            entity_id = f"sensor.{sensor_name}"
             if ent_reg.async_get(entity_id):
                 await platform.async_remove_entity(entity_id)
                 ent_reg.async_remove(entity_id)
