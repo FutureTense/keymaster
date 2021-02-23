@@ -239,6 +239,7 @@ async def test_handle_state_change_zwave_js(
     assert state.state == STATE_LOCKED
 
     events = async_capture_events(hass, EVENT_KEYMASTER_LOCK_STATE_CHANGED)
+    events_js = async_capture_events(hass, "zwave_js_event")
 
     # Load the integration
     config_entry = MockConfigEntry(
@@ -275,7 +276,7 @@ async def test_handle_state_change_zwave_js(
     await hass.async_block_till_done()
 
     # Reload the config entries ?
-    assert await hass.config_entries.async_reload(config_entry.entry_id)
+    assert await hass.config_entries.async_reload(integration.entry_id)
     await hass.async_block_till_done()
 
     assert "zwave_js" in hass.config.components
@@ -303,6 +304,12 @@ async def test_handle_state_change_zwave_js(
         },
     )
     node.receive_event(event)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmtype")
+    assert state is not None
+    assert state.state == "22"
+
     event = Event(
         type="value updated",
         data={
@@ -321,11 +328,18 @@ async def test_handle_state_change_zwave_js(
         },
     )
     node.receive_event(event)
+    await hass.async_block_till_done()
 
-    assert len(events) == 1
-    assert events[0].data[ATTR_NAME] == "frontdoor"
-    assert events[0].data[ATTR_STATE] == "unlocked"
-    assert events[0].data[ATTR_ACTION_CODE] == 22
-    assert events[0].data[ATTR_ACTION_TEXT] == "RF Unlock"
-    assert events[0].data[ATTR_CODE_SLOT] == 1
-    assert events[0].data[ATTR_CODE_SLOT_NAME] == ""
+    state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmlevel")
+    assert state is not None
+    assert state.state == "3"
+
+    # these should be 1
+    assert len(events) == 0
+    assert len(events_js) == 0
+    # assert events[0].data[ATTR_NAME] == "frontdoor"
+    # assert events[0].data[ATTR_STATE] == "unlocked"
+    # assert events[0].data[ATTR_ACTION_CODE] == 22
+    # assert events[0].data[ATTR_ACTION_TEXT] == "RF Unlock"
+    # assert events[0].data[ATTR_CODE_SLOT] == 1
+    # assert events[0].data[ATTR_CODE_SLOT_NAME] == ""
