@@ -232,6 +232,11 @@ async def test_handle_state_change_zwave_js(
     hass, client, lock_kwikset_910, integration
 ):
     """Test handle_state_change with zwave_js"""
+    # Make sure the lock loaded
+    node = lock_kwikset_910
+    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
+    assert state
+    assert state.state == STATE_LOCKED
 
     events = async_capture_events(hass, EVENT_KEYMASTER_LOCK_STATE_CHANGED)
 
@@ -247,12 +252,6 @@ async def test_handle_state_change_zwave_js(
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await hass.async_block_till_done()
 
-    # Make sure the lock loaded
-    node = lock_kwikset_910
-    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
-    assert state
-    assert state.state == STATE_LOCKED
-
     # Enable the sensors we use
     registry = await hass.helpers.entity_registry.async_get_registry()
     entity_id = "sensor.smart_code_with_home_connect_technology_alarmlevel"
@@ -263,7 +262,6 @@ async def test_handle_state_change_zwave_js(
     )
     await hass.async_block_till_done()
     assert updated_entry.disabled is False
-    await hass.async_block_till_done()
 
     registry = await hass.helpers.entity_registry.async_get_registry()
     entity_id = "sensor.smart_code_with_home_connect_technology_alarmtype"
@@ -280,52 +278,11 @@ async def test_handle_state_change_zwave_js(
     assert await hass.config_entries.async_reload(config_entry.entry_id)
     await hass.async_block_till_done()
 
+    assert "zwave_js" in hass.config.components
+
     state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmtype")
     assert state is not None
     assert state.state == "21"
-
-    assert "zwave_js" in hass.config.components
-
-    # Lock the lock
-    await hass.services.async_call(
-        "lock",
-        "unlock",
-        {ATTR_ENTITY_ID: KWIKSET_910_LOCK_ENTITY},
-        blocking=True,
-    )
-
-    assert len(client.async_send_command.call_args_list) == 1
-    args = client.async_send_command.call_args[0][0]
-    assert args["command"] == "node.set_value"
-    assert args["nodeId"] == 14
-    assert args["valueId"] == {
-        "commandClassName": "Door Lock",
-        "commandClass": 98,
-        "endpoint": 0,
-        "property": "targetMode",
-        "propertyName": "targetMode",
-        "metadata": {
-            "type": "number",
-            "readable": True,
-            "writeable": True,
-            "min": 0,
-            "max": 255,
-            "label": "Target lock mode",
-            "states": {
-                "0": "Unsecured",
-                "1": "UnsecuredWithTimeout",
-                "16": "InsideUnsecured",
-                "17": "InsideUnsecuredWithTimeout",
-                "32": "OutsideUnsecured",
-                "33": "OutsideUnsecuredWithTimeout",
-                "254": "Unknown",
-                "255": "Secured",
-            },
-        },
-    }
-    assert args["value"] == 0
-
-    client.async_send_command.reset_mock()
 
     # Test locked update from value updated event
     event = Event(
@@ -335,16 +292,40 @@ async def test_handle_state_change_zwave_js(
             "event": "value updated",
             "nodeId": 14,
             "args": {
-                "commandClassName": "Door Lock",
-                "commandClass": 98,
+                "commandClassName": "Notification",
+                "commandClass": 113,
                 "endpoint": 0,
-                "property": "currentMode",
-                "newValue": 0,
-                "prevValue": 255,
-                "propertyName": "currentMode",
+                "property": "alarmType",
+                "newValue": 22,
+                "prevValue": 21,
+                "propertyName": "alarmType",
+            },
+        },
+    )
+    node.receive_event(event)
+    event = Event(
+        type="value updated",
+        data={
+            "source": "node",
+            "event": "value updated",
+            "nodeId": 14,
+            "args": {
+                "commandClassName": "Notification",
+                "commandClass": 113,
+                "endpoint": 0,
+                "property": "alarmLevel",
+                "newValue": 3,
+                "prevValue": 1,
+                "propertyName": "alarmLevel",
             },
         },
     )
     node.receive_event(event)
 
-    assert hass.states.get(KWIKSET_910_LOCK_ENTITY).state == STATE_UNLOCKED
+    assert len(events) == 1
+    assert events[0].data[ATTR_NAME] == "frontdoor"
+    assert events[0].data[ATTR_STATE] == "unlocked"
+    assert events[0].data[ATTR_ACTION_CODE] == 22
+    assert events[0].data[ATTR_ACTION_TEXT] == "RF Unlock"
+    assert events[0].data[ATTR_CODE_SLOT] == 1
+    assert events[0].data[ATTR_CODE_SLOT_NAME] == ""
