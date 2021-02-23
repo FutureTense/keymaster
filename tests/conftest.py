@@ -132,6 +132,20 @@ def lock_schlage_be469_fixture(client, lock_schlage_be469_state):
     return node
 
 
+@pytest.fixture(name="lock_kwikset_910_state", scope="session")
+def lock_kwikset_910_state_fixture():
+    """Load the schlage lock node state fixture data."""
+    return json.loads(load_fixture("zwave_js/lock_kwikset_910_state.json"))
+
+
+@pytest.fixture(name="lock_kwikset_910")
+def lock_kwikset_910_fixture(client, lock_kwikset_910_state):
+    """Mock a schlage lock node."""
+    node = Node(client, lock_kwikset_910_state)
+    client.driver.controller.nodes[node.node_id] = node
+    return node
+
+
 @pytest.fixture(name="client")
 def mock_client_fixture(controller_state, version_state):
     """Mock a client."""

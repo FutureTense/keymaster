@@ -25,9 +25,12 @@ from homeassistant.const import (
 
 from .common import MQTTMessage, async_capture_events, process_fixture_data, setup_ozw
 
-from tests.const import CONFIG_DATA, CONFIG_DATA_REAL
+from tests.const import CONFIG_DATA, CONFIG_DATA_910, CONFIG_DATA_REAL
 
 SCHLAGE_BE469_LOCK_ENTITY = "lock.touchscreen_deadbolt_current_lock_mode"
+KWIKSET_910_LOCK_ENTITY = (
+    "lock.smart_code_with_home_connect_technology_current_lock_mode"
+)
 
 
 async def test_delete_lock_and_base_folder(
@@ -226,7 +229,7 @@ async def test_handle_state_change(hass, lock_data, sent_messages):
 
 
 async def test_handle_state_change_zwave_js(
-    hass, client, lock_schlage_be469, integration
+    hass, client, lock_kwikset_910, integration
 ):
     """Test handle_state_change with zwave_js"""
 
@@ -234,7 +237,7 @@ async def test_handle_state_change_zwave_js(
 
     # Load the integration
     config_entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=2
     )
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)
@@ -245,14 +248,25 @@ async def test_handle_state_change_zwave_js(
     await hass.async_block_till_done()
 
     # Make sure the lock loaded
-    node = lock_schlage_be469
-    state = hass.states.get(SCHLAGE_BE469_LOCK_ENTITY)
+    node = lock_kwikset_910
+    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
     assert state
-    assert state.state == STATE_UNLOCKED
+    assert state.state == STATE_LOCKED
 
     # Enable the sensors we use
     registry = await hass.helpers.entity_registry.async_get_registry()
-    entity_id = "sensor.touchscreen_deadbolt_access_control_lock_state"
+    entity_id = "sensor.smart_code_with_home_connect_technology_alarmlevel"
+    entry = registry.async_get(entity_id)
+    updated_entry = registry.async_update_entity(
+        entry.entity_id,
+        **{"disabled_by": None},
+    )
+    await hass.async_block_till_done()
+    assert updated_entry.disabled is False
+    await hass.async_block_till_done()
+
+    registry = await hass.helpers.entity_registry.async_get_registry()
+    entity_id = "sensor.smart_code_with_home_connect_technology_alarmtype"
     entry = registry.async_get(entity_id)
     updated_entry = registry.async_update_entity(
         entry.entity_id,
@@ -266,24 +280,24 @@ async def test_handle_state_change_zwave_js(
     assert await hass.config_entries.async_reload(config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # state = hass.states.get("sensor.touchscreen_deadbolt_access_control_lock_state")
-    # assert state is not None
-    # assert state.state == "0"
+    state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmtype")
+    assert state is not None
+    assert state.state == "21"
 
     assert "zwave_js" in hass.config.components
 
     # Lock the lock
     await hass.services.async_call(
         "lock",
-        "lock",
-        {ATTR_ENTITY_ID: SCHLAGE_BE469_LOCK_ENTITY},
+        "unlock",
+        {ATTR_ENTITY_ID: KWIKSET_910_LOCK_ENTITY},
         blocking=True,
     )
 
     assert len(client.async_send_command.call_args_list) == 1
     args = client.async_send_command.call_args[0][0]
     assert args["command"] == "node.set_value"
-    assert args["nodeId"] == 20
+    assert args["nodeId"] == 14
     assert args["valueId"] == {
         "commandClassName": "Door Lock",
         "commandClass": 98,
@@ -309,7 +323,7 @@ async def test_handle_state_change_zwave_js(
             },
         },
     }
-    assert args["value"] == 255
+    assert args["value"] == 0
 
     client.async_send_command.reset_mock()
 
@@ -319,18 +333,18 @@ async def test_handle_state_change_zwave_js(
         data={
             "source": "node",
             "event": "value updated",
-            "nodeId": 20,
+            "nodeId": 14,
             "args": {
                 "commandClassName": "Door Lock",
                 "commandClass": 98,
                 "endpoint": 0,
                 "property": "currentMode",
-                "newValue": 255,
-                "prevValue": 0,
+                "newValue": 0,
+                "prevValue": 255,
                 "propertyName": "currentMode",
             },
         },
     )
     node.receive_event(event)
 
-    assert hass.states.get(SCHLAGE_BE469_LOCK_ENTITY).state == STATE_LOCKED
+    assert hass.states.get(KWIKSET_910_LOCK_ENTITY).state == STATE_UNLOCKED
