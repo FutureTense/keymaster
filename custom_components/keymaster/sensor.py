@@ -6,8 +6,8 @@ from typing import List
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_registry import EntityRegistry, async_get_registry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
