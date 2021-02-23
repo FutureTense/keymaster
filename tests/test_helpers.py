@@ -275,7 +275,7 @@ async def test_handle_state_change_zwave_js(
     assert updated_entry.disabled is False
     await hass.async_block_till_done()
 
-    # Reload the config entries ?
+    # Reload zwave_js
     assert await hass.config_entries.async_reload(integration.entry_id)
     await hass.async_block_till_done()
 

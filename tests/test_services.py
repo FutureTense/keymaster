@@ -16,8 +16,6 @@ from .common import setup_ozw
 
 from tests.const import CONFIG_DATA
 
-SCHLAGE_BE469_LOCK_ENTITY = "lock.touchscreen_deadbolt"
-
 
 async def test_generate_package_files(hass):
     """Test generate_package_files"""
