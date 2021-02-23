@@ -281,9 +281,14 @@ async def test_handle_state_change_zwave_js(
 
     assert "zwave_js" in hass.config.components
 
+    # Make sure the sensors updated the current values
     state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmtype")
     assert state is not None
     assert state.state == "21"
+
+    state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmlevel")
+    assert state is not None
+    assert state.state == "1"
 
     # Test locked update from value updated event
     event = Event(
@@ -304,7 +309,6 @@ async def test_handle_state_change_zwave_js(
         },
     )
     node.receive_event(event)
-    await hass.async_block_till_done()
 
     state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmtype")
     assert state is not None
