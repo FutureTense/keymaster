@@ -366,7 +366,7 @@ def handle_state_change(
 
 
 def reset_code_slot_if_pin_unknown(
-    hass, lock_name: str, num_code_slots: int, start_from_code_slot: int
+    hass, lock_name: str, code_slots: int, start_from: int
 ) -> None:
     """
     Reset a code slot if the PIN is unknown.
@@ -375,15 +375,13 @@ def reset_code_slot_if_pin_unknown(
     an initial state.
     """
     return asyncio.run_coroutine_threadsafe(
-        async_reset_code_slot_if_pin_unknown(
-            hass, lock_name, num_code_slots, start_from_code_slot
-        ),
+        async_reset_code_slot_if_pin_unknown(hass, lock_name, code_slots, start_from),
         hass.loop,
     ).result()
 
 
 async def async_reset_code_slot_if_pin_unknown(
-    hass, lock_name: str, num_code_slots: int, start_from_code_slot: int
+    hass, lock_name: str, code_slots: int, start_from: int
 ) -> None:
     """
     Reset a code slot if the PIN is unknown.
@@ -391,7 +389,7 @@ async def async_reset_code_slot_if_pin_unknown(
     Used when a code slot is first generated so we can give all input helpers
     an initial state.
     """
-    for x in range(start_from_code_slot, num_code_slots + 1):
+    for x in range(start_from, start_from + code_slots):
         pin_state = hass.states.get(f"input_text.{lock_name}_pin_{x}")
         if pin_state and pin_state.state == STATE_UNKNOWN:
             await hass.services.async_call(

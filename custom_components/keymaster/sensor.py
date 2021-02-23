@@ -20,10 +20,12 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup config entry."""
     # Add entities for all defined slots
+    start_from = entry.data[CONF_START]
+    code_slots = entry.data[CONF_SLOTS]
     async_add_entities(
         [
             CodesSensor(hass, entry, x)
-            for x in range(entry.data[CONF_START], entry.data[CONF_SLOTS] + 1)
+            for x in range(start_from, start_from + code_slots)
         ],
         True,
     )

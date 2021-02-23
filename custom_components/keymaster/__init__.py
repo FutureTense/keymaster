@@ -374,12 +374,13 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
             config_entry.data[CONF_LOCK_NAME],
         )
 
-    old_slots = list(
-        range(config_entry.data[CONF_START], config_entry.data[CONF_SLOTS] + 1)
-    )
-    new_slots = list(
-        range(config_entry.options[CONF_START], config_entry.options[CONF_SLOTS] + 1)
-    )
+    start_from = config_entry.data[CONF_START]
+    code_slots = config_entry.data[CONF_SLOTS]
+    old_slots = list(range(start_from, start_from + code_slots))
+
+    start_from = config_entry.options[CONF_START]
+    code_slots = config_entry.options[CONF_SLOTS]
+    new_slots = list(range(start_from, start_from + code_slots))
 
     new_data = config_entry.options.copy()
     new_data.pop(CONF_GENERATE, None)
