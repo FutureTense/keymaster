@@ -261,15 +261,18 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     start_from = config_entry.data[CONF_START]
 
     activelockheaders = ",".join(
-        [f"{activelockheader}_{x}" for x in range(start_from, code_slots + 1)]
+        [f"{activelockheader}_{x}" for x in range(start_from, start_from + code_slots)]
     )
     inputlockpinheaders = ",".join(
-        [f"{inputlockpinheader}_{x}" for x in range(start_from, code_slots + 1)]
+        [
+            f"{inputlockpinheader}_{x}"
+            for x in range(start_from, start_from + code_slots)
+        ]
     )
     input_reset_code_slot_headers = ",".join(
         [
             f"{input_reset_code_slot_header}_{x}"
-            for x in range(start_from, code_slots + 1)
+            for x in range(start_from, start_from + code_slots)
         ]
     )
 
@@ -298,7 +301,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
 
     _LOGGER.debug("Creating per slot YAML and lovelace cards...")
     # Replace variables in code slot files
-    for x in range(start_from, code_slots + 1):
+    for x in range(start_from, start_from + code_slots):
         replacements["TEMPLATENUM"] = str(x)
 
         for in_f, out_f, write_mode in (

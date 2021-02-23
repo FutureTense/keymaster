@@ -6,8 +6,8 @@ from typing import List
 from openzwavemqtt.const import ATTR_CODE_SLOT
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_registry import EntityRegistry, async_get_registry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
@@ -20,10 +20,12 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup config entry."""
     # Add entities for all defined slots
+    start_from = entry.data[CONF_START]
+    code_slots = entry.data[CONF_SLOTS]
     async_add_entities(
         [
             CodesSensor(hass, entry, x)
-            for x in range(entry.data[CONF_START], entry.data[CONF_SLOTS] + 1)
+            for x in range(start_from, start_from + code_slots)
         ],
         True,
     )
