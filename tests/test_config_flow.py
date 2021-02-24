@@ -204,7 +204,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
-                "lockname": "frontdoor",
+                "lockname": "sidedoor",
                 "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
@@ -215,13 +215,11 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
-                "lockname": "frontdoor",
-                "generate_package": True,
+                "lockname": "sidedoor",
                 "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
-                "child_locks_file": "",
                 "hide_pins": False,
             },
         ),
@@ -234,9 +232,12 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
         domain=DOMAIN,
         title="frontdoor",
         data=_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS)(CONFIG_DATA),
+        version=2,
     )
 
     entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
 
     await setup.async_setup_component(hass, "persistent_notification", {})
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -258,7 +259,7 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
         assert result2["type"] == "create_entry"
 
         await hass.async_block_till_done()
-        assert entry.data == data
+        assert entry.data.copy() == data
 
 
 def test_parsing_child_locks_file():
