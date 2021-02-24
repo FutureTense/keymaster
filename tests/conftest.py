@@ -1,8 +1,14 @@
 """ Fixtures for keymaster tests. """
+import asyncio
 import json
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from zwave_js_server.event import Event
+from zwave_js_server.model.driver import Driver
+from zwave_js_server.model.node import Node
+from zwave_js_server.version import VersionInfo
 
 from .common import load_fixture
 
@@ -115,3 +121,91 @@ def sent_messages_fixture():
         ),
     ):
         yield sent_messages
+
+
+@pytest.fixture(name="lock_schlage_be469_state", scope="session")
+def lock_schlage_be469_state_fixture():
+    """Load the schlage lock node state fixture data."""
+    return json.loads(load_fixture("zwave_js/lock_schlage_be469_state.json"))
+
+
+@pytest.fixture(name="lock_schlage_be469")
+def lock_schlage_be469_fixture(client, lock_schlage_be469_state):
+    """Mock a schlage lock node."""
+    node = Node(client, lock_schlage_be469_state)
+    client.driver.controller.nodes[node.node_id] = node
+    return node
+
+
+@pytest.fixture(name="lock_kwikset_910_state", scope="session")
+def lock_kwikset_910_state_fixture():
+    """Load the schlage lock node state fixture data."""
+    return json.loads(load_fixture("zwave_js/lock_kwikset_910_state.json"))
+
+
+@pytest.fixture(name="lock_kwikset_910")
+def lock_kwikset_910_fixture(client, lock_kwikset_910_state):
+    """Mock a schlage lock node."""
+    node = Node(client, lock_kwikset_910_state)
+    client.driver.controller.nodes[node.node_id] = node
+    return node
+
+
+@pytest.fixture(name="client")
+def mock_client_fixture(controller_state, version_state):
+    """Mock a client."""
+
+    with patch(
+        "homeassistant.components.zwave_js.ZwaveClient", autospec=True
+    ) as client_class:
+        client = client_class.return_value
+
+        async def connect():
+            await asyncio.sleep(0)
+            client.connected = True
+
+        async def listen(driver_ready: asyncio.Event) -> None:
+            driver_ready.set()
+            await asyncio.sleep(30)
+            assert False, "Listen wasn't canceled!"
+
+        async def disconnect():
+            client.connected = False
+
+        client.connect = AsyncMock(side_effect=connect)
+        client.listen = AsyncMock(side_effect=listen)
+        client.disconnect = AsyncMock(side_effect=disconnect)
+        client.driver = Driver(client, controller_state)
+
+        client.version = VersionInfo.from_message(version_state)
+        client.ws_server_url = "ws://test:3000/zjs"
+
+        yield client
+
+
+@pytest.fixture(name="integration")
+async def integration_fixture(hass, client):
+    """Set up the zwave_js integration."""
+    entry = MockConfigEntry(domain="zwave_js", data={"url": "ws://test.org"})
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    return entry
+
+
+@pytest.fixture(name="controller_state", scope="session")
+def controller_state_fixture():
+    """Load the controller state fixture data."""
+    return json.loads(load_fixture("zwave_js/controller_state.json"))
+
+
+@pytest.fixture(name="version_state", scope="session")
+def version_state_fixture():
+    """Load the version state fixture data."""
+    return {
+        "type": "version",
+        "driverVersion": "6.0.0-beta.0",
+        "serverVersion": "1.0.0",
+        "homeId": 1234567890,
+    }
