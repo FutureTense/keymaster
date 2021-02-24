@@ -12,12 +12,6 @@ from custom_components.keymaster import (
 )
 from custom_components.keymaster.const import DOMAIN
 
-from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
-from homeassistant.components.zwave_js.lock import (
-    SERVICE_CLEAR_LOCK_USERCODE,
-    SERVICE_SET_LOCK_USERCODE,
-)
-
 from .common import setup_ozw
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_910
