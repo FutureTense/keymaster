@@ -150,17 +150,26 @@ class ZwaveJSNetworkReadySensor(BaseNetworkReadySensor):
         """Initialize sensor."""
         super().__init__(primary_lock, child_locks, ZWAVE_JS_DOMAIN)
         self.lock_config_entry_id = None
+        self._lock_found = True
 
     async def async_update(self) -> None:
         """Update sensor."""
-        if not self.lock_config_entry_id:
+        if (
+            not self.lock_config_entry_id
+            or not self.hass.config_entries.async_get_entry(self.lock_config_entry_id)
+        ):
             entity_id = self.primary_lock.lock_entity_id
             ent_reg = await async_get_entity_registry(self.hass)
             lock_ent_reg_entry = ent_reg.async_get(entity_id)
             if not lock_ent_reg_entry:
-                _LOGGER.error("Can't find your lock %s.", entity_id)
+                if self._lock_found:
+                    self._lock_found = False
+                    _LOGGER.warning("Can't find your lock %s.", entity_id)
                 return
             self.lock_config_entry_id = lock_ent_reg_entry.config_entry_id
+            if not self._lock_found:
+                _LOGGER.info("Found your lock %s", entity_id)
+                self._lock_found = True
 
         try:
             client = self.hass.data[ZWAVE_JS_DOMAIN][self.lock_config_entry_id][
