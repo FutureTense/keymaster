@@ -170,7 +170,7 @@ automation:
     - condition: template
       value_template: >-
         {{
-          states("sensor.LOCKNAME_code_slot_TEMPLATENUM") not in ("unavailable", "")
+          states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != "unavailable"
           and
           trigger.from_state.state != "unavailable"
         }}
