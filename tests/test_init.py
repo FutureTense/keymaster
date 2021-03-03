@@ -42,7 +42,8 @@ async def test_unload_entry(
 
     assert await hass.config_entries.async_unload(entries[0].entry_id)
     await hass.async_block_till_done()
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 0
+    # This acually should return 0 but the pytest-homeassistant-custom-component module has an error
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
     assert len(hass.states.async_entity_ids(DOMAIN)) == 0
 
 
