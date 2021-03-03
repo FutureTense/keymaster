@@ -293,10 +293,18 @@ def handle_state_change(
 
         # Get alarm_level/usercode and alarm_type/access_control  states
         alarm_level_state = hass.states.get(lock.alarm_level_or_user_code_entity_id)
-        alarm_level_value = int(alarm_level_state.state) if alarm_level_state else None
+        alarm_level_value = (
+            int(alarm_level_state.state)
+            if alarm_level_state and alarm_level_state.state != STATE_UNKNOWN
+            else None
+        )
 
         alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
-        alarm_type_value = int(alarm_type_state.state) if alarm_type_state else None
+        alarm_type_value = (
+            int(alarm_type_state.state)
+            if alarm_type_state and alarm_type_state.state != STATE_UNKNOWN
+            else None
+        )
 
         # Bail out if we can't use the sensors to provide a meaningful message
         if alarm_level_value is None or alarm_type_value is None:
