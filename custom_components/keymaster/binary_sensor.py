@@ -66,6 +66,10 @@ ENTITY_ID = ENTITY_ID_FORMAT.format(slugify(ENTITY_NAME))
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Setup config entry."""
+
+    if hass.states.get(ENTITY_ID):
+        return True
+
     primary_lock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     child_locks = hass.data[DOMAIN][config_entry.entry_id][CHILD_LOCKS]
     if using_zwave_js(hass):
