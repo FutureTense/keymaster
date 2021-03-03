@@ -39,7 +39,7 @@ CONFIG_DATA_REAL = {
 CONFIG_DATA_910 = {
     "alarm_level_or_user_code_entity_id": "sensor.smart_code_with_home_connect_technology_alarmlevel",
     "alarm_type_or_access_control_entity_id": "sensor.smart_code_with_home_connect_technology_alarmtype",
-    "lock_entity_id": "lock.smart_code_with_home_connect_technology_current_lock_mode",
+    "lock_entity_id": "lock.smart_code_with_home_connect_technology",
     "lockname": "frontdoor",
     "generate_package": True,
     "packages_path": "packages/keymaster",

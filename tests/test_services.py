@@ -16,9 +16,7 @@ from .common import setup_ozw
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_910
 
-KWIKSET_910_LOCK_ENTITY = (
-    "lock.smart_code_with_home_connect_technology_current_lock_mode"
-)
+KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 
 
 async def test_generate_package_files(hass):
@@ -189,19 +187,19 @@ async def test_add_code_zwave_js(hass, client, lock_kwikset_910, integration):
     assert "zwave_js" in hass.config.components
 
     # Check current lock state
-    assert hass.states.get(KWIKSET_910_LOCK_ENTITY).state == "unlocked"
+    assert hass.states.get(KWIKSET_910_LOCK_ENTITY).state == "locked"
 
     # Call the service
     servicedata = {
-        "entity_id": "lock.smart_code_with_home_connect_technology_current_lock_mode",
+        "entity_id": KWIKSET_910_LOCK_ENTITY,
         "code_slot": 1,
         "usercode": "1234",
     }
     await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
     await hass.async_block_till_done()
 
-    assert len(client.async_send_command.call_args_list) == 1
-    args = client.async_send_command.call_args[0][0]
+    assert len(client.async_send_command_no_wait.call_args_list) == 1
+    args = client.async_send_command_no_wait.call_args[0][0]
     assert args["command"] == "node.set_value"
     assert args["nodeId"] == 14
     assert args["valueId"] == {
@@ -243,18 +241,18 @@ async def test_clear_code_zwave_js(hass, client, lock_kwikset_910, integration):
     assert "zwave_js" in hass.config.components
 
     # Check current lock state
-    assert hass.states.get(KWIKSET_910_LOCK_ENTITY).state == "unlocked"
+    assert hass.states.get(KWIKSET_910_LOCK_ENTITY).state == "locked"
 
     # Call the service
     servicedata = {
-        "entity_id": "lock.smart_code_with_home_connect_technology_current_lock_mode",
+        "entity_id": KWIKSET_910_LOCK_ENTITY,
         "code_slot": 1,
     }
     await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
     await hass.async_block_till_done()
 
-    assert len(client.async_send_command.call_args_list) == 1
-    args = client.async_send_command.call_args[0][0]
+    assert len(client.async_send_command_no_wait.call_args_list) == 1
+    args = client.async_send_command_no_wait.call_args[0][0]
     assert args["command"] == "node.set_value"
     assert args["nodeId"] == 14
     assert args["valueId"] == {
