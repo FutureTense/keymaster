@@ -13,5 +13,6 @@
   ],
   "iot_class": "Local Polling",
   "zip_release": true,
-  "filename": "keymaster.zip"
+  "filename": "keymaster.zip",
+  "homeassistant": "2021.3.0"
 }
