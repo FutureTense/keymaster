@@ -1,36 +1,54 @@
 generate_package:
-  description: Generate lock manager files.
+  name: Generate lock manager files
+  description: (Re-)Generates the package files that are used to provide the input helpers and automations that make Keymaster work
   fields:
     lockname:
-      description: Lock name to generate files for.
+      name: Lock Name
+      description: The name that you specified during keymaster configuration.
       example: frontdoor
+      required: false
+      selector:
+        text:
 
 add_code:
-  description: Add code to lock. Supports ozw and zwave locks.
+  name: Add code to lock
+  description: Supports ozw, zwave, and zwave_js locks.
+  target:
+    entity:
+      domain: lock
   fields:
-    entity_id: 
-      description: The entity_id of the lock you are attempting to modify the code of
-      example: lock.frontdoor_locked
     code_slot:
+      name: Code Slot
       description: The code slot you are attempting to add/replace a code into
       example: 2
+      required: true
+      selector:
+        text:
     usercode:
+      name: Usercode
       description: The code you are attempting to set
-      example: 1234      
+      example: 1234
+      required: true
+      selector:
+        text:
       
 clear_code:
-  description: Clear code from lock. Supports ozw and zwave locks.
+  name: Clear code from lock
+  description: Supports ozw, zwave, and zwave_js locks.
+  target:
+    entity:
+      domain: lock
   fields:
-    entity_id: 
-      description: The entity_id of the lock you are attempting to modify the code of
-      example: lock.frontdoor_locked
     code_slot:
+      name: Code Slot
       description: The code slot you are attempting to clear
-      example: 2      
+      example: 2
+      selector:
+        text:
 
 refresh_codes:
-  description: Refresh lock codes from the lock. 
-  fields:
-    entity_id: 
-      description: The entity_id of the lock you are attempting to refresh the codes of
-      example: lock.frontdoor_locked
+  name: Refresh codes from a lock
+  description: Experimental. Only supports ozw locks for now, and may not be fully functional.
+  target:
+    entity:
+      domain: lock
