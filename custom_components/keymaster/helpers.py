@@ -23,12 +23,8 @@ from homeassistant.const import (
 )
 from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.exceptions import ServiceNotFound
-from homeassistant.helpers.device_registry import (
-    async_get_registry as async_get_device_registry,
-)
-from homeassistant.helpers.entity_registry import (
-    async_get_registry as async_get_entity_registry,
-)
+from homeassistant.helpers.device_registry import async_get as async_get_device_registry
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -149,8 +145,8 @@ async def async_update_zwave_js_nodes_and_devices(
 ) -> None:
     """Update Z-Wave JS nodes and devices."""
     client = hass.data[ZWAVE_JS_DOMAIN][entry_id][ZWAVE_JS_DATA_CLIENT]
-    ent_reg = await async_get_entity_registry(hass)
-    dev_reg = await async_get_device_registry(hass)
+    ent_reg = async_get_entity_registry(hass)
+    dev_reg = async_get_device_registry(hass)
     for lock in [primary_lock, *child_locks]:
         lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
         if not lock_ent_reg_entry:

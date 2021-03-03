@@ -7,7 +7,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity_registry import EntityRegistry, async_get_registry
+from homeassistant.helpers.entity_registry import (
+    EntityRegistry,
+    async_get as async_get_entity_registry,
+)
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
@@ -70,7 +73,7 @@ async def async_setup_entry(
         f"{DOMAIN}_{entry.entry_id}_code_slots_changed",
         partial(
             code_slots_changed,
-            await async_get_registry(hass),
+            async_get_entity_registry(hass),
             entity_platform.current_platform.get(),
             entry,
         ),
