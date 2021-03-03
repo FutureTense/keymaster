@@ -40,7 +40,7 @@ clear_code:
       domain: lock
   fields:
     code_slot:
-      nae: Code Slot
+      name: Code Slot
       description: The code slot you are attempting to clear
       example: 2
       selector:
