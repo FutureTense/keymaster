@@ -164,7 +164,7 @@ automation:
         {{
           states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != "unavailable"
           and
-          trigger.from_state.state != "unavailable"
+          states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != states("input_text.LOCKNAME_pin_TEMPLATENUM")
         }}
   action:
     - choose:
