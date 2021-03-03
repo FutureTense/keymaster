@@ -1,13 +1,13 @@
 """ Test keymaster helpers """
 from unittest.mock import Mock, patch
 
-from openzwavemqtt.const import ATTR_CODE_SLOT
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.event import Event
 
 from custom_components.keymaster.const import (
     ATTR_ACTION_CODE,
     ATTR_ACTION_TEXT,
+    ATTR_CODE_SLOT,
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
     DOMAIN,

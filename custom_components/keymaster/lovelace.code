@@ -8,63 +8,63 @@
             entities:
               - entity: input_text.LOCKNAME_name_TEMPLATENUM
               - entity: input_text.LOCKNAME_pin_TEMPLATENUM
-              - entity: input_boolean.enabled_LOCKNAME_TEMPLATENUM
-              - entity: input_boolean.notify_LOCKNAME_TEMPLATENUM
+              - entity: input_boolean.LOCKNAME_enabled_TEMPLATENUM
+              - entity: input_boolean.LOCKNAME_notify_TEMPLATENUM
               - type: divider
-              - entity: sensor.connected_LOCKNAME_TEMPLATENUM
+              - entity: sensor.LOCKNAME_connected_TEMPLATENUM
                 state_color: true
-              - entity: binary_sensor.active_LOCKNAME_TEMPLATENUM
+              - entity: binary_sensor.LOCKNAME_active_TEMPLATENUM
                 state_color: true
-              - entity: binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM
+              - entity: binary_sensor.LOCKNAME_pin_synched_TEMPLATENUM
                 state_color: true
               - type: 'custom:fold-entity-row'
                 head:
                   type: section
                   label: Advanced Options
                 entities:
-                  - entity: input_boolean.reset_codeslot_LOCKNAME_TEMPLATENUM
+                  - entity: input_boolean.LOCKNAME_reset_codeslot_TEMPLATENUM
                   - type: divider
-                  - entity: input_boolean.accesslimit_LOCKNAME_TEMPLATENUM
-                  - entity: input_number.accesscount_LOCKNAME_TEMPLATENUM
+                  - entity: input_boolean.LOCKNAME_accesslimit_TEMPLATENUM
+                  - entity: input_number.LOCKNAME_accesscount_TEMPLATENUM
                     type: 'custom:numberbox-card'
                     icon: 'mdi:key-variant'
                     speed: 250
                   - type: divider
-                  - entity: input_boolean.daterange_LOCKNAME_TEMPLATENUM
-                  - entity: input_datetime.start_date_LOCKNAME_TEMPLATENUM
-                  - entity: input_datetime.end_date_LOCKNAME_TEMPLATENUM
+                  - entity: input_boolean.LOCKNAME_daterange_TEMPLATENUM
+                  - entity: input_datetime.LOCKNAME_start_date_TEMPLATENUM
+                  - entity: input_datetime.LOCKNAME_end_date_TEMPLATENUM
                   - type: divider
-                  - input_boolean.sun_LOCKNAME_TEMPLATENUM
-                  - input_boolean.sun_inc_LOCKNAME_TEMPLATENUM
-                  - input_datetime.sun_start_date_LOCKNAME_TEMPLATENUM
-                  - input_datetime.sun_end_date_LOCKNAME_TEMPLATENUM
+                  - input_boolean.LOCKNAME_sun_TEMPLATENUM
+                  - input_boolean.LOCKNAME_sun_inc_TEMPLATENUM
+                  - input_datetime.LOCKNAME_sun_start_date_TEMPLATENUM
+                  - input_datetime.LOCKNAME_sun_end_date_TEMPLATENUM
                   - type: divider
-                  - input_boolean.mon_LOCKNAME_TEMPLATENUM
-                  - input_boolean.mon_inc_LOCKNAME_TEMPLATENUM
-                  - input_datetime.mon_start_date_LOCKNAME_TEMPLATENUM
-                  - input_datetime.mon_end_date_LOCKNAME_TEMPLATENUM
+                  - input_boolean.LOCKNAME_mon_TEMPLATENUM
+                  - input_boolean.LOCKNAME_mon_inc_TEMPLATENUM
+                  - input_datetime.LOCKNAME_mon_start_date_TEMPLATENUM
+                  - input_datetime.LOCKNAME_mon_end_date_TEMPLATENUM
                   - type: divider
-                  - input_boolean.tue_LOCKNAME_TEMPLATENUM
-                  - input_boolean.tue_inc_LOCKNAME_TEMPLATENUM
-                  - input_datetime.tue_start_date_LOCKNAME_TEMPLATENUM
-                  - input_datetime.tue_end_date_LOCKNAME_TEMPLATENUM
+                  - input_boolean.LOCKNAME_tue_TEMPLATENUM
+                  - input_boolean.LOCKNAME_tue_inc_TEMPLATENUM
+                  - input_datetime.LOCKNAME_tue_start_date_TEMPLATENUM
+                  - input_datetime.LOCKNAME_tue_end_date_TEMPLATENUM
                   - type: divider
-                  - input_boolean.wed_LOCKNAME_TEMPLATENUM
-                  - input_boolean.wed_inc_LOCKNAME_TEMPLATENUM
-                  - input_datetime.wed_start_date_LOCKNAME_TEMPLATENUM
-                  - input_datetime.wed_end_date_LOCKNAME_TEMPLATENUM
+                  - input_boolean.LOCKNAME_wed_TEMPLATENUM
+                  - input_boolean.LOCKNAME_wed_inc_TEMPLATENUM
+                  - input_datetime.LOCKNAME_wed_start_date_TEMPLATENUM
+                  - input_datetime.LOCKNAME_wed_end_date_TEMPLATENUM
                   - type: divider
-                  - input_boolean.thu_LOCKNAME_TEMPLATENUM
-                  - input_boolean.thu_inc_LOCKNAME_TEMPLATENUM
-                  - input_datetime.thu_start_date_LOCKNAME_TEMPLATENUM
-                  - input_datetime.thu_end_date_LOCKNAME_TEMPLATENUM
+                  - input_boolean.LOCKNAME_thu_TEMPLATENUM
+                  - input_boolean.LOCKNAME_thu_inc_TEMPLATENUM
+                  - input_datetime.LOCKNAME_thu_start_date_TEMPLATENUM
+                  - input_datetime.LOCKNAME_thu_end_date_TEMPLATENUM
                   - type: divider
-                  - input_boolean.fri_LOCKNAME_TEMPLATENUM
-                  - input_boolean.fri_inc_LOCKNAME_TEMPLATENUM
-                  - input_datetime.fri_start_date_LOCKNAME_TEMPLATENUM
-                  - input_datetime.fri_end_date_LOCKNAME_TEMPLATENUM
+                  - input_boolean.LOCKNAME_fri_TEMPLATENUM
+                  - input_boolean.LOCKNAME_fri_inc_TEMPLATENUM
+                  - input_datetime.LOCKNAME_fri_start_date_TEMPLATENUM
+                  - input_datetime.LOCKNAME_fri_end_date_TEMPLATENUM
                   - type: divider
-                  - input_boolean.sat_LOCKNAME_TEMPLATENUM
-                  - input_boolean.sat_inc_LOCKNAME_TEMPLATENUM
-                  - input_datetime.sat_start_date_LOCKNAME_TEMPLATENUM
-                  - input_datetime.sat_end_date_LOCKNAME_TEMPLATENUM
+                  - input_boolean.LOCKNAME_sat_TEMPLATENUM
+                  - input_boolean.LOCKNAME_sat_inc_TEMPLATENUM
+                  - input_datetime.LOCKNAME_sat_start_date_TEMPLATENUM
+                  - input_datetime.LOCKNAME_sat_end_date_TEMPLATENUM

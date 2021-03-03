@@ -4,8 +4,6 @@ import os
 import random
 from typing import Any, Dict
 
-from openzwavemqtt.const import CommandClass
-
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
@@ -14,6 +12,7 @@ from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    ATTR_CODE_SLOT,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
     CONF_HIDE_PINS,
@@ -37,23 +36,22 @@ from .helpers import (
 )
 from .lock import KeymasterLock
 
-# TODO: At some point we should assume that users have upgraded to the latest
-# Home Assistant instance and that we can safely import these, so we can move
-# these back to standard imports at that point.
+# TODO: At some point we should deprecate ozw and zwave and require zwave_js.
+# At that point, we will not need this try except logic and can remove a bunch
+# of code.
 try:
-    from zwave_js_server.const import ATTR_CODE_SLOT
-
     from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
     from homeassistant.components.zwave_js.lock import (
         SERVICE_CLEAR_LOCK_USERCODE,
         SERVICE_SET_LOCK_USERCODE,
     )
 except (ModuleNotFoundError, ImportError):
-    from openzwavemqtt.const import ATTR_CODE_SLOT
+    pass
 
-    ZWAVE_JS_DOMAIN = ""
-    SERVICE_CLEAR_LOCK_USERCODE = ""
-    SERVICE_SET_LOCK_USERCODE = ""
+try:
+    from openzwavemqtt.const import CommandClass
+except (ModuleNotFoundError, ImportError):
+    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,10 +78,7 @@ async def refresh_codes(
     """Refresh lock codes."""
     node_id = get_node_id(hass, entity_id)
     if node_id is None:
-        _LOGGER.error(
-            "Problem retrieving node_id from entity %s",
-            entity_id,
-        )
+        _LOGGER.error("Problem retrieving node_id from entity %s", entity_id)
         return
 
     # OZW Button press (experimental)
@@ -123,10 +118,7 @@ async def add_code(
     elif using_zwave(hass):
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
-            _LOGGER.error(
-                "Problem retrieving node_id from entity %s",
-                entity_id,
-            )
+            _LOGGER.error("Problem retrieving node_id from entity %s", entity_id)
             return
 
         servicedata[ATTR_NODE_ID] = node_id
@@ -161,10 +153,7 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
     elif using_zwave(hass):
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
-            _LOGGER.error(
-                "Problem retrieving node_id from entity %s",
-                entity_id,
-            )
+            _LOGGER.error("Problem retrieving node_id from entity %s", entity_id)
             return
 
         servicedata = {
@@ -182,6 +171,15 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
             SET_USERCODE,
             {**servicedata, ATTR_USER_CODE: str(random.randint(1000, 9999))},
         )
+        try:
+            await hass.services.async_call(
+                LOCK_DOMAIN,
+                SET_USERCODE,
+                {**servicedata, ATTR_USER_CODE: str(random.randint(1000, 9999))},
+            )
+        except Exception as err:
+            _LOGGER.error("Error calling lock.set_usercode service call: %s", str(err))
+            return
 
         await call_service(hass, LOCK_DOMAIN, CLEAR_USERCODE, servicedata)
     else:
@@ -190,6 +188,7 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
 
 def generate_package_files(hass: HomeAssistant, name: str) -> None:
     """Generate the package files."""
+    # Attempt to find lock
     config_entry = next(
         (
             hass.config_entries.async_get_entry(entry_id)
@@ -217,9 +216,6 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     )
 
     _LOGGER.debug("DEBUG conf_lock: %s name: %s", lockname, name)
-
-    if lockname != name:
-        return
 
     inputlockpinheader = f"input_text.{lockname}_pin"
     activelockheader = f"binary_sensor.active_{lockname}"
@@ -269,18 +265,14 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
             for x in range(start_from, start_from + code_slots)
         ]
     )
-    input_reset_code_slot_headers = ",".join(
-        [
-            f"{input_reset_code_slot_header}_{x}"
-            for x in range(start_from, start_from + code_slots)
-        ]
-    )
+    all_code_slots = ", ".join([f"{x}" for x in range(start_from, code_slots + 1)])
 
     _LOGGER.debug("Creating common YAML files...")
     replacements = {
         "LOCKNAME": lockname,
         "CASE_LOCK_NAME": lockname,
         "INPUTLOCKPINHEADER": inputlockpinheaders,
+        "ALL_CODE_SLOTS": all_code_slots,
         "ACTIVELOCKHEADER": activelockheaders,
         "INPUT_RESET_CODE_SLOT_HEADER": input_reset_code_slot_headers,
         "LOCKENTITYNAME": lockentityname,

@@ -2,9 +2,9 @@
 from homeassistant.const import STATE_LOCKED, STATE_UNLOCKED
 
 DOMAIN = "keymaster"
-VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
-ISSUE_URL = "https://github.com/FutureTense/keymaster"
-PLATFORM = "sensor"
+VERSION = "0.0.01"
+ISSUE_URL = "https://github.com/FutureTense/keypaster"
+PLATFORMS = ["binary_sensor", "sensor"]
 ZWAVE_NETWORK = "zwave_network"
 MANAGER = "manager"
 
@@ -30,6 +30,7 @@ ATTR_CODE_SLOT_NAME = "code_slot_name"
 ATTR_NAME = "lockname"
 ATTR_NODE_ID = "node_id"
 ATTR_USER_CODE = "usercode"
+ATTR_CODE_SLOT = "code_slot"
 
 # Configuration Properties
 CONF_ALARM_LEVEL = "alarm_level"
@@ -57,6 +58,29 @@ DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
 DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"
 DEFAULT_ALARM_TYPE_SENSOR = "sensor.fake"
 DEFAULT_HIDE_PINS = False
+
+# Connected sensor maps
+CONNECTED_STATE_MAP = {
+    True: {
+        True: "Connected",
+        False: "Connecting",
+    },
+    False: {
+        True: "Disconnected",
+        False: "Disconnecting",
+    },
+}
+
+CONNECTED_ICON_MAP = {
+    True: {
+        True: "mdi:folder-key",
+        False: "mdi:folder-key-network",
+    },
+    False: {
+        True: "mdi:folder-open",
+        False: "mdi:wiper-watch",
+    },
+}
 
 # Action maps
 ACTION_MAP = {
