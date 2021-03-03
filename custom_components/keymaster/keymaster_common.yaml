@@ -26,21 +26,6 @@ script:
           title: "reset"
           message: "LOCKNAME"
 
-  LOCKNAME_conditional_notify:
-    sequence:
-      - condition: template
-        value_template: >-
-          {% set inputbool = boolean %}
-          {% if states(inputbool) == 'on'%}
-            true
-          {% else %}
-            false
-          {% endif %}
-      - service: script.LOCKNAME_manual_notify
-        data_template:
-          title: "{{title}}"
-          message: "{{message}}"
-
   LOCKNAME_reset_codeslot:
     mode: parallel
     fields:
@@ -72,12 +57,12 @@ script:
       - service: input_datetime.set_datetime
         data_template:
           entity_id: "input_datetime.start_date_LOCKNAME_{{ code_slot | string }}"
-          date: >
+          date: >-
             {{ now().strftime('%Y-%m-%d') }}
       - service: input_datetime.set_datetime
         data_template:
           entity_id: "input_datetime.end_date_LOCKNAME_{{ code_slot | string }}"
-          date: >
+          date: >-
             {{ now().strftime('%Y-%m-%d') }} 
       - service: input_boolean.turn_off
         data_template:
@@ -143,12 +128,11 @@ automation:
         lockname: LOCKNAME
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: input_boolean.LOCKNAME_lock_notifications
         state: "on"
     action:
-      - service: script.LOCKNAME_conditional_notify
+      - service: script.LOCKNAME_manual_notify
         data_template:
-          boolean: input_boolean.LOCKNAME_lock_notifications
           title: CASE_LOCK_NAME
           message: "{{ trigger.event.data.action_text }}"
 
@@ -159,9 +143,6 @@ automation:
       event_data:
         lockname: LOCKNAME
     condition:
-      - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
-        state: "on"
       - condition: template
         value_template: "{{ trigger.event.data.code_slot > 0 }}"
       - condition: template
@@ -169,49 +150,30 @@ automation:
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
-          title: "{{ trigger.event.data.action_text }}"
-          message: "{{ trigger.event.data.code_slot_name }}"
+          title: CASE_LOCK_NAME
+          message: "{{ trigger.event.data.action_text }} ({{ trigger.event.data.code_slot_name }})"
 
-  - alias: CASE_LOCK_NAME Sensor Close
-    condition:
-      - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
-        state: "on"
+  - alias: "CASE_LOCK_NAME Door Open and Close"
     trigger:
       entity_id: DOORSENSORENTITYNAME
       platform: state
-      to: "off"
-    action:
-      - service: script.LOCKNAME_conditional_notify
-        data_template:
-          boolean: input_boolean.LOCKNAME_dooraccess_notifications
-          title: CASE_LOCK_NAME
-          message: "Closed"
-
-  - alias: CASE_LOCK_NAME Sensor Opened
     condition:
       - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
+        entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
         state: "on"
-    trigger:
-      entity_id: DOORSENSORENTITYNAME
-      platform: state
-      to: "on"
+      - condition: template
+        value_template: "{{ trigger.from_state.state in ('on', 'off') and trigger.to_state.state in ('on', 'off') }}"
     action:
-      - service: script.LOCKNAME_conditional_notify
+      - service: script.LOCKNAME_manual_notify
         data_template:
-          boolean: input_boolean.LOCKNAME_dooraccess_notifications
           title: CASE_LOCK_NAME
-          message: "Opened"
+          message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
 
   - alias: CASE_LOCK_NAME Changed Code
     trigger:
       entity_id: INPUTLOCKPINHEADER
       platform: state
     condition:
-      - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
-        state: "on"
       - condition: template
         value_template: >-
           {{
@@ -231,10 +193,6 @@ automation:
             {{ 'input_boolean.enabled_LOCKNAME_' + trigger.entity_id.split('_')[-1] }}
 
   - alias: CASE_LOCK_NAME Reset
-    condition:
-      - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
-        state: "on"
     trigger:
       entity_id: input_boolean.LOCKNAME_reset_lock
       platform: state
@@ -252,9 +210,6 @@ automation:
       event_data:
         lockname: LOCKNAME
     condition:
-      - condition: state
-        entity_id: "input_boolean.allow_automation_execution"
-        state: "on"
       - condition: template
         # make sure decrementing access entries is enabled 
         value_template: "{{ is_state('input_boolean.accesslimit_LOCKNAME_' + trigger.event.data.code_slot | string, 'on') }}"

@@ -1,12 +1,10 @@
 """keymaster Integration."""
+import asyncio
 from datetime import timedelta
 import functools
 import logging
 from typing import Any, Dict, List
 
-from openzwavemqtt.const import CommandClass
-from openzwavemqtt.exceptions import NotFoundError, NotSupportedError
-from openzwavemqtt.util.node import get_node_from_manager
 import voluptuous as vol
 
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
@@ -16,6 +14,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     EVENT_HOMEASSISTANT_STARTED,
     STATE_LOCKED,
+    STATE_ON,
     STATE_UNLOCKED,
 )
 from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
@@ -23,7 +22,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .binary_sensor import ENTITY_ID as NETWORK_READY_ENTITY_ID
 from .const import (
+    ATTR_CODE_SLOT,
     ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
@@ -46,13 +47,19 @@ from .const import (
     DOMAIN,
     ISSUE_URL,
     MANAGER,
-    PLATFORM,
+    PLATFORMS,
     PRIMARY_LOCK,
     UNSUB_LISTENERS,
     VERSION,
     ZWAVE_NETWORK,
 )
-from .exceptions import NoNodeSpecifiedError, ZWaveIntegrationNotConfiguredError
+from .exceptions import (
+    NoNodeSpecifiedError,
+    NotFoundError as NativeNotFoundError,
+    NotSupportedError as NativeNotSupportedError,
+    ZWaveIntegrationNotConfiguredError,
+    ZWaveNetworkNotReady,
+)
 from .helpers import (
     async_reload_package_platforms,
     async_reset_code_slot_if_pin_unknown,
@@ -69,20 +76,23 @@ from .helpers import (
 from .lock import KeymasterLock
 from .services import add_code, clear_code, generate_package_files, refresh_codes
 
-# TODO: At some point we should assume that users have upgraded to the latest
-# Home Assistant instance and that we can safely import these, so we can move
-# these back to standard imports at that point.
+# TODO: At some point we should deprecate ozw and zwave and require zwave_js.
+# At that point, we will not need this try except logic and can remove a bunch
+# of code.
 try:
-    from zwave_js_server.const import ATTR_CODE_SLOT, ATTR_IN_USE, ATTR_USERCODE
+    from zwave_js_server.const import ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.util.lock import get_usercodes
 
     from homeassistant.components.zwave_js import ZWAVE_JS_EVENT
 except (ModuleNotFoundError, ImportError):
-    from openzwavemqtt.const import ATTR_CODE_SLOT
+    pass
 
-    ATTR_IN_USE = "in_use"
-    ATTR_USERCODE = "usercode"
-    ZWAVE_JS_EVENT = "zwave_js_event"
+try:
+    from openzwavemqtt.const import CommandClass
+    from openzwavemqtt.exceptions import NotFoundError
+    from openzwavemqtt.util.node import get_node_from_manager
+except (ModuleNotFoundError, ImportError):
+    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -240,9 +250,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         config_entry.data[CONF_START],
     )
 
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(config_entry, PLATFORM)
-    )
+    for platform in PLATFORMS:
+        hass.async_create_task(
+            hass.config_entries.async_forward_entry_setup(config_entry, platform)
+        )
 
     # if the use turned on the bool generate the files
     if should_generate_package:
@@ -303,8 +314,13 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         notification_id=notification_id,
     )
 
-    unload_ok = await hass.config_entries.async_forward_entry_unload(
-        config_entry, PLATFORM
+    unload_ok = all(
+        await asyncio.gather(
+            *[
+                hass.config_entries.async_forward_entry_unload(config_entry, platform)
+                for platform in PLATFORMS
+            ]
+        )
     )
 
     if unload_ok:
@@ -460,9 +476,12 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage usercode updates."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-        self._lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
+        self._primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
             PRIMARY_LOCK
         ]
+        self._child_locks: List[KeymasterLock] = hass.data[DOMAIN][
+            config_entry.entry_id
+        ][CHILD_LOCKS]
         super().__init__(
             hass,
             _LOGGER,
@@ -481,9 +500,11 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         data = ""
 
         # Build data from entities
-        enabled_bool = f"input_boolean.enabled_{self._lock.lock_name}_{code_slot}"
+        enabled_bool = (
+            f"input_boolean.enabled_{self._primary_lock.lock_name}_{code_slot}"
+        )
         enabled = self.hass.states.get(enabled_bool)
-        pin_data = f"input_text.{self._lock.lock_name}_pin_{code_slot}"
+        pin_data = f"input_text.{self._primary_lock.lock_name}_pin_{code_slot}"
         pin = self.hass.states.get(pin_data)
 
         # If slot is enabled return the PIN
@@ -500,20 +521,28 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     async def async_update_usercodes(self) -> Dict[str, Any]:
         """Async wrapper to update usercodes."""
         try:
+            network_ready = self.hass.states.get(NETWORK_READY_ENTITY_ID)
+            if not network_ready or network_ready.state != STATE_ON:
+                raise ZWaveNetworkNotReady
+
             return await self.hass.async_add_executor_job(self.update_usercodes)
         except (
-            NotFoundError,
-            NotSupportedError,
+            NativeNotFoundError,
+            NativeNotSupportedError,
             NoNodeSpecifiedError,
             ZWaveIntegrationNotConfiguredError,
+            ZWaveNetworkNotReady,
         ) as err:
+            # We can silently fail if we've never been able to retrieve data
+            if not self.data:
+                return {}
             raise UpdateFailed from err
 
     def update_usercodes(self) -> Dict[str, Any]:
         """Update usercodes."""
         # loop to get user code data from entity_id node
         instance_id = 1  # default
-        data = {CONF_LOCK_ENTITY_ID: self._lock.lock_entity_id}
+        data = {CONF_LOCK_ENTITY_ID: self._primary_lock.lock_entity_id}
 
         # # make button call
         # servicedata = {"entity_id": self._entity_id}
@@ -522,7 +551,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         # )
 
         if using_zwave_js(self.hass):
-            node = self._lock.zwave_js_lock_node
+            node = self._primary_lock.zwave_js_lock_node
+            if node is None:
+                raise NativeNotFoundError
             code_slot = 1
 
             for slot in get_usercodes(node):
@@ -544,7 +575,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         # pull the codes for ozw
         elif using_ozw(self.hass):
-            node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+            node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
             if node_id is None:
                 return data
             data[ATTR_NODE_ID] = node_id
@@ -559,12 +590,12 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     data[ATTR_NODE_ID],
                 )
             except NotFoundError:
-                return data
+                raise NativeNotFoundError from None
 
             command_class = node.get_command_class(CommandClass.USER_CODE)
 
             if not command_class:
-                raise NotSupportedError("Node doesn't have code slots")
+                raise NativeNotSupportedError("Node doesn't have code slots")
 
             for value in command_class.values():  # type: ignore
                 code_slot = int(value.index)
@@ -581,7 +612,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         # pull codes for zwave
         elif using_zwave(self.hass):
-            node_id = get_node_id(self.hass, self._lock.lock_entity_id)
+            node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
             if node_id is None:
                 return data
             data[ATTR_NODE_ID] = node_id
@@ -592,7 +623,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             network = self.hass.data[ZWAVE_NETWORK]
             node = network.nodes.get(data[ATTR_NODE_ID])
             if not node:
-                raise NotFoundError
+                raise NativeNotFoundError
 
             lock_values = node.get_values(class_id=CommandClass.USER_CODE).values()
             for value in lock_values:
@@ -613,9 +644,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     code = self._invalid_code(value.index)
 
                 # Build data from entities
-                enabled_bool = (
-                    f"input_boolean.enabled_{self._lock.lock_name}_{value.index}"
-                )
+                enabled_bool = f"input_boolean.enabled_{self._primary_lock.lock_name}_{value.index}"
                 enabled = self.hass.states.get(enabled_bool)
 
                 # Report blank slot if occupied by random code

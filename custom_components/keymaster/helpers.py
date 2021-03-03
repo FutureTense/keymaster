@@ -13,7 +13,7 @@ from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
-from homeassistant.components.zwave.const import DATA_ZWAVE_CONFIG
+from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -57,9 +57,9 @@ zwave_supported = True
 ozw_supported = True
 zwave_js_supported = True
 
-# TODO: At some point we should assume that users have upgraded to the latest
-# Home Assistant instance and that we can safely import these, so we can move
-# these back to standard imports at that point.
+# TODO: At some point we should deprecate ozw and zwave and require zwave_js.
+# At that point, we will not need this try except logic and can remove a bunch
+# of code.
 try:
     from zwave_js_server.const import ATTR_CODE_SLOT
 
@@ -72,20 +72,23 @@ try:
         DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
         DOMAIN as ZWAVE_JS_DOMAIN,
     )
-
-    zwave_js_supported = True
 except (ModuleNotFoundError, ImportError):
-    from openzwavemqtt.const import ATTR_CODE_SLOT
-
+    zwave_js_supported = False
+    ATTR_CODE_SLOT = "code_slot"
     from .const import ATTR_NODE_ID
 
-    ATTR_DEVICE_ID = "device_id"
-    ATTR_LABEL = "label"
-    ATTR_PARAMETERS = "parameters"
-    ATTR_TYPE = "type"
-    ZWAVE_JS_DATA_CLIENT = "client"
-    ZWAVE_JS_DOMAIN = "zwave_js"
-    zwave_js_supported = False
+# We try importing these to see if zwave or ozw is supported
+# and assuming it can't be if the dependent packages aren't
+# installed on this Home Assistant instance
+try:
+    import openzwavemqtt as ozw_module  # noqa: F401
+except (ModuleNotFoundError, ImportError):
+    ozw_supported = False
+
+try:
+    import openzwave as zwave_module  # noqa: F401
+except (ModuleNotFoundError, ImportError):
+    zwave_supported = False
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -97,7 +100,7 @@ def using_ozw(hass: HomeAssistant) -> bool:
 
 def using_zwave(hass: HomeAssistant) -> bool:
     """Returns whether the zwave integration is configured."""
-    return zwave_supported and DATA_ZWAVE_CONFIG in hass.data
+    return zwave_supported and DATA_NETWORK in hass.data
 
 
 def using_zwave_js(hass: HomeAssistant) -> bool:
@@ -135,56 +138,33 @@ async def generate_keymaster_locks(
         for lock_name, lock in config_entry.data.get(CHILD_LOCKS, {}).items()
     ]
 
-    # If we are using zwave_js, we need to grab the node and device entry for the
-    # locks so we can use them later. To do this, we use the zwave_js client being
-    # used by the config entry associated with the lock to lookup and store the node.
-    # To get the node we need to get the node ID which we get from the device registry.
-    if using_zwave_js(hass):
-        ent_reg = await async_get_entity_registry(hass)
-        dev_reg = await async_get_device_registry(hass)
-        for lock in [primary_lock, *child_locks]:
-            lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
-            if not lock_ent_reg_entry:
-                continue
-            lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
-            if not lock_dev_reg_entry:
-                continue
-            node_id: int = 0
-            for identifier in lock_dev_reg_entry.identifiers:
-                if identifier[0] == ZWAVE_JS_DOMAIN:
-                    node_id = int(identifier[1].split("-")[1])
-            lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-
-            client = None
-            while client is None:
-                try:
-                    client = hass.data[ZWAVE_JS_DOMAIN][lock_config_entry_id][
-                        ZWAVE_JS_DATA_CLIENT
-                    ]
-                except KeyError:
-                    _LOGGER.info(
-                        "Can't access Z-Wave JS data client yet. "
-                        "Trying again in 5 seconds"
-                    )
-                    await asyncio.sleep(5)
-
-            while lock.zwave_js_lock_device is None and lock.zwave_js_lock_node is None:
-                if (
-                    client.connected
-                    and client.driver
-                    and client.driver.controller
-                    and node_id in client.driver.controller.nodes
-                ):
-                    lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
-                    lock.zwave_js_lock_device = lock_dev_reg_entry
-                else:
-                    _LOGGER.info(
-                        "Can't access Z-Wave JS lock node yet. "
-                        "Trying again in 5 seconds"
-                    )
-                    await asyncio.sleep(5)
-
     return primary_lock, child_locks
+
+
+async def async_update_zwave_js_nodes_and_devices(
+    hass: HomeAssistant,
+    entry_id: str,
+    primary_lock: KeymasterLock,
+    child_locks: List[KeymasterLock],
+) -> None:
+    """Update Z-Wave JS nodes and devices."""
+    client = hass.data[ZWAVE_JS_DOMAIN][entry_id][ZWAVE_JS_DATA_CLIENT]
+    ent_reg = await async_get_entity_registry(hass)
+    dev_reg = await async_get_device_registry(hass)
+    for lock in [primary_lock, *child_locks]:
+        lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
+        if not lock_ent_reg_entry:
+            continue
+        lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
+        if not lock_dev_reg_entry:
+            continue
+        node_id: int = 0
+        for identifier in lock_dev_reg_entry.identifiers:
+            if identifier[0] == ZWAVE_JS_DOMAIN:
+                node_id = int(identifier[1].split("-")[1])
+
+        lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+        lock.zwave_js_lock_device = lock_dev_reg_entry
 
 
 def output_to_file_from_template(

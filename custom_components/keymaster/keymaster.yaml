@@ -154,19 +154,11 @@ automation:
   trigger:
     - platform: state
       entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
+      from: 'on'
       to: 'off'
-    - platform: state
-      entity_id: "input_boolean.allow_automation_execution"
-      to: 'on'
     - platform: state
       entity_id: "sensor.LOCKNAME_code_slot_TEMPLATENUM"
   condition:
-    - condition: state
-      entity_id: "input_boolean.allow_automation_execution"
-      state: "on"
-    - condition: state
-      entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
-      state: "off"
     - condition: template
       value_template: >-
         {{
