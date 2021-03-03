@@ -198,8 +198,8 @@ async def test_add_code_zwave_js(hass, client, lock_kwikset_910, integration):
     await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
     await hass.async_block_till_done()
 
-    assert len(client.async_send_command.call_args_list) == 1
-    args = client.async_send_command.call_args[0][0]
+    assert len(client.async_send_command_no_wait.call_args_list) == 1
+    args = client.async_send_command_no_wait.call_args[0][0]
     assert args["command"] == "node.set_value"
     assert args["nodeId"] == 14
     assert args["valueId"] == {
@@ -251,8 +251,8 @@ async def test_clear_code_zwave_js(hass, client, lock_kwikset_910, integration):
     await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
     await hass.async_block_till_done()
 
-    assert len(client.async_send_command.call_args_list) == 1
-    args = client.async_send_command.call_args[0][0]
+    assert len(client.async_send_command_no_wait.call_args_list) == 1
+    args = client.async_send_command_no_wait.call_args[0][0]
     assert args["command"] == "node.set_value"
     assert args["nodeId"] == 14
     assert args["valueId"] == {
