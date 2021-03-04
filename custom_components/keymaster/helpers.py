@@ -19,6 +19,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_STATE,
     SERVICE_RELOAD,
+    STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
 from homeassistant.core import Event, HomeAssistant, State
@@ -291,14 +292,16 @@ def handle_state_change(
         alarm_level_state = hass.states.get(lock.alarm_level_or_user_code_entity_id)
         alarm_level_value = (
             int(alarm_level_state.state)
-            if alarm_level_state and alarm_level_state.state != STATE_UNKNOWN
+            if alarm_level_state
+            and alarm_level_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
             else None
         )
 
         alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
         alarm_type_value = (
             int(alarm_type_state.state)
-            if alarm_type_state and alarm_type_state.state != STATE_UNKNOWN
+            if alarm_type_state
+            and alarm_type_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
             else None
         )
 
