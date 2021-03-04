@@ -66,6 +66,7 @@ async def test_refresh_codes(hass, lock_data, caplog):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
+    # Test invalid entity_id
     servicedata = {"entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor"}
     await hass.services.async_call(DOMAIN, SERVICE_REFRESH_CODES, servicedata)
     await hass.async_block_till_done()
@@ -75,6 +76,7 @@ async def test_refresh_codes(hass, lock_data, caplog):
         in caplog.text
     )
 
+    # Valid entity_id
     servicedata = {"entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked"}
     await hass.services.async_call(DOMAIN, SERVICE_REFRESH_CODES, servicedata)
     await hass.async_block_till_done()
