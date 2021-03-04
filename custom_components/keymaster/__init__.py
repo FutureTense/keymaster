@@ -491,6 +491,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             config_entry.entry_id
         ][CHILD_LOCKS]
         self.ent_reg = ent_reg
+        self.network_ready_entity = None
         super().__init__(
             hass,
             _LOGGER,
@@ -499,7 +500,6 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             update_method=self.async_update_usercodes,
         )
         self.data = {}
-        self.network_ready_entity = None
 
     def _invalid_code(self, code_slot):
         """Return the PIN slot value as we are unable to read the slot value
