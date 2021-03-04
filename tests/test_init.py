@@ -11,7 +11,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from .common import setup_ozw
 
-NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
+NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 
 
 async def test_setup_entry(hass, mock_generate_package_files):
