@@ -25,8 +25,9 @@ from homeassistant.helpers.entity_registry import (
 )
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import slugify
 
-from .binary_sensor import generate_network_ready_unique_id
+from .binary_sensor import generate_binary_sensor_name
 from .const import (
     ATTR_CODE_SLOT,
     ATTR_NAME,
@@ -491,7 +492,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             config_entry.entry_id
         ][CHILD_LOCKS]
         self.ent_reg = ent_reg
-        self.network_ready_entity = None
+        self.network_sensor = None
         super().__init__(
             hass,
             _LOGGER,
@@ -530,17 +531,17 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_update_usercodes(self) -> Dict[str, Any]:
         """Async wrapper to update usercodes."""
-        if not self.network_ready_entity:
-            self.network_ready_entity = self.ent_reg.async_get_entity_id(
+        if not self.network_sensor:
+            self.network_sensor = self.ent_reg.async_get_entity_id(
                 "binary_sensor",
                 DOMAIN,
-                generate_network_ready_unique_id(self._primary_lock.lock_name),
+                slugify(generate_binary_sensor_name(self._primary_lock.lock_name)),
             )
         try:
-            network_ready = self.hass.states.get(self.network_ready_entity)
+            network_ready = self.hass.states.get(self.network_sensor)
             if not network_ready:
                 # We may need to get a new entity ID
-                self.network_ready_entity = None
+                self.network_sensor = None
                 raise ZWaveNetworkNotReady
 
             if network_ready.state != STATE_ON:

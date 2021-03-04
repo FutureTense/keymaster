@@ -57,12 +57,12 @@ except (ModuleNotFoundError, ImportError):
     pass
 
 _LOGGER = logging.getLogger(__name__)
-ENTITY_NAME = "Z-Wave Network Ready"
+ENTITY_NAME = "Network"
 
 
-def generate_network_ready_unique_id(lock_name: str) -> str:
+def generate_binary_sensor_name(lock_name: str) -> str:
     """Generate unique ID for network ready sensor."""
-    return slugify(f"{lock_name}: {ENTITY_NAME}")
+    return f"{lock_name}: {ENTITY_NAME}"
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -97,6 +97,8 @@ class BaseNetworkReadySensor(BinarySensorEntity):
         self.child_locks = child_locks
         self.integration_name = integration_name
         self._is_on = False
+        self._name = generate_binary_sensor_name(self.primary_lock.lock_name)
+        self._unique_id = slugify(self._name)
 
     @callback
     def async_set_is_on_property(
@@ -119,12 +121,12 @@ class BaseNetworkReadySensor(BinarySensorEntity):
     @property
     def name(self) -> str:
         """Return name of entity."""
-        return f"{self.primary_lock.lock_name}: {ENTITY_NAME}"
+        return self._name
 
     @property
     def unique_id(self) -> str:
         """Return unique ID of entity."""
-        return generate_network_ready_unique_id(self.primary_lock.lock_name)
+        return self._unique_id
 
     @property
     def is_on(self) -> bool:
