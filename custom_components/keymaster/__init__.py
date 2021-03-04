@@ -26,7 +26,7 @@ from homeassistant.helpers.entity_registry import (
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .binary_sensor import ENTITY_ID as generate_network_ready_unique_id
+from .binary_sensor import generate_network_ready_unique_id
 from .const import (
     ATTR_CODE_SLOT,
     ATTR_NAME,
@@ -532,7 +532,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         """Async wrapper to update usercodes."""
         if not self.network_ready_entity:
             self.network_ready_entity = self.ent_reg.async_get_entity_id(
-                generate_network_ready_unique_id(self._primary_lock.lock_name)
+                "binary_sensor",
+                DOMAIN,
+                generate_network_ready_unique_id(self._primary_lock.lock_name),
             )
         try:
             network_ready = self.hass.states.get(self.network_ready_entity)
