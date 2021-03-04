@@ -15,8 +15,8 @@ add_code:
   description: Supports ozw, zwave, and zwave_js locks.
   fields:
     entity_id:
-      name: Entity ID
-      description: Lock entity to add a code to
+      name: Lock
+      description: Lock to add a code to
       required: true
       selector:
         entity:
@@ -41,8 +41,8 @@ clear_code:
   description: Supports ozw, zwave, and zwave_js locks.
   fields:
     entity_id:
-      name: Entity ID
-      description: Lock entity to clear a code from
+      name: Lock
+      description: Lock to clear a code from
       required: true
       selector:
         entity:
@@ -59,8 +59,8 @@ refresh_codes:
   description: Experimental. Only supports ozw locks for now, and may not be fully functional.
   fields:
     entity_id:
-      name: Entity ID
-      description: Lock entity to refresh codes on
+      name: Lock
+      description: Lock to refresh codes on
       required: true
       selector:
         entity:
