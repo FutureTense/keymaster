@@ -5,7 +5,7 @@ from custom_components.keymaster.const import DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant import setup
 
-from tests.const import CONFIG_DATA, CONFIG_DATA_OLD
+from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 
 
 async def test_setup_entry(hass, mock_generate_package_files):
@@ -13,7 +13,7 @@ async def test_setup_entry(hass, mock_generate_package_files):
 
     await setup.async_setup_component(hass, "persistent_notification", {})
     entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
     )
 
     entry.add_to_hass(hass)
