@@ -5,7 +5,6 @@ from typing import List
 
 from homeassistant.components.binary_sensor import (
     DEVICE_CLASS_CONNECTIVITY,
-    ENTITY_ID_FORMAT,
     BinarySensorEntity,
 )
 from homeassistant.components.mqtt import async_subscribe, models
@@ -58,16 +57,16 @@ except (ModuleNotFoundError, ImportError):
     pass
 
 _LOGGER = logging.getLogger(__name__)
-ENTITY_NAME = "Keymaster: ZWave Network Ready"
-ENTITY_ID = ENTITY_ID_FORMAT.format(slugify(ENTITY_NAME))
+ENTITY_NAME = "Z-Wave Network Ready"
+
+
+def generate_network_ready_unique_id(lock_name: str) -> str:
+    """Generate unique ID for network ready sensor."""
+    return slugify(f"{lock_name}: {ENTITY_NAME}")
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Setup config entry."""
-
-    if hass.states.get(ENTITY_ID):
-        return True
-
     primary_lock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     child_locks = hass.data[DOMAIN][config_entry.entry_id][CHILD_LOCKS]
     if using_zwave_js(hass):
@@ -120,12 +119,12 @@ class BaseNetworkReadySensor(BinarySensorEntity):
     @property
     def name(self) -> str:
         """Return name of entity."""
-        return ENTITY_NAME
+        return f"{self.primary_lock.lock_name}: {ENTITY_NAME}"
 
     @property
     def unique_id(self) -> str:
         """Return unique ID of entity."""
-        return slugify(self.name)
+        return generate_network_ready_unique_id(self.primary_lock.lock_name)
 
     @property
     def is_on(self) -> bool:
