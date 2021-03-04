@@ -538,7 +538,12 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             )
         try:
             network_ready = self.hass.states.get(self.network_ready_entity)
-            if not network_ready or network_ready.state != STATE_ON:
+            if not network_ready:
+                # We may need to get a new entity ID
+                self.network_ready_entity = None
+                raise ZWaveNetworkNotReady
+
+            if network_ready.state != STATE_ON:
                 raise ZWaveNetworkNotReady
 
             return await self.hass.async_add_executor_job(self.update_usercodes)
