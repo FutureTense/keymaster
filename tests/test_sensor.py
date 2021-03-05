@@ -17,9 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def test_connected_sensor(
     hass: HomeAssistant,
-    mock_osremove,
-    mock_osmakedir,
-    mock_listdir,
+    mock_generate_package_files,
     client,
     lock_kwikset_910,
     integration,

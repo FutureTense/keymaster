@@ -22,9 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def test_active_sensor(
     hass: HomeAssistant,
-    mock_osremove,
-    mock_osmakedir,
-    mock_listdir,
+    mock_generate_package_files,
     client,
     lock_kwikset_910,
     integration,
@@ -142,9 +140,7 @@ async def test_active_sensor(
 
 async def test_pin_synched_sensor(
     hass: HomeAssistant,
-    mock_osremove,
-    mock_osmakedir,
-    mock_listdir,
+    mock_generate_package_files,
     client,
     lock_kwikset_910,
     integration,
