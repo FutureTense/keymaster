@@ -1,20 +1,22 @@
 """ Test keymaster init """
 import logging
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
-from custom_components.keymaster.helpers import using_ozw
+from custom_components.keymaster.helpers import using_ozw, using_zwave
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant import setup
+from homeassistant.components.zwave.const import DATA_NETWORK
+from homeassistant import setup, config_entries
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from .common import MQTTMessage, process_fixture_data, setup_ozw
+from .mock.zwave import MockNode, MockValue
 
-NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
-# NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
+# NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
+NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,8 +83,53 @@ async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
     assert len(entries) == 1
 
 
+async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
+    """Test handling usercode updates using zwave"""
+
+    mock_network = hass.data[DATA_NETWORK] = MagicMock()
+    node = MockNode(node_id=12)
+    value0 = MockValue(data="12345678", node=node, index=0)
+    value1 = MockValue(data="******", node=node, index=1)
+
+    node.get_values.return_value = {value0.value_id: value0, value1.value_id: value1}
+
+    # Setup the zwave integration
+    hass.config.components.add("zwave")
+    config_entry = config_entries.ConfigEntry(
+        1,
+        "zwave",
+        "Mock Title",
+        {"usb_path": "mock-path", "network_key": "mock-key"},
+        "test",
+        config_entries.CONN_CLASS_LOCAL_PUSH,
+        system_options={},
+    )
+    await hass.config_entries.async_forward_entry_setup(config_entry, "lock")
+    await hass.async_block_till_done()
+
+    # Load the integration
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Fire the event
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+
+    assert using_zwave(hass)
+
+    assert hass.states.get(NETWORK_READY_ENTITY)
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+
+    # assert hass.states.get("sensor.frontdoor_code_slot_1") == "12345678"
+    # assert "Work around code in use." in caplog.text
+
+
 async def test_update_usercodes_using_ozw(hass, lock_data):
-    """Test handle_state_change"""
+    """Test handling usercode updates using ozw"""
     receive_message, ozw_entry = await setup_ozw(hass, fixture=lock_data)
 
     with patch("homeassistant.components.mqtt.async_subscribe") as mock_subscribe:

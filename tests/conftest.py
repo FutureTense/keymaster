@@ -1,15 +1,19 @@
 """ Fixtures for keymaster tests. """
 import asyncio
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
+from homeassistant.bootstrap import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
 
+from homeassistant.components.zwave import DATA_NETWORK
+
 from .common import load_fixture
+from .mock.zwave import MockNetwork, MockOption
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -208,3 +212,38 @@ def version_state_fixture():
         "serverVersion": "1.0.0",
         "homeId": 1234567890,
     }
+
+
+@pytest.fixture
+async def zwave_setup(hass):
+    """Zwave setup."""
+    await async_setup_component(hass, "zwave", {"zwave": {}})
+    await hass.async_block_till_done()
+
+
+@pytest.fixture
+async def zwave_setup_ready(hass, zwave_setup):
+    """Zwave setup and set network to ready."""
+    zwave_network = hass.data[DATA_NETWORK]
+    zwave_network.state = MockNetwork.STATE_READY
+
+
+@pytest.fixture
+def mock_openzwave():
+    """Mock out Open Z-Wave."""
+    base_mock = MagicMock()
+    libopenzwave = base_mock.libopenzwave
+    libopenzwave.__file__ = "test"
+    base_mock.network.ZWaveNetwork = MockNetwork
+    base_mock.option.ZWaveOption = MockOption
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "libopenzwave": libopenzwave,
+            "openzwave.option": base_mock.option,
+            "openzwave.network": base_mock.network,
+            "openzwave.group": base_mock.group,
+        },
+    ):
+        yield base_mock
