@@ -1,4 +1,6 @@
 """ Test keymaster init """
+import logging
+from unittest.mock import patch, Mock
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
@@ -9,9 +11,12 @@ from homeassistant import setup
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
-from .common import setup_ozw
+from .common import MQTTMessage, process_fixture_data, setup_ozw
 
-NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
+# NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
+NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def test_setup_entry(hass, mock_generate_package_files):
@@ -78,8 +83,16 @@ async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
 
 async def test_update_usercodes_using_ozw(hass, lock_data):
     """Test handle_state_change"""
+    receive_message, ozw_entry = await setup_ozw(hass, fixture=lock_data)
 
-    await setup_ozw(hass, fixture=lock_data)
+    with patch("homeassistant.components.mqtt.async_subscribe") as mock_subscribe:
+        mock_subscribe.return_value = Mock()
+        assert await hass.config_entries.async_reload(ozw_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert len(mock_subscribe.mock_calls) == 1
+    receive_message = mock_subscribe.mock_calls[0][1][2]
+    await process_fixture_data(hass, receive_message, lock_data)
 
     assert "ozw" in hass.config.components
 
@@ -99,6 +112,35 @@ async def test_update_usercodes_using_ozw(hass, lock_data):
 
     # TODO: Find a way to turn on the binary_sensor for ozw
     assert hass.states.get(NETWORK_READY_ENTITY)
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "off"
+
+    # This doesn't seem to work for some reason
+
+    message = MQTTMessage(
+        topic="OpenZWave/1/status/",
+        payload={
+            "OpenZWave_Version": "1.6.1131",
+            "OZWDaemon_Version": "0.1.101",
+            "QTOpenZWave_Version": "1.0.0",
+            "QT_Version": "5.12.5",
+            "Status": "driverAllNodesQueriedSomeDead",
+            "TimeStamp": 1590178891,
+            "ManufacturerSpecificDBReady": True,
+            "homeID": 4075923038,
+            "getControllerNodeId": 1,
+            "getSUCNodeId": 0,
+            "isPrimaryController": False,
+            "isBridgeController": False,
+            "hasExtendedTXStatistics": True,
+            "getControllerLibraryVersion": "Z-Wave 4.05",
+            "getControllerLibraryType": "Static Controller",
+            "getControllerPath": "/dev/zwave",
+        },
+    )
+    message.encode()
+    receive_message(message)
+    await hass.async_block_till_done()
+
     # assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
     # assert hass.states.get("sensor.frontdoor_code_slot_1") == "12345678"
