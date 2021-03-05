@@ -15,8 +15,8 @@ from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from tests.common import MQTTMessage, process_fixture_data, setup_ozw
 from tests.mock.zwave import MockNode, MockValue
 
-NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
-# NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
+# NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
+NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
 
 _LOGGER = logging.getLogger(__name__)
 
