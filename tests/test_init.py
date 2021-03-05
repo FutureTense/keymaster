@@ -13,8 +13,8 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from .common import MQTTMessage, process_fixture_data, setup_ozw
 
-# NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
-NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
+NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
+# NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
 
 _LOGGER = logging.getLogger(__name__)
 
