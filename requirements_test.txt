@@ -5,3 +5,4 @@ pytest
 pytest-homeassistant-custom-component
 black
 isort
+pydispatch
