@@ -19,10 +19,15 @@ from homeassistant.const import (
 )
 from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.entity_registry import (
+    EntityRegistry,
+    async_get as async_get_entity_registry,
+)
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import slugify
 
-from .binary_sensor import ENTITY_ID as NETWORK_READY_ENTITY_ID
+from .binary_sensor import generate_binary_sensor_name
 from .const import (
     ATTR_CODE_SLOT,
     ATTR_NAME,
@@ -165,7 +170,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         CHILD_LOCKS: child_locks,
         UNSUB_LISTENERS: [],
     }
-    coordinator = LockUsercodeUpdateCoordinator(hass, config_entry)
+    coordinator = LockUsercodeUpdateCoordinator(
+        hass, config_entry, async_get_entity_registry(hass)
+    )
     hass.data[DOMAIN][config_entry.entry_id][COORDINATOR] = coordinator
 
     # Button Press
@@ -475,13 +482,17 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
 class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage usercode updates."""
 
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    def __init__(
+        self, hass: HomeAssistant, config_entry: ConfigEntry, ent_reg: EntityRegistry
+    ) -> None:
         self._primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
             PRIMARY_LOCK
         ]
         self._child_locks: List[KeymasterLock] = hass.data[DOMAIN][
             config_entry.entry_id
         ][CHILD_LOCKS]
+        self.ent_reg = ent_reg
+        self.network_sensor = None
         super().__init__(
             hass,
             _LOGGER,
@@ -520,9 +531,20 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_update_usercodes(self) -> Dict[str, Any]:
         """Async wrapper to update usercodes."""
+        if not self.network_sensor:
+            self.network_sensor = self.ent_reg.async_get_entity_id(
+                "binary_sensor",
+                DOMAIN,
+                slugify(generate_binary_sensor_name(self._primary_lock.lock_name)),
+            )
         try:
-            network_ready = self.hass.states.get(NETWORK_READY_ENTITY_ID)
-            if not network_ready or network_ready.state != STATE_ON:
+            network_ready = self.hass.states.get(self.network_sensor)
+            if not network_ready:
+                # We may need to get a new entity ID
+                self.network_sensor = None
+                raise ZWaveNetworkNotReady
+
+            if network_ready.state != STATE_ON:
                 raise ZWaveNetworkNotReady
 
             return await self.hass.async_add_executor_job(self.update_usercodes)

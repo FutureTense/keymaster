@@ -13,10 +13,14 @@ generate_package:
 add_code:
   name: Add code to lock
   description: Supports ozw, zwave, and zwave_js locks.
-  target:
-    entity:
-      domain: lock
   fields:
+    entity_id:
+      name: Lock
+      description: Lock to add a code to
+      required: true
+      selector:
+        entity:
+          domain: lock
     code_slot:
       name: Code Slot
       description: The code slot you are attempting to add/replace a code into
@@ -35,10 +39,14 @@ add_code:
 clear_code:
   name: Clear code from lock
   description: Supports ozw, zwave, and zwave_js locks.
-  target:
-    entity:
-      domain: lock
   fields:
+    entity_id:
+      name: Lock
+      description: Lock to clear a code from
+      required: true
+      selector:
+        entity:
+          domain: lock
     code_slot:
       name: Code Slot
       description: The code slot you are attempting to clear
@@ -49,6 +57,11 @@ clear_code:
 refresh_codes:
   name: Refresh codes from a lock
   description: Experimental. Only supports ozw locks for now, and may not be fully functional.
-  target:
-    entity:
-      domain: lock
+  fields:
+    entity_id:
+      name: Lock
+      description: Lock to refresh codes on
+      required: true
+      selector:
+        entity:
+          domain: lock
