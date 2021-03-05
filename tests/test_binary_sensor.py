@@ -8,19 +8,37 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.keymaster.const import DOMAIN
-from homeassistant.const import STATE_OFF, STATE_ON
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_LOCKED
 from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt
 
 from tests.const import CONFIG_DATA
 
+KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
+NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
+
 _LOGGER = logging.getLogger(__name__)
 
 
 async def test_active_sensor(
-    hass: HomeAssistant, mock_osremove, mock_osmakedir, mock_listdir
+    hass: HomeAssistant,
+    mock_osremove,
+    mock_osmakedir,
+    mock_listdir,
+    client,
+    lock_kwikset_910,
+    integration,
 ):
     """Test active binary sensor."""
+
+    # Make sure the lock and zwavejs loaded
+    node = lock_kwikset_910
+    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
+    assert state
+    assert state.state == STATE_LOCKED
+
+    assert "zwave_js" in hass.config.components
+
     now = dt.now()
     yesterday = now - timedelta(days=1)
     tomorrow = now + timedelta(days=1)
@@ -60,6 +78,8 @@ async def test_active_sensor(
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
     assert hass.states.get(active_entity).state == STATE_OFF
 
@@ -121,9 +141,24 @@ async def test_active_sensor(
 
 
 async def test_pin_synched_sensor(
-    hass: HomeAssistant, mock_osremove, mock_osmakedir, mock_listdir
+    hass: HomeAssistant,
+    mock_osremove,
+    mock_osmakedir,
+    mock_listdir,
+    client,
+    lock_kwikset_910,
+    integration,
 ):
     """Test PIN synched binary sensor."""
+
+    # Make sure the lock and zwavejs loaded
+    node = lock_kwikset_910
+    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
+    assert state
+    assert state.state == STATE_LOCKED
+
+    assert "zwave_js" in hass.config.components
+
     lock_pin_entity = "sensor.frontdoor_code_slot_1"
     input_pin_entity = "input_text.frontdoor_pin_1"
     active_entity = "binary_sensor.frontdoor_active_1"
@@ -134,6 +169,8 @@ async def test_pin_synched_sensor(
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
     hass.states.async_set(lock_pin_entity, "")
     hass.states.async_set(input_pin_entity, "")
