@@ -12,7 +12,7 @@ from homeassistant.const import STATE_OFF, STATE_ON, STATE_LOCKED
 from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt
 
-from tests.const import CONFIG_DATA
+from tests.const import CONFIG_DATA_910
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
@@ -73,7 +73,7 @@ async def test_active_sensor(
     hass.states.async_set(current_day_start_time_entity, "00:00")
     hass.states.async_set(current_day_end_time_entity, "00:00")
     entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=2
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -164,7 +164,7 @@ async def test_pin_synched_sensor(
     active_entity = "binary_sensor.frontdoor_active_1"
     pin_synched_entity = "binary_sensor.frontdoor_pin_synched_1"
     entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=2
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)

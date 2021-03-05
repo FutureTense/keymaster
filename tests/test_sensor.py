@@ -7,7 +7,7 @@ from custom_components.keymaster.const import DOMAIN
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_LOCKED
 from homeassistant.core import HomeAssistant
 
-from tests.const import CONFIG_DATA
+from tests.const import CONFIG_DATA_910
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
@@ -39,7 +39,7 @@ async def test_connected_sensor(
     connected_entity = "sensor.frontdoor_connected_1"
 
     entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=2
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
