@@ -12,8 +12,8 @@ from zwave_js_server.version import VersionInfo
 
 from homeassistant.components.zwave import DATA_NETWORK
 
-from .common import load_fixture
-from .mock.zwave import MockNetwork, MockOption
+from tests.common import load_fixture
+from tests.mock.zwave import MockNetwork, MockOption
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
