@@ -12,8 +12,8 @@ from homeassistant import setup, config_entries
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
-from .common import MQTTMessage, process_fixture_data, setup_ozw
-from .mock.zwave import MockNode, MockValue
+from tests.common import MQTTMessage, process_fixture_data, setup_ozw
+from tests.mock.zwave import MockNode, MockValue
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 # NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
