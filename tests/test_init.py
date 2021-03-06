@@ -1,10 +1,10 @@
 """ Test keymaster init """
 import logging
-from unittest.mock import patch, Mock, MagicMock
+from unittest.mock import patch, MagicMock
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
-from custom_components.keymaster.helpers import using_ozw, using_zwave
+from custom_components.keymaster.helpers import using_ozw
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant import setup, config_entries
@@ -12,7 +12,7 @@ from homeassistant import setup, config_entries
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
-from tests.common import MQTTMessage, process_fixture_data, setup_ozw
+from tests.common import setup_ozw
 from tests.mock.zwave import MockNode, MockValue, MockNetwork
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
@@ -104,12 +104,15 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     hass.data[DATA_NETWORK].state = MockNetwork.STATE_READY
 
     # Load the integration
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
-    )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    with patch(
+        "custom_components.keymaster.binary_sensor.using_zwave", return_value=True
+    ):
+        entry = MockConfigEntry(
+            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+        )
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
     # Fire the event
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
