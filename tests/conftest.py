@@ -247,3 +247,10 @@ def mock_openzwave():
         },
     ):
         yield base_mock
+
+
+@pytest.fixture
+async def mock_using_zwave():
+    with patch("custom_components.keymaster.helpers.using_zwave") as mock_using_zwave:
+        mock_using_zwave.return_value = True
+    yield mock_using_zwave

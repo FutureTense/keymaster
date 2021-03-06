@@ -83,7 +83,9 @@ async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
     assert len(entries) == 1
 
 
-async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
+async def test_update_usercodes_using_zwave(
+    hass, mock_openzwave, mock_using_zwave, caplog
+):
     """Test handling usercode updates using zwave"""
 
     mock_network = hass.data[DATA_NETWORK] = MagicMock()
