@@ -13,7 +13,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from tests.common import MQTTMessage, process_fixture_data, setup_ozw
-from tests.mock.zwave import MockNode, MockValue
+from tests.mock.zwave import MockNode, MockValue, MockNetwork
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 # NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
@@ -106,6 +106,9 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     )
     await hass.config_entries.async_forward_entry_setup(config_entry, "lock")
     await hass.async_block_till_done()
+
+    # Set the zwave network as ready
+    hass.data[DATA_NETWORK].state = MockNetwork.STATE_READY
 
     # Load the integration
     entry = MockConfigEntry(
