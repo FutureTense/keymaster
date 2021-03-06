@@ -6,14 +6,20 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.keymaster.const import DOMAIN
 from custom_components.keymaster.helpers import using_ozw
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.components.zwave.const import DATA_NETWORK
+from homeassistant.components.zwave import lock, node_entity, async_setup_platform
+from homeassistant.components.zwave.const import (
+    DATA_DEVICES,
+    DATA_NETWORK,
+    DISCOVERY_DEVICE,
+    COMMAND_CLASS_DOOR_LOCK,
+)
 from homeassistant import setup, config_entries
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from tests.common import setup_ozw
-from tests.mock.zwave import MockNode, MockValue, MockNetwork
+from tests.mock.zwave import MockNode, MockValue, MockNetwork, MockEntityValues
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 # NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
@@ -86,15 +92,19 @@ async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
 async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     """Test handling usercode updates using zwave"""
 
-    mock_network = hass.data[DATA_NETWORK] = MagicMock()
+    # Setup zwave mock
+    hass.data[DATA_NETWORK] = mock_openzwave
     node = MockNode(node_id=12)
-    value0 = MockValue(data="12345678", node=node, index=0)
-    value1 = MockValue(data="******", node=node, index=1)
+    value0 = MockValue(data="12345678", node=node, index=1)
+    value1 = MockValue(data="******", node=node, index=2)
 
     node.get_values.return_value = {
         value0.value_id: value0,
         value1.value_id: value1,
     }
+
+    mock_openzwave.nodes = {node.node_id: node}
+    entity = node_entity.ZWaveNodeEntity(node, mock_openzwave)
 
     # Setup the zwave integration
     await setup_zwave(hass, mock_openzwave)
@@ -103,10 +113,26 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     # Set the zwave network as ready
     hass.data[DATA_NETWORK].state = MockNetwork.STATE_READY
 
+    # Create the entities
+    hass.states.async_set(
+        "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_level", 1
+    )
+    await hass.async_block_till_done()
+    hass.states.async_set(
+        "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_type", 22
+    )
+    await hass.async_block_till_done()
+    hass.states.async_set(
+        "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
+        "locked",
+        {"node_id": 12},
+    )
+    await hass.async_block_till_done()
+
     # Load the integration
     with patch(
         "custom_components.keymaster.binary_sensor.using_zwave", return_value=True
-    ):
+    ), patch("custom_components.keymaster.using_zwave", return_value=True):
         entry = MockConfigEntry(
             domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
         )
@@ -119,13 +145,11 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     await hass.async_block_till_done()
 
     assert hass.states.get(NETWORK_READY_ENTITY)
-    hass.states.async_set(NETWORK_READY_ENTITY, "on")
-    await hass.async_block_till_done()
     assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
     # TODO: Figure out why the code slot sensors are not updating
-    # assert hass.states.get("sensor.frontdoor_code_slot_1") == "12345678"
-    # assert "Work around code in use." in caplog.text
+    assert hass.states.get("sensor.frontdoor_code_slot_1").state == "12345678"
+    assert "Work around code in use." in caplog.text
 
 
 async def test_update_usercodes_using_ozw(hass, lock_data):
