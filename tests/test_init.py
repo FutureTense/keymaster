@@ -1,25 +1,19 @@
 """ Test keymaster init """
 import logging
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
-from custom_components.keymaster.helpers import using_ozw
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.components.zwave import lock, node_entity, async_setup_platform
-from homeassistant.components.zwave.const import (
-    DATA_DEVICES,
-    DATA_NETWORK,
-    DISCOVERY_DEVICE,
-    COMMAND_CLASS_DOOR_LOCK,
-)
+from homeassistant.components.zwave import node_entity
+from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant import setup, config_entries
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from tests.common import setup_ozw
-from tests.mock.zwave import MockNode, MockValue, MockNetwork, MockEntityValues
+from tests.mock.zwave import MockNode, MockValue, MockNetwork
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 # NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
@@ -154,17 +148,30 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
 
 async def test_update_usercodes_using_ozw(hass, lock_data):
     """Test handling usercode updates using ozw"""
-    await setup_ozw(hass, fixture=lock_data)
 
+    await setup_ozw(hass, fixture=lock_data)
     assert "ozw" in hass.config.components
 
-    # Load the integration
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+    # Create the entities
+    hass.states.async_set(
+        "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_level", 1
     )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+    hass.states.async_set(
+        "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_type", 22
+    )
+    await hass.async_block_till_done()
+
+    # Load the integration
+    with patch(
+        "custom_components.keymaster.binary_sensor.using_ozw", return_value=True
+    ), patch("custom_components.keymaster.using_ozw", return_value=True):
+        entry = MockConfigEntry(
+            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+        )
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
     # Fire the event
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
@@ -176,19 +183,12 @@ async def test_update_usercodes_using_ozw(hass, lock_data):
     assert state.state == "locked"
     assert state.attributes["node_id"] == 14
 
-    assert using_ozw(hass)
-
     assert hass.states.get(NETWORK_READY_ENTITY)
+    # This should be "on"
     assert hass.states.get(NETWORK_READY_ENTITY).state == "off"
 
-    # Turn on the sensor
-    hass.states.async_set(NETWORK_READY_ENTITY, "on")
-    await hass.async_block_till_done()
-
-    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
-
     # TODO: Figure out why the code slot sensors are not updating
-    # assert hass.states.get("sensor.frontdoor_code_slot_1") == "12345678"
+    # assert hass.states.get("sensor.frontdoor_code_slot_1").state == "12345678"
 
 
 async def setup_zwave(hass, mock_openzwave):
