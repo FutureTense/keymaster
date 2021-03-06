@@ -6,4 +6,3 @@ pytest-homeassistant-custom-component
 black
 isort
 pydispatcher
-homeassistant-pyozw

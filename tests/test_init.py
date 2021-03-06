@@ -10,7 +10,6 @@ from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant import setup, config_entries
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from openzwave.network import ZWaveNetwork
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from tests.common import setup_ozw
@@ -137,8 +136,6 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
 
     # Fire the event
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
-    await hass.async_block_till_done()
-    hass.bus.async_fire(ZWaveNetwork.SIGNAL_NETWORK_READY)
     await hass.async_block_till_done()
 
     assert hass.states.get(NETWORK_READY_ENTITY)
