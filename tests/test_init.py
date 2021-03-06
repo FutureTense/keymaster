@@ -83,59 +83,64 @@ async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
     assert len(entries) == 1
 
 
-async def test_update_usercodes_using_zwave(
-    hass, mock_openzwave, mock_using_zwave, caplog
-):
+async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     """Test handling usercode updates using zwave"""
 
-    mock_network = hass.data[DATA_NETWORK] = MagicMock()
-    node = MockNode(node_id=12)
-    value0 = MockValue(data="12345678", node=node, index=0)
-    value1 = MockValue(data="******", node=node, index=1)
+    with patch(
+        "custom_components.keymaster.binary_sensor.using_zwave", return_value=True
+    ), patch("custom_components.keymaster.helpers.using_zwave", return_value=True):
 
-    node.get_values.return_value = {value0.value_id: value0, value1.value_id: value1}
+        mock_network = hass.data[DATA_NETWORK] = MagicMock()
+        node = MockNode(node_id=12)
+        value0 = MockValue(data="12345678", node=node, index=0)
+        value1 = MockValue(data="******", node=node, index=1)
 
-    # Setup the zwave integration
-    hass.config.components.add("zwave")
-    config_entry = config_entries.ConfigEntry(
-        1,
-        "zwave",
-        "Mock Title",
-        {"usb_path": "mock-path", "network_key": "mock-key"},
-        "test",
-        config_entries.CONN_CLASS_LOCAL_PUSH,
-        system_options={},
-    )
-    await hass.config_entries.async_forward_entry_setup(config_entry, "lock")
-    await hass.async_block_till_done()
+        node.get_values.return_value = {
+            value0.value_id: value0,
+            value1.value_id: value1,
+        }
 
-    # Set the zwave network as ready
-    hass.data[DATA_NETWORK].state = MockNetwork.STATE_READY
+        # Setup the zwave integration
+        hass.config.components.add("zwave")
+        config_entry = config_entries.ConfigEntry(
+            1,
+            "zwave",
+            "Mock Title",
+            {"usb_path": "mock-path", "network_key": "mock-key"},
+            "test",
+            config_entries.CONN_CLASS_LOCAL_PUSH,
+            system_options={},
+        )
+        await hass.config_entries.async_forward_entry_setup(config_entry, "lock")
+        await hass.async_block_till_done()
 
-    assert using_zwave(hass)
+        # Set the zwave network as ready
+        hass.data[DATA_NETWORK].state = MockNetwork.STATE_READY
 
-    # Load the integration
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
-    )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+        assert using_zwave(hass)
 
-    # Fire the event
-    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
-    await hass.async_block_till_done()
+        # Load the integration
+        entry = MockConfigEntry(
+            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+        )
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
-    assert "Z-Wave integration not found" not in caplog.text
+        # Fire the event
+        hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+        await hass.async_block_till_done()
 
-    assert hass.states.get(NETWORK_READY_ENTITY)
-    hass.states.async_set(NETWORK_READY_ENTITY, "on")
-    await hass.async_block_till_done()
-    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+        assert "Z-Wave integration not found" not in caplog.text
 
-    # TODO: Figure out why the code slot sensors are not updating
-    # assert hass.states.get("sensor.frontdoor_code_slot_1") == "12345678"
-    # assert "Work around code in use." in caplog.text
+        assert hass.states.get(NETWORK_READY_ENTITY)
+        hass.states.async_set(NETWORK_READY_ENTITY, "on")
+        await hass.async_block_till_done()
+        assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+
+        # TODO: Figure out why the code slot sensors are not updating
+        # assert hass.states.get("sensor.frontdoor_code_slot_1") == "12345678"
+        # assert "Work around code in use." in caplog.text
 
 
 async def test_update_usercodes_using_ozw(hass, lock_data):
