@@ -119,27 +119,21 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await hass.async_block_till_done()
 
-    # assert using_zwave(hass)
+    assert using_zwave(hass)
 
-    # assert hass.states.get(NETWORK_READY_ENTITY)
-    # assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+    assert hass.states.get(NETWORK_READY_ENTITY)
+    hass.states.async_set(NETWORK_READY_ENTITY, "on")
+    await hass.async_block_till_done()
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
+    # TODO: Figure out why the code slot sensors are not updating
     # assert hass.states.get("sensor.frontdoor_code_slot_1") == "12345678"
     # assert "Work around code in use." in caplog.text
 
 
 async def test_update_usercodes_using_ozw(hass, lock_data):
     """Test handling usercode updates using ozw"""
-    receive_message, ozw_entry = await setup_ozw(hass, fixture=lock_data)
-
-    with patch("homeassistant.components.mqtt.async_subscribe") as mock_subscribe:
-        mock_subscribe.return_value = Mock()
-        assert await hass.config_entries.async_reload(ozw_entry.entry_id)
-        await hass.async_block_till_done()
-
-    assert len(mock_subscribe.mock_calls) == 1
-    receive_message = mock_subscribe.mock_calls[0][1][2]
-    await process_fixture_data(hass, receive_message, lock_data)
+    await setup_ozw(hass, fixture=lock_data)
 
     assert "ozw" in hass.config.components
 
@@ -155,39 +149,22 @@ async def test_update_usercodes_using_ozw(hass, lock_data):
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await hass.async_block_till_done()
 
+    # Make sure the lock loaded
+    state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
+    assert state is not None
+    assert state.state == "locked"
+    assert state.attributes["node_id"] == 14
+
     assert using_ozw(hass)
 
-    # TODO: Find a way to turn on the binary_sensor for ozw
     assert hass.states.get(NETWORK_READY_ENTITY)
     assert hass.states.get(NETWORK_READY_ENTITY).state == "off"
 
-    # This doesn't seem to work for some reason
-
-    message = MQTTMessage(
-        topic="OpenZWave/1/status/",
-        payload={
-            "OpenZWave_Version": "1.6.1131",
-            "OZWDaemon_Version": "0.1.101",
-            "QTOpenZWave_Version": "1.0.0",
-            "QT_Version": "5.12.5",
-            "Status": "driverAllNodesQueriedSomeDead",
-            "TimeStamp": 1590178891,
-            "ManufacturerSpecificDBReady": True,
-            "homeID": 4075923038,
-            "getControllerNodeId": 1,
-            "getSUCNodeId": 0,
-            "isPrimaryController": False,
-            "isBridgeController": False,
-            "hasExtendedTXStatistics": True,
-            "getControllerLibraryVersion": "Z-Wave 4.05",
-            "getControllerLibraryType": "Static Controller",
-            "getControllerPath": "/dev/zwave",
-        },
-    )
-    message.encode()
-    receive_message(message)
+    # Turn on the sensor
+    hass.states.async_set(NETWORK_READY_ENTITY, "on")
     await hass.async_block_till_done()
 
-    # assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
+    # TODO: Figure out why the code slot sensors are not updating
     # assert hass.states.get("sensor.frontdoor_code_slot_1") == "12345678"
