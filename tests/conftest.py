@@ -252,7 +252,6 @@ def mock_openzwave():
 @pytest.fixture
 async def mock_using_zwave():
     with patch(
-        "custom_components.keymaster.binary_sensor.using_zwave"
-    ) as mock_using_zwave:
-        mock_using_zwave.return_value = True
-    yield mock_using_zwave
+        "custom_components.keymaster.binary_sensor.using_zwave", return_value=True
+    ):
+        yield

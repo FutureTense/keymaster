@@ -112,6 +112,8 @@ async def test_update_usercodes_using_zwave(
     # Set the zwave network as ready
     hass.data[DATA_NETWORK].state = MockNetwork.STATE_READY
 
+    assert using_zwave(hass)
+
     # Load the integration
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
