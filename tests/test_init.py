@@ -115,8 +115,6 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await hass.async_block_till_done()
 
-    assert "Z-Wave integration not found" not in caplog.text
-
     assert hass.states.get(NETWORK_READY_ENTITY)
     hass.states.async_set(NETWORK_READY_ENTITY, "on")
     await hass.async_block_till_done()
