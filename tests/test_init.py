@@ -146,11 +146,19 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     assert "Work around code in use." in caplog.text
 
 
-async def test_update_usercodes_using_ozw(hass, lock_data, caplog):
+async def test_update_usercodes_using_ozw(
+    hass,
+    mock_using_ozw_helpers,
+    mock_using_ozw_init,
+    mock_using_ozw_bin,
+    lock_data,
+    caplog,
+):
     """Test handling usercode updates using ozw"""
 
     await setup_ozw(hass, fixture=lock_data)
     assert "ozw" in hass.config.components
+    assert OZW_DOMAIN in hass.data
 
     # Create the entities
     hass.states.async_set(
@@ -168,12 +176,8 @@ async def test_update_usercodes_using_ozw(hass, lock_data, caplog):
     assert state.state == "locked"
     assert state.attributes["node_id"] == 14
 
-    assert OZW_DOMAIN in hass.data
-
     # Load the integration
     with patch(
-        "custom_components.keymaster.binary_sensor.using_ozw", return_value=True
-    ), patch("custom_components.keymaster.using_ozw", return_value=True), patch(
         "custom_components.keymaster.binary_sensor.async_subscribe"
     ) as mock_subscribe:
         mock_subscribe.return_value = Mock()
