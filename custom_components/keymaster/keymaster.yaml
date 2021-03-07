@@ -104,6 +104,9 @@ input_boolean:
   reset_codeslot_LOCKNAME_TEMPLATENUM:
     name: 'Reset Code Slot'
 
+  synchronize_buffer_LOCKNAME_TEMPLATENUM:
+    name: 'Synchronize Code Slot Buffer'
+
   sun_LOCKNAME_TEMPLATENUM:
     name: 'Sunday'
 
@@ -164,7 +167,7 @@ automation:
         {{
           states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != "unavailable"
           and
-          states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != states("input_text.LOCKNAME_pin_TEMPLATENUM")
+          not is_state("input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM", "on")
         }}
   action:
     - choose:
@@ -174,6 +177,9 @@ automation:
             - condition: template
               value_template: "{{ is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM','on') }}"
           sequence:
+            - service: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM
             - service: keymaster.add_code
               data_template:
                 entity_id: LOCKENTITYNAME
@@ -182,17 +188,26 @@ automation:
                 usercode: >-
                   {% set object = states('input_text.LOCKNAME_pin_TEMPLATENUM') %}
                   {{ object.strip() }}
+            - service: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM
 
         # The code should be removed from the lock's slot
         - conditions:
             - condition: template
               value_template: "{{ is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM','off') }}"
           sequence:
+            - service: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM
             - service: keymaster.clear_code
               data_template:
                 entity_id: LOCKENTITYNAME
                 code_slot: >-
                   {{ TEMPLATENUM }}
+            - service: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM
 
 ################  binary_sensor: #################  
 binary_sensor:
