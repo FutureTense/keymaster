@@ -1,9 +1,10 @@
 """ Test keymaster init """
 import logging
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
+from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.zwave import node_entity
 from homeassistant.components.zwave.const import DATA_NETWORK
@@ -12,7 +13,7 @@ from homeassistant import setup, config_entries
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
-from tests.common import setup_ozw
+from tests.common import setup_ozw, MQTTMessage
 from tests.mock.zwave import MockNode, MockValue, MockNetwork
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
@@ -141,12 +142,11 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     assert hass.states.get(NETWORK_READY_ENTITY)
     assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
-    # TODO: Figure out why the code slot sensors are not updating
     assert hass.states.get("sensor.frontdoor_code_slot_1").state == "12345678"
     assert "Work around code in use." in caplog.text
 
 
-async def test_update_usercodes_using_ozw(hass, lock_data):
+async def test_update_usercodes_using_ozw(hass, lock_data, caplog):
     """Test handling usercode updates using ozw"""
 
     await setup_ozw(hass, fixture=lock_data)
@@ -162,10 +162,21 @@ async def test_update_usercodes_using_ozw(hass, lock_data):
     )
     await hass.async_block_till_done()
 
+    # Make sure the lock loaded
+    state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
+    assert state is not None
+    assert state.state == "locked"
+    assert state.attributes["node_id"] == 14
+
+    assert OZW_DOMAIN in hass.data
+
     # Load the integration
     with patch(
         "custom_components.keymaster.binary_sensor.using_ozw", return_value=True
-    ), patch("custom_components.keymaster.using_ozw", return_value=True):
+    ), patch("custom_components.keymaster.using_ozw", return_value=True), patch(
+        "custom_components.keymaster.binary_sensor.async_subscribe"
+    ) as mock_subscribe:
+        mock_subscribe.return_value = Mock()
         entry = MockConfigEntry(
             domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
         )
@@ -173,19 +184,25 @@ async def test_update_usercodes_using_ozw(hass, lock_data):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
+    assert len(mock_subscribe.mock_calls) == 1
+    receive_message = mock_subscribe.mock_calls[0][1][2]
+
+    message = MQTTMessage(
+        topic="OpenZWave/1/status/",
+        payload={"Status": "driverAllNodesQueriedSomeDead"},
+    )
+    message.encode()
+    receive_message(message)
+    await hass.async_block_till_done()
+
     # Fire the event
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await hass.async_block_till_done()
 
-    # Make sure the lock loaded
-    state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
-    assert state is not None
-    assert state.state == "locked"
-    assert state.attributes["node_id"] == 14
+    assert "Z-Wave integration not found" not in caplog.text
 
     assert hass.states.get(NETWORK_READY_ENTITY)
-    # This should be "on"
-    assert hass.states.get(NETWORK_READY_ENTITY).state == "off"
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
     # TODO: Figure out why the code slot sensors are not updating
     # assert hass.states.get("sensor.frontdoor_code_slot_1").state == "12345678"
