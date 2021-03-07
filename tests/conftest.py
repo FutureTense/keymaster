@@ -1,16 +1,19 @@
 """ Fixtures for keymaster tests. """
 import asyncio
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from zwave_js_server.event import Event
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
 
-from .common import load_fixture
+from homeassistant.bootstrap import async_setup_component
+from homeassistant.components.zwave import DATA_NETWORK
+
+from tests.common import load_fixture
+from tests.mock.zwave import MockNetwork, MockOption
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -209,3 +212,74 @@ def version_state_fixture():
         "serverVersion": "1.0.0",
         "homeId": 1234567890,
     }
+
+
+@pytest.fixture
+async def zwave_setup(hass):
+    """Zwave setup."""
+    await async_setup_component(hass, "zwave", {"zwave": {}})
+    await hass.async_block_till_done()
+
+
+@pytest.fixture
+async def zwave_setup_ready(hass, zwave_setup):
+    """Zwave setup and set network to ready."""
+    zwave_network = hass.data[DATA_NETWORK]
+    zwave_network.state = MockNetwork.STATE_READY
+
+
+@pytest.fixture
+def mock_openzwave():
+    """Mock out Open Z-Wave."""
+    base_mock = MagicMock()
+    libopenzwave = base_mock.libopenzwave
+    libopenzwave.__file__ = "test"
+    base_mock.network.ZWaveNetwork = MockNetwork
+    base_mock.option.ZWaveOption = MockOption
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "libopenzwave": libopenzwave,
+            "openzwave.option": base_mock.option,
+            "openzwave.network": base_mock.network,
+            "openzwave.group": base_mock.group,
+        },
+    ):
+        yield base_mock
+
+
+@pytest.fixture
+async def mock_using_ozw_bin():
+    """Fixture to mock using_ozw in binary_sensor"""
+    with patch(
+        "custom_components.keymaster.binary_sensor.using_ozw", return_value=True
+    ) as mock_using_ozw_bin:
+        yield mock_using_ozw_bin
+
+
+@pytest.fixture
+async def mock_using_ozw_init():
+    """Fixture to mock using_ozw in init"""
+    with patch(
+        "custom_components.keymaster.using_ozw", return_value=True
+    ) as mock_using_ozw_init:
+        yield mock_using_ozw_init
+
+
+@pytest.fixture
+async def mock_using_ozw_helpers():
+    """Fixture to mock using_ozw in helpers"""
+    with patch(
+        "custom_components.keymaster.helpers.using_ozw", return_value=True
+    ) as mock_using_ozw_helpers:
+        yield mock_using_ozw_helpers
+
+
+@pytest.fixture
+async def mock_using_ozw_services():
+    """Fixture to mock using_ozw in services"""
+    with patch(
+        "custom_components.keymaster.services.using_ozw", return_value=True
+    ) as mock_using_ozw_services:
+        yield mock_using_ozw_services
