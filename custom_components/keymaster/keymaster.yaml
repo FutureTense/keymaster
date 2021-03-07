@@ -104,9 +104,6 @@ input_boolean:
   reset_codeslot_LOCKNAME_TEMPLATENUM:
     name: 'Reset Code Slot'
 
-  synchronize_buffer_LOCKNAME_TEMPLATENUM:
-    name: 'Synchronize Code Slot Buffer'
-
   sun_LOCKNAME_TEMPLATENUM:
     name: 'Sunday'
 
@@ -154,6 +151,7 @@ automation:
 
 - alias: synchronize_codeslot_LOCKNAME_TEMPLATENUM
   initial_state: true
+  mode: single
   trigger:
     - platform: state
       entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
@@ -164,11 +162,7 @@ automation:
   condition:
     - condition: template
       value_template: >-
-        {{
-          states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != "unavailable"
-          and
-          not is_state("input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM", "on")
-        }}
+        {{ states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != "unavailable" }}
   action:
     - choose:
 
@@ -177,9 +171,6 @@ automation:
             - condition: template
               value_template: "{{ is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM','on') }}"
           sequence:
-            - service: input_boolean.turn_on
-              target:
-                entity_id: input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM
             - service: keymaster.add_code
               data_template:
                 entity_id: LOCKENTITYNAME
@@ -188,26 +179,19 @@ automation:
                 usercode: >-
                   {% set object = states('input_text.LOCKNAME_pin_TEMPLATENUM') %}
                   {{ object.strip() }}
-            - service: input_boolean.turn_off
-              target:
-                entity_id: input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM
+            - delay: 10
 
         # The code should be removed from the lock's slot
         - conditions:
             - condition: template
               value_template: "{{ is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM','off') }}"
           sequence:
-            - service: input_boolean.turn_on
-              target:
-                entity_id: input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM
             - service: keymaster.clear_code
               data_template:
                 entity_id: LOCKENTITYNAME
                 code_slot: >-
                   {{ TEMPLATENUM }}
-            - service: input_boolean.turn_off
-              target:
-                entity_id: input_boolean.synchronize_buffer_LOCKNAME_TEMPLATENUM
+            - delay: 10
 
 ################  binary_sensor: #################  
 binary_sensor:
