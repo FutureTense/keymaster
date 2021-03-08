@@ -7,6 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
 from homeassistant import config_entries, setup
+from homeassistant.bootstrap import async_setup_component
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.zwave import node_entity
@@ -88,6 +89,15 @@ async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
 async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
     """Test handling usercode updates using zwave"""
 
+    mock_receivers = {}
+
+    def mock_connect(receiver, signal, *args, **kwargs):
+        mock_receivers[signal] = receiver
+
+    with patch("pydispatch.dispatcher.connect", new=mock_connect):
+        await async_setup_component(hass, "zwave", {"zwave": {}})
+        await hass.async_block_till_done()
+
     # Setup zwave mock
     hass.data[DATA_NETWORK] = mock_openzwave
     node = MockNode(node_id=12)
@@ -108,6 +118,12 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
 
     # Set the zwave network as ready
     hass.data[DATA_NETWORK].state = MockNetwork.STATE_READY
+
+    assert mock_receivers
+
+    await hass.async_add_executor_job(
+        mock_receivers[MockNetwork.SIGNAL_ALL_NODES_QUERIED]
+    )
 
     # Create the entities
     hass.states.async_set(
