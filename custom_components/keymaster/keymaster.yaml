@@ -151,21 +151,17 @@ automation:
 
 - alias: synchronize_codeslot_LOCKNAME_TEMPLATENUM
   initial_state: true
+  mode: single
+  max_exceeded: silent
   trigger:
     - platform: state
       entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
       from: 'on'
       to: 'off'
-    - platform: state
-      entity_id: "sensor.LOCKNAME_code_slot_TEMPLATENUM"
   condition:
     - condition: template
       value_template: >-
-        {{
-          states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != "unavailable"
-          and
-          states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != states("input_text.LOCKNAME_pin_TEMPLATENUM")
-        }}
+        {{ states("sensor.LOCKNAME_code_slot_TEMPLATENUM") != "unavailable" }}
   action:
     - choose:
 
@@ -180,8 +176,7 @@ automation:
                 code_slot: >-
                   {{ TEMPLATENUM }}
                 usercode: >-
-                  {% set object = states('input_text.LOCKNAME_pin_TEMPLATENUM') %}
-                  {{ object.strip() }}
+                  {{ states('input_text.LOCKNAME_pin_TEMPLATENUM').strip() }}
 
         # The code should be removed from the lock's slot
         - conditions:
