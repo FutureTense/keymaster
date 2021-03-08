@@ -152,6 +152,7 @@ automation:
 - alias: synchronize_codeslot_LOCKNAME_TEMPLATENUM
   initial_state: true
   mode: single
+  max_exceeded: silent
   trigger:
     - platform: state
       entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
