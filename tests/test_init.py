@@ -1,5 +1,6 @@
 """ Test keymaster init """
 import logging
+import time
 from unittest.mock import Mock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -148,9 +149,7 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
 
 async def test_update_usercodes_using_ozw(
     hass,
-    mock_using_ozw_helpers,
-    mock_using_ozw_init,
-    mock_using_ozw_bin,
+    mock_using_ozw,
     lock_data,
     caplog,
 ):
@@ -208,8 +207,15 @@ async def test_update_usercodes_using_ozw(
     assert hass.states.get(NETWORK_READY_ENTITY)
     assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
+    # Give the sensors time to update
+    time.sleep(7)
+    await hass.async_block_till_done()
+    time.sleep(2)
+    await hass.async_block_till_done()
+
     # TODO: Figure out why the code slot sensors are not updating
-    # assert hass.states.get("sensor.frontdoor_code_slot_1").state == "12345678"
+    assert hass.states.get("sensor.frontdoor_code_slot_1").state == "12345678"
+    assert "DEBUG: Ignoring code slot with * in value." in caplog.text
 
 
 async def setup_zwave(hass, mock_openzwave):
