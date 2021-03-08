@@ -176,7 +176,6 @@ automation:
                 code_slot: >-
                   {{ TEMPLATENUM }}
                 usercode: >-
-                  {% set object = states('input_text.LOCKNAME_pin_TEMPLATENUM') %}
                   {{ states('input_text.LOCKNAME_pin_TEMPLATENUM').strip() }}
 
         # The code should be removed from the lock's slot
