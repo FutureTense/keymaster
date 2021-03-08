@@ -149,9 +149,7 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
 
 async def test_update_usercodes_using_ozw(
     hass,
-    mock_using_ozw_helpers,
-    mock_using_ozw_init,
-    mock_using_ozw_bin,
+    mock_using_ozw,
     lock_data,
     caplog,
 ):
