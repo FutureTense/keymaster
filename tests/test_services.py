@@ -1,4 +1,5 @@
 """ Test keymaster services """
+import errno
 from unittest.mock import patch
 
 import pytest
@@ -19,7 +20,7 @@ from tests.const import CONFIG_DATA, CONFIG_DATA_910
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 
 
-async def test_generate_package_files(hass):
+async def test_generate_package_files(hass, caplog):
     """Test generate_package_files"""
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
@@ -38,15 +39,22 @@ async def test_generate_package_files(hass):
         )
     await hass.async_block_till_done()
 
-    # TODO: Fix os.makedirs mock to produce exception
-    # with patch("custom_components.keymaster.services.os", autospec=True) as mock_os:
-    #     mock_os.makedirs.side_effect = Exception("FileNotFoundError")
-    #     servicedata = {
-    #         "lockname": "frontdoor",
-    #     }
-    #     await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
-    #     await hass.async_block_till_done()
-    #     assert "Error creating directory: FileNotFoundError" in caplog.text
+    # Check for exception when unable to create directory
+    with patch(
+        "custom_components.keymaster.services.os", autospec=True
+    ) as mock_os, patch(
+        "custom_components.keymaster.services.output_to_file_from_template"
+    ):
+        mock_os.path.isdir.return_value = False
+        mock_os.makedirs.side_effect = OSError(errno.EEXIST, "error")
+        servicedata = {
+            "lockname": "frontdoor",
+        }
+        await hass.services.async_call(DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata)
+        await hass.async_block_till_done()
+        mock_os.path.isdir.assert_called_once
+        mock_os.makedirs.assert_called_once
+        assert "Error creating directory:" in caplog.text
 
 
 async def test_refresh_codes(hass, lock_data, caplog):
