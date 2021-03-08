@@ -49,7 +49,11 @@ async def test_delete_lock_and_base_folder(
 
     assert mock_osrmdir.called
     assert mock_osremove.called
-    # need to mock the path to properly test this
+
+    with patch("custom_components.keymaster.helpers.os", autospec=True) as mock_os:
+        mock_os.listdir.return_value = False
+        delete_lock_and_base_folder(hass, entry)
+        mock_os.rmdir.assert_called_once
 
 
 async def test_handle_state_change(hass, lock_data, sent_messages):
