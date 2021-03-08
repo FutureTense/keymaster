@@ -253,6 +253,8 @@ def mock_openzwave():
 async def mock_using_ozw_bin():
     """Fixture to mock using_ozw in binary_sensor"""
     with patch(
+        "custom_components.keymaster.binary_sensor.using_zwave_js", return_value=False
+    ), patch(
         "custom_components.keymaster.binary_sensor.using_ozw", return_value=True
     ) as mock_using_ozw_bin:
         yield mock_using_ozw_bin
@@ -261,7 +263,7 @@ async def mock_using_ozw_bin():
 @pytest.fixture
 async def mock_using_ozw_init():
     """Fixture to mock using_ozw in init"""
-    with patch(
+    with patch("custom_components.keymaster.using_zwave_js", return_value=False), patch(
         "custom_components.keymaster.using_ozw", return_value=True
     ) as mock_using_ozw_init:
         yield mock_using_ozw_init
@@ -271,6 +273,8 @@ async def mock_using_ozw_init():
 async def mock_using_ozw_helpers():
     """Fixture to mock using_ozw in helpers"""
     with patch(
+        "custom_components.keymaster.helpers.using_zwave_js", return_value=False
+    ), patch(
         "custom_components.keymaster.helpers.using_ozw", return_value=True
     ) as mock_using_ozw_helpers:
         yield mock_using_ozw_helpers
@@ -280,6 +284,8 @@ async def mock_using_ozw_helpers():
 async def mock_using_ozw_services():
     """Fixture to mock using_ozw in services"""
     with patch(
+        "custom_components.keymaster.services.using_zwave_js", return_value=False
+    ), patch(
         "custom_components.keymaster.services.using_ozw", return_value=True
     ) as mock_using_ozw_services:
         yield mock_using_ozw_services
