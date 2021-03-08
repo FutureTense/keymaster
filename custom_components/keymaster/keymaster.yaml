@@ -158,8 +158,6 @@ automation:
       entity_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
       from: 'on'
       to: 'off'
-    - platform: state
-      entity_id: "sensor.LOCKNAME_code_slot_TEMPLATENUM"
   condition:
     - condition: template
       value_template: >-
@@ -179,8 +177,7 @@ automation:
                   {{ TEMPLATENUM }}
                 usercode: >-
                   {% set object = states('input_text.LOCKNAME_pin_TEMPLATENUM') %}
-                  {{ object.strip() }}
-            - delay: 10
+                  {{ states('input_text.LOCKNAME_pin_TEMPLATENUM').strip() }}
 
         # The code should be removed from the lock's slot
         - conditions:
@@ -192,7 +189,6 @@ automation:
                 entity_id: LOCKENTITYNAME
                 code_slot: >-
                   {{ TEMPLATENUM }}
-            - delay: 10
 
 ################  binary_sensor: #################  
 binary_sensor:
