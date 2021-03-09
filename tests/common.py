@@ -142,3 +142,19 @@ def async_fire_time_changed(hass, datetime_, fire_all=False):
 
 
 fire_time_changed = threadsafe_callback_factory(async_fire_time_changed)
+
+
+async def setup_zwave(hass, mock_openzwave):
+    """Set up the mock ZWave config entry."""
+    hass.config.components.add("zwave")
+    config_entry = config_entries.ConfigEntry(
+        1,
+        "zwave",
+        "Mock Title",
+        {"usb_path": "mock-path", "network_key": "mock-key"},
+        "test",
+        config_entries.CONN_CLASS_LOCAL_PUSH,
+        system_options={},
+    )
+    await hass.config_entries.async_forward_entry_setup(config_entry, "lock")
+    await hass.async_block_till_done()

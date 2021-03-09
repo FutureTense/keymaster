@@ -12,10 +12,14 @@ from custom_components.keymaster import (
     SERVICE_REFRESH_CODES,
 )
 from custom_components.keymaster.const import DOMAIN
+from homeassistant.bootstrap import async_setup_component
+from homeassistant.components.zwave import node_entity
+from homeassistant.components.zwave.const import DATA_NETWORK
 
-from .common import setup_ozw
+from .common import setup_ozw, setup_zwave
 
 from tests.const import CONFIG_DATA, CONFIG_DATA_910
+from tests.mock.zwave import MockNetwork, MockNode, MockValue
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 
@@ -290,7 +294,7 @@ async def test_clear_code_zwave_js(hass, client, lock_kwikset_910, integration):
     assert args["value"] == 0
 
 
-async def test_clear_code(hass, lock_data, sent_messages, caplog):
+async def test_clear_code(hass, lock_data, sent_messages, mock_openzwave, caplog):
     """Test refresh_codes"""
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
@@ -339,6 +343,52 @@ async def test_clear_code(hass, lock_data, sent_messages, caplog):
             "Error calling lock.set_usercode service call: Unable to find service lock.set_usercode"
             in caplog.text
         )
+
+    with patch("custom_components.keymaster.services.using_zwave", return_value=True):
+        # Setup zwave mock
+        hass.data[DATA_NETWORK] = mock_openzwave
+        node = MockNode(node_id=12)
+        value0 = MockValue(data="12345678", node=node, index=1)
+        value1 = MockValue(data="******", node=node, index=2)
+
+        node.get_values.return_value = {
+            value0.value_id: value0,
+            value1.value_id: value1,
+        }
+
+        mock_openzwave.nodes = {node.node_id: node}
+        entity = node_entity.ZWaveNodeEntity(node, mock_openzwave)
+
+        # Setup the zwave integration
+        await setup_zwave(hass, mock_openzwave)
+        await hass.async_block_till_done()
+
+        # Set the zwave network as ready
+        hass.data[DATA_NETWORK].state = MockNetwork.STATE_READY
+
+        # Create the entities
+        hass.states.async_set(
+            "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_level_2", 1
+        )
+        await hass.async_block_till_done()
+        hass.states.async_set(
+            "sensor.smartcode_10_touchpad_electronic_deadbolt_alarm_type_2", 22
+        )
+        await hass.async_block_till_done()
+        hass.states.async_set(
+            "lock.smartcode_10_touchpad_electronic_deadbolt_locked_2",
+            "locked",
+            {"node_id": 12},
+        )
+        await hass.async_block_till_done()
+        servicedata = {
+            "entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked_2",
+            "code_slot": 1,
+        }
+        await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
+        await hass.async_block_till_done()
+
+        assert "Usercode at slot 1 is cleared" in caplog.text
 
     # Bring OZW up
     await setup_ozw(hass, fixture=lock_data)
