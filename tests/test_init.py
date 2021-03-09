@@ -1,7 +1,7 @@
 """ Test keymaster init """
 import logging
 import time
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -41,6 +41,23 @@ async def test_setup_entry(hass, mock_generate_package_files):
     assert len(entries) == 1
 
 
+async def test_setup_entry_core_state(hass, mock_generate_package_files):
+    """Test setting up entities."""
+    with patch.object(hass, "state", return_value="STARTING"):
+        await setup.async_setup_component(hass, "persistent_notification", {})
+        entry = MockConfigEntry(
+            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+        )
+
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
+        entries = hass.config_entries.async_entries(DOMAIN)
+        assert len(entries) == 1
+
+
 async def test_unload_entry(
     hass,
     mock_delete_folder,
@@ -73,17 +90,18 @@ async def test_unload_entry(
 
 async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
     """Test setting up entities with old path"""
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_OLD, version=1
-    )
+    with patch.object(hass.config, "path", return_value="/config"):
+        entry = MockConfigEntry(
+            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_OLD, version=1
+        )
 
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
-    entries = hass.config_entries.async_entries(DOMAIN)
-    assert len(entries) == 1
+        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
+        entries = hass.config_entries.async_entries(DOMAIN)
+        assert len(entries) == 1
 
 
 async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
