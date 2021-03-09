@@ -14,7 +14,7 @@ from homeassistant.components.zwave import node_entity
 from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 
-from tests.common import MQTTMessage, setup_ozw
+from tests.common import MQTTMessage, setup_ozw, setup_zwave
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from tests.mock.zwave import MockNetwork, MockNode, MockValue
 
@@ -232,19 +232,3 @@ async def test_update_usercodes_using_ozw(
     # TODO: Figure out why the code slot sensors are not updating
     assert hass.states.get("sensor.frontdoor_code_slot_1").state == "12345678"
     assert "DEBUG: Ignoring code slot with * in value." in caplog.text
-
-
-async def setup_zwave(hass, mock_openzwave):
-    """Set up the mock ZWave config entry."""
-    hass.config.components.add("zwave")
-    config_entry = config_entries.ConfigEntry(
-        1,
-        "zwave",
-        "Mock Title",
-        {"usb_path": "mock-path", "network_key": "mock-key"},
-        "test",
-        config_entries.CONN_CLASS_LOCAL_PUSH,
-        system_options={},
-    )
-    await hass.config_entries.async_forward_entry_setup(config_entry, "lock")
-    await hass.async_block_till_done()
