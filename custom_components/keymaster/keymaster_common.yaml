@@ -215,7 +215,12 @@ automation:
         value_template: "{{ is_state('input_boolean.accesslimit_LOCKNAME_' + trigger.event.data.code_slot | string, 'on') }}"
       - condition: template
         # Check for Keypad Unlock code
-        value_template: "{{ trigger.event.data.code_slot > 0 and trigger.event.data.action_code in (6, 19)}}"
+        value_template: >-
+        {{
+          trigger.event.data.code_slot > 0
+          and
+          (trigger.event.data.action_code is undefined or trigger.event.data.action_code in (6, 19))
+        }}
     action:
       - service: input_number.decrement
         data_template:
