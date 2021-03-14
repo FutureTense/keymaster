@@ -36,6 +36,7 @@ from .const import (
     ATTR_ACTION_TEXT,
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
+    ATTR_NOTIFICATION_SOURCE,
     CHILD_LOCKS,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
@@ -243,6 +244,7 @@ def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: E
         hass.bus.fire(
             EVENT_KEYMASTER_LOCK_STATE_CHANGED,
             event_data={
+                ATTR_NOTIFICATION_SOURCE: "event",
                 ATTR_NAME: lock.lock_name,
                 ATTR_ENTITY_ID: lock.lock_entity_id,
                 ATTR_STATE: lock_state.state if lock_state else "",
@@ -338,6 +340,7 @@ def handle_state_change(
         hass.bus.fire(
             EVENT_KEYMASTER_LOCK_STATE_CHANGED,
             event_data={
+                ATTR_NOTIFICATION_SOURCE: "entity_state",
                 ATTR_NAME: lock.lock_name,
                 ATTR_ENTITY_ID: lock.lock_entity_id,
                 ATTR_STATE: new_state.state,

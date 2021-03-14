@@ -25,6 +25,7 @@ EVENT_KEYMASTER_LOCK_STATE_CHANGED = "keymaster_lock_state_changed"
 ATTR_ACTION_CODE = "action_code"
 ATTR_ACTION_TEXT = "action_text"
 ATTR_CODE_SLOT_NAME = "code_slot_name"
+ATTR_NOTIFICATION_SOURCE = "notification_source"
 
 # Attributes
 ATTR_NAME = "lockname"
