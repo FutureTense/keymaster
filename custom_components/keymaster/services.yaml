@@ -6,7 +6,7 @@ generate_package:
       name: Lock Name
       description: The name that you specified during keymaster configuration.
       example: frontdoor
-      required: false
+      required: true
       selector:
         text:
 
