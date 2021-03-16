@@ -666,12 +666,12 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     code = self._invalid_code(value.index)
 
                 # Build data from entities
-                enabled_bool = f"input_boolean.enabled_{self._primary_lock.lock_name}_{value.index}"
-                enabled = self.hass.states.get(enabled_bool)
+                active_bool = f"binary_sensor.active_{self._primary_lock.lock_name}_{value.index}"
+                active = self.hass.states.get(active_bool)
 
                 # Report blank slot if occupied by random code
-                if enabled is not None:
-                    if enabled.state == "off":
+                if active is not None:
+                    if active.state == "off":
                         _LOGGER.debug(
                             "DEBUG: Utilizing Zwave clear_usercode work around code."
                         )
