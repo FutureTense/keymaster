@@ -511,16 +511,16 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         data = ""
 
         # Build data from entities
-        enabled_bool = (
-            f"input_boolean.enabled_{self._primary_lock.lock_name}_{code_slot}"
+        active_binary_sensor = (
+            f"binary_sensor.active_{self._primary_lock.lock_name}_{code_slot}"
         )
-        enabled = self.hass.states.get(enabled_bool)
+        active = self.hass.states.get(active_binary_sensor)
         pin_data = f"input_text.{self._primary_lock.lock_name}_pin_{code_slot}"
         pin = self.hass.states.get(pin_data)
 
         # If slot is enabled return the PIN
-        if enabled is not None and pin is not None:
-            if enabled.state == "on" and pin.state.isnumeric():
+        if active is not None and pin is not None:
+            if active.state == "on" and pin.state.isnumeric():
                 _LOGGER.debug("Utilizing BE469 work around code.")
                 data = pin.state
             else:
@@ -666,12 +666,12 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     code = self._invalid_code(value.index)
 
                 # Build data from entities
-                enabled_bool = f"input_boolean.enabled_{self._primary_lock.lock_name}_{value.index}"
-                enabled = self.hass.states.get(enabled_bool)
+                active_binary_sensor = f"binary_sensor.active_{self._primary_lock.lock_name}_{value.index}"
+                active = self.hass.states.get(active_binary_sensor)
 
                 # Report blank slot if occupied by random code
-                if enabled is not None:
-                    if enabled.state == "off":
+                if active is not None:
+                    if active.state == "off":
                         _LOGGER.debug(
                             "DEBUG: Utilizing Zwave clear_usercode work around code."
                         )
