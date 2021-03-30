@@ -88,7 +88,7 @@ try:
     from zwave_js_server.const import ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.util.lock import get_usercodes
 
-    from homeassistant.components.zwave_js import ZWAVE_JS_EVENT
+    from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 except (ModuleNotFoundError, ImportError):
     pass
 
@@ -273,7 +273,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         # Listen to Z-Wave JS events so we can fire our own events
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(
-                ZWAVE_JS_EVENT,
+                ZWAVE_JS_NOTIFICATION_EVENT,
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
@@ -446,7 +446,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     if async_using_zwave_js(lock=primary_lock):
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(
-                ZWAVE_JS_EVENT,
+                ZWAVE_JS_NOTIFICATION_EVENT,
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
