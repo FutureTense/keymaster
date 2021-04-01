@@ -13,7 +13,6 @@ from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
-from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -25,7 +24,10 @@ from homeassistant.const import (
 from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers.device_registry import async_get as async_get_device_registry
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from homeassistant.helpers.entity_registry import (
+    EntityRegistry,
+    async_get as async_get_entity_registry,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -85,25 +87,52 @@ except (ModuleNotFoundError, ImportError):
 
 try:
     import openzwave as zwave_module  # noqa: F401
+
+    from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
 except (ModuleNotFoundError, ImportError):
     zwave_supported = False
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def using_ozw(hass: HomeAssistant) -> bool:
+def _using(
+    is_supported: bool,
+    domain: str,
+    lock: Optional[KeymasterLock],
+    entity_id: Optional[str],
+    ent_reg: Optional[EntityRegistry],
+) -> bool:
+    """Base function for using_<zwave integration> logic."""
+    if not (lock or (entity_id and ent_reg)):
+        raise Exception("Missing arguments")
+
+    if lock:
+        entity = lock.ent_reg.async_get(lock.lock_entity_id)
+    else:
+        entity = ent_reg.async_get(entity_id)
+
+    return entity and entity.platform == domain
+
+
+def using_ozw(
+    lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
+) -> bool:
     """Returns whether the ozw integration is configured."""
-    return ozw_supported and OZW_DOMAIN in hass.data
+    return _using(ozw_supported, OZW_DOMAIN, lock, entity_id, ent_reg)
 
 
-def using_zwave(hass: HomeAssistant) -> bool:
+def using_zwave(
+    lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
+) -> bool:
     """Returns whether the zwave integration is configured."""
-    return zwave_supported and DATA_NETWORK in hass.data
+    return _using(zwave_supported, ZWAVE_DOMAIN, lock, entity_id, ent_reg)
 
 
-def using_zwave_js(hass: HomeAssistant) -> bool:
+def using_zwave_js(
+    lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
+) -> bool:
     """Returns whether the zwave_js integration is configured."""
-    return zwave_js_supported and ZWAVE_JS_DOMAIN in hass.data
+    return _using(zwave_js_supported, ZWAVE_JS_DOMAIN, lock, entity_id, ent_reg)
 
 
 def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
@@ -119,12 +148,14 @@ async def generate_keymaster_locks(
     hass: HomeAssistant, config_entry: ConfigEntry
 ) -> Tuple[KeymasterLock, List[KeymasterLock]]:
     """Generate primary and child keymaster locks from config entry."""
+    ent_reg = async_get_entity_registry(hass)
     primary_lock = KeymasterLock(
         config_entry.data[CONF_LOCK_NAME],
         config_entry.data[CONF_LOCK_ENTITY_ID],
         config_entry.data.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
         config_entry.data.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
-        config_entry.data[CONF_SENSOR_NAME],
+        ent_reg,
+        door_sensor_entity_id=config_entry.data[CONF_SENSOR_NAME],
     )
     child_locks = [
         KeymasterLock(
@@ -132,6 +163,7 @@ async def generate_keymaster_locks(
             lock[CONF_LOCK_ENTITY_ID],
             lock.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
             lock.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
+            ent_reg,
         )
         for lock_name, lock in config_entry.data.get(CHILD_LOCKS, {}).items()
     ]

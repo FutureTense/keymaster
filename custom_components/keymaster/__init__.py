@@ -269,7 +269,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata, blocking=True
         )
 
-    if using_zwave_js(hass):
+    if using_zwave_js(lock=primary_lock):
         # Listen to Z-Wave JS events so we can fire our own events
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(
@@ -443,7 +443,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         unsub_listener()
     hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
-    if using_zwave_js(hass):
+    if using_zwave_js(lock=primary_lock):
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(
                 ZWAVE_JS_EVENT,
@@ -572,7 +572,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         #    DOMAIN, SERVICE_REFRESH_CODES, servicedata
         # )
 
-        if using_zwave_js(self.hass):
+        if using_zwave_js(lock=self._primary_lock):
             node = self._primary_lock.zwave_js_lock_node
             if node is None:
                 raise NativeNotFoundError
@@ -596,7 +596,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             return data
 
         # pull the codes for ozw
-        elif using_ozw(self.hass):
+        elif using_ozw(lock=self._primary_lock):
             node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
             if node_id is None:
                 return data
@@ -633,7 +633,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             return data
 
         # pull codes for zwave
-        elif using_zwave(self.hass):
+        elif using_zwave(lock=self._primary_lock):
             node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
             if node_id is None:
                 return data
@@ -666,7 +666,9 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     code = self._invalid_code(value.index)
 
                 # Build data from entities
-                active_binary_sensor = f"binary_sensor.active_{self._primary_lock.lock_name}_{value.index}"
+                active_binary_sensor = (
+                    f"binary_sensor.active_{self._primary_lock.lock_name}_{value.index}"
+                )
                 active = self.hass.states.get(active_binary_sensor)
 
                 # Report blank slot if occupied by random code

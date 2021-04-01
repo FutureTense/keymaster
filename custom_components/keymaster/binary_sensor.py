@@ -69,11 +69,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     """Setup config entry."""
     primary_lock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     child_locks = hass.data[DOMAIN][config_entry.entry_id][CHILD_LOCKS]
-    if using_zwave_js(hass):
+    if using_zwave_js(lock=primary_lock):
         entity = ZwaveJSNetworkReadySensor(primary_lock, child_locks)
-    elif using_ozw(hass):
+    elif using_ozw(lock=primary_lock):
         entity = OZWNetworkReadySensor(primary_lock, child_locks)
-    elif using_zwave(hass):
+    elif using_zwave(lock=primary_lock):
         entity = ZwaveNetworkReadySensor(primary_lock, child_locks)
     else:
         _LOGGER.error("Z-Wave integration not found")

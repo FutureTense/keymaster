@@ -10,6 +10,7 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import create
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 
 from .const import (
     ATTR_CODE_SLOT,
@@ -85,7 +86,7 @@ async def refresh_codes(
         return
 
     # OZW Button press (experimental)
-    if using_ozw(hass):
+    if using_ozw(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
         manager = hass.data[OZW_DOMAIN][MANAGER]
         lock_values = manager.get_instance(instance_id).get_node(node_id).values()
         for value in lock_values:
@@ -108,17 +109,17 @@ async def add_code(
         ATTR_USER_CODE: usercode,
     }
 
-    if using_zwave_js(hass):
+    if using_zwave_js(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
         servicedata[ATTR_ENTITY_ID] = entity_id
         await call_service(
             hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
         )
 
-    elif using_ozw(hass):
+    elif using_ozw(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
         servicedata[ATTR_ENTITY_ID] = entity_id
         await call_service(hass, OZW_DOMAIN, SET_USERCODE, servicedata)
 
-    elif using_zwave(hass):
+    elif using_zwave(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
             _LOGGER.error(
