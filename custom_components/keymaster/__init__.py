@@ -277,6 +277,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
+        return True
 
     # Check if we need to check alarm type/alarm level sensors, in which case
     # we need to listen for lock state changes
@@ -450,6 +451,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
+        return
 
     # Check if alarm type/alarm level sensors are specified, in which case
     # we need to listen for lock state changes and derive the action from those
