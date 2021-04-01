@@ -15,6 +15,7 @@ from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    ATTR_DEVICE_ID,
     ATTR_ENTITY_ID,
     ATTR_STATE,
     SERVICE_RELOAD,
@@ -64,7 +65,6 @@ try:
     from zwave_js_server.const import ATTR_CODE_SLOT
 
     from homeassistant.components.zwave_js.const import (
-        ATTR_DEVICE_ID,
         ATTR_EVENT_LABEL,
         ATTR_NODE_ID,
         ATTR_PARAMETERS,
