@@ -154,7 +154,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # path
     config_path = hass.config.path()
     if config_entry.data[CONF_PATH].startswith(config_path):
-        updated_config[CONF_PATH] = updated_config[CONF_PATH][len(config_path) :]
+        num_chars_config_path = len(config_path)
+        updated_config[CONF_PATH] = updated_config[CONF_PATH][num_chars_config_path:]
         # Remove leading slashes
         updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
 
