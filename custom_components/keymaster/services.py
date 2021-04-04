@@ -109,17 +109,19 @@ async def add_code(
         ATTR_USER_CODE: usercode,
     }
 
-    if using_zwave_js(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
+    ent_reg = async_get_entity_registry(hass)
+
+    if using_zwave_js(entity_id=entity_id, ent_reg=ent_reg):
         servicedata[ATTR_ENTITY_ID] = entity_id
         await call_service(
             hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
         )
 
-    elif using_ozw(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
+    elif using_ozw(entity_id=entity_id, ent_reg=ent_reg):
         servicedata[ATTR_ENTITY_ID] = entity_id
         await call_service(hass, OZW_DOMAIN, SET_USERCODE, servicedata)
 
-    elif using_zwave(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
+    elif using_zwave(entity_id=entity_id, ent_reg=ent_reg):
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
             _LOGGER.error(
@@ -139,7 +141,9 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
     """Clear the usercode from a code slot."""
     _LOGGER.debug("Attempting to call clear_usercode...")
 
-    if using_zwave_js(hass):
+    ent_reg = async_get_entity_registry(hass)
+
+    if using_zwave_js(entity_id=entity_id, ent_reg=ent_reg):
         servicedata = {
             ATTR_ENTITY_ID: entity_id,
             ATTR_CODE_SLOT: code_slot,
@@ -148,7 +152,7 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
             hass, ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
         )
 
-    elif using_ozw(hass):
+    elif using_ozw(entity_id=entity_id, ent_reg=ent_reg):
         # Call dummy slot first as a workaround
         for curr_code_slot in (999, code_slot):
             servicedata = {
@@ -157,7 +161,7 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
             }
             await call_service(hass, OZW_DOMAIN, CLEAR_USERCODE, servicedata)
 
-    elif using_zwave(hass):
+    elif using_zwave(entity_id=entity_id, ent_reg=ent_reg):
         node_id = get_node_id(hass, entity_id)
         if node_id is None:
             _LOGGER.error(
