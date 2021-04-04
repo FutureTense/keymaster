@@ -106,6 +106,9 @@ def _using(
     if not (lock or (entity_id and ent_reg)):
         raise Exception("Missing arguments")
 
+    if not is_supported:
+        return False
+
     if lock:
         entity = lock.ent_reg.async_get(lock.lock_entity_id)
     else:
