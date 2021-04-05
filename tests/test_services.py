@@ -121,7 +121,9 @@ async def test_add_code(hass, lock_data, sent_messages, caplog):
     )
 
     # Mock using_zwave
-    with patch("custom_components.keymaster.services.using_zwave", return_value=True):
+    with patch(
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
+    ):
         servicedata = {
             "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
             "code_slot": 1,
@@ -135,7 +137,7 @@ async def test_add_code(hass, lock_data, sent_messages, caplog):
         )
 
     with patch(
-        "custom_components.keymaster.services.using_zwave", return_value=True
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
     ), patch("custom_components.keymaster.services.get_node_id", return_value="14"):
         servicedata = {
             "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
@@ -152,36 +154,39 @@ async def test_add_code(hass, lock_data, sent_messages, caplog):
     # Bring OZW up
     await setup_ozw(hass, fixture=lock_data)
 
-    state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
-    assert state is not None
-    assert state.state == "locked"
-    assert state.attributes["node_id"] == 14
+    with patch(
+        "custom_components.keymaster.services.async_using_ozw", return_value=True
+    ):
+        state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
+        assert state is not None
+        assert state.state == "locked"
+        assert state.attributes["node_id"] == 14
 
-    servicedata = {
-        "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
-        "code_slot": 1,
-        "usercode": "1234",
-    }
-    await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
-    await hass.async_block_till_done()
+        servicedata = {
+            "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+            "code_slot": 1,
+            "usercode": "1234",
+        }
+        await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
+        await hass.async_block_till_done()
 
-    assert (
-        "Unable to find referenced entities lock.kwikset_touchpad_electronic_deadbolt_frontdoor"
-        in caplog.text
-    )
+        assert (
+            "Unable to find referenced entities lock.kwikset_touchpad_electronic_deadbolt_frontdoor"
+            in caplog.text
+        )
 
-    servicedata = {
-        "entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
-        "code_slot": 1,
-        "usercode": "123456",
-    }
-    await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
-    await hass.async_block_till_done()
+        servicedata = {
+            "entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
+            "code_slot": 1,
+            "usercode": "123456",
+        }
+        await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
+        await hass.async_block_till_done()
 
-    assert len(sent_messages) == 1
-    msg = sent_messages[0]
-    assert msg["topic"] == "OpenZWave/1/command/setvalue/"
-    assert msg["payload"] == {"Value": "123456", "ValueIDKey": 281475217408023}
+        assert len(sent_messages) == 1
+        msg = sent_messages[0]
+        assert msg["topic"] == "OpenZWave/1/command/setvalue/"
+        assert msg["payload"] == {"Value": "123456", "ValueIDKey": 281475217408023}
 
 
 async def test_add_code_zwave_js(hass, client, lock_kwikset_910, integration):
@@ -212,8 +217,8 @@ async def test_add_code_zwave_js(hass, client, lock_kwikset_910, integration):
     await hass.services.async_call(DOMAIN, SERVICE_ADD_CODE, servicedata)
     await hass.async_block_till_done()
 
-    assert len(client.async_send_command_no_wait.call_args_list) == 1
-    args = client.async_send_command_no_wait.call_args[0][0]
+    assert len(client.async_send_command.call_args_list) == 1
+    args = client.async_send_command.call_args[0][0]
     assert args["command"] == "node.set_value"
     assert args["nodeId"] == 14
     assert args["valueId"] == {
@@ -265,8 +270,8 @@ async def test_clear_code_zwave_js(hass, client, lock_kwikset_910, integration):
     await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
     await hass.async_block_till_done()
 
-    assert len(client.async_send_command_no_wait.call_args_list) == 1
-    args = client.async_send_command_no_wait.call_args[0][0]
+    assert len(client.async_send_command.call_args_list) == 1
+    args = client.async_send_command.call_args[0][0]
     assert args["command"] == "node.set_value"
     assert args["nodeId"] == 14
     assert args["valueId"] == {
@@ -318,7 +323,9 @@ async def test_clear_code(hass, lock_data, sent_messages, mock_openzwave, caplog
     )
 
     # Mock using_zwave
-    with patch("custom_components.keymaster.services.using_zwave", return_value=True):
+    with patch(
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
+    ):
         servicedata = {
             "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
             "code_slot": 1,
@@ -331,7 +338,7 @@ async def test_clear_code(hass, lock_data, sent_messages, mock_openzwave, caplog
         )
 
     with patch(
-        "custom_components.keymaster.services.using_zwave", return_value=True
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
     ), patch("custom_components.keymaster.services.get_node_id", return_value="14"):
         servicedata = {
             "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
@@ -344,7 +351,9 @@ async def test_clear_code(hass, lock_data, sent_messages, mock_openzwave, caplog
             in caplog.text
         )
 
-    with patch("custom_components.keymaster.services.using_zwave", return_value=True):
+    with patch(
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
+    ):
         # Setup zwave mock
         hass.data[DATA_NETWORK] = mock_openzwave
         node = MockNode(node_id=12)
@@ -393,39 +402,42 @@ async def test_clear_code(hass, lock_data, sent_messages, mock_openzwave, caplog
     # Bring OZW up
     await setup_ozw(hass, fixture=lock_data)
 
-    state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
-    assert state is not None
-    assert state.state == "locked"
-    assert state.attributes["node_id"] == 14
+    with patch(
+        "custom_components.keymaster.services.async_using_ozw", return_value=True
+    ):
+        state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
+        assert state is not None
+        assert state.state == "locked"
+        assert state.attributes["node_id"] == 14
 
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
-    )
+        entry = MockConfigEntry(
+            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+        )
 
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
-    servicedata = {
-        "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
-        "code_slot": 1,
-    }
-    await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
-    await hass.async_block_till_done()
+        servicedata = {
+            "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+            "code_slot": 1,
+        }
+        await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
+        await hass.async_block_till_done()
 
-    assert (
-        "Unable to find referenced entities lock.kwikset_touchpad_electronic_deadbolt_frontdoor"
-        in caplog.text
-    )
+        assert (
+            "Unable to find referenced entities lock.kwikset_touchpad_electronic_deadbolt_frontdoor"
+            in caplog.text
+        )
 
-    servicedata = {
-        "entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
-        "code_slot": 1,
-    }
-    await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
-    await hass.async_block_till_done()
+        servicedata = {
+            "entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
+            "code_slot": 1,
+        }
+        await hass.services.async_call(DOMAIN, SERVICE_CLEAR_CODE, servicedata)
+        await hass.async_block_till_done()
 
-    assert len(sent_messages) == 4
-    msg = sent_messages[3]
-    assert msg["topic"] == "OpenZWave/1/command/setvalue/"
-    assert msg["payload"] == {"Value": 1, "ValueIDKey": 72057594287013910}
+        assert len(sent_messages) == 4
+        msg = sent_messages[3]
+        assert msg["topic"] == "OpenZWave/1/command/setvalue/"
+        assert msg["payload"] == {"Value": 1, "ValueIDKey": 72057594287013910}
