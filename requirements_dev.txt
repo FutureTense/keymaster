@@ -1,3 +1,5 @@
 homeassistant
+homeassistant-pyozw==0.1.10
+pydispatcher==2.0.5
 python-openzwave-mqtt
 zwave-js-server-python

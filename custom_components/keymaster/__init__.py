@@ -68,15 +68,15 @@ from .exceptions import (
 from .helpers import (
     async_reload_package_platforms,
     async_reset_code_slot_if_pin_unknown,
+    async_using_ozw,
+    async_using_zwave,
+    async_using_zwave_js,
     delete_folder,
     delete_lock_and_base_folder,
     generate_keymaster_locks,
     get_node_id,
     handle_state_change,
     handle_zwave_js_event,
-    using_ozw,
-    using_zwave,
-    using_zwave_js,
 )
 from .lock import KeymasterLock
 from .services import add_code, clear_code, generate_package_files, refresh_codes
@@ -269,7 +269,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata, blocking=True
         )
 
-    if using_zwave_js(lock=primary_lock):
+    if async_using_zwave_js(lock=primary_lock):
         # Listen to Z-Wave JS events so we can fire our own events
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(
@@ -443,7 +443,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         unsub_listener()
     hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
 
-    if using_zwave_js(lock=primary_lock):
+    if async_using_zwave_js(lock=primary_lock):
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(
                 ZWAVE_JS_EVENT,
@@ -530,7 +530,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         return data
 
     async def async_update_usercodes(self) -> Dict[str, Any]:
-        """Async wrapper to update usercodes."""
+        """Wrapper to update usercodes."""
         if not self.network_sensor:
             self.network_sensor = self.ent_reg.async_get_entity_id(
                 "binary_sensor",
@@ -547,7 +547,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             if network_ready.state != STATE_ON:
                 raise ZWaveNetworkNotReady
 
-            return await self.hass.async_add_executor_job(self.update_usercodes)
+            return await self._async_update()
         except (
             NativeNotFoundError,
             NativeNotSupportedError,
@@ -560,7 +560,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 return {}
             raise UpdateFailed from err
 
-    def update_usercodes(self) -> Dict[str, Any]:
+    async def _async_update(self) -> Dict[str, Any]:
         """Update usercodes."""
         # loop to get user code data from entity_id node
         instance_id = 1  # default
@@ -572,7 +572,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         #    DOMAIN, SERVICE_REFRESH_CODES, servicedata
         # )
 
-        if using_zwave_js(lock=self._primary_lock):
+        if async_using_zwave_js(lock=self._primary_lock):
             node = self._primary_lock.zwave_js_lock_node
             if node is None:
                 raise NativeNotFoundError
@@ -586,7 +586,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     data[code_slot] = ""
                 elif usercode and "*" in str(usercode):
                     _LOGGER.debug(
-                        "DEBUG: Ignoring code slot with * in value for code slot %s.",
+                        "DEBUG: Ignoring code slot with * in value for code slot %s",
                         code_slot,
                     )
                     data[code_slot] = self._invalid_code(code_slot)
@@ -596,7 +596,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             return data
 
         # pull the codes for ozw
-        elif using_ozw(lock=self._primary_lock):
+        elif async_using_ozw(lock=self._primary_lock):
             node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
             if node_id is None:
                 return data
@@ -633,7 +633,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             return data
 
         # pull codes for zwave
-        elif using_zwave(lock=self._primary_lock):
+        elif async_using_zwave(lock=self._primary_lock):
             node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
             if node_id is None:
                 return data
@@ -666,17 +666,13 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                     code = self._invalid_code(value.index)
 
                 # Build data from entities
-                active_binary_sensor = (
-                    f"binary_sensor.active_{self._primary_lock.lock_name}_{value.index}"
-                )
+                active_binary_sensor = f"binary_sensor.active_{self._primary_lock.lock_name}_{value.index}"
                 active = self.hass.states.get(active_binary_sensor)
 
                 # Report blank slot if occupied by random code
                 if active is not None:
                     if active.state == "off":
-                        _LOGGER.debug(
-                            "DEBUG: Utilizing Zwave clear_usercode work around code."
-                        )
+                        _LOGGER.debug("DEBUG: Utilizing Zwave clear_usercode work around code")
                         code = ""
 
                 data[int(value.index)] = code

@@ -21,7 +21,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import Event, HomeAssistant, State
+from homeassistant.core import Event, HomeAssistant, State, callback
 from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers.device_registry import async_get as async_get_device_registry
 from homeassistant.helpers.entity_registry import (
@@ -95,7 +95,8 @@ except (ModuleNotFoundError, ImportError):
 _LOGGER = logging.getLogger(__name__)
 
 
-def _using(
+@callback
+def _async_using(
     is_supported: bool,
     domain: str,
     lock: Optional[KeymasterLock],
@@ -106,9 +107,6 @@ def _using(
     if not (lock or (entity_id and ent_reg)):
         raise Exception("Missing arguments")
 
-    if not is_supported:
-        return False
-
     if lock:
         entity = lock.ent_reg.async_get(lock.lock_entity_id)
     else:
@@ -117,25 +115,28 @@ def _using(
     return entity and entity.platform == domain
 
 
-def using_ozw(
+@callback
+def async_using_ozw(
     lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
 ) -> bool:
     """Returns whether the ozw integration is configured."""
-    return _using(ozw_supported, OZW_DOMAIN, lock, entity_id, ent_reg)
+    return _async_using(ozw_supported, OZW_DOMAIN, lock, entity_id, ent_reg)
 
 
-def using_zwave(
+@callback
+def async_using_zwave(
     lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
 ) -> bool:
     """Returns whether the zwave integration is configured."""
-    return _using(zwave_supported, ZWAVE_DOMAIN, lock, entity_id, ent_reg)
+    return _async_using(zwave_supported, ZWAVE_DOMAIN, lock, entity_id, ent_reg)
 
 
-def using_zwave_js(
+@callback
+def async_using_zwave_js(
     lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
 ) -> bool:
     """Returns whether the zwave_js integration is configured."""
-    return _using(zwave_js_supported, ZWAVE_JS_DOMAIN, lock, entity_id, ent_reg)
+    return _async_using(zwave_js_supported, ZWAVE_JS_DOMAIN, lock, entity_id, ent_reg)
 
 
 def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
