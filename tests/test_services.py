@@ -121,7 +121,9 @@ async def test_add_code(hass, lock_data, sent_messages, caplog):
     )
 
     # Mock using_zwave
-    with patch("custom_components.keymaster.services.using_zwave", return_value=True):
+    with patch(
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
+    ):
         servicedata = {
             "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
             "code_slot": 1,
@@ -135,7 +137,7 @@ async def test_add_code(hass, lock_data, sent_messages, caplog):
         )
 
     with patch(
-        "custom_components.keymaster.services.using_zwave", return_value=True
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
     ), patch("custom_components.keymaster.services.get_node_id", return_value="14"):
         servicedata = {
             "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
@@ -318,7 +320,9 @@ async def test_clear_code(hass, lock_data, sent_messages, mock_openzwave, caplog
     )
 
     # Mock using_zwave
-    with patch("custom_components.keymaster.services.using_zwave", return_value=True):
+    with patch(
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
+    ):
         servicedata = {
             "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
             "code_slot": 1,
@@ -331,7 +335,7 @@ async def test_clear_code(hass, lock_data, sent_messages, mock_openzwave, caplog
         )
 
     with patch(
-        "custom_components.keymaster.services.using_zwave", return_value=True
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
     ), patch("custom_components.keymaster.services.get_node_id", return_value="14"):
         servicedata = {
             "entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
@@ -344,7 +348,9 @@ async def test_clear_code(hass, lock_data, sent_messages, mock_openzwave, caplog
             in caplog.text
         )
 
-    with patch("custom_components.keymaster.services.using_zwave", return_value=True):
+    with patch(
+        "custom_components.keymaster.services.async_using_zwave", return_value=True
+    ):
         # Setup zwave mock
         hass.data[DATA_NETWORK] = mock_openzwave
         node = MockNode(node_id=12)

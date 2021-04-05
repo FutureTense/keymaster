@@ -253,8 +253,8 @@ def mock_openzwave():
 async def mock_using_ozw():
     """Fixture to mock using_ozw in helpers"""
     with patch(
-        "custom_components.keymaster.helpers.using_zwave_js", return_value=False
+        "custom_components.keymaster.helpers.async_using_zwave_js", return_value=False
     ), patch(
-        "custom_components.keymaster.helpers.using_ozw", return_value=True
+        "custom_components.keymaster.helpers.async_using_ozw", return_value=True
     ) as mock_using_ozw_helpers:
         yield mock_using_ozw_helpers

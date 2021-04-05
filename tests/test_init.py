@@ -161,8 +161,8 @@ async def test_update_usercodes_using_zwave(hass, mock_openzwave, caplog):
 
     # Load the integration
     with patch(
-        "custom_components.keymaster.binary_sensor.using_zwave", return_value=True
-    ), patch("custom_components.keymaster.using_zwave", return_value=True):
+        "custom_components.keymaster.binary_sensor.async_using_zwave", return_value=True
+    ), patch("custom_components.keymaster.async_using_zwave", return_value=True):
         entry = MockConfigEntry(
             domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
         )
