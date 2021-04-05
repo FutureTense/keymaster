@@ -97,7 +97,6 @@ _LOGGER = logging.getLogger(__name__)
 
 @callback
 def _async_using(
-    is_supported: bool,
     domain: str,
     lock: Optional[KeymasterLock],
     entity_id: Optional[str],
@@ -120,7 +119,7 @@ def async_using_ozw(
     lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
 ) -> bool:
     """Returns whether the ozw integration is configured."""
-    return _async_using(ozw_supported, OZW_DOMAIN, lock, entity_id, ent_reg)
+    return ozw_supported and _async_using(OZW_DOMAIN, lock, entity_id, ent_reg)
 
 
 @callback
@@ -128,7 +127,7 @@ def async_using_zwave(
     lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
 ) -> bool:
     """Returns whether the zwave integration is configured."""
-    return _async_using(zwave_supported, ZWAVE_DOMAIN, lock, entity_id, ent_reg)
+    return zwave_supported and _async_using(ZWAVE_DOMAIN, lock, entity_id, ent_reg)
 
 
 @callback
@@ -136,7 +135,7 @@ def async_using_zwave_js(
     lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
 ) -> bool:
     """Returns whether the zwave_js integration is configured."""
-    return _async_using(zwave_js_supported, ZWAVE_JS_DOMAIN, lock, entity_id, ent_reg)
+    return zwave_js_supported and _async_using(ZWAVE_JS_DOMAIN, lock, entity_id, ent_reg)
 
 
 def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
