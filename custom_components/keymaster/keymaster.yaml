@@ -1,4 +1,4 @@
-
+# yamllint disable
 ############  input_number:  #####################  
 input_number:
   accesscount_LOCKNAME_TEMPLATENUM:
@@ -12,11 +12,11 @@ input_number:
 input_datetime:
   end_date_LOCKNAME_TEMPLATENUM:
     name: 'End'
-    has_time: false
+    has_time: true
     has_date: true
   start_date_LOCKNAME_TEMPLATENUM:
     name: 'Start'
-    has_time: false
+    has_time: true
     has_date: true
 
   sun_start_date_LOCKNAME_TEMPLATENUM:
@@ -208,14 +208,17 @@ binary_sensor:
         {% set current_day = now.strftime('%a')[0:3] | lower %}
         {% set current_date = now.strftime('%Y%m%d') | int %}
         {% set current_time = now.strftime('%H%M') | int %}
+        {% set current_timestamp = as_timestamp(now) | int %}
 
         {## Get whether date range toggle is enabled as well as start and end date (integer yyyymmdd) ##}
         {## Determine whether current date is within date range using integer (yyyymmdd) comparison ##}
         {% set is_date_range_enabled = is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'on') %}
-        {% set start_date = states('input_datetime.start_date_LOCKNAME_TEMPLATENUM').replace('-', '') | int %}
-        {% set end_date = states('input_datetime.end_date_LOCKNAME_TEMPLATENUM').replace('-', '') | int %}
-        {% set is_in_date_range = (current_date >= start_date and current_date <= end_date) %}
-    
+        {% set start_date = state_attr('input_datetime.start_date_LOCKNAME_TEMPLATENUM', 'timestamp') | int %}
+        {% set end_date = state_attr('input_datetime.end_date_LOCKNAME_TEMPLATENUM', 'timestamp') | int %}
+
+        {## Only active if within the full datetime range. To get a single day both start and stop times must be set ##}
+        {% set is_in_date_range = (start_date < end_date and current_timestamp >= start_date and current_timestamp <= end_date) %}
+
         {## Get current days start and end time (integer hhmm). Assume time range is considered enabled if start time != end time. ##}
         {## If time range is inclusive, check if current time is between start and end times. If exclusive, check if current time is before start time or after end time. ##}
         {% set current_day_start_time = (states('input_datetime.' + current_day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int %}
