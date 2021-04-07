@@ -15,6 +15,7 @@ from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    ATTR_DEVICE_ID,
     ATTR_ENTITY_ID,
     ATTR_STATE,
     SERVICE_RELOAD,
@@ -64,11 +65,9 @@ try:
     from zwave_js_server.const import ATTR_CODE_SLOT
 
     from homeassistant.components.zwave_js.const import (
-        ATTR_DEVICE_ID,
-        ATTR_LABEL,
+        ATTR_EVENT_LABEL,
         ATTR_NODE_ID,
         ATTR_PARAMETERS,
-        ATTR_TYPE,
         DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
         DOMAIN as ZWAVE_JS_DOMAIN,
     )
@@ -250,10 +249,6 @@ def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: E
         CHILD_LOCKS
     ]
 
-    # If event doesn't match the right type, we shouldn't fire an event
-    if evt.data[ATTR_TYPE] != "notification":
-        return
-
     for lock in [primary_lock, *child_locks]:
         # Try to find the lock that we are getting an event for, skipping
         # ones that don't match
@@ -285,7 +280,7 @@ def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: E
                 ATTR_NAME: lock.lock_name,
                 ATTR_ENTITY_ID: lock.lock_entity_id,
                 ATTR_STATE: lock_state.state if lock_state else "",
-                ATTR_ACTION_TEXT: evt.data.get(ATTR_LABEL),
+                ATTR_ACTION_TEXT: evt.data.get(ATTR_EVENT_LABEL),
                 ATTR_CODE_SLOT: code_slot or 0,
                 ATTR_CODE_SLOT_NAME: code_slot_name_state.state
                 if code_slot_name_state is not None

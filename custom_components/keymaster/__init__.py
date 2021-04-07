@@ -88,7 +88,7 @@ try:
     from zwave_js_server.const import ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.util.lock import get_usercodes
 
-    from homeassistant.components.zwave_js import ZWAVE_JS_EVENT
+    from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 except (ModuleNotFoundError, ImportError):
     pass
 
@@ -154,7 +154,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # path
     config_path = hass.config.path()
     if config_entry.data[CONF_PATH].startswith(config_path):
-        updated_config[CONF_PATH] = updated_config[CONF_PATH][len(config_path) :]
+        num_chars_config_path = len(config_path)
+        updated_config[CONF_PATH] = updated_config[CONF_PATH][num_chars_config_path:]
         # Remove leading slashes
         updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
 
@@ -273,10 +274,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         # Listen to Z-Wave JS events so we can fire our own events
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(
-                ZWAVE_JS_EVENT,
+                ZWAVE_JS_NOTIFICATION_EVENT,
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
+        return True
+
+    # We only get here if we are not using zwave_js
 
     # Check if we need to check alarm type/alarm level sensors, in which case
     # we need to listen for lock state changes
@@ -446,10 +450,13 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     if async_using_zwave_js(lock=primary_lock):
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
             hass.bus.async_listen(
-                ZWAVE_JS_EVENT,
+                ZWAVE_JS_NOTIFICATION_EVENT,
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
+        return
+
+    # We only get here if we are not using zwave_js
 
     # Check if alarm type/alarm level sensors are specified, in which case
     # we need to listen for lock state changes and derive the action from those
