@@ -1,0 +1,12 @@
+entities:
+  - entity: binary_sensor.system_ready
+  - entity: lock.frontdoor_touchscreen_deadbolt_z_wave_plus
+  - entity: input_boolean.frontdoor_autolock
+  - entity: cover.garagedoor_opener
+  - entity: timer.frontdoor
+  - entity: timer.garagedoor
+  - entity: binary_sensor.frontdoor_is_open
+show_header_toggle: false
+state_color: true
+title: Entrances
+type: entities

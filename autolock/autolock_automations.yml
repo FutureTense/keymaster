@@ -1,0 +1,182 @@
+- alias: frontdoor Locked
+  initial_state: true
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+  trigger:
+    entity_id: lock.frontdoor_touchscreen_deadbolt_z_wave_plus
+    platform: state
+    to: locked
+  action:
+    - service: timer.cancel
+      entity_id: timer.frontdoor
+      
+- alias: frontdoor Unlocked
+  initial_state: true
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+  trigger:
+    entity_id: lock.frontdoor_touchscreen_deadbolt_z_wave_plus
+    platform: state
+    to: unlocked
+  action:
+    - service: script.turn_on
+      entity_id: script.start_frontdoor_custom_timer
+    
+- alias: Lock Timer Finished
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+  trigger:
+    platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.frontdoor
+  action:
+    service: script.turn_on
+    entity_id: script.lock_frontdoor
+    
+- alias: frontdoor_autolock finished
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+  trigger:
+    platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.auto_lock_disable
+  action:
+    service: input_boolean.on
+    entity_id: input_boolean.frontdoor_autolock
+      
+- alias: Disable Auto Lock
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+  trigger:
+    entity_id: input_boolean.frontdoor_autolock
+    platform: state
+    to: 'off'
+  action:
+    - service: timer.cancel
+      entity_id:
+        - timer.garagedoor
+        - timer.frontdoor
+    - service: lock.unlock
+      entity_id: lock.frontdoor_touchscreen_deadbolt_z_wave_plus
+    - service: timer.start
+      entity_id: timer.auto_lock_disable
+     
+- alias: Enable frontdoor Auto Lock
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+  trigger:
+    entity_id: input_boolean.frontdoor_autolock
+    platform: state
+    to: 'on'
+  action:
+    - service: timer.cancel
+      entity_id:
+        - timer.garagedoor
+        - timer.frontdoor
+        - timer.auto_lock_disable
+    - service: script.turn_on
+      entity_id: script.lock_frontdoor
+    - service: cover.close_cover
+      entity_id: cover.garagedoor_opener
+
+- alias: Garage Opened Start Timer
+  trigger:
+    - platform: state
+      entity_id: cover.garagedoor_opener
+      to: 'open'
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+    - condition: state
+      entity_id: input_boolean.frontdoor_autolock
+      state: 'on'
+  action:
+    - service: timer.start
+      entity_id: timer.garagedoor
+
+- alias: MyQ API down
+  trigger:
+    - platform: state 
+      entity_id: 
+        - 'binary_sensor.hub_myq_gateway'
+    - platform: time_pattern
+      minutes: "/15"      
+  condition:
+    condition: state
+    entity_id: 'binary_sensor.hub_myq_gateway'
+    state: 'unavailable'
+  action:
+    - service: persistent_notification.create
+      data_template:   
+        title: "MyQ API"
+        message: "MyQ is offline"
+
+- alias: Garage Opened
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+  trigger:
+    - platform: state
+      entity_id: cover.garagedoor_opener
+      to: 'open'
+  action:
+    - service: notify.my_devices
+      data_template:   
+        title: "Garage"    
+        message: "Opened"
+
+- alias: Garage Closed
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+  trigger:
+    - platform: state
+      entity_id: cover.garagedoor_opener
+      from: 'open'
+      to: 'closed'
+  action:
+    - service: timer.cancel
+      entity_id:  timer.garagedoor
+    - service: notify.my_devices
+      data_template:   
+        title: "Garage"    
+        message: "Closed"
+      
+# sends message after timer expires, restarts timer
+- alias: Garage Opened Timer Finished
+  trigger:
+    - platform: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.garagedoor
+  condition:
+    - condition: state
+      entity_id: 'binary_sensor.allow_automation'
+      state: 'on' 
+    - condition: state
+      entity_id: cover.garagedoor_opener
+      state: 'open'
+  action:
+    - service: notify.my_devices
+      data_template:   
+        title: "Garage"
+        message: "Left Opened"
+    - service: timer.start
+      entity_id: timer.garagedoor
