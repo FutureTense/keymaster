@@ -134,7 +134,7 @@ automation:
       - service: script.LOCKNAME_manual_notify
         data_template:
           title: CASE_LOCK_NAME
-          message: "{{ trigger.event.data.action_text }}"
+          message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
 
   - alias: CASE_LOCK_NAME User Notifications
     trigger:
@@ -147,6 +147,9 @@ automation:
         value_template: "{{ trigger.event.data.code_slot > 0 }}"
       - condition: template
         value_template: "{{ is_state('input_boolean.notify_LOCKNAME_' + trigger.event.data.code_slot | string, 'on') }}"
+      - condition: state
+        entity_id: input_boolean.LOCKNAME_lock_notifications
+        state: "off"
     action:
       - service: script.LOCKNAME_manual_notify
         data_template:
