@@ -83,7 +83,7 @@ async def async_setup_entry(
 
 
 class CodesSensor(CoordinatorEntity):
-    """ Representation of a sensor """
+    """Representation of a sensor"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
         """Initialize the sensor."""

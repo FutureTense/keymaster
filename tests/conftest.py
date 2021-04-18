@@ -101,7 +101,7 @@ def mock_delete_lock_and_base_folder():
 
 @pytest.fixture
 def mock_os_path_join():
-    """ Fixture to mock splitext """
+    """Fixture to mock splitext"""
     with patch("os.path.join"):
         yield
 

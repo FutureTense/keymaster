@@ -16,7 +16,7 @@ KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 
 
 async def test_ozw_network_ready(hass, mock_using_ozw, lock_data, caplog):
-    """ Test ozw network ready sensor """
+    """Test ozw network ready sensor"""
 
     await setup_ozw(hass, fixture=lock_data)
     assert "ozw" in hass.config.components
@@ -102,7 +102,7 @@ async def test_ozw_network_ready(hass, mock_using_ozw, lock_data, caplog):
 async def test_zwavejs_network_ready(
     hass, client, lock_kwikset_910, integration, caplog
 ):
-    """ Test zwavejs network ready sensor """
+    """Test zwavejs network ready sensor"""
 
     node = lock_kwikset_910
     state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
