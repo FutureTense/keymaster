@@ -241,7 +241,7 @@ async def test_handle_state_change_zwave_js(
     assert state.state == STATE_LOCKED
 
     events = async_capture_events(hass, EVENT_KEYMASTER_LOCK_STATE_CHANGED)
-    events_js = async_capture_events(hass, "zwave_js_event")
+    events_js = async_capture_events(hass, "zwave_js_notification")
 
     # Load the integration
     config_entry = MockConfigEntry(
@@ -255,99 +255,13 @@ async def test_handle_state_change_zwave_js(
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await hass.async_block_till_done()
 
-    # Enable the sensors we use
-    registry = await hass.helpers.entity_registry.async_get_registry()
-    entity_id = "sensor.smart_code_with_home_connect_technology_alarmlevel"
-    entry = registry.async_get(entity_id)
-    updated_entry = registry.async_update_entity(
-        entry.entity_id,
-        **{"disabled_by": None},
-    )
-    await hass.async_block_till_done()
-    assert updated_entry.disabled is False
-
-    registry = await hass.helpers.entity_registry.async_get_registry()
-    entity_id = "sensor.smart_code_with_home_connect_technology_alarmtype"
-    entry = registry.async_get(entity_id)
-    updated_entry = registry.async_update_entity(
-        entry.entity_id,
-        **{"disabled_by": None},
-    )
-    await hass.async_block_till_done()
-    assert updated_entry.disabled is False
-    await hass.async_block_till_done()
-
     # Reload zwave_js
     assert await hass.config_entries.async_reload(integration.entry_id)
     await hass.async_block_till_done()
 
     assert "zwave_js" in hass.config.components
 
-    # Make sure the sensors updated the current values
-    state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmtype")
-    assert state is not None
-    assert state.state == "21"
-
-    state = hass.states.get("sensor.smart_code_with_home_connect_technology_alarmlevel")
-    assert state is not None
-    assert state.state == "1"
-
     # Test locked update from value updated event
-    event = Event(
-        type="value updated",
-        data={
-            "source": "node",
-            "event": "value updated",
-            "nodeId": 14,
-            "args": {
-                "commandClassName": "Notification",
-                "commandClass": 113,
-                "endpoint": 0,
-                "property": "alarmType",
-                "newValue": 19,
-                "prevValue": 21,
-                "propertyName": "alarmType",
-            },
-        },
-    )
-    node.receive_event(event)
-
-    assert (
-        hass.states.get(
-            "sensor.smart_code_with_home_connect_technology_alarmtype"
-        ).state
-        == "19"
-    )
-    client.async_send_command.reset_mock()
-
-    event = Event(
-        type="value updated",
-        data={
-            "source": "node",
-            "event": "value updated",
-            "nodeId": 14,
-            "args": {
-                "commandClassName": "Notification",
-                "commandClass": 113,
-                "endpoint": 0,
-                "property": "alarmLevel",
-                "newValue": 3,
-                "prevValue": 1,
-                "propertyName": "alarmLevel",
-            },
-        },
-    )
-    node.receive_event(event)
-    await hass.async_block_till_done()
-
-    assert (
-        hass.states.get(
-            "sensor.smart_code_with_home_connect_technology_alarmlevel"
-        ).state
-        == "3"
-    )
-    client.async_send_command.reset_mock()
-
     event = Event(
         type="value updated",
         data={
@@ -376,24 +290,31 @@ async def test_handle_state_change_zwave_js(
             "source": "node",
             "event": "notification",
             "nodeId": 14,
-            "notificationLabel": "Keypad unlock operation",
-            "parameters": {"userId": 3},
+            "ccId": 113,
+            "args": {
+                "type": 6,
+                "event": 5,
+                "label": "Access Control",
+                "eventLabel": "Keypad unlock operation",
+                "parameters": {"userId": 3},
+            },
         },
     )
     node.receive_event(event)
     # wait for the event
     await hass.async_block_till_done()
 
-    assert len(events) == 3
-    assert len(events_js) == 2
+    assert len(events) == 1
+    assert len(events_js) == 1
     assert events[0].data[ATTR_NAME] == "frontdoor"
     assert events[0].data[ATTR_STATE] == "unlocked"
     assert events[0].data[ATTR_ACTION_TEXT] == "Keypad unlock operation"
     assert events[0].data[ATTR_CODE_SLOT] == 3
     assert events[0].data[ATTR_CODE_SLOT_NAME] == ""
 
-    assert events_js[0].data["type"] == "notification"
+    assert events_js[0].data["type"] == 6
+    assert events_js[0].data["event"] == 5
     assert events_js[0].data["home_id"] == client.driver.controller.home_id
     assert events_js[0].data["node_id"] == 14
-    assert events_js[0].data["label"] == "Keypad unlock operation"
+    assert events_js[0].data["event_label"] == "Keypad unlock operation"
     assert events_js[0].data["parameters"]["userId"] == 3
