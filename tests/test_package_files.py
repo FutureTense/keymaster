@@ -91,14 +91,22 @@ async def test_template_sensors(hass: HomeAssistant):
 
         # Mess with date range
         hass.states.async_set(daterange_entity, STATE_ON)
-        hass.states.async_set(start_date_entity, "2020-12-12")
-        hass.states.async_set(end_date_entity, "2021-12-12")
+        hass.states.async_set(
+            start_date_entity,
+            "2020-12-12 00:00:00",
+            attributes={"timestamp": 1607749200},
+        )
+        hass.states.async_set(
+            end_date_entity, "2021-12-12 00:00:00", attributes={"timestamp": 1639371599}
+        )
 
         await hass.async_block_till_done()
         assert hass.states.get(active_entity).state == STATE_ON
 
         # Set current day outside date range and test that entity turns off
-        hass.states.async_set(end_date_entity, "2021-01-01")
+        hass.states.async_set(
+            end_date_entity, "2021-01-01 00:00:00", attributes={"timestamp": 1609477200}
+        )
 
         await hass.async_block_till_done()
         assert hass.states.get(active_entity).state == STATE_OFF
