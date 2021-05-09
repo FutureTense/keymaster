@@ -1,6 +1,8 @@
 """ Test keymaster init """
+from datetime import datetime, timedelta
 import logging
 import time
+from unittest.async_case import IsolatedAsyncioTestCase
 from unittest.mock import MagicMock, Mock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -13,8 +15,9 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.zwave import node_entity
 from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+import homeassistant.util.dt as dt_util
 
-from tests.common import MQTTMessage, setup_ozw, setup_zwave
+from tests.common import MQTTMessage, setup_ozw, setup_zwave, async_fire_time_changed
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from tests.mock.zwave import MockNetwork, MockNode, MockValue
 
@@ -188,7 +191,7 @@ async def test_update_usercodes_using_ozw(
     caplog,
 ):
     """Test handling usercode updates using ozw"""
-
+    now = dt_util.now()
     await setup_ozw(hass, fixture=lock_data)
     assert "ozw" in hass.config.components
     assert OZW_DOMAIN in hass.data
@@ -242,9 +245,7 @@ async def test_update_usercodes_using_ozw(
     assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
     # Give the sensors time to update
-    time.sleep(7)
-    await hass.async_block_till_done()
-    time.sleep(2)
+    async_fire_time_changed(hass, now + timedelta(seconds=7))
     await hass.async_block_till_done()
 
     # TODO: Figure out why the code slot sensors are not updating
