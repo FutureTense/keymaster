@@ -17,7 +17,7 @@ from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 import homeassistant.util.dt as dt_util
 
-from tests.common import MQTTMessage, setup_ozw, setup_zwave, async_fire_time_changed
+from tests.common import MQTTMessage, async_fire_time_changed, setup_ozw, setup_zwave
 from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from tests.mock.zwave import MockNetwork, MockNode, MockValue
 
