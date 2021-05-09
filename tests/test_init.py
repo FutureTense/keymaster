@@ -1,14 +1,12 @@
 """ Test keymaster init """
-from datetime import datetime, timedelta
+from datetime import timedelta
 import logging
-import time
-from unittest.async_case import IsolatedAsyncioTestCase
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
-from homeassistant import config_entries, setup
+from homeassistant import setup
 from homeassistant.bootstrap import async_setup_component
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
