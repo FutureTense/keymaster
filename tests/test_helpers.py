@@ -14,9 +14,7 @@ from custom_components.keymaster.const import (
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
 )
 from custom_components.keymaster.helpers import delete_lock_and_base_folder
-from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.const import (
-    ATTR_ENTITY_ID,
     ATTR_STATE,
     EVENT_HOMEASSISTANT_STARTED,
     STATE_LOCKED,

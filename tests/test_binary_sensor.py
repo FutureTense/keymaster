@@ -5,11 +5,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_LOCKED
 
 from tests.common import MQTTMessage, setup_ozw
-from tests.const import CONFIG_DATA, CONFIG_DATA_910, CONFIG_DATA_REAL
+from tests.const import CONFIG_DATA, CONFIG_DATA_REAL
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
