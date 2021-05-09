@@ -12,7 +12,6 @@ from custom_components.keymaster import (
     SERVICE_REFRESH_CODES,
 )
 from custom_components.keymaster.const import DOMAIN
-from homeassistant.bootstrap import async_setup_component
 from homeassistant.components.zwave import node_entity
 from homeassistant.components.zwave.const import DATA_NETWORK
 

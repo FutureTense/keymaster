@@ -5,8 +5,6 @@ import logging
 import os
 from unittest.mock import patch
 
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
-
 from homeassistant.components import binary_sensor, sensor
 from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
