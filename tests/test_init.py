@@ -242,7 +242,7 @@ async def test_update_usercodes_using_ozw(
     assert hass.states.get(NETWORK_READY_ENTITY)
     assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
-    # Give the sensors time to update
+    # Fast forward time so that sensors update
     async_fire_time_changed(hass, now + timedelta(seconds=7))
     await hass.async_block_till_done()
 
