@@ -17,6 +17,14 @@ categories:
       - "fix"
       - "bugfix"
       - "bug"
+  - title: ":wrench: Maintenance :wrench:"
+    labels:
+      - "chore"
+      - "repo"
+      - "maintenance"
+  - title: ":mortar_board: Code Quality :mortar_board:"
+    labels:
+      - "code-quality"
 template: |
   [![Downloads for this release](https://img.shields.io/github/downloads/FutureTense/keymaster/v$RESOLVED_VERSION/total.svg)](https://github.com/FutureTense/keymaster/releases/v$RESOLVED_VERSION)
 
