@@ -4,26 +4,21 @@ on:
   pull_request:
   schedule:
     - cron: '0 0 * * *'
+
 jobs:
-  ci:
+  validate_hacs:
+    name: "HACS Validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-        name: Download repo
+      - uses: "actions/checkout@v2"
+      - name: HACS Action
+        uses: "hacs/action@main"
         with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v2
-        name: Setup Python
-      - uses: actions/cache@v2
-        name: Cache
-        with:
-          path: |
-            ~/.cache/pip
-          key: custom-component-ci
-      - uses: hacs/action@main
-        with:
-          CATEGORY: integration
-      - uses: KTibow/ha-blueprint@stable
-        name: CI
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          category: "integration"
+  validate_hassfest:
+    name: "Hassfest Validation"
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v2"
+      - uses: home-assistant/actions/hassfest@master
+  
