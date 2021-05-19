@@ -9,7 +9,6 @@ from custom_components.keymaster.config_flow import (
     KeyMasterFlowHandler,
     _get_entities,
     _get_schema,
-    _parse_child_locks_file,
 )
 from custom_components.keymaster.const import CONF_PATH, DOMAIN
 from homeassistant import config_entries, setup
@@ -36,6 +35,7 @@ _LOGGER = logging.getLogger(__name__)
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -49,6 +49,7 @@ _LOGGER = logging.getLogger(__name__)
                 "slots": 6,
                 "start_from": 1,
                 "hide_pins": False,
+                "parent": "(none)",
             },
         ),
         (
@@ -62,6 +63,7 @@ _LOGGER = logging.getLogger(__name__)
                 "slots": 6,
                 "start_from": 1,
                 "child_locks_file": "test.yaml",
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -74,14 +76,8 @@ _LOGGER = logging.getLogger(__name__)
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
-                "child_locks": {
-                    "test_lock": {
-                        "alarm_level_or_user_code_entity_id": "sensor.test",
-                        "alarm_type_or_access_control_entity_id": "sensor.test",
-                        "lock_entity_id": "lock.test",
-                    }
-                },
                 "hide_pins": False,
+                "parent": "(none)",
             },
         ),
     ],
@@ -142,6 +138,7 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -156,6 +153,7 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "start_from": 1,
                 "child_locks_file": "",
                 "hide_pins": False,
+                "parent": "(none)",
             },
         ),
     ],
@@ -200,6 +198,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -212,6 +211,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "slots": 4,
                 "start_from": 1,
                 "hide_pins": False,
+                "parent": "(none)",
             },
         ),
     ],
@@ -266,6 +266,7 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -278,6 +279,7 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
                 "slots": 4,
                 "start_from": 1,
                 "hide_pins": False,
+                "parent": "(none)",
             },
         ),
     ],
@@ -332,6 +334,7 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -344,6 +347,7 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
                 "slots": 4,
                 "start_from": 1,
                 "hide_pins": False,
+                "parent": "(none)",
             },
         ),
     ],
@@ -390,40 +394,6 @@ async def test_options_flow_with_zwavejs(
 
         await hass.async_block_till_done()
         assert entry.data.copy() == data
-
-
-def test_parsing_child_locks_file():
-    """Test function that parses child locks file."""
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=False
-    ):
-        assert _parse_child_locks_file("test.yaml")[1] == "Path invalid"
-
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.os.path.isfile", return_value=False
-    ):
-        assert _parse_child_locks_file("test.yaml")[1] == "Must be a file"
-
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.os.path.isfile", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.load_yaml", return_value={}
-    ):
-        assert _parse_child_locks_file("test.yaml")[1] == "File is empty"
-
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.os.path.isfile", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.load_yaml",
-        return_value={"test": {"invalid_key": "test"}},
-    ):
-        assert "File data is invalid: " in _parse_child_locks_file("test.yaml")[1]
 
 
 async def test_get_entities(hass, lock_data):

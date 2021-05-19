@@ -139,7 +139,9 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
         return data
 
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.data.parent is None and entry.entry_id != entry_id:
+        if "parent" not in entry.data.keys() and entry.entry_id != entry_id:
+            data.append(entry.title)
+        elif entry.entry_id != entry_id:
             data.append(entry.title)
 
     return data
@@ -231,9 +233,9 @@ def _get_schema(
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
-            vol.Optional(CONF_PARENT, default=_get_default(CONF_PARENT, "")): vol.In(
-                _available_parent_locks(hass, entry_id)
-            ),
+            vol.Optional(
+                CONF_PARENT, default=_get_default(CONF_PARENT, "(none)")
+            ): vol.In(_available_parent_locks(hass, entry_id)),
         },
         extra=ALLOW_EXTRA,
     )
