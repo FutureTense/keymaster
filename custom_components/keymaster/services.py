@@ -209,6 +209,12 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         raise ValueError(f"Couldn't find existing lock entry for {name}")
 
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+
+    # Append _child to child lock yaml files
+    child_file = ""
+    if primary_lock.parent:
+        child_file = "_child"
+
     lockname = primary_lock.lock_name
 
     _LOGGER.debug("Starting file generation...")
@@ -297,11 +303,6 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "SENSORALARMLEVEL": sensoralarmlevel,
         "HIDE_PINS": hide_pins,
     }
-
-    # Append _child to child lock yaml files
-    child_file = ""
-    if primary_lock.parent:
-        child_file = "_child"
 
     # Replace variables in common file
     for in_f, out_f, write_mode in (
