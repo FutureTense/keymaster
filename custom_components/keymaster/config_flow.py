@@ -276,6 +276,10 @@ async def _start_config_flow(
         user_input[CONF_GENERATE] = DEFAULT_GENERATE
         user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
 
+        # Convert (none) to None
+        if user_input[CONF_PARENT] == "(none)":
+            user_input[CONF_PARENT] = None
+
         # Regular flow has an async function, options flow has a sync function
         # so we need to handle them conditionally
         if asyncio.iscoroutinefunction(cls._get_unique_name_error):
