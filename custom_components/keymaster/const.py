@@ -49,6 +49,7 @@ CONF_SENSOR_NAME = "sensorname"
 CONF_SLOTS = "slots"
 CONF_START = "start_from"
 CONF_HIDE_PINS = "hide_pins"
+CONF_PARENT = "parent"
 
 # Defaults
 DEFAULT_CODE_SLOTS = 10

@@ -25,6 +25,7 @@ from .const import (
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_PARENT,
     CONF_PATH,
     CONF_SENSOR_NAME,
     CONF_SLOTS,
@@ -141,8 +142,28 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
     ) -> Dict[str, Any]:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
-            self, "init", "", user_input, self.config_entry.data
+            self,
+            "init",
+            "",
+            user_input,
+            self.config_entry.data,
+            self.config_entry.entry_id,
         )
+
+
+def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
+    """Find other keymaster configurations and list them as posible
+    parent locks if they are not a child lock already."""
+
+    data = ["(none)"]
+    if DOMAIN not in hass.data:
+        return data
+
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.data.parent is None and entry.entry_id != entry_id:
+            data.append(entry.title)
+
+    return data
 
 
 def _get_entities(
@@ -170,6 +191,7 @@ def _get_schema(
     hass: HomeAssistant,
     user_input: Optional[Dict[str, Any]],
     default_dict: Dict[str, Any],
+    entry_id: str = None,
 ) -> vol.Schema:
     """Gets a schema using the default_dict as a backup."""
     if user_input is None:
@@ -230,9 +252,9 @@ def _get_schema(
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
-            vol.Optional(
-                CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE, "")
-            ): str,
+            vol.Optional(CONF_PARENT, default=_get_default(CONF_PARENT, "")): vol.In(
+                _available_parent_locks(hass, entry_id)
+            ),
         },
         extra=ALLOW_EXTRA,
     )
@@ -245,11 +267,12 @@ def _show_config_form(
     errors: Dict[str, str],
     description_placeholders: Dict[str, str],
     defaults: Dict[str, Any] = None,
+    entry_id: str = None,
 ) -> Dict[str, Any]:
     """Show the configuration form to edit location data."""
     return cls.async_show_form(
         step_id=step_id,
-        data_schema=_get_schema(cls.hass, user_input, defaults),
+        data_schema=_get_schema(cls.hass, user_input, defaults, entry_id),
         errors=errors,
         description_placeholders=description_placeholders,
     )
@@ -261,6 +284,7 @@ async def _start_config_flow(
     title: str,
     user_input: Dict[str, Any],
     defaults: Dict[str, Any] = None,
+    entry_id: str = None,
 ):
     """Start a config flow."""
     errors = {}
@@ -306,9 +330,21 @@ async def _start_config_flow(
             return cls.async_create_entry(title=title, data=user_input)
 
         return _show_config_form(
-            cls, step_id, user_input, errors, description_placeholders, defaults
+            cls,
+            step_id,
+            user_input,
+            errors,
+            description_placeholders,
+            defaults,
+            entry_id,
         )
 
     return _show_config_form(
-        cls, step_id, user_input, errors, description_placeholders, defaults
+        cls,
+        step_id,
+        user_input,
+        errors,
+        description_placeholders,
+        defaults,
+        entry_id,
     )
