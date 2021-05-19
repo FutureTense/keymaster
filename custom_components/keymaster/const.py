@@ -28,10 +28,10 @@ ATTR_CODE_SLOT_NAME = "code_slot_name"
 ATTR_NOTIFICATION_SOURCE = "notification_source"
 
 # Attributes
+ATTR_CODE_SLOT = "code_slot"
 ATTR_NAME = "lockname"
 ATTR_NODE_ID = "node_id"
 ATTR_USER_CODE = "usercode"
-ATTR_CODE_SLOT = "code_slot"
 
 # Configuration Properties
 CONF_ALARM_LEVEL = "alarm_level"
@@ -42,14 +42,14 @@ CONF_CHILD_LOCKS = "child_locks"
 CONF_CHILD_LOCKS_FILE = "child_locks_file"
 CONF_ENTITY_ID = "entity_id"
 CONF_GENERATE = "generate_package"
-CONF_PATH = "packages_path"
+CONF_HIDE_PINS = "hide_pins"
 CONF_LOCK_ENTITY_ID = "lock_entity_id"
 CONF_LOCK_NAME = "lockname"
+CONF_PARENT = "parent"
+CONF_PATH = "packages_path"
 CONF_SENSOR_NAME = "sensorname"
 CONF_SLOTS = "slots"
 CONF_START = "start_from"
-CONF_HIDE_PINS = "hide_pins"
-CONF_PARENT = "parent"
 
 # Defaults
 DEFAULT_CODE_SLOTS = 10
