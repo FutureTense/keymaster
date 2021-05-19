@@ -56,27 +56,6 @@ CHILD_LOCKS_SCHEMA = cv.schema_with_slug_keys(
 )
 
 
-def _parse_child_locks_file(file_path: str) -> bool:
-    """Validate that child locks file exists and is valid."""
-    if not os.path.exists(file_path):
-        _LOGGER.error("The child locks file (%s) does not exist", file_path)
-        return None, "Path invalid"
-
-    if not os.path.isfile(file_path):
-        _LOGGER.error("The childs locks path (%s) is not a valid file", file_path)
-        return None, "Must be a file"
-
-    child_locks = load_yaml(file_path)
-    try:
-        CHILD_LOCKS_SCHEMA(child_locks)
-        if not child_locks:
-            return None, "File is empty"
-    except (vol.Invalid, vol.MultipleInvalid) as err:
-        _LOGGER.error("Child locks file data is invalid: %s", err)
-        return None, f"File data is invalid: {err}"
-    return child_locks, None
-
-
 @config_entries.HANDLERS.register(DOMAIN)
 class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for KeyMaster."""
@@ -305,22 +284,6 @@ async def _start_config_flow(
         # Validate that package path is relative
         if os.path.isabs(user_input[CONF_PATH]):
             errors[CONF_PATH] = "invalid_path"
-
-        # Validate that child locks file path is relative and follows valid schema
-        if user_input.get(CONF_CHILD_LOCKS_FILE):
-            if os.path.isabs(user_input[CONF_CHILD_LOCKS_FILE]):
-                errors[CONF_CHILD_LOCKS_FILE] = "invalid_path"
-            else:
-                child_locks, err_msg = await cls.hass.async_add_executor_job(
-                    _parse_child_locks_file,
-                    os.path.join(
-                        cls.hass.config.path(),
-                        user_input[CONF_CHILD_LOCKS_FILE],
-                    ),
-                )
-                if err_msg:
-                    errors[CONF_CHILD_LOCKS_FILE] = "invalid_child_locks_file"
-                    description_placeholders["error"] = "invalid_child_locks_file"
 
         # Update options if no errors
         if not errors:
