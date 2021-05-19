@@ -297,10 +297,20 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "SENSORALARMLEVEL": sensoralarmlevel,
         "HIDE_PINS": hide_pins,
     }
+
+    # Append _child to child lock yaml files
+    child_file = ""
+    if primary_lock.parent:
+        child_file = "_child"
+
     # Replace variables in common file
     for in_f, out_f, write_mode in (
-        ("keymaster_common.yaml", f"{lockname}_keymaster_common.yaml", "w+"),
-        ("lovelace.head", f"{lockname}_lovelace", "w+"),
+        (
+            "keymaster_common.yaml",
+            f"{lockname}_keymaster_common{child_file}.yaml",
+            "w+",
+        ),
+        ("lovelace.head", f"{lockname}_lovelace{child_file}", "w+"),
     ):
         output_to_file_from_template(
             input_path, in_f, output_path, out_f, replacements, write_mode
@@ -312,8 +322,8 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         replacements["TEMPLATENUM"] = str(x)
 
         for in_f, out_f, write_mode in (
-            ("keymaster.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
-            ("lovelace.code", f"{lockname}_lovelace", "a"),
+            ("keymaster.yaml", f"{lockname}_keymaster_{x}{child_file}.yaml", "w+"),
+            ("lovelace.code", f"{lockname}_lovelace{child_file}", "a"),
         ):
             output_to_file_from_template(
                 input_path, in_f, output_path, out_f, replacements, write_mode
