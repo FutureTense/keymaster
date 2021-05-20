@@ -307,11 +307,11 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     # Replace variables in common file
     for in_f, out_f, write_mode in (
         (
-            "keymaster_common.yaml",
-            f"{lockname}_keymaster_common{child_file}.yaml",
+            f"keymaster_common{child_file}.yaml",
+            f"{lockname}_keymaster_common.yaml",
             "w+",
         ),
-        ("lovelace.head", f"{lockname}_lovelace{child_file}", "w+"),
+        (f"lovelace{child_file}.head", f"{lockname}_lovelace", "w+"),
     ):
         output_to_file_from_template(
             input_path, in_f, output_path, out_f, replacements, write_mode
@@ -323,8 +323,8 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         replacements["TEMPLATENUM"] = str(x)
 
         for in_f, out_f, write_mode in (
-            ("keymaster.yaml", f"{lockname}_keymaster_{x}{child_file}.yaml", "w+"),
-            ("lovelace.code", f"{lockname}_lovelace{child_file}", "a"),
+            (f"keymaster{child_file}.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
+            (f"lovelace{child_file}.code", f"{lockname}_lovelace", "a"),
         ):
             output_to_file_from_template(
                 input_path, in_f, output_path, out_f, replacements, write_mode
