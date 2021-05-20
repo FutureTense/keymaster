@@ -162,6 +162,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     if "parent" not in config_entry.data.keys():
         updated_config[CONF_PARENT] = None
+    elif config_entry.data[CONF_PARENT] == "(none)":
+        updated_config[CONF_PARENT] = None
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)

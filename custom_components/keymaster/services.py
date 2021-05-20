@@ -212,7 +212,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
 
     # Append _child to child lock yaml files
     child_file = ""
-    if primary_lock.parent:
+    if primary_lock.parent is not None:
         child_file = "_child"
 
     lockname = primary_lock.lock_name
