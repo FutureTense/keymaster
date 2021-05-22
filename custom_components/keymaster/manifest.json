@@ -20,6 +20,6 @@
   "config_flow": true,
   "issue_tracker": "https://github.com/FutureTense/keymaster/issues",
   "requirements": [],
-  "version": "v0.0.0",
-  "iot_class": "local_polling"
+  "iot_class": "local_polling",
+  "version": "v0.0.0"  
 }
