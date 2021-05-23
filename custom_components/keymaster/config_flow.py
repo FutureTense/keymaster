@@ -138,7 +138,7 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
     for entry in hass.config_entries.async_entries(DOMAIN):
         if "parent" not in entry.data.keys() and entry.entry_id != entry_id:
             data.append(entry.title)
-        elif entry.entry_id != entry_id:
+        elif entry.data[CONF_PARENT] is None and entry.entry_id != entry_id:
             data.append(entry.title)
 
     return data

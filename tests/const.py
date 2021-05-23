@@ -59,3 +59,28 @@ CONFIG_DATA_BE469 = {
     "slots": 6,
     "start_from": 1,
 }
+
+CONFIG_DATA_ALT = {
+    "alarm_level_or_user_code_entity_id": "sensor.fake",
+    "alarm_type_or_access_control_entity_id": "sensor.fake",
+    "lock_entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
+    "lockname": "frontdoor",
+    "generate_package": True,
+    "packages_path": "packages/keymaster",
+    "sensorname": "binary_sensor.fake",
+    "slots": 6,
+    "start_from": 1,
+}
+
+CONFIG_DATA_CHILD = {
+    "alarm_level_or_user_code_entity_id": "sensor.fake",
+    "alarm_type_or_access_control_entity_id": "sensor.fake",
+    "lock_entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
+    "lockname": "sidedoor",
+    "generate_package": True,
+    "packages_path": "packages/keymaster",
+    "sensorname": "binary_sensor.fake",
+    "slots": 6,
+    "start_from": 1,
+    "parent": "frontdoor",
+}
