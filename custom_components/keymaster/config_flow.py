@@ -19,8 +19,6 @@ from homeassistant.util.yaml.loader import load_yaml
 from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_CHILD_LOCKS,
-    CONF_CHILD_LOCKS_FILE,
     CONF_GENERATE,
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
@@ -67,7 +65,6 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         CONF_START: DEFAULT_START,
         CONF_SENSOR_NAME: DEFAULT_DOOR_SENSOR,
         CONF_PATH: DEFAULT_PACKAGES_PATH,
-        CONF_CHILD_LOCKS_FILE: "",
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
@@ -269,7 +266,6 @@ async def _start_config_flow(
 ):
     """Start a config flow."""
     errors = {}
-    child_locks = None
     description_placeholders = {}
 
     if user_input is not None:
@@ -293,9 +289,6 @@ async def _start_config_flow(
 
         # Update options if no errors
         if not errors:
-            user_input.pop(CONF_CHILD_LOCKS_FILE, None)
-            if child_locks:
-                user_input[CONF_CHILD_LOCKS] = child_locks
             return cls.async_create_entry(title=title, data=user_input)
 
         return _show_config_form(

@@ -62,7 +62,6 @@ _LOGGER = logging.getLogger(__name__)
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
-                "child_locks_file": "test.yaml",
                 "parent": "(none)",
             },
             "frontdoor",
@@ -85,15 +84,6 @@ _LOGGER = logging.getLogger(__name__)
 async def test_form(input_1, title, data, hass, mock_get_entities):
     """Test we get the form."""
     with patch(
-        "custom_components.keymaster.config_flow.load_yaml",
-        return_value={
-            "test_lock": {
-                "alarm_level_or_user_code_entity_id": "sensor.test",
-                "alarm_type_or_access_control_entity_id": "sensor.test",
-                "lock_entity_id": "lock.test",
-            }
-        },
-    ), patch(
         "custom_components.keymaster.config_flow.os.path.exists", return_value=True
     ), patch(
         "custom_components.keymaster.config_flow.os.path.isfile", return_value=True
@@ -151,7 +141,6 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
-                "child_locks_file": "",
                 "hide_pins": False,
                 "parent": None,
             },
