@@ -302,6 +302,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "SENSORALARMTYPE": sensoralarmtype,
         "SENSORALARMLEVEL": sensoralarmlevel,
         "HIDE_PINS": hide_pins,
+        "PARENTLOCK": primary_lock.parent,
     }
 
     # Replace variables in common file

@@ -188,6 +188,81 @@ automation:
                 entity_id: LOCKENTITYNAME
                 code_slot: >-
                   {{ TEMPLATENUM }}
+                  
+                  
+- alias: copy_PARENTLOCK_name_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_text.PARENTLOCK_name_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.LOCKNAME_name_TEMPLATENUM
+      data:
+        value: "{{ states('input_text.PARENTLOCK_name_TEMPLATENUM') }}"
+
+- alias: copy_PARENTLOCK_pin_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_text.PARENTLOCK_pin_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.LOCKNAME_pin_TEMPLATENUM
+      data:
+        value: "{{ states('input_text.PARENTLOCK_pin_TEMPLATENUM') }}"
+
+- alias: copy_PARENTLOCK_enabled_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.enabled_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.enabled_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.enabled_LOCKNAME_TEMPLATENUM        
+
+- alias: copy_PARENTLOCK_notify_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.notify_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.notify_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.notify_LOCKNAME_TEMPLATENUM        
+    
+- alias: copy_PARENTLOCK_reset_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.reset_codeslot_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.reset_codeslot_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.reset_codeslot_PARENTLOCK_TEMPLATENUM        
+
+###################  script:  ####################
+script:
+  LOCKNAME_copy_from_parent_TEMPLATENUM:
+    sequence:
+      - service: automation.trigger
+        data: {}
+        target:
+          entity_id:
+            - automation.copy_PARENTLOCK_name_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_pin_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_enabled_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_notify_LOCKNAME_TEMPLATENUM
 
 ################  binary_sensor: #################  
 binary_sensor:
