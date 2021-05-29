@@ -44,6 +44,7 @@ from .const import (
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_PARENT,
     CONF_PATH,
     CONF_SLOTS,
     CONF_START,
@@ -158,6 +159,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         updated_config[CONF_PATH] = updated_config[CONF_PATH][num_chars_config_path:]
         # Remove leading slashes
         updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
+
+    if "parent" not in config_entry.data.keys():
+        updated_config[CONF_PARENT] = None
+    elif config_entry.data[CONF_PARENT] == "(none)":
+        updated_config[CONF_PARENT] = None
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)

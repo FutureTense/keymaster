@@ -209,6 +209,12 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         raise ValueError(f"Couldn't find existing lock entry for {name}")
 
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+
+    # Append _child to child lock yaml files
+    child_file = ""
+    if primary_lock.parent is not None:
+        child_file = "_child"
+
     lockname = primary_lock.lock_name
 
     _LOGGER.debug("Starting file generation...")
@@ -297,10 +303,15 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "SENSORALARMLEVEL": sensoralarmlevel,
         "HIDE_PINS": hide_pins,
     }
+
     # Replace variables in common file
     for in_f, out_f, write_mode in (
-        ("keymaster_common.yaml", f"{lockname}_keymaster_common.yaml", "w+"),
-        ("lovelace.head", f"{lockname}_lovelace", "w+"),
+        (
+            f"keymaster_common{child_file}.yaml",
+            f"{lockname}_keymaster_common.yaml",
+            "w+",
+        ),
+        (f"lovelace{child_file}.head", f"{lockname}_lovelace", "w+"),
     ):
         output_to_file_from_template(
             input_path, in_f, output_path, out_f, replacements, write_mode
@@ -312,8 +323,8 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         replacements["TEMPLATENUM"] = str(x)
 
         for in_f, out_f, write_mode in (
-            ("keymaster.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
-            ("lovelace.code", f"{lockname}_lovelace", "a"),
+            (f"keymaster{child_file}.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
+            (f"lovelace{child_file}.code", f"{lockname}_lovelace", "a"),
         ):
             output_to_file_from_template(
                 input_path, in_f, output_path, out_f, replacements, write_mode
