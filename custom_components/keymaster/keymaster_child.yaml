@@ -251,6 +251,401 @@ automation:
           {% endif %}
       entity_id: input_boolean.reset_codeslot_PARENTLOCK_TEMPLATENUM        
 
+- alias: copy_PARENTLOCK_accesslimit_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.accesslimit_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.accesslimit_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.accesslimit_LOCKNAME_TEMPLATENUM        
+
+- alias: copy_PARENTLOCK_accesscount_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_number.accesscount_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+     - service: input_number.set_value
+       entity_id: input_number.accesscount_LOCKNAME_TEMPLATENUM
+       data_template:
+         value: '{{ states.input_number.accesscount_PARENTLOCK_TEMPLATENUM.state | int }}'
+
+- alias: copy_PARENTLOCK_daterange_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.daterange_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.daterange_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.daterange_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_start_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.start_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.start_date_LOCKNAME_TEMPLATENUM
+      data:
+        datetime: "{{ states.input_datetime.start_date_PARENTLOCK_TEMPLATENUM.state }}"
+        
+- alias: copy_PARENTLOCK_end_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.end_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.end_date_LOCKNAME_TEMPLATENUM
+      data:
+        datetime: "{{ states.input_datetime.end_date_PARENTLOCK_TEMPLATENUM.state }}"
+  
+- alias: copy_PARENTLOCK_sun_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.sun_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.sun_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.sun_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_sun_inc_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.sun_inc_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.sun_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.sun_inc_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_sun_start_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.sun_start_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.sun_start_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.sun_start_date_frontdoor_1.state }}"
+  
+- alias: copy_PARENTLOCK_sun_end_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.sun_end_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.sun_end_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.sun_end_date_frontdoor_1.state }}"
+
+- alias: copy_PARENTLOCK_mon_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.mon_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.mon_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.mon_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_mon_inc_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.mon_inc_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.mon_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.mon_inc_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_mon_start_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.mon_start_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.mon_start_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.mon_start_date_frontdoor_1.state }}"
+  
+- alias: copy_PARENTLOCK_mon_end_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.mon_end_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.mon_end_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.mon_end_date_frontdoor_1.state }}"
+        
+- alias: copy_PARENTLOCK_tue_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.tue_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.tue_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.tue_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_tue_inc_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.tue_inc_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.tue_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.tue_inc_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_tue_start_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.tue_start_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.tue_start_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.tue_start_date_frontdoor_1.state }}"
+  
+- alias: copy_PARENTLOCK_tue_end_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.tue_end_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.tue_end_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.tue_end_date_frontdoor_1.state }}"
+
+- alias: copy_PARENTLOCK_wed_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.wed_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.wed_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.wed_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_wed_inc_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.wed_inc_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.wed_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.wed_inc_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_wed_start_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.wed_start_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.wed_start_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.wed_start_date_frontdoor_1.state }}"
+  
+- alias: copy_PARENTLOCK_wed_end_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.wed_end_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.wed_end_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.wed_end_date_frontdoor_1.state }}"
+
+- alias: copy_PARENTLOCK_thu_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.thu_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.thu_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.thu_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_thu_inc_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.thu_inc_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.thu_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.thu_inc_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_thu_start_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.thu_start_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.thu_start_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.thu_start_date_frontdoor_1.state }}"
+  
+- alias: copy_PARENTLOCK_thu_end_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.thu_end_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.thu_end_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.thu_end_date_frontdoor_1.state }}"
+
+- alias: copy_PARENTLOCK_fri_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.fri_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.fri_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.fri_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_fri_inc_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.fri_inc_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.fri_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.fri_inc_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_fri_start_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.fri_start_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.fri_start_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.fri_start_date_frontdoor_1.state }}"
+  
+- alias: copy_PARENTLOCK_fri_end_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.fri_end_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.fri_end_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.fri_end_date_frontdoor_1.state }}"
+
+- alias: copy_PARENTLOCK_sat_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.sat_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.sat_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.sat_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_sat_inc_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_boolean.sat_inc_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service_template: >
+          {% if (states.input_boolean.sat_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+      entity_id: input_boolean.sat_inc_LOCKNAME_TEMPLATENUM
+
+- alias: copy_PARENTLOCK_sat_start_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.sat_start_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.sat_start_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.sat_start_date_frontdoor_1.state }}"
+  
+- alias: copy_PARENTLOCK_sat_end_date_LOCKNAME_TEMPLATENUM
+  trigger:
+    entity_id: input_datetime.sat_end_date_PARENTLOCK_TEMPLATENUM
+    platform: state
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.sat_end_date_backdoor_1
+      data:
+        time: "{{ states.input_datetime.sat_end_date_frontdoor_1.state }}"
+
+
 ###################  script:  ####################
 script:
   LOCKNAME_copy_from_parent_TEMPLATENUM:
@@ -263,6 +658,40 @@ script:
             - automation.copy_PARENTLOCK_pin_LOCKNAME_TEMPLATENUM
             - automation.copy_PARENTLOCK_enabled_LOCKNAME_TEMPLATENUM
             - automation.copy_PARENTLOCK_notify_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_reset_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_accesslimit_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_accesscount_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_daterange_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_start_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_end_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_sun_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_sun_inc_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_sun_start_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_sun_end_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_mon_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_mon_inc_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_mon_start_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_mon_end_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_tue_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_tue_inc_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_tue_start_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_tue_end_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_wed_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_wed_inc_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_wed_start_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_wed_end_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_thu_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_thu_inc_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_thu_start_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_thu_end_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_fri_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_fri_inc_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_fri_start_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_fri_end_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_sat_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_sat_inc_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_sat_start_date_LOCKNAME_TEMPLATENUM
+            - automation.copy_PARENTLOCK_sat_end_date_LOCKNAME_TEMPLATENUM
 
 ################  binary_sensor: #################  
 binary_sensor:
