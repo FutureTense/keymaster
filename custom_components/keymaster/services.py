@@ -8,6 +8,7 @@ from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import create
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
@@ -58,6 +59,18 @@ _LOGGER = logging.getLogger(__name__)
 
 SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
+
+
+async def _init_child_locks(
+    hass: HomeAssistant, start: int, slots: int, lockname: str
+) -> None:
+    """Populates child locks values with parent values"""
+    # LOCKNAME_copy_from_parent_TEMPLATENUM
+
+    for x in range(start, start + slots):
+        the_service = f"{lockname}_copy_from_parent_{x}"
+        _LOGGER.debug("Attempting to call script: %s", the_service)
+        call_service(hass, SCRIPT_DOMAIN, the_service)
 
 
 async def call_service(
@@ -302,7 +315,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "SENSORALARMTYPE": sensoralarmtype,
         "SENSORALARMLEVEL": sensoralarmlevel,
         "HIDE_PINS": hide_pins,
-        "PARENTLOCK": "" if primary_lock.parent is None else primary_lock.parent
+        "PARENTLOCK": "" if primary_lock.parent is None else primary_lock.parent,
     }
 
     # Replace variables in common file
@@ -344,6 +357,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
             "Package generation complete and all changes have been hot reloaded"
         )
         reset_code_slot_if_pin_unknown(hass, lockname, code_slots, start_from)
+        _init_child_locks(hass, start_from, code_slots, lockname)
     else:
         create(
             hass,
