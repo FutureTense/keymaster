@@ -344,7 +344,7 @@ automation:
       target:
         entity_id: input_datetime.sun_start_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.sun_start_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.sun_start_date_PARENTLOCK_TEMPLATENUM.state }}"
   
 - alias: copy_PARENTLOCK_sun_end_date_LOCKNAME_TEMPLATENUM
   trigger:
@@ -355,7 +355,7 @@ automation:
       target:
         entity_id: input_datetime.sun_end_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.sun_end_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.sun_end_date_PARENTLOCK_TEMPLATENUM.state }}"
 
 - alias: copy_PARENTLOCK_mon_LOCKNAME_TEMPLATENUM
   trigger:
@@ -392,7 +392,7 @@ automation:
       target:
         entity_id: input_datetime.mon_start_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.mon_start_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.mon_start_date_PARENTLOCK_TEMPLATENUM.state }}"
   
 - alias: copy_PARENTLOCK_mon_end_date_LOCKNAME_TEMPLATENUM
   trigger:
@@ -403,7 +403,7 @@ automation:
       target:
         entity_id: input_datetime.mon_end_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.mon_end_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.mon_end_date_PARENTLOCK_TEMPLATENUM.state }}"
         
 - alias: copy_PARENTLOCK_tue_LOCKNAME_TEMPLATENUM
   trigger:
@@ -440,7 +440,7 @@ automation:
       target:
         entity_id: input_datetime.tue_start_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.tue_start_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.tue_start_date_PARENTLOCK_TEMPLATENUM.state }}"
   
 - alias: copy_PARENTLOCK_tue_end_date_LOCKNAME_TEMPLATENUM
   trigger:
@@ -451,7 +451,7 @@ automation:
       target:
         entity_id: input_datetime.tue_end_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.tue_end_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.tue_end_date_PARENTLOCK_TEMPLATENUM.state }}"
 
 - alias: copy_PARENTLOCK_wed_LOCKNAME_TEMPLATENUM
   trigger:
@@ -488,7 +488,7 @@ automation:
       target:
         entity_id: input_datetime.wed_start_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.wed_start_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.wed_start_date_PARENTLOCK_TEMPLATENUM.state }}"
   
 - alias: copy_PARENTLOCK_wed_end_date_LOCKNAME_TEMPLATENUM
   trigger:
@@ -499,7 +499,7 @@ automation:
       target:
         entity_id: input_datetime.wed_end_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.wed_end_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.wed_end_date_PARENTLOCK_TEMPLATENUM.state }}"
 
 - alias: copy_PARENTLOCK_thu_LOCKNAME_TEMPLATENUM
   trigger:
@@ -536,7 +536,7 @@ automation:
       target:
         entity_id: input_datetime.thu_start_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.thu_start_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.thu_start_date_PARENTLOCK_TEMPLATENUM.state }}"
   
 - alias: copy_PARENTLOCK_thu_end_date_LOCKNAME_TEMPLATENUM
   trigger:
@@ -547,7 +547,7 @@ automation:
       target:
         entity_id: input_datetime.thu_end_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.thu_end_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.thu_end_date_PARENTLOCK_TEMPLATENUM.state }}"
 
 - alias: copy_PARENTLOCK_fri_LOCKNAME_TEMPLATENUM
   trigger:
@@ -584,7 +584,7 @@ automation:
       target:
         entity_id: input_datetime.fri_start_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.fri_start_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.fri_start_date_PARENTLOCK_TEMPLATENUM.state }}"
   
 - alias: copy_PARENTLOCK_fri_end_date_LOCKNAME_TEMPLATENUM
   trigger:
@@ -595,7 +595,7 @@ automation:
       target:
         entity_id: input_datetime.fri_end_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.fri_end_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.fri_end_date_PARENTLOCK_TEMPLATENUM.state }}"
 
 - alias: copy_PARENTLOCK_sat_LOCKNAME_TEMPLATENUM
   trigger:
@@ -632,7 +632,7 @@ automation:
       target:
         entity_id: input_datetime.sat_start_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.sat_start_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.sat_start_date_PARENTLOCK_TEMPLATENUM.state }}"
   
 - alias: copy_PARENTLOCK_sat_end_date_LOCKNAME_TEMPLATENUM
   trigger:
@@ -643,7 +643,7 @@ automation:
       target:
         entity_id: input_datetime.sat_end_date_LOCKNAME_TEMPLATENUM
       data:
-        time: "{{ states.input_datetime.sat_end_date_frontdoor_1.state }}"
+        time: "{{ states.input_datetime.sat_end_date_PARENTLOCK_TEMPLATENUM.state }}"
 
 
 ###################  script:  ####################
