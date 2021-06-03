@@ -17,6 +17,7 @@
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
           "child_locks_file": "Path to child locks file",
+          "parent": "Select parent lock",          
           "hide_pins": "Hide PINs in UI?"
         },
         "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
@@ -49,6 +50,7 @@
           "lockname": "Lock Name (ie: frontdoor)",
           "packages_path": "Path to packages directory",
           "child_locks_file": "Path to child locks file",
+          "parent": "Select parent lock",          
           "hide_pins": "Hide PINs in UI?"
         },
         "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
