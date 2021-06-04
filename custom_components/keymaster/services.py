@@ -61,7 +61,7 @@ SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
 
 
-async def _init_child_locks(
+async def init_child_locks(
     hass: HomeAssistant, start: int, slots: int, lockname: str
 ) -> None:
     """Populates child locks values with parent values"""
@@ -357,7 +357,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
             "Package generation complete and all changes have been hot reloaded"
         )
         reset_code_slot_if_pin_unknown(hass, lockname, code_slots, start_from)
-        _init_child_locks(hass, start_from, code_slots, lockname)
+        init_child_locks(hass, start_from, code_slots, lockname)
     else:
         create(
             hass,

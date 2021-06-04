@@ -80,7 +80,13 @@ from .helpers import (
     handle_zwave_js_event,
 )
 from .lock import KeymasterLock
-from .services import add_code, clear_code, generate_package_files, refresh_codes
+from .services import (
+    add_code,
+    clear_code,
+    generate_package_files,
+    refresh_codes,
+    init_child_locks,
+)
 
 # TODO: At some point we should deprecate ozw and zwave and require zwave_js.
 # At that point, we will not need this try except logic and can remove a bunch
@@ -312,6 +318,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                     homeassistant_started_listener, hass, config_entry, locks_to_watch
                 ),
             )
+
+    init_child_locks(
+        hass,
+        config_entry.data[CONF_START],
+        config_entry.data[CONF_SLOTS],
+        config_entry.data[CONF_LOCK_NAME],
+    )
 
     return True
 
