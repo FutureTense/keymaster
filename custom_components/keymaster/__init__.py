@@ -319,7 +319,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 ),
             )
 
-    init_child_locks(
+    await init_child_locks(
         hass,
         config_entry.data[CONF_START],
         config_entry.data[CONF_SLOTS],
@@ -563,6 +563,8 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 DOMAIN,
                 slugify(generate_binary_sensor_name(self._primary_lock.lock_name)),
             )
+        if self.network_sensor is None:
+            raise UpdateFailed
         try:
             network_ready = self.hass.states.get(self.network_sensor)
             if not network_ready:

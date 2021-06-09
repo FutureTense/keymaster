@@ -70,7 +70,7 @@ async def init_child_locks(
     for x in range(start, start + slots):
         the_service = f"{lockname}_copy_from_parent_{x}"
         _LOGGER.debug("Attempting to call script: %s", the_service)
-        call_service(hass, SCRIPT_DOMAIN, the_service)
+        await call_service(hass, SCRIPT_DOMAIN, the_service)
     _LOGGER.debug("Sync complete")
 
 
