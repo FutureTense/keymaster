@@ -5,11 +5,13 @@ from unittest.mock import patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+import uuid
+
 from custom_components.keymaster.config_flow import (
     KeyMasterFlowHandler,
     _get_entities,
     _get_schema,
-    _parse_child_locks_file,
+    _available_parent_locks,
 )
 from custom_components.keymaster.const import CONF_PATH, DOMAIN
 from homeassistant import config_entries, setup
@@ -17,7 +19,11 @@ from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 
 from .common import setup_ozw
 
-from tests.const import CONFIG_DATA
+from tests.const import (
+    CONFIG_DATA,
+    CONFIG_DATA_ALT,
+    CONFIG_DATA_CHILD,
+)
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +42,7 @@ _LOGGER = logging.getLogger(__name__)
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -49,6 +56,7 @@ _LOGGER = logging.getLogger(__name__)
                 "slots": 6,
                 "start_from": 1,
                 "hide_pins": False,
+                "parent": None,
             },
         ),
         (
@@ -61,7 +69,7 @@ _LOGGER = logging.getLogger(__name__)
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
-                "child_locks_file": "test.yaml",
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -74,14 +82,8 @@ _LOGGER = logging.getLogger(__name__)
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
-                "child_locks": {
-                    "test_lock": {
-                        "alarm_level_or_user_code_entity_id": "sensor.test",
-                        "alarm_type_or_access_control_entity_id": "sensor.test",
-                        "lock_entity_id": "lock.test",
-                    }
-                },
                 "hide_pins": False,
+                "parent": None,
             },
         ),
     ],
@@ -89,15 +91,6 @@ _LOGGER = logging.getLogger(__name__)
 async def test_form(input_1, title, data, hass, mock_get_entities):
     """Test we get the form."""
     with patch(
-        "custom_components.keymaster.config_flow.load_yaml",
-        return_value={
-            "test_lock": {
-                "alarm_level_or_user_code_entity_id": "sensor.test",
-                "alarm_type_or_access_control_entity_id": "sensor.test",
-                "lock_entity_id": "lock.test",
-            }
-        },
-    ), patch(
         "custom_components.keymaster.config_flow.os.path.exists", return_value=True
     ), patch(
         "custom_components.keymaster.config_flow.os.path.isfile", return_value=True
@@ -142,6 +135,7 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -154,8 +148,8 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
-                "child_locks_file": "",
                 "hide_pins": False,
+                "parent": None,
             },
         ),
     ],
@@ -200,6 +194,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -212,6 +207,7 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "slots": 4,
                 "start_from": 1,
                 "hide_pins": False,
+                "parent": None,
             },
         ),
     ],
@@ -266,6 +262,7 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -278,6 +275,7 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
                 "slots": 4,
                 "start_from": 1,
                 "hide_pins": False,
+                "parent": None,
             },
         ),
     ],
@@ -332,6 +330,7 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
+                "parent": "(none)",
             },
             "frontdoor",
             {
@@ -344,6 +343,7 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
                 "slots": 4,
                 "start_from": 1,
                 "hide_pins": False,
+                "parent": None,
             },
         ),
     ],
@@ -392,40 +392,6 @@ async def test_options_flow_with_zwavejs(
         assert entry.data.copy() == data
 
 
-def test_parsing_child_locks_file():
-    """Test function that parses child locks file."""
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=False
-    ):
-        assert _parse_child_locks_file("test.yaml")[1] == "Path invalid"
-
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.os.path.isfile", return_value=False
-    ):
-        assert _parse_child_locks_file("test.yaml")[1] == "Must be a file"
-
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.os.path.isfile", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.load_yaml", return_value={}
-    ):
-        assert _parse_child_locks_file("test.yaml")[1] == "File is empty"
-
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.os.path.isfile", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.load_yaml",
-        return_value={"test": {"invalid_key": "test"}},
-    ):
-        assert "File data is invalid: " in _parse_child_locks_file("test.yaml")[1]
-
-
 async def test_get_entities(hass, lock_data):
     """Test function that returns entities by domain."""
     await setup_ozw(hass, fixture=lock_data)
@@ -439,3 +405,44 @@ async def test_get_entities(hass, lock_data):
     assert "lock.smartcode_10_touchpad_electronic_deadbolt_locked" in _get_entities(
         hass, LOCK_DOMAIN
     )
+
+
+async def test_available_parent_locks(hass, lock_data):
+    """Test function that returns previously configured keymaster integrations."""
+    await setup_ozw(hass, fixture=lock_data)
+    _LOGGER.error(_get_schema(hass, CONFIG_DATA_ALT, KeyMasterFlowHandler.DEFAULTS))
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="frontdoor",
+        data=_get_schema(hass, CONFIG_DATA_ALT, KeyMasterFlowHandler.DEFAULTS)(
+            CONFIG_DATA_ALT
+        ),
+        version=2,
+    )
+
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    entry2 = MockConfigEntry(
+        domain=DOMAIN,
+        title="sidedoor",
+        data=_get_schema(hass, CONFIG_DATA_CHILD, KeyMasterFlowHandler.DEFAULTS)(
+            CONFIG_DATA_CHILD
+        ),
+        version=2,
+    )
+
+    entry2.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry2.entry_id)
+    await hass.async_block_till_done()
+
+    fake_entry = uuid.uuid4().hex
+
+    # Only the front door should be listed
+    assert "frontdoor" not in _available_parent_locks(hass, entry.entry_id)
+    assert "frontdoor" in _available_parent_locks(hass, fake_entry)
+
+    # Make sure the door with a parent isn't in the list
+    assert "sidedoor" not in _available_parent_locks(hass, entry2.entry_id)
+    assert "sidedoor" not in _available_parent_locks(hass, fake_entry)

@@ -45,6 +45,7 @@ from .const import (
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_PARENT,
     CONF_PATH,
     CONF_SENSOR_NAME,
     DOMAIN,
@@ -160,6 +161,7 @@ async def generate_keymaster_locks(
         config_entry.data.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
         ent_reg,
         door_sensor_entity_id=config_entry.data[CONF_SENSOR_NAME],
+        parent=config_entry.data[CONF_PARENT],
     )
     child_locks = [
         KeymasterLock(

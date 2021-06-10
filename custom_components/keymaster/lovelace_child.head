@@ -4,6 +4,7 @@
     panel: false
     badges:
       - input_text.LOCKNAME_lockname
+      - input_text.LOCKNAME_PARENTLOCK_parent
       - input_boolean.LOCKNAME_lock_notifications
       - input_boolean.LOCKNAME_dooraccess_notifications
       - input_boolean.LOCKNAME_garageacess_notifications

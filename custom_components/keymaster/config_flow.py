@@ -19,12 +19,11 @@ from homeassistant.util.yaml.loader import load_yaml
 from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_CHILD_LOCKS,
-    CONF_CHILD_LOCKS_FILE,
     CONF_GENERATE,
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_PARENT,
     CONF_PATH,
     CONF_SENSOR_NAME,
     CONF_SLOTS,
@@ -55,27 +54,6 @@ CHILD_LOCKS_SCHEMA = cv.schema_with_slug_keys(
 )
 
 
-def _parse_child_locks_file(file_path: str) -> bool:
-    """Validate that child locks file exists and is valid."""
-    if not os.path.exists(file_path):
-        _LOGGER.error("The child locks file (%s) does not exist", file_path)
-        return None, "Path invalid"
-
-    if not os.path.isfile(file_path):
-        _LOGGER.error("The childs locks path (%s) is not a valid file", file_path)
-        return None, "Must be a file"
-
-    child_locks = load_yaml(file_path)
-    try:
-        CHILD_LOCKS_SCHEMA(child_locks)
-        if not child_locks:
-            return None, "File is empty"
-    except (vol.Invalid, vol.MultipleInvalid) as err:
-        _LOGGER.error("Child locks file data is invalid: %s", err)
-        return None, f"File data is invalid: {err}"
-    return child_locks, None
-
-
 @config_entries.HANDLERS.register(DOMAIN)
 class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for KeyMaster."""
@@ -87,7 +65,6 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         CONF_START: DEFAULT_START,
         CONF_SENSOR_NAME: DEFAULT_DOOR_SENSOR,
         CONF_PATH: DEFAULT_PACKAGES_PATH,
-        CONF_CHILD_LOCKS_FILE: "",
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
@@ -141,8 +118,30 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
     ) -> Dict[str, Any]:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
-            self, "init", "", user_input, self.config_entry.data
+            self,
+            "init",
+            "",
+            user_input,
+            self.config_entry.data,
+            self.config_entry.entry_id,
         )
+
+
+def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
+    """Find other keymaster configurations and list them as posible
+    parent locks if they are not a child lock already."""
+
+    data = ["(none)"]
+    if DOMAIN not in hass.data:
+        return data
+
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if CONF_PARENT not in entry.data.keys() and entry.entry_id != entry_id:
+            data.append(entry.title)
+        elif entry.data[CONF_PARENT] is None and entry.entry_id != entry_id:
+            data.append(entry.title)
+
+    return data
 
 
 def _get_entities(
@@ -170,10 +169,16 @@ def _get_schema(
     hass: HomeAssistant,
     user_input: Optional[Dict[str, Any]],
     default_dict: Dict[str, Any],
+    entry_id: str = None,
 ) -> vol.Schema:
     """Gets a schema using the default_dict as a backup."""
     if user_input is None:
         user_input = {}
+
+    if CONF_PARENT in default_dict.keys() and default_dict[CONF_PARENT] is None:
+        check_dict = default_dict.copy()
+        check_dict.pop(CONF_PARENT, None)
+        default_dict = check_dict
 
     def _get_default(key: str, fallback_default: Any = None) -> None:
         """Gets default value for key."""
@@ -231,8 +236,8 @@ def _get_schema(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
             vol.Optional(
-                CONF_CHILD_LOCKS_FILE, default=_get_default(CONF_CHILD_LOCKS_FILE, "")
-            ): str,
+                CONF_PARENT, default=_get_default(CONF_PARENT, "(none)")
+            ): vol.In(_available_parent_locks(hass, entry_id)),
         },
         extra=ALLOW_EXTRA,
     )
@@ -245,11 +250,12 @@ def _show_config_form(
     errors: Dict[str, str],
     description_placeholders: Dict[str, str],
     defaults: Dict[str, Any] = None,
+    entry_id: str = None,
 ) -> Dict[str, Any]:
     """Show the configuration form to edit location data."""
     return cls.async_show_form(
         step_id=step_id,
-        data_schema=_get_schema(cls.hass, user_input, defaults),
+        data_schema=_get_schema(cls.hass, user_input, defaults, entry_id),
         errors=errors,
         description_placeholders=description_placeholders,
     )
@@ -261,15 +267,19 @@ async def _start_config_flow(
     title: str,
     user_input: Dict[str, Any],
     defaults: Dict[str, Any] = None,
+    entry_id: str = None,
 ):
     """Start a config flow."""
     errors = {}
-    child_locks = None
     description_placeholders = {}
 
     if user_input is not None:
         user_input[CONF_GENERATE] = DEFAULT_GENERATE
         user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
+
+        # Convert (none) to None
+        if user_input[CONF_PARENT] == "(none)":
+            user_input[CONF_PARENT] = None
 
         # Regular flow has an async function, options flow has a sync function
         # so we need to handle them conditionally
@@ -282,33 +292,26 @@ async def _start_config_flow(
         if os.path.isabs(user_input[CONF_PATH]):
             errors[CONF_PATH] = "invalid_path"
 
-        # Validate that child locks file path is relative and follows valid schema
-        if user_input.get(CONF_CHILD_LOCKS_FILE):
-            if os.path.isabs(user_input[CONF_CHILD_LOCKS_FILE]):
-                errors[CONF_CHILD_LOCKS_FILE] = "invalid_path"
-            else:
-                child_locks, err_msg = await cls.hass.async_add_executor_job(
-                    _parse_child_locks_file,
-                    os.path.join(
-                        cls.hass.config.path(),
-                        user_input[CONF_CHILD_LOCKS_FILE],
-                    ),
-                )
-                if err_msg:
-                    errors[CONF_CHILD_LOCKS_FILE] = "invalid_child_locks_file"
-                    description_placeholders["error"] = "invalid_child_locks_file"
-
         # Update options if no errors
         if not errors:
-            user_input.pop(CONF_CHILD_LOCKS_FILE, None)
-            if child_locks:
-                user_input[CONF_CHILD_LOCKS] = child_locks
             return cls.async_create_entry(title=title, data=user_input)
 
         return _show_config_form(
-            cls, step_id, user_input, errors, description_placeholders, defaults
+            cls,
+            step_id,
+            user_input,
+            errors,
+            description_placeholders,
+            defaults,
+            entry_id,
         )
 
     return _show_config_form(
-        cls, step_id, user_input, errors, description_placeholders, defaults
+        cls,
+        step_id,
+        user_input,
+        errors,
+        description_placeholders,
+        defaults,
+        entry_id,
     )

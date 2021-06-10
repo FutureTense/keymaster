@@ -44,6 +44,7 @@ from .const import (
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_PARENT,
     CONF_PATH,
     CONF_SLOTS,
     CONF_START,
@@ -79,7 +80,13 @@ from .helpers import (
     handle_zwave_js_event,
 )
 from .lock import KeymasterLock
-from .services import add_code, clear_code, generate_package_files, refresh_codes
+from .services import (
+    add_code,
+    clear_code,
+    generate_package_files,
+    refresh_codes,
+    init_child_locks,
+)
 
 # TODO: At some point we should deprecate ozw and zwave and require zwave_js.
 # At that point, we will not need this try except logic and can remove a bunch
@@ -158,6 +165,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         updated_config[CONF_PATH] = updated_config[CONF_PATH][num_chars_config_path:]
         # Remove leading slashes
         updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
+
+    if "parent" not in config_entry.data.keys():
+        updated_config[CONF_PARENT] = None
+    elif config_entry.data[CONF_PARENT] == "(none)":
+        updated_config[CONF_PARENT] = None
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
@@ -306,6 +318,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                     homeassistant_started_listener, hass, config_entry, locks_to_watch
                 ),
             )
+
+    await init_child_locks(
+        hass,
+        config_entry.data[CONF_START],
+        config_entry.data[CONF_SLOTS],
+        config_entry.data[CONF_LOCK_NAME],
+    )
 
     return True
 
@@ -544,6 +563,8 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 DOMAIN,
                 slugify(generate_binary_sensor_name(self._primary_lock.lock_name)),
             )
+        if self.network_sensor is None:
+            raise UpdateFailed
         try:
             network_ready = self.hass.states.get(self.network_sensor)
             if not network_ready:

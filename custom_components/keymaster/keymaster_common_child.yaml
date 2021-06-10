@@ -234,3 +234,6 @@ input_text:
   LOCKNAME_lockname:
     initial: LOCKNAME
     name: 'Lock Name'
+  LOCKNAME_PARENTLOCK_parent:
+    initial: PARENTLOCK
+    name: 'Parent lock'

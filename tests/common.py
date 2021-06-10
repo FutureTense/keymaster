@@ -39,7 +39,6 @@ async def setup_ozw(hass, entry=None, fixture=None):
         entry = MockConfigEntry(
             domain=DOMAIN,
             title="Z-Wave",
-            connection_class=config_entries.CONN_CLASS_LOCAL_PUSH,
         )
 
         entry.add_to_hass(hass)
@@ -154,7 +153,6 @@ async def setup_zwave(hass, mock_openzwave):
         {"usb_path": "mock-path", "network_key": "mock-key"},
         "test",
         config_entries.CONN_CLASS_LOCAL_PUSH,
-        system_options={},
     )
     await hass.config_entries.async_forward_entry_setup(config_entry, "lock")
     await hass.async_block_till_done()

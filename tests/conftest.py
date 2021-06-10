@@ -155,7 +155,7 @@ def lock_kwikset_910_fixture(client, lock_kwikset_910_state):
 
 
 @pytest.fixture(name="client")
-def mock_client_fixture(controller_state, version_state):
+def mock_client_fixture(controller_state, version_state, log_config_state):
     """Mock a client."""
 
     with patch(
@@ -178,12 +178,24 @@ def mock_client_fixture(controller_state, version_state):
         client.connect = AsyncMock(side_effect=connect)
         client.listen = AsyncMock(side_effect=listen)
         client.disconnect = AsyncMock(side_effect=disconnect)
-        client.driver = Driver(client, controller_state)
+        client.driver = Driver(client, controller_state, log_config_state)
 
         client.version = VersionInfo.from_message(version_state)
         client.ws_server_url = "ws://test:3000/zjs"
 
         yield client
+
+
+@pytest.fixture(name="log_config_state")
+def log_config_state_fixture():
+    """Return log config state fixture data."""
+    return {
+        "enabled": True,
+        "level": "info",
+        "logToFile": False,
+        "filename": "",
+        "forceConsole": False,
+    }
 
 
 @pytest.fixture(name="integration")
@@ -258,3 +270,16 @@ async def mock_using_ozw():
         "custom_components.keymaster.helpers.async_using_ozw", return_value=True
     ) as mock_using_ozw_helpers:
         yield mock_using_ozw_helpers
+
+
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    yield
+
+
+@pytest.fixture(autouse=True)
+async def mock_init_child_locks():
+    with patch(
+        "custom_components.keymaster.services.init_child_locks", return_value=True
+    ), patch("custom_components.keymaster.init_child_locks"):
+        yield
