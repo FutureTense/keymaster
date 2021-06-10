@@ -136,7 +136,7 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
         return data
 
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if "parent" not in entry.data.keys() and entry.entry_id != entry_id:
+        if CONF_PARENT not in entry.data.keys() and entry.entry_id != entry_id:
             data.append(entry.title)
         elif entry.data[CONF_PARENT] is None and entry.entry_id != entry_id:
             data.append(entry.title)
@@ -174,6 +174,11 @@ def _get_schema(
     """Gets a schema using the default_dict as a backup."""
     if user_input is None:
         user_input = {}
+
+    if CONF_PARENT in default_dict.keys() and default_dict[CONF_PARENT] is None:
+        check_dict = default_dict.copy()
+        check_dict.pop(CONF_PARENT, None)
+        default_dict = check_dict
 
     def _get_default(key: str, fallback_default: Any = None) -> None:
         """Gets default value for key."""

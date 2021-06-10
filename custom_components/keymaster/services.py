@@ -66,11 +66,12 @@ async def init_child_locks(
 ) -> None:
     """Populates child locks values with parent values"""
     # LOCKNAME_copy_from_parent_TEMPLATENUM
-
+    _LOGGER.debug("Syncing lock: %s", lockname)
     for x in range(start, start + slots):
         the_service = f"{lockname}_copy_from_parent_{x}"
         _LOGGER.debug("Attempting to call script: %s", the_service)
-        call_service(hass, SCRIPT_DOMAIN, the_service)
+        await call_service(hass, SCRIPT_DOMAIN, the_service)
+    _LOGGER.debug("Sync complete")
 
 
 async def call_service(
