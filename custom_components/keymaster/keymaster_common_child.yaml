@@ -228,3 +228,12 @@ automation:
       - service: input_number.decrement
         data_template:
           entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event.data.code_slot | string }}"
+
+###############  input_text:  #################
+input_text:
+  LOCKNAME_lockname:
+    initial: LOCKNAME
+    name: 'Lock Name'
+  LOCKNAME_PARENTLOCK_parent:
+    initial: PARENTLOCK
+    name: 'Parent lock'

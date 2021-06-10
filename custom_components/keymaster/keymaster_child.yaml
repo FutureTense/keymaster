@@ -103,7 +103,10 @@ input_boolean:
     name: 'Enforce PIN limit'
   reset_codeslot_LOCKNAME_TEMPLATENUM:
     name: 'Reset Code Slot'
-
+  override_parent_LOCKNAME_TEMPLATENUM:
+    name: 'Override PARENTLOCK TEMPLATENUM'
+    initial: false
+    
   sun_LOCKNAME_TEMPLATENUM:
     name: 'Sunday'
 
@@ -189,11 +192,23 @@ automation:
                 code_slot: >-
                   {{ TEMPLATENUM }}
                   
-                  
+
+- alias: override_parent_LOCKNAME_TEMPLATENUM_state_change
+  trigger:
+    entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+    platform: state
+    to: 'off'
+  action:
+    - service: script.LOCKNAME_copy_from_parent_TEMPLATENUM
+  
 - alias: copy_PARENTLOCK_name_LOCKNAME_TEMPLATENUM
   trigger:
     entity_id: input_text.PARENTLOCK_name_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_text.set_value
       target:
@@ -205,6 +220,10 @@ automation:
   trigger:
     entity_id: input_text.PARENTLOCK_pin_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_text.set_value
       target:
@@ -216,6 +235,10 @@ automation:
   trigger:
     entity_id: input_boolean.enabled_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.enabled_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -229,6 +252,10 @@ automation:
   trigger:
     entity_id: input_boolean.notify_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.notify_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -242,6 +269,10 @@ automation:
   trigger:
     entity_id: input_boolean.reset_codeslot_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.reset_codeslot_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -255,6 +286,10 @@ automation:
   trigger:
     entity_id: input_boolean.accesslimit_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.accesslimit_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -268,6 +303,10 @@ automation:
   trigger:
     entity_id: input_number.accesscount_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
      - service: input_number.set_value
        entity_id: input_number.accesscount_LOCKNAME_TEMPLATENUM
@@ -278,6 +317,10 @@ automation:
   trigger:
     entity_id: input_boolean.daterange_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.daterange_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -291,6 +334,10 @@ automation:
   trigger:
     entity_id: input_datetime.start_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -302,6 +349,10 @@ automation:
   trigger:
     entity_id: input_datetime.end_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -313,6 +364,10 @@ automation:
   trigger:
     entity_id: input_boolean.sun_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.sun_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -326,6 +381,10 @@ automation:
   trigger:
     entity_id: input_boolean.sun_inc_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.sun_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -339,6 +398,10 @@ automation:
   trigger:
     entity_id: input_datetime.sun_start_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -350,6 +413,10 @@ automation:
   trigger:
     entity_id: input_datetime.sun_end_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -361,6 +428,10 @@ automation:
   trigger:
     entity_id: input_boolean.mon_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.mon_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -374,6 +445,10 @@ automation:
   trigger:
     entity_id: input_boolean.mon_inc_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.mon_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -387,6 +462,10 @@ automation:
   trigger:
     entity_id: input_datetime.mon_start_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -398,6 +477,10 @@ automation:
   trigger:
     entity_id: input_datetime.mon_end_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -409,6 +492,10 @@ automation:
   trigger:
     entity_id: input_boolean.tue_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.tue_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -422,6 +509,10 @@ automation:
   trigger:
     entity_id: input_boolean.tue_inc_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.tue_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -435,6 +526,10 @@ automation:
   trigger:
     entity_id: input_datetime.tue_start_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -446,6 +541,10 @@ automation:
   trigger:
     entity_id: input_datetime.tue_end_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -457,6 +556,10 @@ automation:
   trigger:
     entity_id: input_boolean.wed_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.wed_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -470,6 +573,10 @@ automation:
   trigger:
     entity_id: input_boolean.wed_inc_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.wed_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -483,6 +590,10 @@ automation:
   trigger:
     entity_id: input_datetime.wed_start_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -494,6 +605,10 @@ automation:
   trigger:
     entity_id: input_datetime.wed_end_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -505,6 +620,10 @@ automation:
   trigger:
     entity_id: input_boolean.thu_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.thu_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -518,6 +637,10 @@ automation:
   trigger:
     entity_id: input_boolean.thu_inc_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.thu_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -531,6 +654,10 @@ automation:
   trigger:
     entity_id: input_datetime.thu_start_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -542,6 +669,10 @@ automation:
   trigger:
     entity_id: input_datetime.thu_end_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -553,6 +684,10 @@ automation:
   trigger:
     entity_id: input_boolean.fri_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.fri_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -566,6 +701,10 @@ automation:
   trigger:
     entity_id: input_boolean.fri_inc_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.fri_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -579,6 +718,10 @@ automation:
   trigger:
     entity_id: input_datetime.fri_start_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -590,6 +733,10 @@ automation:
   trigger:
     entity_id: input_datetime.fri_end_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -601,6 +748,10 @@ automation:
   trigger:
     entity_id: input_boolean.sat_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.sat_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -614,6 +765,10 @@ automation:
   trigger:
     entity_id: input_boolean.sat_inc_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service_template: >
           {% if (states.input_boolean.sat_inc_PARENTLOCK_TEMPLATENUM.state == 'on') %}
@@ -627,6 +782,10 @@ automation:
   trigger:
     entity_id: input_datetime.sat_start_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
@@ -638,6 +797,10 @@ automation:
   trigger:
     entity_id: input_datetime.sat_end_date_PARENTLOCK_TEMPLATENUM
     platform: state
+  condition:
+    - condition: state
+      entity_id: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
+      state: 'off'
   action:
     - service: input_datetime.set_datetime
       target:
