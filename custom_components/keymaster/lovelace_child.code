@@ -10,6 +10,7 @@
               - entity: input_text.LOCKNAME_pin_TEMPLATENUM
               - entity: input_boolean.enabled_LOCKNAME_TEMPLATENUM
               - entity: input_boolean.notify_LOCKNAME_TEMPLATENUM
+              - type: divider
               - entity: input_boolean.override_parent_LOCKNAME_TEMPLATENUM
               - type: divider
               - entity: sensor.connected_LOCKNAME_TEMPLATENUM
