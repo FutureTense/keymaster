@@ -186,6 +186,9 @@ def _get_schema(
 
     return vol.Schema(
         {
+            vol.Optional(
+                CONF_PARENT, default=_get_default(CONF_PARENT, "(none)")
+            ): vol.In(_available_parent_locks(hass, entry_id)),
             vol.Required(
                 CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
             ): vol.In(_get_entities(hass, LOCK_DOMAIN)),
@@ -235,9 +238,6 @@ def _get_schema(
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
-            vol.Optional(
-                CONF_PARENT, default=_get_default(CONF_PARENT, "(none)")
-            ): vol.In(_available_parent_locks(hass, entry_id)),
         },
         extra=ALLOW_EXTRA,
     )
