@@ -319,12 +319,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 ),
             )
 
-    await init_child_locks(
-        hass,
-        config_entry.data[CONF_START],
-        config_entry.data[CONF_SLOTS],
-        config_entry.data[CONF_LOCK_NAME],
-    )
+    if primary_lock.parent is not None:
+        await init_child_locks(
+            hass,
+            config_entry.data[CONF_START],
+            config_entry.data[CONF_SLOTS],
+            config_entry.data[CONF_LOCK_NAME],
+        )
 
     return True
 
