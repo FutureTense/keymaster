@@ -358,7 +358,8 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
             "Package generation complete and all changes have been hot reloaded"
         )
         reset_code_slot_if_pin_unknown(hass, lockname, code_slots, start_from)
-        init_child_locks(hass, start_from, code_slots, lockname)
+        if primary_lock.parent is not None:
+            init_child_locks(hass, start_from, code_slots, lockname)
     else:
         create(
             hass,
