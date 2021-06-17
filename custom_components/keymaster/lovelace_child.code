@@ -17,8 +17,6 @@
                 state_color: true
               - entity: binary_sensor.active_LOCKNAME_TEMPLATENUM
                 state_color: true
-              - entity: binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM
-                state_color: true
               - type: 'custom:fold-entity-row'
                 head:
                   type: section

@@ -161,7 +161,7 @@ async def test_template_sensors(hass: HomeAssistant):
         await hass.async_block_till_done()
         assert hass.states.get(active_entity).state == STATE_OFF
         assert hass.states.get(pin_synched_entity).state == STATE_OFF
-        assert hass.states.get(connected_entity).state == "Disconnecting"
+        assert hass.states.get(connected_entity).state == "Deleting"
         assert hass.states.get(connected_entity).attributes["icon"] == "mdi:wiper-wash"
 
         # Now lets simulate a lock that has cleared
@@ -183,7 +183,7 @@ async def test_template_sensors(hass: HomeAssistant):
         await hass.async_block_till_done()
         assert hass.states.get(active_entity).state == STATE_ON
         assert hass.states.get(pin_synched_entity).state == STATE_OFF
-        assert hass.states.get(connected_entity).state == "Connecting"
+        assert hass.states.get(connected_entity).state == "Adding"
         assert (
             hass.states.get(connected_entity).attributes["icon"]
             == "mdi:folder-key-network"

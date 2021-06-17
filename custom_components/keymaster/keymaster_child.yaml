@@ -948,13 +948,13 @@ sensor:
           {% if synched %}
             Connected
           {% else %}
-            Connecting
+            Adding
           {% endif %}
         {% else %}
           {% if synched %}
             Disconnected
           {% else %}
-            Disconnecting
+            Deleting
           {% endif %}
         {% endif %}
       icon_template: >
