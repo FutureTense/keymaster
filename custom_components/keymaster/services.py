@@ -43,6 +43,7 @@ from .lock import KeymasterLock
 # of code.
 try:
     from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
+    from homeassistant.components.zwave_js.helpers import async_get_node_from_entity_id
     from homeassistant.components.zwave_js.lock import (
         SERVICE_CLEAR_LOCK_USERCODE,
         SERVICE_SET_LOCK_USERCODE,
@@ -91,16 +92,23 @@ async def refresh_codes(
     hass: HomeAssistant, entity_id: str, instance_id: int = 1
 ) -> None:
     """Refresh lock codes."""
-    node_id = get_node_id(hass, entity_id)
-    if node_id is None:
-        _LOGGER.error(
-            "Problem retrieving node_id from entity %s",
-            entity_id,
-        )
+    ent_reg = async_get_entity_registry(hass)
+    if async_using_zwave_js(entity_id=entity_id, ent_reg=ent_reg):
+        node = async_get_node_from_entity_id(hass, entity_id, ent_reg=ent_reg)
+        await node.async_refresh_cc_values(CommandClass.USER_CODE)
         return
 
+
     # OZW Button press (experimental)
-    if async_using_ozw(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
+    if async_using_ozw(entity_id=entity_id, ent_reg=ent_reg):
+        node_id = get_node_id(hass, entity_id)
+        if node_id is None:
+            _LOGGER.error(
+                "Problem retrieving node_id from entity %s",
+                entity_id,
+            )
+            return
+
         manager = hass.data[OZW_DOMAIN][MANAGER]
         lock_values = manager.get_instance(instance_id).get_node(node_id).values()
         for value in lock_values:
