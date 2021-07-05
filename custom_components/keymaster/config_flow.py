@@ -275,7 +275,7 @@ async def _start_config_flow(
 
     if user_input is not None:
         user_input[CONF_GENERATE] = DEFAULT_GENERATE
-        user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME])
+        user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME].lower())
 
         # Convert (none) to None
         if user_input[CONF_PARENT] == "(none)":
