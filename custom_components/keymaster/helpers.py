@@ -13,6 +13,7 @@ from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
 from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
+from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_DEVICE_ID,
@@ -441,6 +442,7 @@ async def async_reload_package_platforms(hass: HomeAssistant) -> bool:
         IN_TXT_DOMAIN,
         SCRIPT_DOMAIN,
         TEMPLATE_DOMAIN,
+        TIMER_DOMAIN,
     ]:
         try:
             await hass.services.async_call(domain, SERVICE_RELOAD, blocking=True)
