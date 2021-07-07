@@ -212,7 +212,7 @@ automation:
     platform: state
     to: 'off'
   action:
-    - service: script.LOCKNAME_copy_from_parent_TEMPLATENUM
+    - service: script.keymaster_LOCKNAME_copy_from_parent_TEMPLATENUM
   
 - alias: copy_PARENTLOCK_name_LOCKNAME_TEMPLATENUM
   trigger:
@@ -824,7 +824,7 @@ automation:
 
 ###################  script:  ####################
 script:
-  LOCKNAME_copy_from_parent_TEMPLATENUM:
+  keymaster_LOCKNAME_copy_from_parent_TEMPLATENUM:
     sequence:
       - service: automation.trigger
         data: {}

@@ -16,17 +16,20 @@ input_boolean:
     name: CASE_LOCK_NAME Garage Notifications
   LOCKNAME_reset_lock:
     name: CASE_LOCK_NAME reset lock
+  keymaster_LOCKNAME_autolock:
+    name: 'Auto Lock Enabled'
+    icon: mdi:key-remove
 
 ###################  script:  ####################
 script:
-  LOCKNAME_reset_lock:
+  keymaster_LOCKNAME_reset_lock:
     sequence:
-      - service: script.LOCKNAME_manual_notify
+      - service: script.keymaster_LOCKNAME_manual_notify
         data_template:
           title: "reset"
           message: "LOCKNAME"
 
-  LOCKNAME_reset_codeslot:
+  keymaster_LOCKNAME_reset_codeslot:
     mode: parallel
     fields:
       code_slot:
@@ -92,7 +95,7 @@ script:
               data_template:
                 entity_id: "input_boolean.{{ days[repeat.index - 1] }}_inc_LOCKNAME_{{ code_slot | string }}"
 
-  LOCKNAME_refreshnodeinfo:
+  keymaster_LOCKNAME_refreshnodeinfo:
     description:  'Send MQTT RefreshNodeInfo command'
     sequence:
       - service: system_log.write
@@ -106,21 +109,38 @@ script:
             {% set node_id = state_attr('LOCKENTITYNAME','node_id') %}
             { "node": {{ node_id }} }
           retain: true
+
+  keymaster_LOCKNAME_start_timer:
+    sequence:
+      - condition: state
+        entity_id: LOCKENTITYNAME
+        state: 'unlocked'
+      - service: timer.cancel
+        entity_id:  timer.keymaster_LOCKNAME_autolock
+      - service: timer.start
+        data_template:    # if next_dusk happens sooner than next_dawn, then it's daylight
+          entity_id: timer.keymaster_LOCKNAME_autolock
+          duration: >
+            {% if (((as_timestamp(states.sun.sun.attributes.next_dusk)) > (as_timestamp(states.sun.sun.attributes.next_dawn)))) %}
+              {{ states('input_text.keymaster_LOCKNAME_autolock_door_time_night')}}
+            {% else %}
+              {{ states('input_text.keymaster_LOCKNAME_autolock_door_time_day')}}
+            {% endif %}
           
 ###################  automation:  ####################
 automation:
 
-  - alias: reset_codeslot_LOCKNAME
+  - alias: keymaster_CASE_LOCK_NAME Reset Code Slot
     trigger:
       entity_id: INPUT_RESET_CODE_SLOT_HEADER
       platform: state
       to: 'on'
     action:
-      - service: script.LOCKNAME_reset_codeslot
+      - service: script.keymaster_LOCKNAME_reset_codeslot
         data_template:
           code_slot: "{{ trigger.entity_id.split('_')[-1] }}"
 
-  - alias: CASE_LOCK_NAME Lock Notifications
+  - alias: keymaster_CASE_LOCK_NAME Lock Notifications
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
@@ -136,7 +156,7 @@ automation:
           title: CASE_LOCK_NAME
           message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
 
-  - alias: CASE_LOCK_NAME User Notifications
+  - alias: keymaster_CASE_LOCK_NAME User Notifications
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
@@ -156,7 +176,7 @@ automation:
           title: CASE_LOCK_NAME
           message: "{{ trigger.event.data.action_text }} ({{ trigger.event.data.code_slot_name }})"
 
-  - alias: "CASE_LOCK_NAME Door Open and Close"
+  - alias: keymaster_CASE_LOCK_NAME Door Open and Close
     trigger:
       entity_id: DOORSENSORENTITYNAME
       platform: state
@@ -172,7 +192,7 @@ automation:
           title: CASE_LOCK_NAME
           message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
 
-  - alias: CASE_LOCK_NAME Changed Code
+  - alias: keymaster_CASE_LOCK_NAME Changed Code
     trigger:
       entity_id: INPUTLOCKPINHEADER
       platform: state
@@ -195,18 +215,18 @@ automation:
           entity_id: >-
             {{ 'input_boolean.enabled_LOCKNAME_' + trigger.entity_id.split('_')[-1] }}
 
-  - alias: CASE_LOCK_NAME Reset
+  - alias: keymaster_CASE_LOCK_NAME Reset
     trigger:
       entity_id: input_boolean.LOCKNAME_reset_lock
       platform: state
       from: "off"
       to: "on"
     action:
-      - service: script.LOCKNAME_reset_lock
+      - service: script.keymaster_LOCKNAME_reset_lock
       - service: input_boolean.turn_off
         entity_id: input_boolean.LOCKNAME_reset_lock
 
-  - alias: CASE_LOCK_NAME Decrement Access Count
+  - alias: keymaster_CASE_LOCK_NAME Decrement Access Count
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
@@ -229,8 +249,72 @@ automation:
         data_template:
           entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event.data.code_slot | string }}"
 
+  - alias: keymaster_LOCKNAME_locked
+    trigger:
+      entity_id: LOCKENTITYNAME
+      platform: state
+      to: locked
+    action:
+      - service: timer.cancel
+        entity_id: timer.keymaster_LOCKNAME_autolock
+        
+  - alias: keymaster_LOCKNAME_unlocked
+    trigger:
+      entity_id: LOCKENTITYNAME
+      platform: state
+      to: unlocked
+    action:
+      - service: script.turn_on
+        entity_id: script.keymaster_LOCKNAME_start_timer
+      
+  - alias: keymaster_LOCKNAME_timer_finished
+    trigger:
+      platform: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.keymaster_LOCKNAME_autolock
+    action:
+    - service: lock.lock
+      entity_id: LOCKENTITYNAME
+        
+  - alias: keymaster_LOCKNAME_disable_auto_lock
+    trigger:
+      entity_id: input_boolean.keymaster_LOCKNAME_autolock
+      platform: state
+      to: 'off'
+    action:
+      - service: timer.cancel
+        entity_id:
+          - timer.keymaster_LOCKNAME_autolock
+      - service: lock.unlock
+        entity_id: LOCKENTITYNAME
+       
+  - alias: keymaster_LOCKNAME_enable_auto_lock
+    trigger:
+      entity_id: input_boolean.keymaster_LOCKNAME_autolock
+      platform: state
+      to: 'on'
+    action:
+      - service: timer.cancel
+        entity_id:
+          - timer.keymaster_LOCKNAME_autolock
+      - service: lock.lock
+        entity_id: LOCKENTITYNAME
+
 ###############  input_text:  #################
 input_text:
   LOCKNAME_lockname:
     initial: LOCKNAME
     name: 'Lock Name'
+
+  keymaster_LOCKNAME_autolock_door_time_day:
+    name: 'Day Auto Lock HH:MM:SS'
+    initial: '00:15:00'
+  keymaster_LOCKNAME_autolock_door_time_night:
+    name: 'Night Auto Lock HH:MM:SS'
+    initial: '00:05:00'
+
+###################  timer:  ####################
+timer:
+  keymaster_LOCKNAME_autolock:
+    name: 'Auto Lock Timer'
