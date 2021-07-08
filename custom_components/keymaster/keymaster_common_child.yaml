@@ -263,6 +263,10 @@ automation:
       entity_id: LOCKENTITYNAME
       platform: state
       to: unlocked
+    condition:
+      - condition: state
+        entity_id: input_boolean.keymaster_LOCKNAME_autolock
+        state: "on"
     action:
       - service: script.turn_on
         entity_id: script.keymaster_LOCKNAME_start_timer
