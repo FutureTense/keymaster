@@ -18,8 +18,7 @@ from homeassistant import config_entries, setup
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 
 from .common import setup_ozw
-
-from tests.const import (
+from .const import (
     CONFIG_DATA,
     CONFIG_DATA_ALT,
     CONFIG_DATA_CHILD,

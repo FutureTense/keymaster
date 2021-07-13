@@ -419,7 +419,7 @@ async def async_reset_code_slot_if_pin_unknown(
         if pin_state and pin_state.state == STATE_UNKNOWN:
             await hass.services.async_call(
                 "script",
-                f"{lock_name}_reset_codeslot",
+                f"keymaster_{lock_name}_reset_codeslot",
                 {ATTR_CODE_SLOT: x},
                 blocking=True,
             )
