@@ -15,9 +15,9 @@ from homeassistant.components.zwave.const import DATA_NETWORK
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 import homeassistant.util.dt as dt_util
 
-from tests.common import MQTTMessage, async_fire_time_changed, setup_ozw, setup_zwave
-from tests.const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
-from tests.mock.zwave import MockNetwork, MockNode, MockValue
+from .common import MQTTMessage, async_fire_time_changed, setup_ozw, setup_zwave
+from .const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
+from .mock.zwave import MockNetwork, MockNode, MockValue
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 # NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"

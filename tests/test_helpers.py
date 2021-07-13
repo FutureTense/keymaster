@@ -22,8 +22,7 @@ from homeassistant.const import (
 )
 
 from .common import MQTTMessage, async_capture_events, process_fixture_data, setup_ozw
-
-from tests.const import CONFIG_DATA, CONFIG_DATA_910, CONFIG_DATA_REAL
+from .const import CONFIG_DATA, CONFIG_DATA_910, CONFIG_DATA_REAL
 
 SCHLAGE_BE469_LOCK_ENTITY = "lock.touchscreen_deadbolt_current_lock_mode"
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
