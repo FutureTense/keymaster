@@ -564,7 +564,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         return data
 
-    async def async_update_usercodes(self) -> Dict[int, Any]:
+    async def async_update_usercodes(self) -> Dict[Union[str, int], Any]:
         """Wrapper to update usercodes."""
         self.slots = list(
             range(
