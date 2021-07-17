@@ -92,12 +92,11 @@ from .services import (
 # At that point, we will not need this try except logic and can remove a bunch
 # of code.
 try:
-    from zwave_js_server.const import ATTR_ENDPOINT, ATTR_IN_USE, ATTR_USERCODE
+    from zwave_js_server.const import ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.model.node import Node as ZwaveJSNode
     from zwave_js_server.util.lock import (
-        get_usercode,
         get_usercodes,
-        populate_usercode_in_value_db,
+        get_usercode_from_node,
     )
 
     from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
@@ -623,10 +622,11 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             for slot in get_usercodes(node):
                 code_slot = int(slot[ATTR_CODE_SLOT])
                 usercode: Optional[str] = slot[ATTR_USERCODE]
-                endpoint: int = slot[ATTR_ENDPOINT]
-                if usercode is None and code_slot in self.slots:
-                    await populate_usercode_in_value_db(node, code_slot)
-                    usercode = get_usercode(node, code_slot)
+                # Retrieve code slots that haven't been populated yet
+                if slot[ATTR_IN_USE] is None and code_slot in self.slots:
+                    usercode_resp = await get_usercode_from_node(node, code_slot)
+                    usercode = slot[ATTR_USERCODE] = usercode_resp[ATTR_USERCODE]
+                    slot[ATTR_IN_USE] = usercode_resp[ATTR_IN_USE]
                 if not slot[ATTR_IN_USE]:
                     _LOGGER.debug("DEBUG: Code slot %s not enabled", code_slot)
                     data[code_slot] = ""
