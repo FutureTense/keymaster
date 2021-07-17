@@ -92,14 +92,13 @@ from .services import (
 # At that point, we will not need this try except logic and can remove a bunch
 # of code.
 try:
-    from zwave_js_server.const import (
-        ATTR_ENDPOINT,
-        ATTR_IN_USE,
-        ATTR_USERCODE,
-        CommandClass as ZwaveJSCommandClass,
-    )
+    from zwave_js_server.const import ATTR_ENDPOINT, ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.model.node import Node as ZwaveJSNode
-    from zwave_js_server.util.lock import get_usercode, get_usercodes
+    from zwave_js_server.util.lock import (
+        get_usercode,
+        get_usercodes,
+        populate_usercode_in_value_db,
+    )
 
     from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 except (ModuleNotFoundError, ImportError):
@@ -626,9 +625,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 usercode: Optional[str] = slot[ATTR_USERCODE]
                 endpoint: int = slot[ATTR_ENDPOINT]
                 if usercode is None and code_slot in self.slots:
-                    await node.endpoints[endpoint].async_invoke_cc_api(
-                        ZwaveJSCommandClass.USER_CODE, "get", [code_slot]
-                    )
+                    await populate_usercode_in_value_db(node, code_slot)
                     usercode = get_usercode(node, code_slot)
                 if not slot[ATTR_IN_USE]:
                     _LOGGER.debug("DEBUG: Code slot %s not enabled", code_slot)
