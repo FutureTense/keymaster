@@ -226,7 +226,7 @@ class OZWNetworkReadySensor(BaseNetworkReadySensor):
         super().__init__(primary_lock, child_locks, OZW_DOMAIN)
 
     @callback
-    def async_check_ozw_status(self, msg: models.Message):
+    def async_check_ozw_status(self, msg: models.ReceiveMessage):
         """Check OZW network status."""
         if msg.payload:
             try:
