@@ -1,3 +1,3 @@
-homeassistant
+homeassistant>=2021.8.0b1
 python-openzwave-mqtt
 zwave-js-server-python
