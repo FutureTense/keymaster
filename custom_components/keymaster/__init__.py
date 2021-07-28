@@ -622,7 +622,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             for slot in get_usercodes(node):
                 code_slot = int(slot[ATTR_CODE_SLOT])
                 usercode: Optional[str] = slot[ATTR_USERCODE]
-                in_use = slot[ATTR_IN_USE]
+                in_use: Optional[bool] = slot[ATTR_IN_USE]
                 # Retrieve code slots that haven't been populated yet
                 if in_use is None and code_slot in self.slots:
                     usercode_resp = await get_usercode_from_node(node, code_slot)
