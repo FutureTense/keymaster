@@ -12,7 +12,6 @@ from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
-from zwave_js_server.util.lock import get_usercode_from_node
 
 from .const import (
     ATTR_CODE_SLOT,
@@ -33,8 +32,8 @@ from .helpers import (
     async_using_ozw,
     async_using_zwave,
     async_using_zwave_js,
+    get_code_slots_list,
     get_node_id,
-    get_slots_list,
     output_to_file_from_template,
     reload_package_platforms,
     reset_code_slot_if_pin_unknown,
@@ -45,6 +44,8 @@ from .lock import KeymasterLock
 # At that point, we will not need this try except logic and can remove a bunch
 # of code.
 try:
+    from zwave_js_server.util.lock import get_usercode_from_node
+
     from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
     from homeassistant.components.zwave_js.helpers import async_get_node_from_entity_id
     from homeassistant.components.zwave_js.lock import (
@@ -107,7 +108,7 @@ async def refresh_codes(
 
     ent_reg = async_get_entity_registry(hass)
     if async_using_zwave_js(entity_id=entity_id, ent_reg=ent_reg):
-        code_slots = get_slots_list(config_entry.data)
+        code_slots = get_code_slots_list(config_entry.data)
         node = async_get_node_from_entity_id(hass, entity_id, ent_reg=ent_reg)
         for code_slot in code_slots:
             await get_usercode_from_node(node, code_slot)
