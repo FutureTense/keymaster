@@ -49,6 +49,8 @@ from .const import (
     CONF_PARENT,
     CONF_PATH,
     CONF_SENSOR_NAME,
+    CONF_SLOTS,
+    CONF_START,
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     LOCK_STATE_MAP,
@@ -148,6 +150,11 @@ def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
         return state.attributes[ATTR_NODE_ID]
 
     return None
+
+
+def get_slots_list(data: dict[str, int]) -> List[int]:
+    """Get list of slots."""
+    return list(range(data[CONF_START], data[CONF_START] + data[CONF_SLOTS]))
 
 
 async def generate_keymaster_locks(

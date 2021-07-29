@@ -12,12 +12,14 @@ from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from zwave_js_server.util.lock import get_usercode_from_node
 
 from .const import (
     ATTR_CODE_SLOT,
     ATTR_NODE_ID,
     ATTR_USER_CODE,
     CONF_HIDE_PINS,
+    CONF_LOCK_ENTITY_ID,
     CONF_PATH,
     CONF_SLOTS,
     CONF_START,
@@ -32,6 +34,7 @@ from .helpers import (
     async_using_zwave,
     async_using_zwave_js,
     get_node_id,
+    get_slots_list,
     output_to_file_from_template,
     reload_package_platforms,
     reset_code_slot_if_pin_unknown,
@@ -92,12 +95,23 @@ async def refresh_codes(
     hass: HomeAssistant, entity_id: str, instance_id: int = 1
 ) -> None:
     """Refresh lock codes."""
-    ent_reg = async_get_entity_registry(hass)
-    if async_using_zwave_js(entity_id=entity_id, ent_reg=ent_reg):
-        node = async_get_node_from_entity_id(hass, entity_id, ent_reg=ent_reg)
-        await node.async_refresh_cc_values(CommandClass.USER_CODE)
+    try:
+        config_entry = next(
+            config_entry
+            for config_entry in hass.config_entries.async_entries(DOMAIN)
+            if config_entry.data[CONF_LOCK_ENTITY_ID] == entity_id
+        )
+    except StopIteration:
+        _LOGGER.error("Entity ID %s not set up in keymaster", entity_id)
         return
 
+    ent_reg = async_get_entity_registry(hass)
+    if async_using_zwave_js(entity_id=entity_id, ent_reg=ent_reg):
+        code_slots = get_slots_list(config_entry.data)
+        node = async_get_node_from_entity_id(hass, entity_id, ent_reg=ent_reg)
+        for code_slot in code_slots:
+            await get_usercode_from_node(node, code_slot)
+        return
 
     # OZW Button press (experimental)
     if async_using_ozw(entity_id=entity_id, ent_reg=ent_reg):
