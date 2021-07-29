@@ -75,6 +75,7 @@ from .helpers import (
     delete_folder,
     delete_lock_and_base_folder,
     generate_keymaster_locks,
+    get_code_slots_list,
     get_node_id,
     handle_state_change,
     handle_zwave_js_event,
@@ -425,13 +426,8 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
             config_entry.data[CONF_LOCK_NAME],
         )
 
-    start_from = config_entry.data[CONF_START]
-    code_slots = config_entry.data[CONF_SLOTS]
-    old_slots = list(range(start_from, start_from + code_slots))
-
-    start_from = config_entry.options[CONF_START]
-    code_slots = config_entry.options[CONF_SLOTS]
-    new_slots = list(range(start_from, start_from + code_slots))
+    old_slots = get_code_slots_list(config_entry.data)
+    new_slots = get_code_slots_list(config_entry.options)
 
     new_data = config_entry.options.copy()
     new_data.pop(CONF_GENERATE, None)
@@ -564,12 +560,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_update_usercodes(self) -> Dict[Union[str, int], Any]:
         """Wrapper to update usercodes."""
-        self.slots = list(
-            range(
-                self.config_entry.data[CONF_START],
-                self.config_entry.data[CONF_START] + self.config_entry.data[CONF_SLOTS],
-            )
-        )
+        self.slots = get_code_slots_list(self.config_entry.data)
         if not self.network_sensor:
             self.network_sensor = self.ent_reg.async_get_entity_id(
                 "binary_sensor",
