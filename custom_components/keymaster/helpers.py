@@ -152,7 +152,7 @@ def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
     return None
 
 
-def get_code_slots_list(data: dict[str, int]) -> List[int]:
+def get_code_slots_list(data: Dict[str, int]) -> List[int]:
     """Get list of code slots."""
     return list(range(data[CONF_START], data[CONF_START] + data[CONF_SLOTS]))
 
