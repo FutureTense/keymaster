@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Union
 
 import voluptuous as vol
 
-from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -101,6 +100,11 @@ try:
     )
 
     from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
+except (ModuleNotFoundError, ImportError):
+    pass
+
+try:
+    from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 except (ModuleNotFoundError, ImportError):
     pass
 

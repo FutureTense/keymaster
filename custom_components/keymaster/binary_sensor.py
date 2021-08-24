@@ -8,15 +8,6 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.components.mqtt import async_subscribe, models
-from homeassistant.components.ozw.const import DOMAIN as OZW_DOMAIN
-from homeassistant.components.zwave.const import (
-    DATA_NETWORK as ZWAVE_DATA_NETWORK,
-    DOMAIN as ZWAVE_DOMAIN,
-)
-from homeassistant.components.zwave_js.const import (
-    DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
-    DOMAIN as ZWAVE_JS_DOMAIN,
-)
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
@@ -39,6 +30,19 @@ from .helpers import (
 from .lock import KeymasterLock
 
 try:
+    from homeassistant.components.zwave_js.const import (
+        DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
+        DOMAIN as ZWAVE_JS_DOMAIN,
+    )
+except (ModuleNotFoundError, ImportError):
+    pass
+
+try:
+    from homeassistant.components.ozw.const import DOMAIN as OZW_DOMAIN
+except (ModuleNotFoundError, ImportError):
+    pass
+
+try:
     from openzwave.network import ZWaveNetwork
     from pydispatch import dispatcher
 
@@ -52,6 +56,11 @@ try:
         ZWaveNetwork.SIGNAL_NETWORK_FAILED,
         ZWaveNetwork.SIGNAL_NETWORK_STOPPED,
         ZWaveNetwork.SIGNAL_NETWORK_RESETTED,
+    )
+
+    from homeassistant.components.zwave.const import (
+        DATA_NETWORK as ZWAVE_DATA_NETWORK,
+        DOMAIN as ZWAVE_DOMAIN,
     )
 except (ModuleNotFoundError, ImportError):
     pass
