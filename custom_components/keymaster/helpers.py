@@ -10,7 +10,6 @@ from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
 from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
 from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
-from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
@@ -85,6 +84,8 @@ except (ModuleNotFoundError, ImportError):
 # installed on this Home Assistant instance
 try:
     import openzwavemqtt as ozw_module  # noqa: F401
+
+    from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 except (ModuleNotFoundError, ImportError):
     ozw_supported = False
 
