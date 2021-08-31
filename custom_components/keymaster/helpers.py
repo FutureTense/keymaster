@@ -65,7 +65,7 @@ zwave_js_supported = True
 # At that point, we will not need this try except logic and can remove a bunch
 # of code.
 try:
-    from zwave_js_server.const import ATTR_CODE_SLOT
+    from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
 
     from homeassistant.components.zwave_js.const import (
         ATTR_EVENT_LABEL,
