@@ -100,10 +100,10 @@ class CodesSensor(CoordinatorEntity, SensorEntity):
             CHILD_LOCKS
         ]
 
-        self._attr_unique_id = slugify(self.name)
         self._attr_icon = "mdi:lock-smart"
         self._attr_extra_state_attributes = {ATTR_CODE_SLOT: self._code_slot}
         self._attr_name = f"{self.primary_lock.lock_name}: {self._name}"
+        self._attr_unique_id = slugify(self._attr_name)
 
     @property
     def native_value(self) -> Optional[str]:

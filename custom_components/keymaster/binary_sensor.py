@@ -181,7 +181,7 @@ class ZwaveJSNetworkReadySensor(BaseNetworkReadySensor):
             client.connected and client.driver and client.driver.controller
         )
 
-        # If network_ready and self._is_on are both true or both false, we don't need
+        # If network_ready and self._attr_is_on are both true or both false, we don't need
         # to do anything since there is nothing to update.
         if not network_ready ^ self.is_on:
             return
