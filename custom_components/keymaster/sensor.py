@@ -3,6 +3,7 @@ from functools import partial
 import logging
 from typing import Dict, List, Optional
 
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
@@ -82,7 +83,7 @@ async def async_setup_entry(
     return True
 
 
-class CodesSensor(CoordinatorEntity):
+class CodesSensor(CoordinatorEntity, SensorEntity):
     """Representation of a sensor"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
@@ -99,32 +100,17 @@ class CodesSensor(CoordinatorEntity):
             CHILD_LOCKS
         ]
 
-    @property
-    def unique_id(self) -> str:
-        """Return a unique, Home Assistant friendly identifier for this entity."""
-        return slugify(self.name)
+        self._attr_icon = "mdi:lock-smart"
+        self._attr_extra_state_attributes = {ATTR_CODE_SLOT: self._code_slot}
+        self._attr_name = f"{self.primary_lock.lock_name}: {self._name}"
+        self._attr_unique_id = slugify(self._attr_name)
 
     @property
-    def name(self) -> str:
-        """Return the name of the sensor."""
-        return f"{self.primary_lock.lock_name}: {self._name}"
-
-    @property
-    def state(self) -> Optional[str]:
-        """Return the state of the sensor."""
+    def native_value(self) -> Optional[str]:
+        """Return the value reported by the sensor."""
         return self.coordinator.data.get(self._code_slot)
 
     @property
     def available(self) -> bool:
         """Return whether sensor is available or not."""
         return self._code_slot in self.coordinator.data
-
-    @property
-    def icon(self) -> str:
-        """Return the icon."""
-        return "mdi:lock-smart"
-
-    @property
-    def device_state_attributes(self) -> Dict[str, int]:
-        """Return device specific state attributes."""
-        return {ATTR_CODE_SLOT: self._code_slot}
