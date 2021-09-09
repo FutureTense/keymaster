@@ -65,8 +65,6 @@ zwave_js_supported = True
 # At that point, we will not need this try except logic and can remove a bunch
 # of code.
 try:
-    from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
-
     from homeassistant.components.zwave_js.const import (
         ATTR_EVENT_LABEL,
         ATTR_NODE_ID,
@@ -74,6 +72,8 @@ try:
         DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
         DOMAIN as ZWAVE_JS_DOMAIN,
     )
+
+    from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
 except (ModuleNotFoundError, ImportError):
     zwave_js_supported = False
     ATTR_CODE_SLOT = "code_slot"
@@ -83,16 +83,16 @@ except (ModuleNotFoundError, ImportError):
 # and assuming it can't be if the dependent packages aren't
 # installed on this Home Assistant instance
 try:
-    import openzwavemqtt as ozw_module  # noqa: F401
-
     from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
+
+    import openzwavemqtt as ozw_module  # noqa: F401
 except (ModuleNotFoundError, ImportError):
     ozw_supported = False
 
 try:
-    import openzwave as zwave_module  # noqa: F401
-
     from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
+
+    import openzwave as zwave_module  # noqa: F401
 except (ModuleNotFoundError, ImportError):
     zwave_supported = False
 
