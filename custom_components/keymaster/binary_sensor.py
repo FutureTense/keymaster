@@ -43,13 +43,13 @@ except (ModuleNotFoundError, ImportError):
     pass
 
 try:
+    from openzwave.network import ZWaveNetwork
+    from pydispatch import dispatcher
+
     from homeassistant.components.zwave.const import (
         DATA_NETWORK as ZWAVE_DATA_NETWORK,
         DOMAIN as ZWAVE_DOMAIN,
     )
-
-    from openzwave.network import ZWaveNetwork
-    from pydispatch import dispatcher
 
     ZWAVE_NETWORK_READY_STATUSES = (
         ZWaveNetwork.SIGNAL_AWAKE_NODES_QUERIED,

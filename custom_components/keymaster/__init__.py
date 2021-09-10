@@ -84,8 +84,8 @@ from .services import (
     add_code,
     clear_code,
     generate_package_files,
-    refresh_codes,
     init_child_locks,
+    refresh_codes,
 )
 
 # TODO: At some point we should deprecate ozw and zwave and require zwave_js.
@@ -94,10 +94,7 @@ from .services import (
 try:
     from zwave_js_server.const.command_class.lock import ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.model.node import Node as ZwaveJSNode
-    from zwave_js_server.util.lock import (
-        get_usercodes,
-        get_usercode_from_node,
-    )
+    from zwave_js_server.util.lock import get_usercode_from_node, get_usercodes
 
     from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 except (ModuleNotFoundError, ImportError):
