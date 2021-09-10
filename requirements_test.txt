@@ -2,7 +2,7 @@
 aiohttp_cors
 asyncio_mqtt
 pytest
-pytest-homeassistant-custom-component
+pytest-homeassistant-custom-component>=0.4.4
 black
 isort
 pydispatcher
