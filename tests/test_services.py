@@ -16,7 +16,7 @@ from homeassistant.components.zwave import node_entity
 from homeassistant.components.zwave.const import DATA_NETWORK
 
 from .common import setup_ozw, setup_zwave
-from .const import CONFIG_DATA, CONFIG_DATA_910, CONFIG_DATA_ALT, CONFIG_DATA_REAL
+from .const import CONFIG_DATA, CONFIG_DATA_910, CONFIG_DATA_ALT
 from .mock.zwave import MockNetwork, MockNode, MockValue
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
