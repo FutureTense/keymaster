@@ -19,6 +19,8 @@ input_boolean:
   keymaster_LOCKNAME_autolock:
     name: 'Auto Lock Enabled'
     icon: mdi:key-remove
+  keymaster_LOCKNAME_retry:
+    name: 'Auto Lock Enabled'
 
 ###################  script:  ####################
 script:
@@ -95,33 +97,6 @@ script:
               data_template:
                 entity_id: "input_boolean.{{ days[repeat.index - 1] }}_inc_LOCKNAME_{{ code_slot | string }}"
 
-  keymaster_LOCKNAME_refreshnodeinfo:
-    description:  'Send MQTT RefreshNodeInfo command'
-    sequence:
-      - service: system_log.write
-        data_template:
-          message: "LOCKNAME_TEMPLATENUM started noderefreshinfo: {{ now() }}"
-          level: debug  
-      - service: mqtt.publish
-        data:
-          topic: 'OpenZWave/1/command/refreshnodeinfo/'
-          payload: >-
-            {% set node_id = state_attr('LOCKENTITYNAME','node_id') %}
-            { "node": {{ node_id }} }
-          retain: true
-
-  keymaster_LOCKNAME_start_timer_retry:
-    sequence:
-      - condition: state
-        entity_id: LOCKENTITYNAME
-        state: 'unlocked'
-      - service: timer.cancel
-        entity_id:  timer.keymaster_LOCKNAME_autolock
-      - service: timer.start
-        data_template:
-          entity_id: timer.keymaster_LOCKNAME_autolock
-          duration: 00:00:30
-
   keymaster_LOCKNAME_start_timer:
     sequence:
       - condition: state
@@ -138,11 +113,28 @@ script:
             {% else %}
               {{ states('input_text.keymaster_LOCKNAME_autolock_door_time_day')}}
             {% endif %}
+
+  boltchecked_lock_LOCKNAME:
+    sequence:
+      - service: lock.lock
+        data:
+          entity_id: LOCKENTITYNAME
+
+  boltchecked_retry_LOCKNAME:
+    sequence:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.keymaster_LOCKNAME_retry
+      - service: persistent_notification.create
+        data_template:
+          title: 'Unable to lock LOCKNAME'
+          message: >-
+            {{ 'Unable to lock LOCKNAME as the sensor indicates the door is currently opened.  The operation will be automatically retried when the door is closed.'}}
           
 ###################  automation:  ####################
 automation:
 
-  - alias: CASE_LOCK_NAME Reset Code Slot
+  - alias: keymaster_CASE_LOCK_NAME Reset Code Slot
     trigger:
       entity_id: INPUT_RESET_CODE_SLOT_HEADER
       platform: state
@@ -152,7 +144,7 @@ automation:
         data_template:
           code_slot: "{{ trigger.entity_id.split('_')[-1] }}"
 
-  - alias: CASE_LOCK_NAME Lock Notifications
+  - alias: keymaster_CASE_LOCK_NAME Lock Notifications
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
@@ -168,7 +160,7 @@ automation:
           title: CASE_LOCK_NAME
           message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
 
-  - alias: CASE_LOCK_NAME User Notifications
+  - alias: keymaster_CASE_LOCK_NAME User Notifications
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
@@ -188,7 +180,7 @@ automation:
           title: CASE_LOCK_NAME
           message: "{{ trigger.event.data.action_text }} ({{ trigger.event.data.code_slot_name }})"
 
-  - alias: CASE_LOCK_NAME Door Open and Close
+  - alias: keymaster_CASE_LOCK_NAME Door Open and Close
     trigger:
       entity_id: DOORSENSORENTITYNAME
       platform: state
@@ -204,7 +196,7 @@ automation:
           title: CASE_LOCK_NAME
           message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
 
-  - alias: CASE_LOCK_NAME Changed Code
+  - alias: keymaster_CASE_LOCK_NAME Changed Code
     trigger:
       entity_id: INPUTLOCKPINHEADER
       platform: state
@@ -227,7 +219,7 @@ automation:
           entity_id: >-
             {{ 'input_boolean.enabled_LOCKNAME_' + trigger.entity_id.split('_')[-1] }}
 
-  - alias: CASE_LOCK_NAME Reset
+  - alias: keymaster_CASE_LOCK_NAME Reset
     trigger:
       entity_id: input_boolean.LOCKNAME_reset_lock
       platform: state
@@ -238,7 +230,7 @@ automation:
       - service: input_boolean.turn_off
         entity_id: input_boolean.LOCKNAME_reset_lock
 
-  - alias: CASE_LOCK_NAME Decrement Access Count
+  - alias: keymaster_CASE_LOCK_NAME Decrement Access Count
     trigger:
       platform: event
       event_type: keymaster_lock_state_changed
@@ -270,6 +262,34 @@ automation:
       - service: timer.cancel
         entity_id: timer.keymaster_LOCKNAME_autolock
         
+  - alias: keymaster_turn_off_retry_LOCKNAME
+    trigger:
+      entity_id: LOCKENTITYNAME
+      platform: state
+      to: locked
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.keymaster_LOCKNAME_retry
+
+  - alias: keymaster_retry_bolt_closed_LOCKNAME
+    trigger:
+      platform: state
+      entity_id: DOORSENSORENTITYNAME
+      to: 'off'
+    condition:
+      - condition: state
+        entity_id: input_boolean.keymaster_LOCKNAME_retry
+        state: "on"
+    action:
+      - service: persistent_notification.create
+        data_template:
+          title: 'LOCKNAME is closed'
+          message: >-
+            {{ 'The LOCKNAME sensor indicates the door has been closed, re-attempting to lock.'}}
+      - service: lock.lock
+        entity_id: lock.boltchecked_LOCKNAME
+        
   - alias: keymaster_LOCKNAME_unlocked
     trigger:
       entity_id: LOCKENTITYNAME
@@ -282,7 +302,7 @@ automation:
     action:
       - service: script.turn_on
         entity_id: script.keymaster_LOCKNAME_start_timer
-      
+       
   - alias: keymaster_LOCKNAME_timer_finished
     trigger:
       platform: event
@@ -290,19 +310,9 @@ automation:
       event_data:
         entity_id: timer.keymaster_LOCKNAME_autolock
     action:
-    - choose:
-        - conditions:
-            - condition: template
-              value_template: "{{ (states('DOORSENSORENTITYNAME') != 'on') }}"
-          sequence:
-            - service: lock.lock
-              entity_id: LOCKENTITYNAME
-        - conditions:
-            - condition: template
-              value_template: "{{ (states('DOORSENSORENTITYNAME') == 'on') }}"
-          sequence:
-            - service: script.keymaster_LOCKNAME_start_timer_retry
-        
+      - service: lock.lock
+        entity_id: lock.boltchecked_LOCKNAME
+
   - alias: keymaster_LOCKNAME_disable_auto_lock
     trigger:
       entity_id: input_boolean.keymaster_LOCKNAME_autolock
@@ -313,8 +323,8 @@ automation:
         entity_id:
           - timer.keymaster_LOCKNAME_autolock
       - service: lock.unlock
-        entity_id: LOCKENTITYNAME
-       
+        entity_id: lock.boltchecked_LOCKNAME
+
   - alias: keymaster_LOCKNAME_enable_auto_lock
     trigger:
       entity_id: input_boolean.keymaster_LOCKNAME_autolock
@@ -325,6 +335,23 @@ automation:
         entity_id:
           - timer.keymaster_LOCKNAME_autolock
       - service: lock.lock
+        entity_id: lock.boltchecked_LOCKNAME
+
+###################  timer:  ####################
+timer:
+  keymaster_LOCKNAME_autolock:
+    name: 'Auto Lock Timer'
+
+###################  lock:  ####################
+lock:
+  - platform: template
+    name: boltchecked_LOCKNAME
+    value_template: "{{ is_state('LOCKENTITYNAME', 'locked') }}"
+    lock:
+      service: "{{ 'script.boltchecked_lock_LOCKNAME' if (is_state('DOORSENSORENTITYNAME', 'off')) else 'script.boltchecked_retry_LOCKNAME' }}"
+    unlock:
+      service: lock.unlock
+      data:
         entity_id: LOCKENTITYNAME
 
 ###############  input_text:  #################
@@ -332,9 +359,6 @@ input_text:
   LOCKNAME_lockname:
     initial: LOCKNAME
     name: 'Lock Name'
-  LOCKNAME_PARENTLOCK_parent:
-    initial: PARENTLOCK
-    name: 'Parent lock'
 
   keymaster_LOCKNAME_autolock_door_time_day:
     name: 'Day Auto Lock HH:MM:SS'
@@ -343,8 +367,7 @@ input_text:
     name: 'Night Auto Lock HH:MM:SS'
     initial: '00:05:00'
 
-###################  timer:  ####################
-timer:
-  keymaster_LOCKNAME_autolock:
-    name: 'Auto Lock Timer'
-    
+###############  PARENT entities  #################
+LOCKNAME_PARENTLOCK_parent:
+    initial: PARENTLOCK
+    name: 'Parent lock'
