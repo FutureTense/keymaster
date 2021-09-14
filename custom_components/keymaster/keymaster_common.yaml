@@ -302,6 +302,9 @@ automation:
     action:
       - service: script.turn_on
         entity_id: script.keymaster_LOCKNAME_start_timer
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.keymaster_LOCKNAME_retry
       
   - alias: keymaster_LOCKNAME_timer_finished
     trigger:
@@ -312,6 +315,17 @@ automation:
     action:
       - service: lock.lock
         entity_id: lock.boltchecked_LOCKNAME
+
+  - alias: keymaster_LOCKNAME_timer_canceled
+    trigger:
+      platform: event
+      event_type: timer.cancelled
+      event_data:
+        entity_id: timer.keymaster_LOCKNAME_autolock
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.keymaster_LOCKNAME_retry
         
   - alias: keymaster_LOCKNAME_disable_auto_lock
     trigger:
@@ -324,13 +338,19 @@ automation:
           - timer.keymaster_LOCKNAME_autolock
       - service: lock.unlock
         entity_id: lock.boltchecked_LOCKNAME
-       
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.keymaster_LOCKNAME_retry
+        
   - alias: keymaster_LOCKNAME_enable_auto_lock
     trigger:
       entity_id: input_boolean.keymaster_LOCKNAME_autolock
       platform: state
       to: 'on'
     action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.keymaster_LOCKNAME_retry
       - service: timer.cancel
         entity_id:
           - timer.keymaster_LOCKNAME_autolock
