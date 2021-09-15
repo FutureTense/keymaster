@@ -368,7 +368,7 @@ lock:
     name: boltchecked_LOCKNAME
     value_template: "{{ is_state('LOCKENTITYNAME', 'locked') }}"
     lock:
-      service: "{{ 'script.boltchecked_lock_LOCKNAME' if (is_state('DOORSENSORENTITYNAME', 'off')) else 'script.boltchecked_retry_LOCKNAME' }}"
+      service: "{{ 'script.boltchecked_retry_LOCKNAME' if (is_state('DOORSENSORENTITYNAME', 'on')) else 'script.boltchecked_lock_LOCKNAME' }}"
     unlock:
       service: lock.unlock
       data:
