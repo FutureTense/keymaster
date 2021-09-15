@@ -290,11 +290,11 @@ automation:
       - service: lock.lock
         entity_id: lock.boltchecked_LOCKNAME
 
-- alias: keymaster_LOCKNAME_opened
+  - alias: keymaster_LOCKNAME_opened
     trigger:
       platform: state
       entity_id: DOORSENSORENTITYNAME
-        state: "on" 
+      to: 'on'
     action:
       - service: timer.start
         data_template:
