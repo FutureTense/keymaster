@@ -7,6 +7,7 @@ ISSUE_URL = "https://github.com/FutureTense/keymaster"
 PLATFORMS = ["binary_sensor", "sensor"]
 ZWAVE_NETWORK = "zwave_network"
 MANAGER = "manager"
+INTEGRATION = "zwave_integration"
 
 # hass.data attributes
 CHILD_LOCKS = "child_locks"

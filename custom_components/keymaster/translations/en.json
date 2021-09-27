@@ -64,5 +64,11 @@
         "title": "Confirm"
       }
     }
+  },
+  "system_health": {
+    "info": {
+      "zwave_integration": "Zwave Integration",
+      "network_status": "Network Status"
+    }
   }
 }
