@@ -300,6 +300,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
+        await system_health_check(hass, config_entry)
         return True
 
     # We only get here if we are not using zwave_js
