@@ -1,5 +1,5 @@
-homeassistant>=2021.9.5
-homeassistant-pyozw==0.1.10
+homeassistant
+homeassistant-pyozw
 python-openzwave-mqtt
 zwave-js-server-python
 pyserial

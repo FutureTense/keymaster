@@ -33,6 +33,14 @@ def skip_notifications_fixture():
         yield
 
 
+@pytest.fixture(autouse=True)
+async def mock_init_child_locks():
+    with patch(
+        "custom_components.keymaster.services.init_child_locks", return_value=True
+    ), patch("custom_components.keymaster.init_child_locks"):
+        yield
+
+
 @pytest.fixture()
 def mock_get_entities():
     """Mock email data update class values."""
@@ -276,16 +284,3 @@ async def mock_using_ozw():
         "custom_components.keymaster.helpers.async_using_ozw", return_value=True
     ) as mock_using_ozw_helpers:
         yield mock_using_ozw_helpers
-
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    yield
-
-
-@pytest.fixture(autouse=True)
-async def mock_init_child_locks():
-    with patch(
-        "custom_components.keymaster.services.init_child_locks", return_value=True
-    ), patch("custom_components.keymaster.init_child_locks"):
-        yield
