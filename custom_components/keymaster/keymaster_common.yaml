@@ -85,11 +85,11 @@ script:
             - service: input_datetime.set_datetime
               data_template:
                 entity_id: "input_datetime.{{ days[repeat.index - 1] }}_start_date_LOCKNAME_{{ code_slot | string }}"
-                time: "{{ '00:00' | timestamp_custom('%H:%M') }}"
+                time: "{{ now().replace(hour=00,minute=00,second=00) }}"
             - service: input_datetime.set_datetime
               data_template:
                 entity_id: "input_datetime.{{ days[repeat.index - 1] }}_end_date_LOCKNAME_{{ code_slot | string }}"
-                time: "{{ '00:00' | timestamp_custom('%H:%M') }}"
+                time: "{{ now().replace(hour=00,minute=00,second=00) }}"
             - service: input_boolean.turn_on
               data_template:
                 entity_id: "input_boolean.{{ days[repeat.index - 1] }}_LOCKNAME_{{ code_slot | string }}"
