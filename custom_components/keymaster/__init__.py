@@ -50,6 +50,7 @@ from .const import (
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
+    INTEGRATION,
     ISSUE_URL,
     MANAGER,
     PLATFORMS,
@@ -299,6 +300,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
+        await system_health_check(hass, config_entry)
         return True
 
     # We only get here if we are not using zwave_js
@@ -336,7 +338,24 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             config_entry.data[CONF_LOCK_NAME],
         )
 
+    await system_health_check(hass, config_entry)
     return True
+
+
+async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    """Update system health check data."""
+    primary_lock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+
+    if async_using_zwave_js(lock=primary_lock):
+        hass.data[DOMAIN][INTEGRATION] = "zwave_js"
+    elif async_using_ozw(lock=primary_lock):
+        hass.data[DOMAIN][INTEGRATION] = "ozw"
+    elif async_using_zwave(lock=primary_lock):
+        hass.data[DOMAIN][INTEGRATION] = "zwave"
+    else:
+        hass.data[DOMAIN][INTEGRATION] = "unknown"
+
+    hass.data[DOMAIN]["network_sensor"] = slugify(f"{primary_lock.lock_name}: Network")
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
