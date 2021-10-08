@@ -419,6 +419,6 @@ input_text:
     initial: "00:05:00"
 
 ###############  PARENT entities  #################
-LOCKNAME_PARENTLOCK_parent:
-  initial: PARENTLOCK
-  name: "Parent lock"
+  LOCKNAME_PARENTLOCK_parent:
+    initial: PARENTLOCK
+    name: "Parent lock"
