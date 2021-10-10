@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.plugins import enable_custom_integrations
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
@@ -18,12 +19,25 @@ from .mock.zwave import MockNetwork, MockOption
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    yield
+
+
 @pytest.fixture(name="skip_notifications", autouse=True)
 def skip_notifications_fixture():
     """Skip notification calls."""
     with patch("homeassistant.components.persistent_notification.async_create"), patch(
         "homeassistant.components.persistent_notification.async_dismiss"
     ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+async def mock_init_child_locks():
+    with patch(
+        "custom_components.keymaster.services.init_child_locks", return_value=True
+    ), patch("custom_components.keymaster.init_child_locks"):
         yield
 
 
@@ -270,16 +284,3 @@ async def mock_using_ozw():
         "custom_components.keymaster.helpers.async_using_ozw", return_value=True
     ) as mock_using_ozw_helpers:
         yield mock_using_ozw_helpers
-
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    yield
-
-
-@pytest.fixture(autouse=True)
-async def mock_init_child_locks():
-    with patch(
-        "custom_components.keymaster.services.init_child_locks", return_value=True
-    ), patch("custom_components.keymaster.init_child_locks"):
-        yield

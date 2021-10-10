@@ -1,28 +1,23 @@
 """ Test keymaster config flow """
 import logging
 from unittest.mock import patch
+import uuid
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-import uuid
-
 from custom_components.keymaster.config_flow import (
     KeyMasterFlowHandler,
+    _available_parent_locks,
     _get_entities,
     _get_schema,
-    _available_parent_locks,
 )
 from custom_components.keymaster.const import CONF_PATH, DOMAIN
 from homeassistant import config_entries, setup
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 
 from .common import setup_ozw
-from .const import (
-    CONFIG_DATA,
-    CONFIG_DATA_ALT,
-    CONFIG_DATA_CHILD,
-)
+from .const import CONFIG_DATA, CONFIG_DATA_ALT, CONFIG_DATA_CHILD
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 _LOGGER = logging.getLogger(__name__)

@@ -46,6 +46,11 @@ try:
     from openzwave.network import ZWaveNetwork
     from pydispatch import dispatcher
 
+    from homeassistant.components.zwave.const import (
+        DATA_NETWORK as ZWAVE_DATA_NETWORK,
+        DOMAIN as ZWAVE_DOMAIN,
+    )
+
     ZWAVE_NETWORK_READY_STATUSES = (
         ZWaveNetwork.SIGNAL_AWAKE_NODES_QUERIED,
         ZWaveNetwork.SIGNAL_ALL_NODES_QUERIED,
@@ -56,11 +61,6 @@ try:
         ZWaveNetwork.SIGNAL_NETWORK_FAILED,
         ZWaveNetwork.SIGNAL_NETWORK_STOPPED,
         ZWaveNetwork.SIGNAL_NETWORK_RESETTED,
-    )
-
-    from homeassistant.components.zwave.const import (
-        DATA_NETWORK as ZWAVE_DATA_NETWORK,
-        DOMAIN as ZWAVE_DOMAIN,
     )
 except (ModuleNotFoundError, ImportError):
     pass

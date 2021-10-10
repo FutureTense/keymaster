@@ -16,7 +16,7 @@ from homeassistant.components.zwave import node_entity
 from homeassistant.components.zwave.const import DATA_NETWORK
 
 from .common import setup_ozw, setup_zwave
-from .const import CONFIG_DATA, CONFIG_DATA_910
+from .const import CONFIG_DATA, CONFIG_DATA_910, CONFIG_DATA_ALT
 from .mock.zwave import MockNetwork, MockNode, MockValue
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
@@ -69,7 +69,7 @@ async def test_refresh_codes(hass, lock_data, caplog):
     assert state.attributes["node_id"] == 14
 
     entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_ALT, version=2
     )
 
     entry.add_to_hass(hass)
@@ -82,7 +82,7 @@ async def test_refresh_codes(hass, lock_data, caplog):
     await hass.async_block_till_done()
 
     assert (
-        "Problem retrieving node_id from entity lock.kwikset_touchpad_electronic_deadbolt_frontdoor"
+        "Entity ID lock.kwikset_touchpad_electronic_deadbolt_frontdoor not set up in keymaster"
         in caplog.text
     )
 
