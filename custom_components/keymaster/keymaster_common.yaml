@@ -100,6 +100,9 @@ script:
   keymaster_LOCKNAME_start_timer:
     sequence:
       - condition: state
+        entity_id: input_boolean.keymaster_LOCKNAME_autolock
+        state: "on"
+      - condition: state
         entity_id: LOCKENTITYNAME
         state: "unlocked"
       - service: timer.cancel
@@ -289,6 +292,9 @@ automation:
     condition:
       - condition: state
         entity_id: input_boolean.keymaster_LOCKNAME_retry
+        state: "on" 
+      - condition: state
+        entity_id: input_boolean.keymaster_LOCKNAME_autolock
         state: "on"
     action:
       - service: persistent_notification.create
@@ -316,8 +322,8 @@ automation:
               {{ states('input_text.keymaster_LOCKNAME_autolock_door_time_day')}}
             {% endif %}
 
-  - alias: keymaster_LOCKNAME_unlocked
-    id: keymaster_LOCKNAME_unlocked
+  - alias: keymaster_LOCKNAME_unlocked_start_autolock
+    id: keymaster_LOCKNAME_unlocked_start_autolock
     trigger:
       entity_id: LOCKENTITYNAME
       platform: state
@@ -335,6 +341,10 @@ automation:
 
   - alias: keymaster_LOCKNAME_timer_finished
     id: keymaster_LOCKNAME_timer_finished
+    condition:
+      - condition: state
+        entity_id: input_boolean.keymaster_LOCKNAME_autolock
+        state: "on"
     trigger:
       platform: event
       event_type: timer.finished
@@ -366,8 +376,6 @@ automation:
       - service: timer.cancel
         entity_id:
           - timer.keymaster_LOCKNAME_autolock
-      - service: lock.unlock
-        entity_id: lock.boltchecked_LOCKNAME
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.keymaster_LOCKNAME_retry
@@ -385,8 +393,8 @@ automation:
       - service: timer.cancel
         entity_id:
           - timer.keymaster_LOCKNAME_autolock
-      - service: lock.lock
-        entity_id: lock.boltchecked_LOCKNAME
+      - service: script.turn_on
+        entity_id: script.keymaster_LOCKNAME_start_timer
 
 ###################  timer:  ####################
 timer:
