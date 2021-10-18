@@ -2,7 +2,7 @@
 import logging
 import os
 import random
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
@@ -239,7 +239,8 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         (
             hass.config_entries.async_get_entry(entry_id)
             for entry_id in hass.data[DOMAIN]
-            if hass.data[DOMAIN][entry_id][PRIMARY_LOCK].lock_name == name
+            if isinstance(hass.data[DOMAIN][entry_id], Mapping)
+            and hass.data[DOMAIN][entry_id][PRIMARY_LOCK].lock_name == name
         ),
         None,
     )
