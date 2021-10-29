@@ -16,10 +16,9 @@ def async_register(
 async def system_health_info(hass):
     """Get info for the info page."""
     client = hass.data[DOMAIN]
+    network_sensor = f"binary_sensor.{client['network_sensor']}"
 
     return {
         "zwave_integration": client["zwave_integration"],
-        "network_status": hass.states[
-            f"binary_sensor.{client['network_sensor']}"
-        ].state,
+        "network_status": hass.states.get(network_sensor).state,
     }
