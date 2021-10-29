@@ -20,5 +20,5 @@ async def system_health_info(hass):
 
     return {
         "zwave_integration": client["zwave_integration"],
-        "network_status": hass.states.get(network_sensor),
+        "network_status": hass.states.get(network_sensor).state,
     }
