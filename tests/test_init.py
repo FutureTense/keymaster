@@ -282,6 +282,10 @@ async def test_setup_entry_alt_slots(
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
 
+    assert hass.states.get(NETWORK_READY_ENTITY)
+    hass.states.async_set(NETWORK_READY_ENTITY, "on")
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+
     # Fast forward time so that sensors update
     async_fire_time_changed(hass, now + timedelta(seconds=7))
     await hass.async_block_till_done()
