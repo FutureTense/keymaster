@@ -260,6 +260,7 @@ async def test_setup_entry_alt_slots(
     integration,
     mock_zwavejs_get_usercodes,
     mock_using_zwavejs,
+    caplog,
 ):
     """Test setting up entities with alternate slot setting."""
     SENSOR_CHECK = "sensor.frontdoor_code_slot_11"
@@ -288,9 +289,9 @@ async def test_setup_entry_alt_slots(
     await hass.async_block_till_done()
 
     assert "zwave_js" in hass.config.components
+    assert "Z-Wave integration not found" not in caplog.text
 
     assert hass.states.get(NETWORK_READY_ENTITY)
-    hass.states.async_set(NETWORK_READY_ENTITY, "on")
     assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
 
     # Fast forward time so that sensors update
