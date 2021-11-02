@@ -259,6 +259,7 @@ async def test_setup_entry_alt_slots(
     lock_kwikset_910,
     integration,
     mock_zwavejs_get_usercodes,
+    mock_using_zwavejs,
 ):
     """Test setting up entities with alternate slot setting."""
     SENSOR_CHECK = "sensor.frontdoor_code_slot_11"
@@ -284,10 +285,6 @@ async def test_setup_entry_alt_slots(
 
     # Fire the event
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
-    await hass.async_block_till_done()
-
-    # Reload zwave_js
-    assert await hass.config_entries.async_reload(integration.entry_id)
     await hass.async_block_till_done()
 
     assert "zwave_js" in hass.config.components

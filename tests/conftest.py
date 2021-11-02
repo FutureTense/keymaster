@@ -299,3 +299,12 @@ async def mock_zwavejs_get_usercodes():
         "custom_components.keymaster.get_usercodes", return_value=slot_data
     ) as mock_usercodes:
         yield mock_usercodes
+
+
+@pytest.fixture
+async def mock_using_zwavejs():
+    """Fixture to mock using_ozw in helpers"""
+    with patch(
+        "custom_components.keymaster.helpers.async_using_zwave_js", return_value=True
+    ) as mock_using_zwavejs:
+        yield mock_using_zwavejs
