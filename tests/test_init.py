@@ -12,7 +12,7 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.zwave import node_entity
 from homeassistant.components.zwave.const import DATA_NETWORK
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_LOCKED
 import homeassistant.util.dt as dt_util
 
 from .common import MQTTMessage, async_fire_time_changed, setup_ozw, setup_zwave
@@ -20,6 +20,7 @@ from .const import CONFIG_DATA, CONFIG_DATA_ALT_SLOTS, CONFIG_DATA_OLD, CONFIG_D
 from .mock.zwave import MockNetwork, MockNode, MockValue
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
+KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 # NETWORK_READY_ENTITY = "binary_sensor.keymaster_zwave_network_ready"
 
 _LOGGER = logging.getLogger(__name__)
@@ -251,8 +252,16 @@ async def test_update_usercodes_using_ozw(
     assert "DEBUG: Ignoring code slot with * in value." in caplog.text
 
 
-async def test_setup_entry_alt_slots(hass, mock_generate_package_files):
+async def test_setup_entry_alt_slots(
+    hass, mock_generate_package_files, client, lock_kwikset_910, integration
+):
     """Test setting up entities with alternate slot setting."""
+    SENSOR_CHECK = "sensor.frontdoor_code_slot_11"
+
+    node = lock_kwikset_910
+    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
+    assert state
+    assert state.state == STATE_LOCKED
 
     await setup.async_setup_component(hass, "persistent_notification", {})
     entry = MockConfigEntry(
@@ -266,3 +275,6 @@ async def test_setup_entry_alt_slots(hass, mock_generate_package_files):
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 5
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
+
+    assert hass.states.get(SENSOR_CHECK)
+    assert hass.states.get(SENSOR_CHECK).state == "off"
