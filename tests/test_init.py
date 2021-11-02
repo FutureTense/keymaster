@@ -282,6 +282,16 @@ async def test_setup_entry_alt_slots(
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
 
+    # Fire the event
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+
+    # Reload zwave_js
+    assert await hass.config_entries.async_reload(integration.entry_id)
+    await hass.async_block_till_done()
+
+    assert "zwave_js" in hass.config.components
+
     assert hass.states.get(NETWORK_READY_ENTITY)
     hass.states.async_set(NETWORK_READY_ENTITY, "on")
     assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
