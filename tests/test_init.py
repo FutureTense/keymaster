@@ -262,6 +262,7 @@ async def test_setup_entry_alt_slots(
 ):
     """Test setting up entities with alternate slot setting."""
     SENSOR_CHECK = "sensor.frontdoor_code_slot_11"
+    now = dt_util.now()
 
     node = lock_kwikset_910
     state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
@@ -280,6 +281,13 @@ async def test_setup_entry_alt_slots(
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
+
+    assert hass.states.get(NETWORK_READY_ENTITY)
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+
+    # Fast forward time so that sensors update
+    async_fire_time_changed(hass, now + timedelta(seconds=7))
+    await hass.async_block_till_done()
 
     assert hass.states.get(SENSOR_CHECK)
     assert hass.states.get(SENSOR_CHECK).state == "12345"
