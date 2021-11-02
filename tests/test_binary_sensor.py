@@ -115,3 +115,8 @@ async def test_zwavejs_network_ready(
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
+
+    assert "Z-Wave integration not found" not in caplog.text
+
+    assert hass.states.get(NETWORK_READY_ENTITY)
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
