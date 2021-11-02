@@ -16,7 +16,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 import homeassistant.util.dt as dt_util
 
 from .common import MQTTMessage, async_fire_time_changed, setup_ozw, setup_zwave
-from .const import CONFIG_DATA, CONFIG_DATA_OLD, CONFIG_DATA_REAL
+from .const import CONFIG_DATA, CONFIG_DATA_ALT_SLOTS, CONFIG_DATA_OLD, CONFIG_DATA_REAL
 from .mock.zwave import MockNetwork, MockNode, MockValue
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
@@ -249,3 +249,20 @@ async def test_update_usercodes_using_ozw(
     # TODO: Figure out why the code slot sensors are not updating
     assert hass.states.get("sensor.frontdoor_code_slot_1").state == "12345678"
     assert "DEBUG: Ignoring code slot with * in value." in caplog.text
+
+
+async def test_setup_entry_alt_slots(hass, mock_generate_package_files):
+    """Test setting up entities with alternate slot setting."""
+
+    await setup.async_setup_component(hass, "persistent_notification", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_ALT_SLOTS, version=2
+    )
+
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
+    entries = hass.config_entries.async_entries(DOMAIN)
+    assert len(entries) == 1
