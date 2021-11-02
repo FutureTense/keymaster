@@ -283,3 +283,19 @@ async def mock_using_ozw():
         "custom_components.keymaster.helpers.async_using_ozw", return_value=True
     ) as mock_using_ozw_helpers:
         yield mock_using_ozw_helpers
+
+
+@pytest.fixture
+async def mock_zwavejs_get_usercodes():
+    """Fixture to mock get_usercodes."""
+    slot_data = {
+        10: {"code_slot": 10, "usercode": "1234", "in_use": True},
+        11: {"code_slot": 11, "usercode": "12345", "in_use": True},
+        12: {"code_slot": 12, "usercode": "", "in_use": False},
+        13: {"code_slot": 13, "usercode": "", "in_use": False},
+        14: {"code_slot": 14, "usercode": "", "in_use": False},
+    }
+    with patch(
+        "custom_components.keymaster.get_usercodes", return_value=slot_data
+    ) as mock_usercodes:
+        yield mock_usercodes

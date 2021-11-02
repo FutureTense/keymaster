@@ -253,7 +253,12 @@ async def test_update_usercodes_using_ozw(
 
 
 async def test_setup_entry_alt_slots(
-    hass, mock_generate_package_files, client, lock_kwikset_910, integration
+    hass,
+    mock_generate_package_files,
+    client,
+    lock_kwikset_910,
+    integration,
+    mock_zwavejs_get_usercodes,
 ):
     """Test setting up entities with alternate slot setting."""
     SENSOR_CHECK = "sensor.frontdoor_code_slot_11"
@@ -277,4 +282,4 @@ async def test_setup_entry_alt_slots(
     assert len(entries) == 1
 
     assert hass.states.get(SENSOR_CHECK)
-    assert hass.states.get(SENSOR_CHECK).state == "off"
+    assert hass.states.get(SENSOR_CHECK).state == "12345"
