@@ -632,10 +632,12 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
             for slot in get_usercodes(node):
                 code_slot = int(slot[ATTR_CODE_SLOT])
+                if code_slot not in self.slots:
+                    continue
                 usercode: Optional[str] = slot[ATTR_USERCODE]
                 in_use: Optional[bool] = slot[ATTR_IN_USE]
                 # Retrieve code slots that haven't been populated yet
-                if in_use is None and code_slot in self.slots:
+                if in_use is None:
                     usercode_resp = await get_usercode_from_node(node, code_slot)
                     usercode = slot[ATTR_USERCODE] = usercode_resp[ATTR_USERCODE]
                     in_use = slot[ATTR_IN_USE] = usercode_resp[ATTR_IN_USE]
@@ -678,6 +680,8 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
             for value in command_class.values():  # type: ignore
                 code_slot = int(value.index)
+                if code_slot not in self.slots:
+                    continue
                 _LOGGER.debug(
                     "DEBUG: Code slot %s value: %s", code_slot, str(value.value)
                 )
@@ -704,6 +708,8 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
             lock_values = node.get_values(class_id=CommandClass.USER_CODE).values()
             for value in lock_values:
+                if value.index not in self.slots:
+                    continue
                 _LOGGER.debug(
                     "DEBUG: Code slot %s value: %s",
                     str(value.index),
