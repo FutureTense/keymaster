@@ -10,6 +10,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_LOCKED
 from .common import MQTTMessage, setup_ozw
 from .const import CONFIG_DATA, CONFIG_DATA_REAL
 
+
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 
@@ -115,6 +116,12 @@ async def test_zwavejs_network_ready(
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
+
+    # Reload zwave_js
+    assert await hass.config_entries.async_reload(integration.entry_id)
+    await hass.async_block_till_done()
+
+    assert "zwave_js" in hass.config.components
 
     assert "Z-Wave integration not found" not in caplog.text
 
