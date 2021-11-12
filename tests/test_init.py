@@ -280,7 +280,7 @@ async def test_setup_entry_alt_slots(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 6
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 7
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
 
