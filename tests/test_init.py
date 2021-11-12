@@ -263,7 +263,8 @@ async def test_setup_entry_alt_slots(
     caplog,
 ):
     """Test setting up entities with alternate slot setting."""
-    SENSOR_CHECK = "sensor.frontdoor_code_slot_11"
+    SENSOR_CHECK_1 = "sensor.frontdoor_code_slot_11"
+    SENSOR_CHECK_2 = "sensor.frontdoor_code_slot_10"
     now = dt_util.now()
 
     node = lock_kwikset_910
@@ -298,5 +299,10 @@ async def test_setup_entry_alt_slots(
     async_fire_time_changed(hass, now + timedelta(seconds=7))
     await hass.async_block_till_done()
 
-    assert hass.states.get(SENSOR_CHECK)
-    assert hass.states.get(SENSOR_CHECK).state == "12345"
+    assert hass.states.get(SENSOR_CHECK_1)
+    assert hass.states.get(SENSOR_CHECK_1).state == "12345"
+
+    assert hass.states.get(SENSOR_CHECK_2)
+    assert hass.states.get(SENSOR_CHECK_2).state == "1234"
+
+    assert "DEBUG: Code slot 12 not enabled" in caplog.text
