@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.plugins import enable_custom_integrations
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
@@ -284,3 +283,29 @@ async def mock_using_ozw():
         "custom_components.keymaster.helpers.async_using_ozw", return_value=True
     ) as mock_using_ozw_helpers:
         yield mock_using_ozw_helpers
+
+
+@pytest.fixture
+async def mock_zwavejs_get_usercodes():
+    """Fixture to mock get_usercodes."""
+    slot_data = [
+        {"code_slot": 10, "usercode": "1234", "in_use": True},
+        {"code_slot": 11, "usercode": "12345", "in_use": True},
+        {"code_slot": 12, "usercode": "", "in_use": False},
+        {"code_slot": 13, "usercode": "", "in_use": False},
+        {"code_slot": 14, "usercode": "", "in_use": False},
+    ]
+    with patch(
+        "custom_components.keymaster.get_usercodes", return_value=slot_data
+    ) as mock_usercodes:
+        yield mock_usercodes
+
+
+@pytest.fixture
+async def mock_using_zwavejs():
+    """Fixture to mock using_ozw in helpers"""
+    with patch(
+        "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+        return_value=True,
+    ) as mock_using_zwavejs_helpers:
+        yield mock_using_zwavejs_helpers

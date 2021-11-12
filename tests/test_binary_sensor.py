@@ -8,7 +8,7 @@ from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_LOCKED
 
 from .common import MQTTMessage, setup_ozw
-from .const import CONFIG_DATA, CONFIG_DATA_REAL
+from .const import CONFIG_DATA_910, CONFIG_DATA_REAL
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
@@ -99,7 +99,7 @@ async def test_ozw_network_ready(hass, mock_using_ozw, lock_data, caplog):
 
 
 async def test_zwavejs_network_ready(
-    hass, client, lock_kwikset_910, integration, caplog
+    hass, client, lock_kwikset_910, integration, mock_using_zwavejs, caplog
 ):
     """Test zwavejs network ready sensor"""
 
@@ -110,8 +110,15 @@ async def test_zwavejs_network_ready(
 
     # Load the integration with wrong lock entity_id
     config_entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=2
     )
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
+
+    assert "zwave_js" in hass.config.components
+
+    assert hass.states.get(NETWORK_READY_ENTITY)
+    assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+
+    assert "Z-Wave integration not found" not in caplog.text
