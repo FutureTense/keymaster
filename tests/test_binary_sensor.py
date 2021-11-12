@@ -99,7 +99,7 @@ async def test_ozw_network_ready(hass, mock_using_ozw, lock_data, caplog):
 
 
 async def test_zwavejs_network_ready(
-    hass, client, lock_kwikset_910, integration, caplog
+    hass, client, lock_kwikset_910, integration, mock_using_zwavejs, caplog
 ):
     """Test zwavejs network ready sensor"""
 
@@ -116,13 +116,9 @@ async def test_zwavejs_network_ready(
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # Reload zwave_js
-    assert await hass.config_entries.async_reload(integration.entry_id)
-    await hass.async_block_till_done()
-
     assert "zwave_js" in hass.config.components
-
-    assert "Z-Wave integration not found" not in caplog.text
 
     assert hass.states.get(NETWORK_READY_ENTITY)
     assert hass.states.get(NETWORK_READY_ENTITY).state == "on"
+
+    assert "Z-Wave integration not found" not in caplog.text
