@@ -88,7 +88,7 @@ CONFIG_DATA_CHILD = {
 CONFIG_DATA_ALT_SLOTS = {
     "alarm_level_or_user_code_entity_id": "sensor.fake",
     "alarm_type_or_access_control_entity_id": "sensor.fake",
-    "lock_entity_id": "lock.smartcode_10_touchpad_electronic_deadbolt_locked",
+    "lock_entity_id": "lock.smart_code_with_home_connect_technology",
     "lockname": "frontdoor",
     "generate_package": True,
     "packages_path": "packages/keymaster",
