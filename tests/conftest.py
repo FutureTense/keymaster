@@ -305,6 +305,7 @@ async def mock_zwavejs_get_usercodes():
 async def mock_using_zwavejs():
     """Fixture to mock using_ozw in helpers"""
     with patch(
-        "custom_components.keymaster.helpers.async_using_zwave_js", return_value=True
+        "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+        return_value=True,
     ) as mock_using_zwavejs_helpers:
         yield mock_using_zwavejs_helpers
