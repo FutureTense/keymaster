@@ -396,6 +396,26 @@ automation:
       - service: script.turn_on
         entity_id: script.keymaster_LOCKNAME_start_timer
 
+  - alias: keymaster_LOCKNAME_initialize
+    trigger:
+      platform: homeassistant
+      event: start
+    action:
+      - service_template: >
+          {% if states('input_text.keymaster_LOCKNAME_autolock_door_time_day')|length == 0  %}
+            input_text.set_value
+          {% endif %}
+        entity_id: input_text.keymaster_LOCKNAME_autolock_door_time_day
+        data:
+          value: "02:00:00"
+      - service_template: >
+          {% if states('input_text.keymaster_LOCKNAME_autolock_door_time_night')|length == 0  %}
+            input_text.set_value
+          {% endif %}
+        entity_id: input_text.keymaster_LOCKNAME_autolock_door_time_night
+        data:
+          value: "00:05:00"
+
 ###################  timer:  ####################
 timer:
   keymaster_LOCKNAME_autolock:
@@ -421,10 +441,8 @@ input_text:
 
   keymaster_LOCKNAME_autolock_door_time_day:
     name: "Day Auto Lock HH:MM:SS"
-    initial: "00:15:00"
   keymaster_LOCKNAME_autolock_door_time_night:
     name: "Night Auto Lock HH:MM:SS"
-    initial: "00:05:00"
 
   ###############  PARENT entities  #################
   LOCKNAME_PARENTLOCK_parent:
