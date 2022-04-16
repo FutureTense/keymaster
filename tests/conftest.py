@@ -1,7 +1,8 @@
 """ Fixtures for keymaster tests. """
 import asyncio
+import copy
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -9,11 +10,7 @@ from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
 
-from homeassistant.bootstrap import async_setup_component
-from homeassistant.components.zwave import DATA_NETWORK
-
 from .common import load_fixture
-from .mock.zwave import MockNetwork, MockOption
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -119,26 +116,6 @@ def mock_os_path_join():
         yield
 
 
-@pytest.fixture(name="lock_data", scope="session")
-def lock_data_fixture():
-    """Load lock MQTT data and return it."""
-    return load_fixture("lock.json")
-
-
-@pytest.fixture(name="sent_messages")
-def sent_messages_fixture():
-    """Fixture to capture sent messages."""
-    sent_messages = []
-
-    with patch(
-        "homeassistant.components.mqtt.async_publish",
-        side_effect=lambda hass, topic, payload: sent_messages.append(
-            {"topic": topic, "payload": json.loads(payload)}
-        ),
-    ):
-        yield sent_messages
-
-
 @pytest.fixture(name="lock_schlage_be469_state", scope="session")
 def lock_schlage_be469_state_fixture():
     """Load the schlage lock node state fixture data."""
@@ -148,7 +125,7 @@ def lock_schlage_be469_state_fixture():
 @pytest.fixture(name="lock_schlage_be469")
 def lock_schlage_be469_fixture(client, lock_schlage_be469_state):
     """Mock a schlage lock node."""
-    node = Node(client, lock_schlage_be469_state)
+    node = Node(client, copy.deepcopy(lock_schlage_be469_state))
     client.driver.controller.nodes[node.node_id] = node
     return node
 
@@ -162,7 +139,7 @@ def lock_kwikset_910_state_fixture():
 @pytest.fixture(name="lock_kwikset_910")
 def lock_kwikset_910_fixture(client, lock_kwikset_910_state):
     """Mock a schlage lock node."""
-    node = Node(client, lock_kwikset_910_state)
+    node = Node(client, copy.deepcopy(lock_kwikset_910_state))
     client.driver.controller.nodes[node.node_id] = node
     return node
 
@@ -225,7 +202,7 @@ async def integration_fixture(hass, client):
 @pytest.fixture(name="controller_state", scope="session")
 def controller_state_fixture():
     """Load the controller state fixture data."""
-    return json.loads(load_fixture("zwave_js/controller_state.json"))
+    return copy.deepcopy(json.loads(load_fixture("zwave_js/controller_state.json")))
 
 
 @pytest.fixture(name="version_state", scope="session")
@@ -237,52 +214,6 @@ def version_state_fixture():
         "serverVersion": "1.0.0",
         "homeId": 1234567890,
     }
-
-
-@pytest.fixture
-async def zwave_setup(hass):
-    """Zwave setup."""
-    await async_setup_component(hass, "zwave", {"zwave": {}})
-    await hass.async_block_till_done()
-
-
-@pytest.fixture
-async def zwave_setup_ready(hass, zwave_setup):
-    """Zwave setup and set network to ready."""
-    zwave_network = hass.data[DATA_NETWORK]
-    zwave_network.state = MockNetwork.STATE_READY
-
-
-@pytest.fixture
-def mock_openzwave():
-    """Mock out Open Z-Wave."""
-    base_mock = MagicMock()
-    libopenzwave = base_mock.libopenzwave
-    libopenzwave.__file__ = "test"
-    base_mock.network.ZWaveNetwork = MockNetwork
-    base_mock.option.ZWaveOption = MockOption
-
-    with patch.dict(
-        "sys.modules",
-        {
-            "libopenzwave": libopenzwave,
-            "openzwave.option": base_mock.option,
-            "openzwave.network": base_mock.network,
-            "openzwave.group": base_mock.group,
-        },
-    ):
-        yield base_mock
-
-
-@pytest.fixture
-async def mock_using_ozw():
-    """Fixture to mock using_ozw in helpers"""
-    with patch(
-        "custom_components.keymaster.helpers.async_using_zwave_js", return_value=False
-    ), patch(
-        "custom_components.keymaster.helpers.async_using_ozw", return_value=True
-    ) as mock_using_ozw_helpers:
-        yield mock_using_ozw_helpers
 
 
 @pytest.fixture

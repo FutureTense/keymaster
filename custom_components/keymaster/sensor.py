@@ -1,7 +1,7 @@
 """Sensor for keymaster."""
 from functools import partial
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry

@@ -5,6 +5,7 @@
         "homeId": 3245146787,
         "ownNodeId": 1,
         "isSecondary": false,
+        "isControllerNode": true,
         "isUsingHomeIdFromOtherNetwork": false,
         "isSISPresent": true,
         "wasRealPrimary": true,

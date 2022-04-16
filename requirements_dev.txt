@@ -1,6 +1,4 @@
 homeassistant
-homeassistant-pyozw
-python-openzwave-mqtt
 zwave-js-server-python
 pyserial
 pyudev
