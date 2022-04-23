@@ -12,6 +12,7 @@ from custom_components.keymaster.config_flow import (
 )
 from custom_components.keymaster.const import CONF_PATH, DOMAIN
 from homeassistant import config_entries, setup
+from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 
 from .const import CONFIG_DATA
 
