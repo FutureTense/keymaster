@@ -7,6 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.config_flow import (
     KeyMasterFlowHandler,
+    _get_entities,
     _get_schema,
 )
 from custom_components.keymaster.const import CONF_PATH, DOMAIN
