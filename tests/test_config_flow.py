@@ -379,3 +379,17 @@ async def test_options_flow_with_zwavejs(
 
         await hass.async_block_till_done()
         assert entry.data.copy() == data
+
+
+async def test_get_entities(hass, lock_kwikset_910, lock_data):
+    """Test function that returns entities by domain."""
+    # Load ZwaveJS
+    node = lock_kwikset_910
+    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
+    
+    assert state is not None
+    assert state.state == "locked"
+
+    assert KWIKSET_910_LOCK_ENTITY in _get_entities(
+        hass, LOCK_DOMAIN
+    )
