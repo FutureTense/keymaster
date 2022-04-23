@@ -381,7 +381,7 @@ async def test_options_flow_with_zwavejs(
         assert entry.data.copy() == data
 
 
-async def test_get_entities(hass, lock_kwikset_910, client):
+async def test_get_entities(hass, lock_kwikset_910, client ,integration):
     """Test function that returns entities by domain."""
     # Load ZwaveJS
     node = lock_kwikset_910
