@@ -1,11 +1,9 @@
 """Services for keymaster."""
 import logging
 import os
-import random
 from typing import Any, Dict, Mapping
 
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
-from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.persistent_notification import create
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID
@@ -15,7 +13,6 @@ from homeassistant.util import slugify
 
 from .const import (
     ATTR_CODE_SLOT,
-    ATTR_NODE_ID,
     ATTR_USER_CODE,
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
@@ -24,25 +21,18 @@ from .const import (
     CONF_START,
     DEFAULT_HIDE_PINS,
     DOMAIN,
-    MANAGER,
     PRIMARY_LOCK,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
 from .helpers import (
-    async_using_ozw,
-    async_using_zwave,
     async_using_zwave_js,
     get_code_slots_list,
-    get_node_id,
     output_to_file_from_template,
     reload_package_platforms,
     reset_code_slot_if_pin_unknown,
 )
 from .lock import KeymasterLock
 
-# TODO: At some point we should deprecate ozw and zwave and require zwave_js.
-# At that point, we will not need this try except logic and can remove a bunch
-# of code.
 try:
     from zwave_js_server.util.lock import get_usercode_from_node
 
@@ -52,13 +42,6 @@ try:
         SERVICE_CLEAR_LOCK_USERCODE,
         SERVICE_SET_LOCK_USERCODE,
     )
-except (ModuleNotFoundError, ImportError):
-    pass
-
-try:
-    from openzwavemqtt.const import CommandClass
-
-    from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
 except (ModuleNotFoundError, ImportError):
     pass
 
@@ -116,26 +99,6 @@ async def refresh_codes(
             await get_usercode_from_node(node, code_slot)
         return
 
-    # OZW Button press (experimental)
-    if async_using_ozw(entity_id=entity_id, ent_reg=ent_reg):
-        node_id = get_node_id(hass, entity_id)
-        if node_id is None:
-            _LOGGER.error(
-                "Problem retrieving node_id from entity %s",
-                entity_id,
-            )
-            return
-
-        manager = hass.data[OZW_DOMAIN][MANAGER]
-        lock_values = manager.get_instance(instance_id).get_node(node_id).values()
-        for value in lock_values:
-            if value.command_class == CommandClass.USER_CODE and value.index == 255:
-                _LOGGER.debug(
-                    "DEBUG: Index found valueIDKey: %s", int(value.value_id_key)
-                )
-                value.send_value(True)
-                value.send_value(False)
-
 
 async def add_code(
     hass: HomeAssistant, entity_id: str, code_slot: int, usercode: str
@@ -156,24 +119,6 @@ async def add_code(
             hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
         )
 
-    elif async_using_ozw(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
-        servicedata[ATTR_ENTITY_ID] = entity_id
-        await call_service(hass, OZW_DOMAIN, SET_USERCODE, servicedata)
-
-    elif async_using_zwave(
-        entity_id=entity_id, ent_reg=async_get_entity_registry(hass)
-    ):
-        node_id = get_node_id(hass, entity_id)
-        if node_id is None:
-            _LOGGER.error(
-                "Problem retrieving node_id from entity %s",
-                entity_id,
-            )
-            return
-
-        servicedata[ATTR_NODE_ID] = node_id
-        await call_service(hass, LOCK_DOMAIN, SET_USERCODE, servicedata)
-
     else:
         raise ZWaveIntegrationNotConfiguredError
 
@@ -193,43 +138,6 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
             hass, ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
         )
 
-    elif async_using_ozw(entity_id=entity_id, ent_reg=async_get_entity_registry(hass)):
-        # Call dummy slot first as a workaround
-        for curr_code_slot in (999, code_slot):
-            servicedata = {
-                ATTR_ENTITY_ID: entity_id,
-                ATTR_CODE_SLOT: curr_code_slot,
-            }
-            await call_service(hass, OZW_DOMAIN, CLEAR_USERCODE, servicedata)
-
-    elif async_using_zwave(
-        entity_id=entity_id, ent_reg=async_get_entity_registry(hass)
-    ):
-        node_id = get_node_id(hass, entity_id)
-        if node_id is None:
-            _LOGGER.error(
-                "Problem retrieving node_id from entity %s",
-                entity_id,
-            )
-            return
-
-        servicedata = {
-            ATTR_NODE_ID: node_id,
-            ATTR_CODE_SLOT: code_slot,
-        }
-
-        _LOGGER.debug(
-            "Setting code slot value to random PIN as workaround in case clearing code "
-            "doesn't work"
-        )
-        await call_service(
-            hass,
-            LOCK_DOMAIN,
-            SET_USERCODE,
-            {**servicedata, ATTR_USER_CODE: str(random.randint(1000, 9999))},
-        )
-
-        await call_service(hass, LOCK_DOMAIN, CLEAR_USERCODE, servicedata)
     else:
         raise ZWaveIntegrationNotConfiguredError
 
@@ -342,7 +250,9 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "SENSORALARMTYPE": sensoralarmtype,
         "SENSORALARMLEVEL": sensoralarmlevel,
         "HIDE_PINS": hide_pins,
-        "PARENTLOCK": "" if primary_lock.parent is None else slugify(primary_lock.parent),
+        "PARENTLOCK": ""
+        if primary_lock.parent is None
+        else slugify(primary_lock.parent),
     }
 
     # Replace variables in common file

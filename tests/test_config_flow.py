@@ -1,14 +1,12 @@
 """ Test keymaster config flow """
 import logging
 from unittest.mock import patch
-import uuid
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.config_flow import (
     KeyMasterFlowHandler,
-    _available_parent_locks,
     _get_entities,
     _get_schema,
 )
@@ -16,8 +14,7 @@ from custom_components.keymaster.const import CONF_PATH, DOMAIN
 from homeassistant import config_entries, setup
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 
-from .common import setup_ozw
-from .const import CONFIG_DATA, CONFIG_DATA_ALT, CONFIG_DATA_CHILD
+from .const import CONFIG_DATA
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 _LOGGER = logging.getLogger(__name__)
@@ -386,57 +383,15 @@ async def test_options_flow_with_zwavejs(
         assert entry.data.copy() == data
 
 
-async def test_get_entities(hass, lock_data):
+async def test_get_entities(hass, lock_kwikset_910, client ,integration):
     """Test function that returns entities by domain."""
-    await setup_ozw(hass, fixture=lock_data)
-
-    # Make sure the lock loaded
-    state = hass.states.get("lock.smartcode_10_touchpad_electronic_deadbolt_locked")
+    # Load ZwaveJS
+    node = lock_kwikset_910
+    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
+    
     assert state is not None
     assert state.state == "locked"
-    assert state.attributes["node_id"] == 14
 
-    assert "lock.smartcode_10_touchpad_electronic_deadbolt_locked" in _get_entities(
+    assert KWIKSET_910_LOCK_ENTITY in _get_entities(
         hass, LOCK_DOMAIN
     )
-
-
-async def test_available_parent_locks(hass, lock_data):
-    """Test function that returns previously configured keymaster integrations."""
-    await setup_ozw(hass, fixture=lock_data)
-    _LOGGER.error(_get_schema(hass, CONFIG_DATA_ALT, KeyMasterFlowHandler.DEFAULTS))
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="frontdoor",
-        data=_get_schema(hass, CONFIG_DATA_ALT, KeyMasterFlowHandler.DEFAULTS)(
-            CONFIG_DATA_ALT
-        ),
-        version=2,
-    )
-
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    entry2 = MockConfigEntry(
-        domain=DOMAIN,
-        title="sidedoor",
-        data=_get_schema(hass, CONFIG_DATA_CHILD, KeyMasterFlowHandler.DEFAULTS)(
-            CONFIG_DATA_CHILD
-        ),
-        version=2,
-    )
-
-    entry2.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry2.entry_id)
-    await hass.async_block_till_done()
-
-    fake_entry = uuid.uuid4().hex
-
-    # Only the front door should be listed
-    assert "frontdoor" not in _available_parent_locks(hass, entry.entry_id)
-    assert "frontdoor" in _available_parent_locks(hass, fake_entry)
-
-    # Make sure the door with a parent isn't in the list
-    assert "sidedoor" not in _available_parent_locks(hass, entry2.entry_id)
-    assert "sidedoor" not in _available_parent_locks(hass, fake_entry)

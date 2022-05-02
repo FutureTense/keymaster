@@ -14,7 +14,6 @@ from homeassistant.components.sensor import DOMAIN as SENSORS_DOMAIN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import slugify
-from homeassistant.util.yaml.loader import load_yaml
 
 from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,

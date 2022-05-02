@@ -57,13 +57,8 @@ from .const import (
 )
 from .lock import KeymasterLock
 
-zwave_supported = True
-ozw_supported = True
 zwave_js_supported = True
 
-# TODO: At some point we should deprecate ozw and zwave and require zwave_js.
-# At that point, we will not need this try except logic and can remove a bunch
-# of code.
 try:
     from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
 
@@ -78,23 +73,6 @@ except (ModuleNotFoundError, ImportError):
     zwave_js_supported = False
     ATTR_CODE_SLOT = "code_slot"
     from .const import ATTR_NODE_ID
-
-# We try importing these to see if zwave or ozw is supported
-# and assuming it can't be if the dependent packages aren't
-# installed on this Home Assistant instance
-try:
-    import openzwavemqtt as ozw_module  # noqa: F401
-
-    from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-except (ModuleNotFoundError, ImportError):
-    ozw_supported = False
-
-try:
-    import openzwave as zwave_module  # noqa: F401
-
-    from homeassistant.components.zwave.const import DOMAIN as ZWAVE_DOMAIN
-except (ModuleNotFoundError, ImportError):
-    zwave_supported = False
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -119,22 +97,6 @@ def _async_using(
 
 
 @callback
-def async_using_ozw(
-    lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
-) -> bool:
-    """Returns whether the ozw integration is configured."""
-    return ozw_supported and _async_using(OZW_DOMAIN, lock, entity_id, ent_reg)
-
-
-@callback
-def async_using_zwave(
-    lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
-) -> bool:
-    """Returns whether the zwave integration is configured."""
-    return zwave_supported and _async_using(ZWAVE_DOMAIN, lock, entity_id, ent_reg)
-
-
-@callback
 def async_using_zwave_js(
     lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
 ) -> bool:
@@ -142,15 +104,6 @@ def async_using_zwave_js(
     return zwave_js_supported and _async_using(
         ZWAVE_JS_DOMAIN, lock, entity_id, ent_reg
     )
-
-
-def get_node_id(hass: HomeAssistant, entity_id: str) -> Optional[str]:
-    """Get node ID from entity."""
-    state = hass.states.get(entity_id)
-    if state:
-        return state.attributes[ATTR_NODE_ID]
-
-    return None
 
 
 def get_code_slots_list(data: Dict[str, int]) -> List[int]:
