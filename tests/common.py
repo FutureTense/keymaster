@@ -6,6 +6,7 @@ import time
 from unittest.mock import patch
 
 from homeassistant import core as ha
+from homeassistant.core import HomeAssistant
 from homeassistant.util.async_ import run_callback_threadsafe
 import homeassistant.util.dt as date_util
 
