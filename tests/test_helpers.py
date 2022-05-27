@@ -37,7 +37,7 @@ async def test_delete_lock_and_base_folder(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     
-    with patch("custom_components.keymaster.helpers.os", autospec=True) as mock_os:
+    with patch("os", autospec=True) as mock_os:
         delete_lock_and_base_folder(hass, entry)
 
         assert mock_os.rmdir.called
