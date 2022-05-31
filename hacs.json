@@ -2,5 +2,5 @@
   "name": "keymaster",
   "zip_release": true,
   "filename": "keymaster.zip",
-  "homeassistant": "2021.9.0"
+  "homeassistant": "2022.4.0"
 }
