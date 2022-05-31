@@ -5,8 +5,9 @@ import os
 import time
 from unittest.mock import patch
 
+from datetime import datetime
 from homeassistant import core as ha
-from homeassistant.const import EVENT_TIME_CHANGED
+from homeassistant.core import HomeAssistant
 from homeassistant.util.async_ import run_callback_threadsafe
 import homeassistant.util.dt as date_util
 
@@ -49,9 +50,12 @@ def threadsafe_callback_factory(func):
 
 
 @ha.callback
-def async_fire_time_changed(hass, datetime_, fire_all=False):
-    """Fire a time changes event."""
-    hass.bus.async_fire(EVENT_TIME_CHANGED, {"now": date_util.as_utc(datetime_)})
+def async_fire_time_changed(
+    hass: HomeAssistant, datetime_: datetime = None, fire_all: bool = False
+) -> None:
+    """Fire a time changed event."""
+    if datetime_ is None:
+        datetime_ = date_util.utcnow()
 
     for task in list(hass.loop._scheduled):
         if not isinstance(task, asyncio.TimerHandle):

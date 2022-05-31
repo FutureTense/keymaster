@@ -1,17 +1,5 @@
 {
   "name": "keymaster",
-  "domains": [
-    "automation",
-    "binary_sensor",
-    "input_boolean",
-    "input_datetime",
-    "input_number",
-    "input_text",
-    "script",
-    "sensor",
-    "template"
-  ],
-  "iot_class": "Local Polling",
   "zip_release": true,
   "filename": "keymaster.zip",
   "homeassistant": "2021.9.0"

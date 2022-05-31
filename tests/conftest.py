@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from sqlalchemy import false
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
@@ -63,6 +64,16 @@ def mock_listdir():
             "anotherfakefile.mp4",
             "lastfile.txt",
         ],
+    ):
+        yield
+
+
+@pytest.fixture
+def mock_listdir_err():
+    """Fixture to mock listdir."""
+    with patch(
+        "os.listdir",
+        return_value=[],
     ):
         yield
 

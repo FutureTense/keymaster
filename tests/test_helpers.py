@@ -27,11 +27,7 @@ SCHLAGE_BE469_LOCK_ENTITY = "lock.touchscreen_deadbolt_current_lock_mode"
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 
 
-async def test_delete_lock_and_base_folder(
-    hass,
-    mock_osremove,
-    mock_osrmdir,
-):
+async def test_delete_lock_and_base_folder(hass, mock_osrmdir, mock_osremove):
     """Test delete_lock_and_base_folder"""
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
@@ -46,10 +42,22 @@ async def test_delete_lock_and_base_folder(
     assert mock_osrmdir.called
     assert mock_osremove.called
 
-    with patch("custom_components.keymaster.helpers.os", autospec=True) as mock_os:
-        mock_os.listdir.return_value = False
-        delete_lock_and_base_folder(hass, entry)
-        mock_os.rmdir.assert_called_once
+
+async def test_delete_lock_and_base_folder_error(
+    hass, mock_osrmdir, mock_osremove, mock_listdir_err
+):
+    """Test delete_lock_and_base_folder"""
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+    )
+
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    delete_lock_and_base_folder(hass, entry)
+
+    assert mock_osrmdir.called_once
 
 
 async def test_handle_state_change_zwave_js(
