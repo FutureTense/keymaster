@@ -311,6 +311,10 @@ automation:
       platform: state
       entity_id: DOORSENSORENTITYNAME
       to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.keymaster_LOCKNAME_autolock
+        state: "on"
     action:
       - service: timer.start
         data_template:
