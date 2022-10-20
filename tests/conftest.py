@@ -170,7 +170,8 @@ def mock_client_fixture(controller_state, version_state, log_config_state):
 
         async def listen(driver_ready: asyncio.Event) -> None:
             driver_ready.set()
-            await asyncio.sleep(30)
+            listen_block = asyncio.Event()
+            await listen_block.wait()
             assert False, "Listen wasn't canceled!"
 
         async def disconnect():
@@ -207,13 +208,15 @@ async def integration_fixture(hass, client):
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
+    client.async_send_command.reset_mock()
+
     return entry
 
 
 @pytest.fixture(name="controller_state", scope="session")
 def controller_state_fixture():
     """Load the controller state fixture data."""
-    return copy.deepcopy(json.loads(load_fixture("zwave_js/controller_state.json")))
+    return json.loads(load_fixture("zwave_js/controller_state.json"))
 
 
 @pytest.fixture(name="version_state", scope="session")
