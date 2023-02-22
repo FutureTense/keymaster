@@ -6,3 +6,4 @@ pytest-homeassistant-custom-component
 black
 isort
 pydispatcher
+zeroconf

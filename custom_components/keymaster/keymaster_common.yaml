@@ -311,6 +311,10 @@ automation:
       platform: state
       entity_id: DOORSENSORENTITYNAME
       to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.keymaster_LOCKNAME_autolock
+        state: "on"
     action:
       - service: timer.start
         data_template:
@@ -396,6 +400,25 @@ automation:
       - service: script.turn_on
         entity_id: script.keymaster_LOCKNAME_start_timer
 
+  - alias: keymaster_LOCKNAME_initialize
+    id: keymaster_LOCKNAME_initialize
+    trigger:
+      platform: homeassistant
+      event: start
+    action:
+      - service: input_text.set_value
+        entity_id: input_text.keymaster_LOCKNAME_autolock_door_time_day
+        data:
+          value: >
+            {%- set current_value=states('input_text.keymaster_LOCKNAME_autolock_door_time_day') -%}
+            {{ iif(current_value in ['', 'unknown'], "02:00:00", current_value)}}
+      - service: input_text.set_value
+        entity_id: input_text.keymaster_LOCKNAME_autolock_door_time_night
+        data:
+          value: >
+            {%- set current_value=states('input_text.keymaster_LOCKNAME_autolock_door_time_night') -%}
+            {{ iif(current_value in ['', 'unknown'], "00:05:00", current_value)}}
+
 ###################  timer:  ####################
 timer:
   keymaster_LOCKNAME_autolock:
@@ -421,7 +444,5 @@ input_text:
 
   keymaster_LOCKNAME_autolock_door_time_day:
     name: "Day Auto Lock HH:MM:SS"
-    initial: "00:15:00"
   keymaster_LOCKNAME_autolock_door_time_night:
     name: "Night Auto Lock HH:MM:SS"
-    initial: "00:05:00"

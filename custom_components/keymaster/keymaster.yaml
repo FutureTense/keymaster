@@ -147,8 +147,8 @@ input_boolean:
 
 ################  automation: #################
 automation:
-  - alias: turn_on_access_limit_LOCKNAME_TEMPLATENUM
-    id: turn_on_access_limit_LOCKNAME_TEMPLATENUM
+  - alias: keymaster_turn_on_access_limit_LOCKNAME_TEMPLATENUM
+    id: keymaster_turn_on_access_limit_LOCKNAME_TEMPLATENUM
     trigger:
       platform: state
       entity_id: input_number.accesscount_LOCKNAME_TEMPLATENUM
@@ -161,8 +161,8 @@ automation:
       target:
         entity_id: input_boolean.accesslimit_LOCKNAME_TEMPLATENUM
 
-  - alias: synchronize_codeslot_LOCKNAME_TEMPLATENUM
-    id: synchronize_codeslot_LOCKNAME_TEMPLATENUM
+  - alias: keymaster_synchronize_codeslot_LOCKNAME_TEMPLATENUM
+    id: keymaster_synchronize_codeslot_LOCKNAME_TEMPLATENUM
     initial_state: true
     mode: single
     max_exceeded: silent

@@ -1,20 +1,17 @@
 """ Fixtures for keymaster tests. """
 import asyncio
+import copy
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.plugins import enable_custom_integrations
+from sqlalchemy import false
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
 
-from homeassistant.bootstrap import async_setup_component
-from homeassistant.components.zwave import DATA_NETWORK
-
 from .common import load_fixture
-from .mock.zwave import MockNetwork, MockOption
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -72,6 +69,16 @@ def mock_listdir():
 
 
 @pytest.fixture
+def mock_listdir_err():
+    """Fixture to mock listdir."""
+    with patch(
+        "os.listdir",
+        return_value=[],
+    ):
+        yield
+
+
+@pytest.fixture
 def mock_osremove():
     """Fixture to mock remove file."""
     with patch("os.remove", return_value=True) as mock_osremove:
@@ -120,26 +127,6 @@ def mock_os_path_join():
         yield
 
 
-@pytest.fixture(name="lock_data", scope="session")
-def lock_data_fixture():
-    """Load lock MQTT data and return it."""
-    return load_fixture("lock.json")
-
-
-@pytest.fixture(name="sent_messages")
-def sent_messages_fixture():
-    """Fixture to capture sent messages."""
-    sent_messages = []
-
-    with patch(
-        "homeassistant.components.mqtt.async_publish",
-        side_effect=lambda hass, topic, payload: sent_messages.append(
-            {"topic": topic, "payload": json.loads(payload)}
-        ),
-    ):
-        yield sent_messages
-
-
 @pytest.fixture(name="lock_schlage_be469_state", scope="session")
 def lock_schlage_be469_state_fixture():
     """Load the schlage lock node state fixture data."""
@@ -149,7 +136,7 @@ def lock_schlage_be469_state_fixture():
 @pytest.fixture(name="lock_schlage_be469")
 def lock_schlage_be469_fixture(client, lock_schlage_be469_state):
     """Mock a schlage lock node."""
-    node = Node(client, lock_schlage_be469_state)
+    node = Node(client, copy.deepcopy(lock_schlage_be469_state))
     client.driver.controller.nodes[node.node_id] = node
     return node
 
@@ -163,7 +150,7 @@ def lock_kwikset_910_state_fixture():
 @pytest.fixture(name="lock_kwikset_910")
 def lock_kwikset_910_fixture(client, lock_kwikset_910_state):
     """Mock a schlage lock node."""
-    node = Node(client, lock_kwikset_910_state)
+    node = Node(client, copy.deepcopy(lock_kwikset_910_state))
     client.driver.controller.nodes[node.node_id] = node
     return node
 
@@ -226,7 +213,7 @@ async def integration_fixture(hass, client):
 @pytest.fixture(name="controller_state", scope="session")
 def controller_state_fixture():
     """Load the controller state fixture data."""
-    return json.loads(load_fixture("zwave_js/controller_state.json"))
+    return copy.deepcopy(json.loads(load_fixture("zwave_js/controller_state.json")))
 
 
 @pytest.fixture(name="version_state", scope="session")
@@ -241,46 +228,26 @@ def version_state_fixture():
 
 
 @pytest.fixture
-async def zwave_setup(hass):
-    """Zwave setup."""
-    await async_setup_component(hass, "zwave", {"zwave": {}})
-    await hass.async_block_till_done()
+async def mock_zwavejs_get_usercodes():
+    """Fixture to mock get_usercodes."""
+    slot_data = [
+        {"code_slot": 10, "usercode": "1234", "in_use": True},
+        {"code_slot": 11, "usercode": "12345", "in_use": True},
+        {"code_slot": 12, "usercode": "", "in_use": False},
+        {"code_slot": 13, "usercode": "", "in_use": False},
+        {"code_slot": 14, "usercode": "", "in_use": False},
+    ]
+    with patch(
+        "custom_components.keymaster.get_usercodes", return_value=slot_data
+    ) as mock_usercodes:
+        yield mock_usercodes
 
 
 @pytest.fixture
-async def zwave_setup_ready(hass, zwave_setup):
-    """Zwave setup and set network to ready."""
-    zwave_network = hass.data[DATA_NETWORK]
-    zwave_network.state = MockNetwork.STATE_READY
-
-
-@pytest.fixture
-def mock_openzwave():
-    """Mock out Open Z-Wave."""
-    base_mock = MagicMock()
-    libopenzwave = base_mock.libopenzwave
-    libopenzwave.__file__ = "test"
-    base_mock.network.ZWaveNetwork = MockNetwork
-    base_mock.option.ZWaveOption = MockOption
-
-    with patch.dict(
-        "sys.modules",
-        {
-            "libopenzwave": libopenzwave,
-            "openzwave.option": base_mock.option,
-            "openzwave.network": base_mock.network,
-            "openzwave.group": base_mock.group,
-        },
-    ):
-        yield base_mock
-
-
-@pytest.fixture
-async def mock_using_ozw():
+async def mock_using_zwavejs():
     """Fixture to mock using_ozw in helpers"""
     with patch(
-        "custom_components.keymaster.helpers.async_using_zwave_js", return_value=False
-    ), patch(
-        "custom_components.keymaster.helpers.async_using_ozw", return_value=True
-    ) as mock_using_ozw_helpers:
-        yield mock_using_ozw_helpers
+        "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+        return_value=True,
+    ) as mock_using_zwavejs_helpers:
+        yield mock_using_zwavejs_helpers

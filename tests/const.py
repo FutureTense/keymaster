@@ -84,3 +84,15 @@ CONFIG_DATA_CHILD = {
     "start_from": 1,
     "parent": "frontdoor",
 }
+
+CONFIG_DATA_ALT_SLOTS = {
+    "alarm_level_or_user_code_entity_id": "sensor.fake",
+    "alarm_type_or_access_control_entity_id": "sensor.fake",
+    "lock_entity_id": "lock.smart_code_with_home_connect_technology",
+    "lockname": "frontdoor",
+    "generate_package": True,
+    "packages_path": "packages/keymaster",
+    "sensorname": "binary_sensor.fake",
+    "slots": 5,
+    "start_from": 10,
+}

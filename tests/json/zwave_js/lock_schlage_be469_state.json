@@ -11,6 +11,7 @@
         "mandatoryControlCCs": []
     },
     "isListening": false,
+    "isControllerNode": false,
     "isFrequentListening": true,
     "isRouting": true,
     "maxBaudRate": 40000,

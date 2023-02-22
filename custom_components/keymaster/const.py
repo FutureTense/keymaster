@@ -5,8 +5,6 @@ DOMAIN = "keymaster"
 VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
 PLATFORMS = ["binary_sensor", "sensor"]
-ZWAVE_NETWORK = "zwave_network"
-MANAGER = "manager"
 INTEGRATION = "zwave_integration"
 
 # hass.data attributes
@@ -62,21 +60,15 @@ DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"
 DEFAULT_ALARM_TYPE_SENSOR = "sensor.fake"
 DEFAULT_HIDE_PINS = False
 
-# OZW constants
-OZW_STATUS_TOPIC = "OpenZWave/1/status/"
-OZW_STATUS_KEY = "Status"
-OZW_READY_STATUSES = [
-    "driverAwakeNodesQueried",
-    "driverAllNodesQueriedSomeDead",
-    "driverAllNodesQueried",
-]
-
 # Action maps
+# FE599 locks only send alarmType 16 for all lock/unlock commands
+# see issue #281
 ACTION_MAP = {
     ALARM_TYPE: {
         999: "Kwikset",
         0: "No Status Reported",
         9: "Lock Jammed",
+        16: "User Access", # FE599 code
         17: "Keypad Lock Jammed",
         21: "Manual Lock",
         22: "Manual Unlock",

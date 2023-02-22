@@ -28,6 +28,7 @@
     },
     "isListening": false,
     "isFrequentListening": true,
+    "isControllerNode": false,
     "isRouting": true,
     "maxBaudRate": 40000,
     "isSecure": true,

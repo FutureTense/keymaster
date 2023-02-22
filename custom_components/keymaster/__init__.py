@@ -30,7 +30,6 @@ from .binary_sensor import generate_binary_sensor_name
 from .const import (
     ATTR_CODE_SLOT,
     ATTR_NAME,
-    ATTR_NODE_ID,
     ATTR_USER_CODE,
     CHILD_LOCKS,
     CONF_ALARM_LEVEL,
@@ -52,12 +51,10 @@ from .const import (
     DOMAIN,
     INTEGRATION,
     ISSUE_URL,
-    MANAGER,
     PLATFORMS,
     PRIMARY_LOCK,
     UNSUB_LISTENERS,
     VERSION,
-    ZWAVE_NETWORK,
 )
 from .exceptions import (
     NoNodeSpecifiedError,
@@ -69,14 +66,11 @@ from .exceptions import (
 from .helpers import (
     async_reload_package_platforms,
     async_reset_code_slot_if_pin_unknown,
-    async_using_ozw,
-    async_using_zwave,
     async_using_zwave_js,
     delete_folder,
     delete_lock_and_base_folder,
     generate_keymaster_locks,
     get_code_slots_list,
-    get_node_id,
     handle_state_change,
     handle_zwave_js_event,
 )
@@ -89,27 +83,12 @@ from .services import (
     refresh_codes,
 )
 
-# TODO: At some point we should deprecate ozw and zwave and require zwave_js.
-# At that point, we will not need this try except logic and can remove a bunch
-# of code.
 try:
     from zwave_js_server.const.command_class.lock import ATTR_IN_USE, ATTR_USERCODE
     from zwave_js_server.model.node import Node as ZwaveJSNode
     from zwave_js_server.util.lock import get_usercode_from_node, get_usercodes
 
     from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
-except (ModuleNotFoundError, ImportError):
-    pass
-
-try:
-    from homeassistant.components.ozw import DOMAIN as OZW_DOMAIN
-except (ModuleNotFoundError, ImportError):
-    pass
-
-try:
-    from openzwavemqtt.const import CommandClass
-    from openzwavemqtt.exceptions import NotFoundError
-    from openzwavemqtt.util.node import get_node_from_manager
 except (ModuleNotFoundError, ImportError):
     pass
 
@@ -297,23 +276,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 functools.partial(handle_zwave_js_event, hass, config_entry),
             )
         )
-        await system_health_check(hass, config_entry)
-        return True
-
-    # We only get here if we are not using zwave_js
 
     # Check if we need to check alarm type/alarm level sensors, in which case
     # we need to listen for lock state changes
     locks_to_watch = []
     for lock in [primary_lock, *child_locks]:
-        if (
-            lock.alarm_level_or_user_code_entity_id
-            not in (
-                None,
-                "sensor.fake",
-            )
-            and lock.alarm_type_or_access_control_entity_id not in (None, "sensor.fake")
-        ):
+        if lock.alarm_level_or_user_code_entity_id not in (
+            None,
+            "sensor.fake",
+        ) and lock.alarm_type_or_access_control_entity_id not in (None, "sensor.fake"):
             locks_to_watch.append(lock)
 
     if locks_to_watch:
@@ -345,10 +316,6 @@ async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
     if async_using_zwave_js(lock=primary_lock):
         hass.data[DOMAIN][INTEGRATION] = "zwave_js"
-    elif async_using_ozw(lock=primary_lock):
-        hass.data[DOMAIN][INTEGRATION] = "ozw"
-    elif async_using_zwave(lock=primary_lock):
-        hass.data[DOMAIN][INTEGRATION] = "zwave"
     else:
         hass.data[DOMAIN][INTEGRATION] = "unknown"
 
@@ -503,14 +470,10 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     # sensors
     locks_to_watch = []
     for lock in [primary_lock, *child_locks]:
-        if (
-            lock.alarm_level_or_user_code_entity_id
-            not in (
-                None,
-                "sensor.fake",
-            )
-            and lock.alarm_type_or_access_control_entity_id not in (None, "sensor.fake")
-        ):
+        if lock.alarm_level_or_user_code_entity_id not in (
+            None,
+            "sensor.fake",
+        ) and lock.alarm_type_or_access_control_entity_id not in (None, "sensor.fake"):
             locks_to_watch.append(lock)
 
     if locks_to_watch:
@@ -653,95 +616,6 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
                     data[code_slot] = usercode
-
-        # pull the codes for ozw
-        elif async_using_ozw(lock=self._primary_lock):
-            node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
-            if node_id is None:
-                return data
-            data[ATTR_NODE_ID] = node_id
-
-            if data[ATTR_NODE_ID] is None:
-                raise NoNodeSpecifiedError
-            # Raises exception when node not found
-            try:
-                node = get_node_from_manager(
-                    self.hass.data[OZW_DOMAIN][MANAGER],
-                    instance_id,
-                    data[ATTR_NODE_ID],
-                )
-            except NotFoundError:
-                raise NativeNotFoundError from None
-
-            command_class = node.get_command_class(CommandClass.USER_CODE)
-
-            if not command_class:
-                raise NativeNotSupportedError("Node doesn't have code slots")
-
-            for value in command_class.values():  # type: ignore
-                code_slot = int(value.index)
-                if code_slot not in self.slots:
-                    continue
-                _LOGGER.debug(
-                    "DEBUG: Code slot %s value: %s", code_slot, str(value.value)
-                )
-                if value.value and "*" in str(value.value):
-                    _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
-                    data[code_slot] = self._invalid_code(code_slot)
-                else:
-                    data[code_slot] = value.value
-
-        # pull codes for zwave
-        elif async_using_zwave(lock=self._primary_lock):
-            node_id = get_node_id(self.hass, self._primary_lock.lock_entity_id)
-            if node_id is None:
-                return data
-            data[ATTR_NODE_ID] = node_id
-
-            if data[ATTR_NODE_ID] is None:
-                raise NoNodeSpecifiedError
-
-            network = self.hass.data[ZWAVE_NETWORK]
-            node = network.nodes.get(data[ATTR_NODE_ID])
-            if not node:
-                raise NativeNotFoundError
-
-            lock_values = node.get_values(class_id=CommandClass.USER_CODE).values()
-            for value in lock_values:
-                if value.index not in self.slots:
-                    continue
-                _LOGGER.debug(
-                    "DEBUG: Code slot %s value: %s",
-                    str(value.index),
-                    str(value.data),
-                )
-                # do not update if the code contains *s
-                code = str(value.data)
-
-                # Remove \x00 if found
-                code = code.replace("\x00", "")
-
-                # Check for * in lock data and use workaround code if exist
-                if "*" in code:
-                    _LOGGER.debug("DEBUG: Ignoring code slot with * in value.")
-                    code = self._invalid_code(value.index)
-
-                # Build data from entities
-                active_binary_sensor = (
-                    f"binary_sensor.active_{self._primary_lock.lock_name}_{value.index}"
-                )
-                active = self.hass.states.get(active_binary_sensor)
-
-                # Report blank slot if occupied by random code
-                if active is not None:
-                    if active.state == "off":
-                        _LOGGER.debug(
-                            "DEBUG: Utilizing Zwave clear_usercode work around code"
-                        )
-                        code = ""
-
-                data[int(value.index)] = code
-
         else:
             raise ZWaveIntegrationNotConfiguredError
 
