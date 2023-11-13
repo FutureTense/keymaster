@@ -107,7 +107,7 @@ script:
         state: "unlocked"
       - service: timer.cancel
         entity_id: timer.keymaster_LOCKNAME_autolock
-      - service: timer.start
+      - service: timer.change 
         data_template: # if next_dusk happens sooner than next_dawn, then it's daylight
           entity_id: timer.keymaster_LOCKNAME_autolock
           duration: >
@@ -116,6 +116,9 @@ script:
             {% else %}
               {{ states('input_text.keymaster_LOCKNAME_autolock_door_time_day')}}
             {% endif %}
+      - service: timer.start
+        data_template: # if next_dusk happens sooner than next_dawn, then it's daylight
+          entity_id: timer.keymaster_LOCKNAME_autolock
 
   boltchecked_lock_LOCKNAME:
     sequence:
@@ -316,7 +319,7 @@ automation:
         entity_id: input_boolean.keymaster_LOCKNAME_autolock
         state: "on"
     action:
-      - service: timer.start
+      - service: timer.change 
         data_template:
           entity_id: timer.keymaster_LOCKNAME_autolock
           duration: >
@@ -325,6 +328,9 @@ automation:
             {% else %}
               {{ states('input_text.keymaster_LOCKNAME_autolock_door_time_day')}}
             {% endif %}
+      - service: timer.start
+        data_template:
+          entity_id: timer.keymaster_LOCKNAME_autolock
 
   - alias: keymaster_LOCKNAME_unlocked_start_autolock
     id: keymaster_LOCKNAME_unlocked_ start_autolock
