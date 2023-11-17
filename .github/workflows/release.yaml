@@ -19,23 +19,22 @@ jobs:
         id: get_version
         if: ${{ github.event_name == 'release' }}
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
-      - name: Get Version
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: echo ::set-output name=VERSION::${{inputs.tags}}      
       - name: Set version number
+        if: ${{ github.event_name == 'release' }}
         run: |
           sed -i '/VERSION = /c\VERSION = "${{ steps.get_version.outputs.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
           sed -i '/version/c\  \"version\": \"${{ steps.get_version.outputs.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
+      - name: Set version number
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          sed -i '/VERSION = /c\VERSION = "${{inputs.tags}}"' ${{ github.workspace }}/custom_components/keymaster/const.py
+          sed -i '/version/c\  \"version\": \"${{inputs.tags}}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
       # Pack the keymaster dir as a zip and upload to the release
       - name: ZIP Keymaster Dir
         run: |
           cd ${{ github.workspace }}/custom_components/keymaster
           zip keymaster.zip -r ./
-      - name: Upload zip to release
-        uses: svenstaro/upload-release-action@v1-release
+      - name: 📤 Upload zip to release
+        uses: softprops/action-gh-release@v0.1.15
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ github.workspace }}/custom_components/keymaster/keymaster.zip
-          asset_name: keymaster.zip
-          tag: ${{ github.ref }}
-          overwrite: true
