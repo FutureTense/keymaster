@@ -12,12 +12,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v1
-      - name: 🔢 Get version
-        if: ${{ github.event_name == 'release' }}
-        id: version
-        uses: home-assistant/actions/helpers/version@master
-      - name: 🔢 Set version number
-        if: ${{ github.event_name == 'release' }}
+      - name: Get Version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+      - name: Set version number
         run: |
           sed -i '/VERSION = /c\VERSION = "${{ steps.get_version.outputs.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
           sed -i '/version/c\  \"version\": \"${{ steps.get_version.outputs.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
