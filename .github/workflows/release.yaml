@@ -37,4 +37,4 @@ jobs:
       - name: 📤 Upload zip to release
         uses: softprops/action-gh-release@v0.1.15
         with:
-          file: ${{ github.workspace }}/custom_components/keymaster/keymaster.zip
+          files: ${{ github.workspace }}/custom_components/keymaster/keymaster.zip
