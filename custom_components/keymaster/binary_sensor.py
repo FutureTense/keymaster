@@ -3,7 +3,7 @@ import logging
 from typing import List
 
 from homeassistant.components.binary_sensor import (
-    DEVICE_CLASS_CONNECTIVITY,
+    BinarySensorDeviceClass,
     BinarySensorEntity,
 )
 from homeassistant.core import callback
@@ -70,7 +70,7 @@ class BaseNetworkReadySensor(BinarySensorEntity):
         self._attr_is_on = False
         self._attr_name = generate_binary_sensor_name(self.primary_lock.lock_name)
         self._attr_unique_id = slugify(self._attr_name)
-        self._attr_device_class = DEVICE_CLASS_CONNECTIVITY
+        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
         self._attr_should_poll = False
 
     @callback
