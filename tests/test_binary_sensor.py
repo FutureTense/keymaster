@@ -1,4 +1,5 @@
 """ Test keymaster binary sensors """
+
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN

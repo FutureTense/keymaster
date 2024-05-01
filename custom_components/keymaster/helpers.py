@@ -1,4 +1,5 @@
 """Helpers for keymaster."""
+
 import asyncio
 from datetime import timedelta
 import logging
@@ -246,9 +247,11 @@ def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: E
                 ATTR_STATE: lock_state.state if lock_state else "",
                 ATTR_ACTION_TEXT: evt.data.get(ATTR_EVENT_LABEL),
                 ATTR_CODE_SLOT: code_slot or 0,
-                ATTR_CODE_SLOT_NAME: code_slot_name_state.state
-                if code_slot_name_state is not None
-                else "",
+                ATTR_CODE_SLOT_NAME: (
+                    code_slot_name_state.state
+                    if code_slot_name_state is not None
+                    else ""
+                ),
             },
         )
         return
@@ -343,9 +346,11 @@ def handle_state_change(
                 ATTR_ACTION_CODE: alarm_type_value,
                 ATTR_ACTION_TEXT: action_text,
                 ATTR_CODE_SLOT: alarm_level_value or 0,
-                ATTR_CODE_SLOT_NAME: code_slot_name_state.state
-                if code_slot_name_state is not None
-                else "",
+                ATTR_CODE_SLOT_NAME: (
+                    code_slot_name_state.state
+                    if code_slot_name_state is not None
+                    else ""
+                ),
             },
         )
         return

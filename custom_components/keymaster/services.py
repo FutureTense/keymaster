@@ -1,4 +1,5 @@
 """Services for keymaster."""
+
 import logging
 import os
 from typing import Any, Dict, Mapping
@@ -250,9 +251,9 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "SENSORALARMTYPE": sensoralarmtype,
         "SENSORALARMLEVEL": sensoralarmlevel,
         "HIDE_PINS": hide_pins,
-        "PARENTLOCK": ""
-        if primary_lock.parent is None
-        else slugify(primary_lock.parent),
+        "PARENTLOCK": (
+            "" if primary_lock.parent is None else slugify(primary_lock.parent)
+        ),
     }
 
     # Replace variables in common file
