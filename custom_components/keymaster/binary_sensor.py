@@ -1,4 +1,5 @@
 """Sensor for keymaster."""
+
 import logging
 from typing import List
 

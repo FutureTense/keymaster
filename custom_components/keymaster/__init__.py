@@ -1,4 +1,5 @@
 """keymaster Integration."""
+
 import asyncio
 from datetime import timedelta
 import functools
@@ -22,7 +23,7 @@ from homeassistant.helpers.entity_registry import (
     EntityRegistry,
     async_get as async_get_entity_registry,
 )
-from homeassistant.helpers.event import async_track_state_change
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import slugify
 
@@ -112,7 +113,7 @@ async def homeassistant_started_listener(
     """Start tracking state changes after HomeAssistant has started."""
     # Listen to lock state changes so we can fire an event
     hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-        async_track_state_change(
+        async_track_state_change_event(
             hass,
             [lock.lock_entity_id for lock in locks_to_watch],
             functools.partial(handle_state_change, hass, config_entry),
@@ -479,7 +480,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     if locks_to_watch:
         # Create new listeners for lock state changes
         hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            async_track_state_change(
+            async_track_state_change_event(
                 hass,
                 [lock.lock_entity_id for lock in locks_to_watch],
                 functools.partial(handle_state_change, hass, config_entry),

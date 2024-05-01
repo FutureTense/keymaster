@@ -1,4 +1,5 @@
 """ Fixtures for keymaster tests. """
+
 import asyncio
 import copy
 import json

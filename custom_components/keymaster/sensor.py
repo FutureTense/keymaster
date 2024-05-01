@@ -1,4 +1,5 @@
 """Sensor for keymaster."""
+
 from functools import partial
 import logging
 from typing import List, Optional

@@ -1,4 +1,5 @@
 """ Test keymaster helpers """
+
 from unittest.mock import patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry

@@ -1,4 +1,5 @@
 """Constants for keymaster."""
+
 from homeassistant.const import STATE_LOCKED, STATE_UNLOCKED
 
 DOMAIN = "keymaster"
@@ -68,7 +69,7 @@ ACTION_MAP = {
         999: "Kwikset",
         0: "No Status Reported",
         9: "Lock Jammed",
-        16: "User Access", # FE599 code
+        16: "User Access",  # FE599 code
         17: "Keypad Lock Jammed",
         21: "Manual Lock",
         22: "Manual Unlock",

@@ -1,4 +1,5 @@
 """ Test keymaster services """
+
 import errno
 from unittest.mock import patch
 
