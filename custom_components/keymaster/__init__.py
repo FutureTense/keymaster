@@ -116,9 +116,7 @@ async def homeassistant_started_listener(
         async_track_state_change_event(
             hass,
             [lock.lock_entity_id for lock in locks_to_watch],
-            functools.partial(handle_state_change, hass, config_entry),
-            from_state=[STATE_LOCKED, STATE_UNLOCKED],
-            to_state=[STATE_LOCKED, STATE_UNLOCKED],
+            functools.partial(handle_state_change, hass, config_entry)
         )
     )
 
