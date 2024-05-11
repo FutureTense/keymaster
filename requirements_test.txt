@@ -7,3 +7,6 @@ black
 isort
 pydispatcher
 zeroconf
+tox
+mypy
+flake8
