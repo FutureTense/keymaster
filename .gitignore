@@ -4,3 +4,5 @@ custom_components/*/__pycache__/
 venv
 *.pyc
 .coverage
+coverage.xml
+.tox/py312/.tox-info.json

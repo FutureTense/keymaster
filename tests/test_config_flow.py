@@ -20,6 +20,8 @@ from .const import CONFIG_DATA
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 _LOGGER = logging.getLogger(__name__)
 
+pytestmark = pytest.mark.asyncio
+
 
 @pytest.mark.parametrize(
     "input_1,title,data",
