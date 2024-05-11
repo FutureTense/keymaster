@@ -23,7 +23,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import Event, HomeAssistant, State, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers.device_registry import async_get as async_get_device_registry
 from homeassistant.helpers.entity_registry import (
@@ -261,14 +261,14 @@ def handle_state_change(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     changed_entity: str,
-    old_state: State,
-    new_state: State,
+    event: Event[EventStateChangedData] | None = None
 ) -> None:
     """Listener to track state changes to lock entities."""
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
         CHILD_LOCKS
     ]
+    new_state = event.data["new_state"]
 
     for lock in [primary_lock, *child_locks]:
         # Don't do anything if the changed entity is not this lock
