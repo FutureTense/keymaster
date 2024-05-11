@@ -22,6 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 
 pytestmark = pytest.mark.asyncio
 
+
 @pytest.mark.parametrize(
     "input_1,title,data",
     [

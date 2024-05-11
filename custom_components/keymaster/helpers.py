@@ -261,7 +261,7 @@ def handle_state_change(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     changed_entity: str,
-    event: Event[EventStateChangedData] | None = None
+    event: Event[EventStateChangedData] | None = None,
 ) -> None:
     """Listener to track state changes to lock entities."""
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
