@@ -10,3 +10,4 @@ zeroconf
 tox
 mypy
 flake8
+pylint

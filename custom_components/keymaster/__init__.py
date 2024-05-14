@@ -13,9 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     EVENT_HOMEASSISTANT_STARTED,
-    STATE_LOCKED,
     STATE_ON,
-    STATE_UNLOCKED,
 )
 from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -107,7 +105,7 @@ CLEAR_USERCODE = "clear_usercode"
 async def homeassistant_started_listener(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    locks_to_watch: List[KeymasterLock],
+    locks_to_watch: List[KeymasterLock],  # pylint: disable-next=unused-argument
     evt: Event = None,
 ):
     """Start tracking state changes after HomeAssistant has started."""
@@ -121,7 +119,9 @@ async def homeassistant_started_listener(
     )
 
 
-async def async_setup(hass: HomeAssistant, config: Config) -> bool:
+async def async_setup(  # pylint: disable-next=unused-argument
+    hass: HomeAssistant, config: Config
+) -> bool:
     """Disallow configuration via YAML."""
     return True
 
@@ -130,7 +130,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     """Set up is called when Home Assistant is loading our component."""
     hass.data.setdefault(DOMAIN, {})
     _LOGGER.info(
-        "Version %s is starting, if you have any issues please report" " them here: %s",
+        "Version %s is starting, if you have any issues please report them here: %s",
         VERSION,
         ISSUE_URL,
     )
@@ -482,8 +482,6 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
                 hass,
                 [lock.lock_entity_id for lock in locks_to_watch],
                 functools.partial(handle_state_change, hass, config_entry),
-                from_state=[STATE_LOCKED, STATE_UNLOCKED],
-                to_state=[STATE_LOCKED, STATE_UNLOCKED],
             )
         )
 
@@ -577,7 +575,6 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update(self) -> Dict[Union[str, int], Any]:
         """Update usercodes."""
         # loop to get user code data from entity_id node
-        instance_id = 1  # default
         data = {CONF_LOCK_ENTITY_ID: self._primary_lock.lock_entity_id}
 
         # # make button call
