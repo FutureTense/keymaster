@@ -256,7 +256,7 @@ def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: E
         )
         return
 
-
+@callback
 def handle_state_change(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
