@@ -13,9 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     EVENT_HOMEASSISTANT_STARTED,
-    STATE_LOCKED,
     STATE_ON,
-    STATE_UNLOCKED,
 )
 from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -575,7 +573,6 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update(self) -> Dict[Union[str, int], Any]:
         """Update usercodes."""
         # loop to get user code data from entity_id node
-        instance_id = 1  # default
         data = {CONF_LOCK_ENTITY_ID: self._primary_lock.lock_entity_id}
 
         # # make button call
