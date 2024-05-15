@@ -265,6 +265,9 @@ def handle_state_change(
     event: Event[EventStateChangedData] | None = None,
 ) -> None:
     """Listener to track state changes to lock entities."""
+    if not event:
+        return
+    
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
     child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
         CHILD_LOCKS
