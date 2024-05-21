@@ -883,6 +883,7 @@ binary_sensor:
     sensors:
       active_LOCKNAME_TEMPLATENUM:
         friendly_name: "Desired PIN State"
+        unique_id: "binary_sensor.active_LOCKNAME_TEMPLATENUM"
         value_template: >-
           {## This template checks whether the PIN should be considered active based on ##}
           {## all of the different ways the PIN can be conditionally enabled/disabled ##}
@@ -939,6 +940,7 @@ binary_sensor:
 
       pin_synched_LOCKNAME_TEMPLATENUM:
         friendly_name: "PIN synchronized with lock"
+        unique_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
         value_template: >
           {% set lockpin = states('sensor.LOCKNAME_code_slot_TEMPLATENUM').strip()  %}
           {% set localpin = states('input_text.LOCKNAME_pin_TEMPLATENUM').strip()  %}
@@ -958,6 +960,7 @@ sensor:
     sensors:
       connected_LOCKNAME_TEMPLATENUM:
         friendly_name: "PIN Status"
+        unique_id: "sensor.connected_LOCKNAME_TEMPLATENUM"
         value_template: >-
           {% set pin_active = is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on')  %}      
           {% set synched = is_state('binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM', 'on')  %}      
