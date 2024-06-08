@@ -14,7 +14,7 @@ from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import (
     ATTR_DEVICE_ID,
     ATTR_ENTITY_ID,
@@ -148,8 +148,8 @@ async def async_update_zwave_js_nodes_and_devices(
 ) -> None:
     """Update Z-Wave JS nodes and devices."""
     try:
-        zwave_entries = hass.config_entries.async_entries(ZWAVE_JS_DOMAIN)
-        zwave_entry = zwave_entries[0] if zwave_entries else None
+        zwave_loaded_entries = [entry for entry in hass.config_entries.async_entries(ZWAVE_JS_DOMAIN) if entry.state == ConfigEntryState.LOADED]
+        zwave_entry = zwave_loaded_entries[0] if zwave_loaded_entries else None
         client = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
     except AttributeError:
         _LOGGER.debug("Can't access Z-Wave JS data client.")

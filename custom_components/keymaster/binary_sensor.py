@@ -7,6 +7,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
@@ -131,8 +132,8 @@ class ZwaveJSNetworkReadySensor(BaseNetworkReadySensor):
                 self._lock_found = True
 
         try:
-            zwave_entries = self.hass.config_entries.async_entries(ZWAVE_JS_DOMAIN)
-            zwave_entry = zwave_entries[0] if zwave_entries else None
+            zwave_loaded_entries = [entry for entry in self.hass.config_entries.async_entries(ZWAVE_JS_DOMAIN) if entry.state == ConfigEntryState.LOADED]
+            zwave_entry = zwave_loaded_entries[0] if zwave_loaded_entries else None
             client = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
         except AttributeError:
             _LOGGER.debug("Can't access Z-Wave JS data client.")
