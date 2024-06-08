@@ -148,7 +148,11 @@ async def async_update_zwave_js_nodes_and_devices(
 ) -> None:
     """Update Z-Wave JS nodes and devices."""
     try:
-        zwave_loaded_entries = [entry for entry in hass.config_entries.async_entries(ZWAVE_JS_DOMAIN) if entry.state == ConfigEntryState.LOADED]
+        zwave_loaded_entries = [
+            entry
+            for entry in hass.config_entries.async_entries(ZWAVE_JS_DOMAIN)
+            if entry.state == ConfigEntryState.LOADED
+        ]
         zwave_entry = zwave_loaded_entries[0] if zwave_loaded_entries else None
         client = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
     except AttributeError:
