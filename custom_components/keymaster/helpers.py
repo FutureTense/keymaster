@@ -147,7 +147,12 @@ async def async_update_zwave_js_nodes_and_devices(
     child_locks: List[KeymasterLock],
 ) -> None:
     """Update Z-Wave JS nodes and devices."""
-    client = hass.data[ZWAVE_JS_DOMAIN][entry_id][ZWAVE_JS_DATA_CLIENT]
+    try:
+        zwave_entries = hass.config_entries.async_entries(ZWAVE_JS_DOMAIN)
+        zwave_entry = zwave_entries[0] if zwave_entries else None
+        client = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
+    except AttributeError:
+        _LOGGER.debug("Can't access Z-Wave JS data client.")
     ent_reg = async_get_entity_registry(hass)
     dev_reg = async_get_device_registry(hass)
     for lock in [primary_lock, *child_locks]:
