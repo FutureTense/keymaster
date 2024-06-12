@@ -148,12 +148,13 @@ async def async_update_zwave_js_nodes_and_devices(
 ) -> None:
     """Update Z-Wave JS nodes and devices."""
     try:
+        lock_ent_config = primary_lock.lock_entity_id.config_entry_id
         zwave_loaded_entries = [
             entry
             for entry in hass.config_entries.async_entries(ZWAVE_JS_DOMAIN)
             if entry.state == ConfigEntryState.LOADED
         ]
-        zwave_entry = zwave_loaded_entries[0] if zwave_loaded_entries else None
+        zwave_entry = lock_ent_config if lock_ent_config in zwave_loaded_entries else None
         client = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
     except AttributeError:
         _LOGGER.debug("Can't access Z-Wave JS data client.")
