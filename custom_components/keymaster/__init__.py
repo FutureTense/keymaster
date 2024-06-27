@@ -255,10 +255,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         config_entry.data[CONF_START],
     )
 
-    for platform in PLATFORMS:
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(config_entry, platform)
-        )
+    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     # if the use turned on the bool generate the files
     if should_generate_package:
