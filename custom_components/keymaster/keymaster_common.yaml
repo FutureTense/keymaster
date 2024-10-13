@@ -161,8 +161,7 @@ automation:
     action:
       - service: script.keymaster_LOCKNAME_manual_notify
         data_template:
-          title: CASE_LOCK_NAME
-          message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
+          message: "TITLE_CASE_LOCK_NAME {{ trigger.event.data.state }} {% if trigger.event.data.code_slot > 0 %} by {{ trigger.event.data.code_slot_name }}{% endif %} {{ trigger.event.data.date_time }}"
 
   - alias: keymaster_CASE_LOCK_NAME User Notifications
     id: keymaster_CASE_LOCK_NAME User Notifications
@@ -182,8 +181,7 @@ automation:
     action:
       - service: script.keymaster_LOCKNAME_manual_notify
         data_template:
-          title: CASE_LOCK_NAME
-          message: "{{ trigger.event.data.action_text }} ({{ trigger.event.data.code_slot_name }})"
+          message: "TITLE_CASE_LOCK_NAME {{ trigger.event.data.state }} {% if trigger.event.data.code_slot > 0 %} by {{ trigger.event.data.code_slot_name }}{% endif %} {{ trigger.event.data.date_time }}"
 
   - alias: keymaster_CASE_LOCK_NAME Door Open and Close
     id: keymaster_CASE_LOCK_NAME Door Open and Close
@@ -199,8 +197,7 @@ automation:
     action:
       - service: script.keymaster_LOCKNAME_manual_notify
         data_template:
-          title: CASE_LOCK_NAME
-          message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
+          message: "TITLE_CASE_LOCK_NAME {% if trigger.to_state.state == 'on' %}opened{% else %}closed{% endif %} {{ trigger.event.data.date_time }"
 
   - alias: keymaster_CASE_LOCK_NAME Changed Code
     id: keymaster_CASE_LOCK_NAME Changed Code
