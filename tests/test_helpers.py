@@ -1,4 +1,4 @@
-""" Test keymaster helpers """
+"""Test keymaster helpers"""
 
 from unittest.mock import patch
 
@@ -9,11 +9,15 @@ from custom_components.keymaster.const import (
     ATTR_ACTION_TEXT,
     ATTR_CODE_SLOT,
     ATTR_CODE_SLOT_NAME,
+    ATTR_DATE_TIME_NOW,
     ATTR_NAME,
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
 )
-from custom_components.keymaster.helpers import delete_lock_and_base_folder
+from custom_components.keymaster.helpers import (
+    delete_lock_and_base_folder,
+    get_friendly_datetime,
+)
 from homeassistant.const import (
     ATTR_STATE,
     EVENT_HOMEASSISTANT_STARTED,
@@ -142,6 +146,7 @@ async def test_handle_state_change_zwave_js(
     assert events[0].data[ATTR_ACTION_TEXT] == "Keypad unlock operation"
     assert events[0].data[ATTR_CODE_SLOT] == 3
     assert events[0].data[ATTR_CODE_SLOT_NAME] == ""
+    assert events[0].data[ATTR_DATE_TIME_NOW] == get_friendly_datetime()
 
     assert events_js[0].data["type"] == 6
     assert events_js[0].data["event"] == 5
