@@ -22,6 +22,7 @@ from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
 )
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import slugify
 
@@ -120,7 +121,7 @@ async def homeassistant_started_listener(
 
 
 async def async_setup(  # pylint: disable-next=unused-argument
-    hass: HomeAssistant, config: Config
+    hass: HomeAssistant, config: ConfigType
 ) -> bool:
     """Disallow configuration via YAML."""
     return True
