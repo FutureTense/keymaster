@@ -15,7 +15,7 @@ from homeassistant.const import (
     EVENT_HOMEASSISTANT_STARTED,
     STATE_ON,
 )
-from homeassistant.core import Config, CoreState, Event, HomeAssistant, ServiceCall
+from homeassistant.core import CoreState, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_registry import (
     EntityRegistry,
