@@ -1,6 +1,6 @@
 """Constants for keymaster."""
 
-from homeassistant.const import STATE_LOCKED, STATE_UNLOCKED
+from homeassistant.components.lock.const import LockState
 
 DOMAIN = "keymaster"
 VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
@@ -115,11 +115,11 @@ ACTION_MAP = {
 
 LOCK_STATE_MAP = {
     ALARM_TYPE: {
-        STATE_LOCKED: 24,
-        STATE_UNLOCKED: 25,
+        LockState.LOCKED: 24,
+        LockState.UNLOCKED: 25,
     },
     ACCESS_CONTROL: {
-        STATE_LOCKED: 3,
-        STATE_UNLOCKED: 4,
+        LockState.LOCKED: 3,
+        LockState.UNLOCKED: 4,
     },
 }
