@@ -87,7 +87,7 @@ async def test_handle_state_change_zwave_js(
     await hass.async_block_till_done()
 
     # Reload zwave_js
-    assert await hass.config_entries.async_reload(integration.entry_id)
+    assert await hass.config_entries.async_reload(config_entry.entry_id)
     await hass.async_block_till_done()
 
     assert "zwave_js" in hass.config.components
