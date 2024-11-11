@@ -1,8 +1,9 @@
-from collections.abc import Mapping
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -17,11 +18,13 @@ class KeymasterEntity(CoordinatorEntity[LockUsercodeUpdateCoordinator]):
 
     def __init__(
         self,
+        hass: HomeAssistant,
         config_entry: ConfigEntry,
         coordinator: LockUsercodeUpdateCoordinator,
         primary_lock: KeymasterLock,
         child_locks: list[KeymasterLock],
     ) -> None:
+        self.hass: HomeAssistant = hass
         self.config_entry: ConfigEntry = config_entry
         self.coordinator: LockUsercodeUpdateCoordinator = coordinator
         self.primary_lock = primary_lock
