@@ -5,12 +5,10 @@ import functools
 import logging
 from typing import List
 
-import voluptuous as vol
-
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import CoreState, Event, HomeAssistant, ServiceCall
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import CoreState, Event, HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.helpers.event import async_track_state_change_event
@@ -19,9 +17,6 @@ from homeassistant.util import slugify
 
 from .binary_sensor import generate_binary_sensor_name as generate_binary_sensor_name
 from .const import (
-    ATTR_CODE_SLOT,
-    ATTR_NAME,
-    ATTR_USER_CODE,
     CHILD_LOCKS,
     CONF_ALARM_LEVEL,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
@@ -44,18 +39,22 @@ from .const import (
     ISSUE_URL,
     PLATFORMS,
     PRIMARY_LOCK,
+    SERVICE_GENERATE_PACKAGE,
     UNSUB_LISTENERS,
     VERSION,
 )
 from .coordinator import LockUsercodeUpdateCoordinator
 from .exceptions import (
     NoNodeSpecifiedError as NoNodeSpecifiedError,
+)
+from .exceptions import (
     ZWaveIntegrationNotConfiguredError as ZWaveIntegrationNotConfiguredError,
+)
+from .exceptions import (
     ZWaveNetworkNotReady as ZWaveNetworkNotReady,
 )
 from .helpers import (
     async_reload_package_platforms,
-    async_reset_code_slot_if_pin_unknown,
     async_using_zwave_js,
     delete_folder,
     delete_lock_and_base_folder,
@@ -65,13 +64,7 @@ from .helpers import (
     handle_zwave_js_event,
 )
 from .lock import KeymasterLock
-from .services import (
-    add_code,
-    clear_code,
-    generate_package_files,
-    init_child_locks,
-    refresh_codes,
-)
+from .services import async_setup_services, init_child_locks
 
 try:
     from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
@@ -79,11 +72,6 @@ except (ModuleNotFoundError, ImportError):
     pass
 
 _LOGGER = logging.getLogger(__name__)
-
-SERVICE_GENERATE_PACKAGE = "generate_package"
-SERVICE_ADD_CODE = "add_code"
-SERVICE_CLEAR_CODE = "clear_code"
-SERVICE_REFRESH_CODES = "refresh_codes"
 
 SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
@@ -148,6 +136,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     config_entry.add_update_listener(update_listener)
 
+    await async_setup_services(hass)
+
     primary_lock, child_locks = await generate_keymaster_locks(hass, config_entry)
 
     hass.data[DOMAIN][config_entry.entry_id] = {
@@ -159,88 +149,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         hass, config_entry, async_get_entity_registry(hass)
     )
     hass.data[DOMAIN][config_entry.entry_id][COORDINATOR] = coordinator
-
-    # Button Press
-    async def _refresh_codes(service: ServiceCall) -> None:
-        """Refresh lock codes."""
-        _LOGGER.debug("Refresh Codes service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        instance_id = 1
-        await refresh_codes(hass, entity_id, instance_id)
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_REFRESH_CODES,
-        _refresh_codes,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-            }
-        ),
-    )
-
-    # Add code
-    async def _add_code(service: ServiceCall) -> None:
-        """Set a user code."""
-        _LOGGER.debug("Add Code service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        code_slot = service.data[ATTR_CODE_SLOT]
-        usercode = service.data[ATTR_USER_CODE]
-        await add_code(hass, entity_id, code_slot, usercode)
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_ADD_CODE,
-        _add_code,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
-                vol.Required(ATTR_USER_CODE): vol.Coerce(str),
-            }
-        ),
-    )
-
-    # Clear code
-    async def _clear_code(service: ServiceCall) -> None:
-        """Clear a user code."""
-        _LOGGER.debug("Clear Code service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        code_slot = service.data[ATTR_CODE_SLOT]
-        await clear_code(hass, entity_id, code_slot)
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_CLEAR_CODE,
-        _clear_code,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
-            }
-        ),
-    )
-
-    # Generate package files
-    def _generate_package(service: ServiceCall) -> None:
-        """Generate the package files."""
-        _LOGGER.debug("DEBUG: %s", service)
-        name = service.data[ATTR_NAME]
-        generate_package_files(hass, name)
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_GENERATE_PACKAGE,
-        _generate_package,
-        schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
-    )
-
-    await async_reset_code_slot_if_pin_unknown(
-        hass,
-        primary_lock.lock_name,
-        config_entry.data[CONF_SLOTS],
-        config_entry.data[CONF_START],
-    )
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 

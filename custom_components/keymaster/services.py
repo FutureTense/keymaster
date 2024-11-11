@@ -4,16 +4,18 @@ import logging
 import os
 from typing import Any, Dict, Mapping
 
+import voluptuous as vol
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.persistent_notification import create
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.util import slugify
 
 from .const import (
     ATTR_CODE_SLOT,
+    ATTR_NAME,
     ATTR_USER_CODE,
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
@@ -23,9 +25,14 @@ from .const import (
     DEFAULT_HIDE_PINS,
     DOMAIN,
     PRIMARY_LOCK,
+    SERVICE_ADD_CODE,
+    SERVICE_CLEAR_CODE,
+    SERVICE_GENERATE_PACKAGE,
+    SERVICE_REFRESH_CODES,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
 from .helpers import (
+    async_reset_code_slot_if_pin_unknown,
     async_using_zwave_js,
     get_code_slots_list,
     output_to_file_from_template,
@@ -50,6 +57,91 @@ _LOGGER = logging.getLogger(__name__)
 
 SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
+
+
+async def async_setup_services(hass: HomeAssistant) -> None:
+    # Button Press
+    async def _refresh_codes(service: ServiceCall) -> None:
+        """Refresh lock codes."""
+        _LOGGER.debug("Refresh Codes service: %s", service)
+        entity_id = service.data[ATTR_ENTITY_ID]
+        instance_id = 1
+        await refresh_codes(hass, entity_id, instance_id)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REFRESH_CODES,
+        _refresh_codes,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
+            }
+        ),
+    )
+
+    # Add code
+    async def _add_code(service: ServiceCall) -> None:
+        """Set a user code."""
+        _LOGGER.debug("Add Code service: %s", service)
+        entity_id = service.data[ATTR_ENTITY_ID]
+        code_slot = service.data[ATTR_CODE_SLOT]
+        usercode = service.data[ATTR_USER_CODE]
+        await add_code(hass, entity_id, code_slot, usercode)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ADD_CODE,
+        _add_code,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
+                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
+                vol.Required(ATTR_USER_CODE): vol.Coerce(str),
+            }
+        ),
+    )
+
+    # Clear code
+    async def _clear_code(service: ServiceCall) -> None:
+        """Clear a user code."""
+        _LOGGER.debug("Clear Code service: %s", service)
+        entity_id = service.data[ATTR_ENTITY_ID]
+        code_slot = service.data[ATTR_CODE_SLOT]
+        await clear_code(hass, entity_id, code_slot)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CLEAR_CODE,
+        _clear_code,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
+                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
+            }
+        ),
+    )
+
+    # Generate package files
+    def _generate_package(service: ServiceCall) -> None:
+        """Generate the package files."""
+        _LOGGER.debug("DEBUG: %s", service)
+        name = service.data[ATTR_NAME]
+        generate_package_files(hass, name)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GENERATE_PACKAGE,
+        _generate_package,
+        schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
+    )
+
+    await async_reset_code_slot_if_pin_unknown(
+        hass,
+        # TODO: Redo this
+        # primary_lock.lock_name,
+        # config_entry.data[CONF_SLOTS],
+        # config_entry.data[CONF_START],
+    )
 
 
 async def init_child_locks(

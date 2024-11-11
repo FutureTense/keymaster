@@ -123,3 +123,8 @@ LOCK_STATE_MAP = {
         LockState.UNLOCKED: 4,
     },
 }
+
+SERVICE_GENERATE_PACKAGE = "generate_package"
+SERVICE_ADD_CODE = "add_code"
+SERVICE_CLEAR_CODE = "clear_code"
+SERVICE_REFRESH_CODES = "refresh_codes"
