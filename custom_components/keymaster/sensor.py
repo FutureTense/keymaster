@@ -2,11 +2,10 @@
 
 import logging
 from functools import partial
-from typing import Optional
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_registry import (
@@ -15,22 +14,20 @@ from homeassistant.helpers.entity_registry import (
 from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
 )
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
 from .const import (
     ATTR_CODE_SLOT,
-    CHILD_LOCKS,
     CONF_LOCK_NAME,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
     DOMAIN,
-    PRIMARY_LOCK,
 )
-from .lock import KeymasterLock
+from .coordinator import KeymasterCoordinator
+from .entity import KeymasterEntity
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -40,9 +37,15 @@ async def async_setup_entry(
     # Add entities for all defined slots
     start_from = entry.data[CONF_START]
     code_slots = entry.data[CONF_SLOTS]
+    coordinator = hass.data[DOMAIN][COORDINATOR]
     async_add_entities(
         [
-            CodesSensor(hass, entry, x)
+            KeymasterCodesSensor(
+                hass=hass,
+                config_entry=entry,
+                coordinator=coordinator,
+                code_slot=x,
+            )
             for x in range(start_from, start_from + code_slots)
         ],
         True,
@@ -66,9 +69,18 @@ async def async_setup_entry(
             if ent_reg.async_get(entity_id):
                 await platform.async_remove_entity(entity_id)
                 ent_reg.async_remove(entity_id)
+        coordinator = hass.data[DOMAIN][COORDINATOR]
 
         async_add_entities(
-            [CodesSensor(hass, entry, x) for x in slots_to_add],
+            [
+                KeymasterCodesSensor(
+                    hass=hass,
+                    config_entry=entry,
+                    coordinator=coordinator,
+                    code_slot=x,
+                )
+                for x in slots_to_add
+            ],
             True,
         )
 
@@ -86,34 +98,33 @@ async def async_setup_entry(
     return True
 
 
-class CodesSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a sensor"""
+class KeymasterCodesSensor(KeymasterEntity, SensorEntity):
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, code_slot: int) -> None:
-        """Initialize the sensor."""
-        super().__init__(hass.data[DOMAIN][entry.entry_id][COORDINATOR])
-        self._config_entry = entry
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        coordinator: KeymasterCoordinator,
+        entity_description: SensorEntityDescription,
+        code_slot: int,
+    ) -> None:
+        """Initialize sensor"""
+        super().__init__(
+            hass=hass,
+            config_entry=config_entry,
+            coordinator=coordinator,
+            entity_description=entity_description,
+        )
         self._code_slot = code_slot
-        self._state = None
-        self._name = f"Code Slot {code_slot}"
-        self.primary_lock: KeymasterLock = hass.data[DOMAIN][entry.entry_id][
-            PRIMARY_LOCK
-        ]
-        self.child_locks: list[KeymasterLock] = hass.data[DOMAIN][entry.entry_id][
-            CHILD_LOCKS
-        ]
-
         self._attr_icon = "mdi:lock-smart"
         self._attr_extra_state_attributes = {ATTR_CODE_SLOT: self._code_slot}
-        self._attr_name = f"{self.primary_lock.lock_name}: {self._name}"
-        self._attr_unique_id = slugify(self._attr_name)
+        self._attr_name = f"Code Slot {code_slot}"
+        self._attr_native_value = None
 
-    @property
-    def native_value(self) -> Optional[str]:
-        """Return the value reported by the sensor."""
-        return self.coordinator.data.get(self._code_slot)
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        _LOGGER.debug(
+            f"[Sensor handle_coordinator_update] self.coordinator.data: {self.coordinator.data}"
+        )
 
-    @property
-    def available(self) -> bool:
-        """Return whether sensor is available or not."""
-        return self._code_slot in self.coordinator.data
+        self.async_write_ha_state()

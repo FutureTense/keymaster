@@ -1,7 +1,7 @@
 """KeymasterLock class."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time
 
 from homeassistant.helpers.device_registry import DeviceEntry
@@ -50,5 +50,5 @@ class KeymasterLock:
     code_slots: Mapping[int, KeymasterCodeSlot] | None = None
     parent: str | None = None
     parent_device_id: str | None = None
-    child_device_ids: list = []
-    listeners: list = []
+    child_device_ids: list = field(default_factory=list)
+    listeners: list = field(default_factory=list)

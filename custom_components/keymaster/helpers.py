@@ -1,11 +1,10 @@
 """Helpers for keymaster."""
 
 import asyncio
+import functools
 import logging
-import os
 from collections.abc import Mapping
 from datetime import timedelta
-from typing import Optional
 
 from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
@@ -15,7 +14,6 @@ from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_DEVICE_ID,
     ATTR_ENTITY_ID,
@@ -26,13 +24,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import ServiceNotFound
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import async_get as async_get_device_registry
-from homeassistant.helpers.entity_registry import (
-    EntityRegistry,
-)
-from homeassistant.helpers.entity_registry import (
-    async_get as async_get_entity_registry,
-)
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -44,20 +39,10 @@ from .const import (
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
     ATTR_NOTIFICATION_SOURCE,
-    CHILD_LOCKS,
-    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_LOCK_ENTITY_ID,
-    CONF_LOCK_NAME,
-    CONF_PARENT,
-    CONF_PATH,
-    CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
-    DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     LOCK_STATE_MAP,
-    PRIMARY_LOCK,
 )
 from .lock import KeymasterLock
 
@@ -86,17 +71,17 @@ _LOGGER = logging.getLogger(__name__)
 
 @callback
 def _async_using(
+    hass: HomeAssistant,
     domain: str,
-    lock: Optional[KeymasterLock],
-    entity_id: Optional[str],
-    ent_reg: Optional[EntityRegistry],
+    lock: KeymasterLock | None,
+    entity_id: str | None,
 ) -> bool:
     """Base function for using_<zwave integration> logic."""
-    if not (lock or (entity_id and ent_reg)):
+    if not (lock or entity_id):
         raise Exception("Missing arguments")
-
+    ent_reg = er.async_get(hass)
     if lock:
-        entity = lock.ent_reg.async_get(lock.lock_entity_id)
+        entity = ent_reg.async_get(lock.lock_entity_id)
     else:
         entity = ent_reg.async_get(entity_id)
 
@@ -105,45 +90,22 @@ def _async_using(
 
 @callback
 def async_using_zwave_js(
-    lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
+    hass: HomeAssistant,
+    lock: KeymasterLock = None,
+    entity_id: str = None,
 ) -> bool:
     """Returns whether the zwave_js integration is configured."""
     return zwave_js_supported and _async_using(
-        ZWAVE_JS_DOMAIN, lock, entity_id, ent_reg
+        hass=hass,
+        domain=ZWAVE_JS_DOMAIN,
+        lock=lock,
+        entity_id=entity_id,
     )
 
 
 def get_code_slots_list(data: Mapping[str, int]) -> list[int]:
     """Get list of code slots."""
     return list(range(data[CONF_START], data[CONF_START] + data[CONF_SLOTS]))
-
-
-async def generate_keymaster_locks(
-    hass: HomeAssistant, config_entry: ConfigEntry
-) -> tuple[KeymasterLock, list[KeymasterLock]]:
-    """Generate primary and child keymaster locks from config entry."""
-    ent_reg = async_get_entity_registry(hass)
-    primary_lock = KeymasterLock(
-        config_entry.data[CONF_LOCK_NAME],
-        config_entry.data[CONF_LOCK_ENTITY_ID],
-        config_entry.data.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
-        config_entry.data.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
-        ent_reg,
-        door_sensor_entity_id=config_entry.data[CONF_SENSOR_NAME],
-        parent=config_entry.data[CONF_PARENT],
-    )
-    child_locks = [
-        KeymasterLock(
-            lock_name,
-            lock[CONF_LOCK_ENTITY_ID],
-            lock.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
-            lock.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
-            ent_reg,
-        )
-        for lock_name, lock in config_entry.data.get(CHILD_LOCKS, {}).items()
-    ]
-
-    return primary_lock, child_locks
 
 
 async def async_update_zwave_js_nodes_and_devices(
@@ -177,101 +139,157 @@ async def async_update_zwave_js_nodes_and_devices(
         lock.zwave_js_lock_device = lock_dev_reg_entry
 
 
-def output_to_file_from_template(
-    input_path: str,
-    input_filename: str,
-    output_path: str,
-    output_filename: str,
-    replacements_dict: Mapping[str, str],
-    write_mode: str,
-) -> None:
-    """Generate file output from input templates while replacing string references."""
-    _LOGGER.debug("Starting generation of %s from %s", output_filename, input_filename)
-    with open(os.path.join(input_path, input_filename), "r") as infile, open(
-        os.path.join(output_path, output_filename), write_mode
-    ) as outfile:
-        for line in infile:
-            for src, target in replacements_dict.items():
-                line = line.replace(src, target)
-            outfile.write(line)
-    _LOGGER.debug("Completed generation of %s from %s", output_filename, input_filename)
+# def output_to_file_from_template(
+#     input_path: str,
+#     input_filename: str,
+#     output_path: str,
+#     output_filename: str,
+#     replacements_dict: Mapping[str, str],
+#     write_mode: str,
+# ) -> None:
+#     """Generate file output from input templates while replacing string references."""
+#     _LOGGER.debug("Starting generation of %s from %s", output_filename, input_filename)
+#     with open(os.path.join(input_path, input_filename), "r") as infile, open(
+#         os.path.join(output_path, output_filename), write_mode
+#     ) as outfile:
+#         for line in infile:
+#             for src, target in replacements_dict.items():
+#                 line = line.replace(src, target)
+#             outfile.write(line)
+#     _LOGGER.debug("Completed generation of %s from %s", output_filename, input_filename)
 
 
-def delete_lock_and_base_folder(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    """Delete packages folder for lock and base keymaster folder if empty."""
-    base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
-    lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+# def delete_lock_and_base_folder(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+#     """Delete packages folder for lock and base keymaster folder if empty."""
+#     base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
+#     lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
 
-    delete_folder(base_path, lock.lock_name)
-    if not os.listdir(base_path):
-        os.rmdir(base_path)
-
-
-def delete_folder(absolute_path: str, *relative_paths: str) -> None:
-    """Recursively delete folder and all children files and folders (depth first)."""
-    path = os.path.join(absolute_path, *relative_paths)
-    if os.path.isfile(path):
-        os.remove(path)
-    else:
-        for file_or_dir in os.listdir(path):
-            delete_folder(path, file_or_dir)
-        os.rmdir(path)
+#     delete_folder(base_path, lock.lock_name)
+#     if not os.listdir(base_path):
+#         os.rmdir(base_path)
 
 
-def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: Event):
+# def delete_folder(absolute_path: str, *relative_paths: str) -> None:
+#     """Recursively delete folder and all children files and folders (depth first)."""
+#     path = os.path.join(absolute_path, *relative_paths)
+#     if os.path.isfile(path):
+#         os.remove(path)
+#     else:
+#         for file_or_dir in os.listdir(path):
+#             delete_folder(path, file_or_dir)
+#         os.rmdir(path)
+
+
+def handle_zwave_js_event(hass: HomeAssistant, lock: KeymasterLock, evt: Event) -> None:
     """Handle Z-Wave JS event."""
-    primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks: list[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
-        CHILD_LOCKS
-    ]
-
-    for lock in [primary_lock, *child_locks]:
-        # Try to find the lock that we are getting an event for, skipping
-        # ones that don't match
-        if (
-            not lock.zwave_js_lock_node
-            or not lock.zwave_js_lock_device
-            or evt.data[ATTR_NODE_ID] != lock.zwave_js_lock_node.node_id
-            or evt.data[ATTR_DEVICE_ID] != lock.zwave_js_lock_device.id
-        ):
-            continue
-
-        # Get lock state to provide as part of event data
-        lock_state = hass.states.get(lock.lock_entity_id)
-
-        params = evt.data.get(ATTR_PARAMETERS) or {}
-        code_slot = params.get("userId", 0)
-
-        # Lookup name for usercode
-        code_slot_name_state = (
-            hass.states.get(f"input_text.{lock.lock_name}_name_{code_slot}")
-            if code_slot and code_slot != 0
-            else None
-        )
-
-        hass.bus.fire(
-            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-            event_data={
-                ATTR_NOTIFICATION_SOURCE: "event",
-                ATTR_NAME: lock.lock_name,
-                ATTR_ENTITY_ID: lock.lock_entity_id,
-                ATTR_STATE: lock_state.state if lock_state else "",
-                ATTR_ACTION_TEXT: evt.data.get(ATTR_EVENT_LABEL),
-                ATTR_CODE_SLOT: code_slot or 0,
-                ATTR_CODE_SLOT_NAME: (
-                    code_slot_name_state.state
-                    if code_slot_name_state is not None
-                    else ""
-                ),
-            },
-        )
+    if (
+        not lock.zwave_js_lock_node
+        or not lock.zwave_js_lock_device
+        or evt.data[ATTR_NODE_ID] != lock.zwave_js_lock_node.node_id
+        or evt.data[ATTR_DEVICE_ID] != lock.zwave_js_lock_device.id
+    ):
         return
+
+    # Get lock state to provide as part of event data
+    lock_state = hass.states.get(lock.lock_entity_id)
+
+    params = evt.data.get(ATTR_PARAMETERS) or {}
+    code_slot = params.get("userId", 0)
+
+    # Lookup name for usercode
+    code_slot_name_state = (
+        hass.states.get(f"input_text.{lock.lock_name}_name_{code_slot}")
+        if code_slot and code_slot != 0
+        else None
+    )
+
+    hass.bus.fire(
+        EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+        event_data={
+            ATTR_NOTIFICATION_SOURCE: "event",
+            ATTR_NAME: lock.lock_name,
+            ATTR_ENTITY_ID: lock.lock_entity_id,
+            ATTR_STATE: lock_state.state if lock_state else "",
+            ATTR_ACTION_TEXT: evt.data.get(ATTR_EVENT_LABEL),
+            ATTR_CODE_SLOT: code_slot or 0,
+            ATTR_CODE_SLOT_NAME: (
+                code_slot_name_state.state if code_slot_name_state is not None else ""
+            ),
+        },
+    )
+    return
+
+
+# def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: Event):
+#     """Handle Z-Wave JS event."""
+#     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+#     child_locks: list[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
+#         CHILD_LOCKS
+#     ]
+
+#     for lock in [primary_lock, *child_locks]:
+#         # Try to find the lock that we are getting an event for, skipping
+#         # ones that don't match
+#         if (
+#             not lock.zwave_js_lock_node
+#             or not lock.zwave_js_lock_device
+#             or evt.data[ATTR_NODE_ID] != lock.zwave_js_lock_node.node_id
+#             or evt.data[ATTR_DEVICE_ID] != lock.zwave_js_lock_device.id
+#         ):
+#             continue
+
+#         # Get lock state to provide as part of event data
+#         lock_state = hass.states.get(lock.lock_entity_id)
+
+#         params = evt.data.get(ATTR_PARAMETERS) or {}
+#         code_slot = params.get("userId", 0)
+
+#         # Lookup name for usercode
+#         code_slot_name_state = (
+#             hass.states.get(f"input_text.{lock.lock_name}_name_{code_slot}")
+#             if code_slot and code_slot != 0
+#             else None
+#         )
+
+#         hass.bus.fire(
+#             EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+#             event_data={
+#                 ATTR_NOTIFICATION_SOURCE: "event",
+#                 ATTR_NAME: lock.lock_name,
+#                 ATTR_ENTITY_ID: lock.lock_entity_id,
+#                 ATTR_STATE: lock_state.state if lock_state else "",
+#                 ATTR_ACTION_TEXT: evt.data.get(ATTR_EVENT_LABEL),
+#                 ATTR_CODE_SLOT: code_slot or 0,
+#                 ATTR_CODE_SLOT_NAME: (
+#                     code_slot_name_state.state
+#                     if code_slot_name_state is not None
+#                     else ""
+#                 ),
+#             },
+#         )
+#         return
+
+
+async def homeassistant_started_listener(
+    hass: HomeAssistant,
+    lock: KeymasterLock,
+    evt: Event = None,
+):
+    """Start tracking state changes after HomeAssistant has started."""
+    # Listen to lock state changes so we can fire an event
+    lock.listeners.append(
+        async_track_state_change_event(
+            hass,
+            lock.lock_entity_id,
+            functools.partial(handle_state_change, hass, lock),
+        )
+    )
 
 
 @callback
 def handle_state_change(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    lock: KeymasterLock,
     changed_entity: str,
     event: Event[EventStateChangedData] | None = None,
 ) -> None:
@@ -279,96 +297,191 @@ def handle_state_change(
     if not event:
         return
 
-    primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks: list[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
-        CHILD_LOCKS
-    ]
     new_state = event.data["new_state"]
 
-    for lock in [primary_lock, *child_locks]:
-        # Don't do anything if the changed entity is not this lock
-        if changed_entity != lock.lock_entity_id:
-            continue
-
-        # Determine action type to set appropriate action text using ACTION_MAP
-        action_type = ""
-        if lock.alarm_type_or_access_control_entity_id and (
-            ALARM_TYPE in lock.alarm_type_or_access_control_entity_id
-            or ALARM_TYPE.replace("_", "")
-            in lock.alarm_type_or_access_control_entity_id
-        ):
-            action_type = ALARM_TYPE
-        if (
-            lock.alarm_type_or_access_control_entity_id
-            and ACCESS_CONTROL in lock.alarm_type_or_access_control_entity_id
-        ):
-            action_type = ACCESS_CONTROL
-
-        # Get alarm_level/usercode and alarm_type/access_control  states
-        alarm_level_state = hass.states.get(lock.alarm_level_or_user_code_entity_id)
-        alarm_level_value = (
-            int(alarm_level_state.state)
-            if alarm_level_state
-            and alarm_level_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
-            else None
-        )
-
-        alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
-        alarm_type_value = (
-            int(alarm_type_state.state)
-            if alarm_type_state
-            and alarm_type_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
-            else None
-        )
-
-        # Bail out if we can't use the sensors to provide a meaningful message
-        if alarm_level_value is None or alarm_type_value is None:
-            return
-
-        # If lock has changed state but alarm_type/access_control state hasn't changed
-        # in a while set action_value to RF lock/unlock
-        if (
-            alarm_level_state is not None
-            and int(alarm_level_state.state) == 0
-            and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
-            > timedelta(seconds=5)
-            and action_type in LOCK_STATE_MAP
-        ):
-            alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
-
-        # Lookup action text based on alarm type value
-        action_text = (
-            ACTION_MAP.get(action_type, {}).get(
-                alarm_type_value, "Unknown Alarm Type Value"
-            )
-            if alarm_type_value is not None
-            else None
-        )
-
-        # Lookup name for usercode
-        code_slot_name_state = hass.states.get(
-            f"input_text.{lock.lock_name}_name_{alarm_level_value}"
-        )
-
-        # Fire state change event
-        hass.bus.fire(
-            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-            event_data={
-                ATTR_NOTIFICATION_SOURCE: "entity_state",
-                ATTR_NAME: lock.lock_name,
-                ATTR_ENTITY_ID: lock.lock_entity_id,
-                ATTR_STATE: new_state.state,
-                ATTR_ACTION_CODE: alarm_type_value,
-                ATTR_ACTION_TEXT: action_text,
-                ATTR_CODE_SLOT: alarm_level_value or 0,
-                ATTR_CODE_SLOT_NAME: (
-                    code_slot_name_state.state
-                    if code_slot_name_state is not None
-                    else ""
-                ),
-            },
-        )
+    # Don't do anything if the changed entity is not this lock
+    if changed_entity != lock.lock_entity_id:
         return
+
+    # Determine action type to set appropriate action text using ACTION_MAP
+    action_type = ""
+    if lock.alarm_type_or_access_control_entity_id and (
+        ALARM_TYPE in lock.alarm_type_or_access_control_entity_id
+        or ALARM_TYPE.replace("_", "") in lock.alarm_type_or_access_control_entity_id
+    ):
+        action_type = ALARM_TYPE
+    if (
+        lock.alarm_type_or_access_control_entity_id
+        and ACCESS_CONTROL in lock.alarm_type_or_access_control_entity_id
+    ):
+        action_type = ACCESS_CONTROL
+
+    # Get alarm_level/usercode and alarm_type/access_control  states
+    alarm_level_state = hass.states.get(lock.alarm_level_or_user_code_entity_id)
+    alarm_level_value = (
+        int(alarm_level_state.state)
+        if alarm_level_state
+        and alarm_level_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+        else None
+    )
+
+    alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
+    alarm_type_value = (
+        int(alarm_type_state.state)
+        if alarm_type_state
+        and alarm_type_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+        else None
+    )
+
+    # Bail out if we can't use the sensors to provide a meaningful message
+    if alarm_level_value is None or alarm_type_value is None:
+        return
+
+    # If lock has changed state but alarm_type/access_control state hasn't changed
+    # in a while set action_value to RF lock/unlock
+    if (
+        alarm_level_state is not None
+        and int(alarm_level_state.state) == 0
+        and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
+        > timedelta(seconds=5)
+        and action_type in LOCK_STATE_MAP
+    ):
+        alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
+
+    # Lookup action text based on alarm type value
+    action_text = (
+        ACTION_MAP.get(action_type, {}).get(
+            alarm_type_value, "Unknown Alarm Type Value"
+        )
+        if alarm_type_value is not None
+        else None
+    )
+
+    # Lookup name for usercode
+    code_slot_name_state = hass.states.get(
+        f"input_text.{lock.lock_name}_name_{alarm_level_value}"
+    )
+
+    # Fire state change event
+    hass.bus.fire(
+        EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+        event_data={
+            ATTR_NOTIFICATION_SOURCE: "entity_state",
+            ATTR_NAME: lock.lock_name,
+            ATTR_ENTITY_ID: lock.lock_entity_id,
+            ATTR_STATE: new_state.state,
+            ATTR_ACTION_CODE: alarm_type_value,
+            ATTR_ACTION_TEXT: action_text,
+            ATTR_CODE_SLOT: alarm_level_value or 0,
+            ATTR_CODE_SLOT_NAME: (
+                code_slot_name_state.state if code_slot_name_state is not None else ""
+            ),
+        },
+    )
+    return
+
+
+# @callback
+# def handle_state_change(
+#     hass: HomeAssistant,
+#     config_entry: ConfigEntry,
+#     changed_entity: str,
+#     event: Event[EventStateChangedData] | None = None,
+# ) -> None:
+#     """Listener to track state changes to lock entities."""
+#     if not event:
+#         return
+
+#     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+#     child_locks: list[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
+#         CHILD_LOCKS
+#     ]
+#     new_state = event.data["new_state"]
+
+#     for lock in [primary_lock, *child_locks]:
+#         # Don't do anything if the changed entity is not this lock
+#         if changed_entity != lock.lock_entity_id:
+#             continue
+
+#         # Determine action type to set appropriate action text using ACTION_MAP
+#         action_type = ""
+#         if lock.alarm_type_or_access_control_entity_id and (
+#             ALARM_TYPE in lock.alarm_type_or_access_control_entity_id
+#             or ALARM_TYPE.replace("_", "")
+#             in lock.alarm_type_or_access_control_entity_id
+#         ):
+#             action_type = ALARM_TYPE
+#         if (
+#             lock.alarm_type_or_access_control_entity_id
+#             and ACCESS_CONTROL in lock.alarm_type_or_access_control_entity_id
+#         ):
+#             action_type = ACCESS_CONTROL
+
+#         # Get alarm_level/usercode and alarm_type/access_control  states
+#         alarm_level_state = hass.states.get(lock.alarm_level_or_user_code_entity_id)
+#         alarm_level_value = (
+#             int(alarm_level_state.state)
+#             if alarm_level_state
+#             and alarm_level_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+#             else None
+#         )
+
+#         alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
+#         alarm_type_value = (
+#             int(alarm_type_state.state)
+#             if alarm_type_state
+#             and alarm_type_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+#             else None
+#         )
+
+#         # Bail out if we can't use the sensors to provide a meaningful message
+#         if alarm_level_value is None or alarm_type_value is None:
+#             return
+
+#         # If lock has changed state but alarm_type/access_control state hasn't changed
+#         # in a while set action_value to RF lock/unlock
+#         if (
+#             alarm_level_state is not None
+#             and int(alarm_level_state.state) == 0
+#             and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
+#             > timedelta(seconds=5)
+#             and action_type in LOCK_STATE_MAP
+#         ):
+#             alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
+
+#         # Lookup action text based on alarm type value
+#         action_text = (
+#             ACTION_MAP.get(action_type, {}).get(
+#                 alarm_type_value, "Unknown Alarm Type Value"
+#             )
+#             if alarm_type_value is not None
+#             else None
+#         )
+
+#         # Lookup name for usercode
+#         code_slot_name_state = hass.states.get(
+#             f"input_text.{lock.lock_name}_name_{alarm_level_value}"
+#         )
+
+#         # Fire state change event
+#         hass.bus.fire(
+#             EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+#             event_data={
+#                 ATTR_NOTIFICATION_SOURCE: "entity_state",
+#                 ATTR_NAME: lock.lock_name,
+#                 ATTR_ENTITY_ID: lock.lock_entity_id,
+#                 ATTR_STATE: new_state.state,
+#                 ATTR_ACTION_CODE: alarm_type_value,
+#                 ATTR_ACTION_TEXT: action_text,
+#                 ATTR_CODE_SLOT: alarm_level_value or 0,
+#                 ATTR_CODE_SLOT_NAME: (
+#                     code_slot_name_state.state
+#                     if code_slot_name_state is not None
+#                     else ""
+#                 ),
+#             },
+#         )
+#         return
 
 
 def reset_code_slot_if_pin_unknown(

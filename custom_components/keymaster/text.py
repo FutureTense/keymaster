@@ -1,9 +1,10 @@
 """Support for keymaster text."""
 
 import logging
+from dataclasses import dataclass
 
 import homeassistant.helpers.entity_registry as er
-from homeassistant.components.text import TextEntity, TextMode
+from homeassistant.components.text import TextEntity, TextEntityDescription, TextMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
@@ -12,16 +13,16 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import slugify
 
 from .const import (
-    CHILD_LOCKS,
     CONF_HIDE_PINS,
+    CONF_LOCK_NAME,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
     DOMAIN,
-    PRIMARY_LOCK,
 )
-from .coordinator import LockUsercodeUpdateCoordinator
-from .entity import KeymasterEntity
+from .coordinator import KeymasterCoordinator
+from .entity import KeymasterEntity, KeymasterEntityDescription
+from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 PLATFORM: Platform = Platform.TEXT
@@ -33,25 +34,21 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-
-    primary_lock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks = hass.data[DOMAIN][config_entry.entry_id][CHILD_LOCKS]
     start_from = config_entry.data[CONF_START]
     code_slots = config_entry.data[CONF_SLOTS]
-    coordinator: LockUsercodeUpdateCoordinator = hass.data[DOMAIN][
-        config_entry.entry_id
-    ][COORDINATOR]
+    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    lock: KeymasterLock = await coordinator.get_lock_by_name(
+        config_entry.data[CONF_LOCK_NAME]
+    )
     entities: list = []
     entities.append(
         KeymasterText(
             hass=hass,
             config_entry=config_entry,
             coordinator=coordinator,
-            primary_lock=primary_lock,
-            child_locks=child_locks,
             text_name="Lock Name",
-            text_entity_id=f"{primary_lock.lock_name}_lockname",
-            initial_value=primary_lock.lock_name,
+            text_entity_id=f"{lock.lock_name}_lockname",
+            initial_value=lock.lock_name,
         )
     )
     entities.append(
@@ -59,10 +56,8 @@ async def async_setup_entry(
             hass=hass,
             config_entry=config_entry,
             coordinator=coordinator,
-            primary_lock=primary_lock,
-            child_locks=child_locks,
             text_name="Day Auto Lock HH:MM:SS",
-            text_entity_id=f"keymaster_{primary_lock.lock_name}_autolock_door_time_day",
+            text_entity_id=f"keymaster_{lock.lock_name}_autolock_door_time_day",
         )
     )
     entities.append(
@@ -70,23 +65,19 @@ async def async_setup_entry(
             hass=hass,
             config_entry=config_entry,
             coordinator=coordinator,
-            primary_lock=primary_lock,
-            child_locks=child_locks,
             text_name="Night Auto Lock HH:MM:SS",
-            text_entity_id=f"keymaster_{primary_lock.lock_name}_autolock_door_time_night",
+            text_entity_id=f"keymaster_{lock.lock_name}_autolock_door_time_night",
         )
     )
-    if hasattr(primary_lock, "parent") and primary_lock.parent is not None:
+    if hasattr(lock, "parent") and lock.parent is not None:
         entities.append(
             KeymasterText(
                 hass=hass,
                 config_entry=config_entry,
                 coordinator=coordinator,
-                primary_lock=primary_lock,
-                child_locks=child_locks,
                 text_name="Parent Lock",
-                text_entity_id=f"{primary_lock.lock_name}_{primary_lock.parent}_parent",
-                initial_value=primary_lock.parent,
+                text_entity_id=f"{lock.lock_name}_{lock.parent}_parent",
+                initial_value=lock.parent,
             )
         )
 
@@ -96,10 +87,8 @@ async def async_setup_entry(
                 hass=hass,
                 config_entry=config_entry,
                 coordinator=coordinator,
-                primary_lock=primary_lock,
-                child_locks=child_locks,
                 text_name=f"Name {x}",
-                text_entity_id=f"{primary_lock.lock_name}_name_{x}",
+                text_entity_id=f"{lock.lock_name}_name_{x}",
             )
         )
         entities.append(
@@ -107,10 +96,8 @@ async def async_setup_entry(
                 hass=hass,
                 config_entry=config_entry,
                 coordinator=coordinator,
-                primary_lock=primary_lock,
-                child_locks=child_locks,
                 text_name=f"PIN {x}",
-                text_entity_id=f"{primary_lock.lock_name}_pin_{x}",
+                text_entity_id=f"{lock.lock_name}_pin_{x}",
                 text_mode=(
                     TextMode.PASSWORD
                     if config_entry.data.get(CONF_HIDE_PINS)
@@ -144,6 +131,9 @@ async def async_setup_entry(
     async_add_entities(entities, True)
     return True
 
+@dataclass
+class KeymasterTextEntityDescription(KeymasterEntityDescription, TextEntityDescription):
+    pass
 
 class KeymasterText(KeymasterEntity, TextEntity):
     """Representation of a keymaster text."""
@@ -152,9 +142,10 @@ class KeymasterText(KeymasterEntity, TextEntity):
         self,
         hass: HomeAssistant,
         config_entry: ConfigEntry,
-        coordinator: LockUsercodeUpdateCoordinator,
+        coordinator: KeymasterCoordinator,
         text_name: str,
         text_entity_id: str,
+        entity_description: KeymasterTextEntityDescription,
         text_mode: TextMode = TextMode.TEXT,
         initial_value: str = None,
     ) -> None:
@@ -163,9 +154,12 @@ class KeymasterText(KeymasterEntity, TextEntity):
             hass=hass,
             config_entry=config_entry,
             coordinator=coordinator,
+            entity_description=entity_description,
         )
         self._attr_name: str = text_name
-        self._attr_unique_id: str = slugify(text_entity_id)
+        self._attr_unique_id: str = (
+            f"{self._keymaster_device_id}_{slugify(text_entity_id)}"
+        )
         _LOGGER.debug(f"[text init] name: {self.name}, unique_id: {self.unique_id}")
         self._attr_native_value: str = initial_value
         self._attr_mode = text_mode
@@ -190,3 +184,4 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
     def set_value(self, value: str) -> None:
         self._attr_native_value = value
+

@@ -1,5 +1,6 @@
 """keymaster Integration."""
 
+import asyncio
 import functools
 import logging
 from collections.abc import Mapping
@@ -13,8 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import slugify
 
-from .binary_sensor import generate_binary_sensor_name
-from .const import ATTR_CODE_SLOT, DOMAIN, UNSUB_LISTENERS
+from .const import ATTR_CODE_SLOT, DOMAIN
 from .exceptions import (
     NoNodeSpecifiedError,
     ZWaveIntegrationNotConfiguredError,
@@ -28,7 +28,7 @@ from .exceptions import (
 )
 from .helpers import (
     async_using_zwave_js,
-    handle_zwave_js_event_new,
+    handle_zwave_js_event,
     homeassistant_started_listener,
 )
 from .lock import KeymasterLock
@@ -48,7 +48,12 @@ except (ModuleNotFoundError, ImportError):
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
+def generate_binary_sensor_name(lock_name: str) -> str:
+    """Generate unique ID for network ready sensor."""
+    return f"{lock_name}: Network"
+
+
+class KeymasterCoordinator(DataUpdateCoordinator):
     """Class to manage keymaster locks."""
 
     def __init__(self, hass: HomeAssistant) -> None:
@@ -59,7 +64,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=5),
+            update_interval=timedelta(seconds=60),
             # update_method=self.async_update_usercodes,
         )
 
@@ -199,13 +204,13 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         lock.listeners = []
 
     async def _update_listeners(self, lock: KeymasterLock):
-        self._unsubscribe_listeners(lock)
-        if async_using_zwave_js(lock=lock):
+        await self._unsubscribe_listeners(lock)
+        if async_using_zwave_js(hass=self.hass, lock=lock):
             # Listen to Z-Wave JS events so we can fire our own events
-            lock[UNSUB_LISTENERS].append(
+            lock.listeners.append(
                 self.hass.bus.async_listen(
                     ZWAVE_JS_NOTIFICATION_EVENT,
-                    functools.partial(handle_zwave_js_event_new, self.hass, lock),
+                    functools.partial(handle_zwave_js_event, self.hass, lock),
                 )
             )
 
@@ -275,6 +280,30 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         await self._update_code_slots()
         return True
 
+    async def get_lock_by_name(self, lock_name: str) -> KeymasterLock | None:
+        for lock in self.locks.values():
+            if lock_name == lock.lock_name:
+                return lock
+        return None
+
+    async def get_lock_by_device_id(
+        self, keymaster_device_id: str
+    ) -> KeymasterLock | None:
+        _LOGGER.debug(
+            f"[get_lock_by_device_id] keymaster_device_id: {keymaster_device_id} ({type(keymaster_device_id)})"
+        )
+        if keymaster_device_id not in self.locks:
+            return None
+        return self.locks[keymaster_device_id]
+
+    def sync_get_lock_by_device_id(
+        self, keymaster_device_id: str
+    ) -> KeymasterLock | None:
+        return asyncio.run_coroutine_threadsafe(
+            self.get_lock_by_device_id(keymaster_device_id),
+            self.hass.loop,
+        ).result()
+
     async def _check_lock_connection(self, lock) -> bool:
         # TODO: redo this to use lock.connected
         self.network_sensor = self._entity_registry.async_get_entity_id(
@@ -308,11 +337,11 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         pass
 
     async def _async_update_data(self) -> Mapping[str, Any]:
-        for lock in self.locks:
-            if not self._check_lock_connection(lock):
+        for lock in self.locks.values():
+            if not await self._check_lock_connection(lock):
                 raise UpdateFailed()
 
-            if async_using_zwave_js(lock=lock):
+            if async_using_zwave_js(hass=self.hass, lock=lock):
                 node: ZwaveJSNode = lock.zwave_js_lock_node
                 if node is None:
                     raise NativeNotFoundError

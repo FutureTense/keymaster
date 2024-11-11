@@ -1,11 +1,12 @@
 """Services for keymaster."""
 
+from collections.abc import Mapping
 import logging
 import os
-from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
+
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.persistent_notification import create
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
@@ -33,23 +34,22 @@ from .const import (
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
 from .helpers import (
-    async_reset_code_slot_if_pin_unknown,
     async_using_zwave_js,
     get_code_slots_list,
-    output_to_file_from_template,
     reload_package_platforms,
     reset_code_slot_if_pin_unknown,
 )
 from .lock import KeymasterLock
 
 try:
+    from zwave_js_server.util.lock import get_usercode_from_node
+
     from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
     from homeassistant.components.zwave_js.helpers import async_get_node_from_entity_id
     from homeassistant.components.zwave_js.lock import (
         SERVICE_CLEAR_LOCK_USERCODE,
         SERVICE_SET_LOCK_USERCODE,
     )
-    from zwave_js_server.util.lock import get_usercode_from_node
 except (ModuleNotFoundError, ImportError):
     pass
 
@@ -135,13 +135,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
     )
 
-    await async_reset_code_slot_if_pin_unknown(
-        hass,
-        # TODO: Redo this
-        # primary_lock.lock_name,
-        # config_entry.data[CONF_SLOTS],
-        # config_entry.data[CONF_START],
-    )
+    # TODO: Redo this
+    # await async_reset_code_slot_if_pin_unknown(
+    #     hass,
+    #     primary_lock.lock_name,
+    #     config_entry.data[CONF_SLOTS],
+    #     config_entry.data[CONF_START],
+    # )
 
 
 async def init_child_locks(
@@ -188,7 +188,7 @@ async def refresh_codes(  # pylint: disable-next=unused-argument
         return
 
     ent_reg = async_get_entity_registry(hass)
-    if async_using_zwave_js(entity_id=entity_id, ent_reg=ent_reg):
+    if async_using_zwave_js(hass=hass, entity_id=entity_id):
         code_slots = get_code_slots_list(config_entry.data)
         node = async_get_node_from_entity_id(hass, entity_id, ent_reg=ent_reg)
         for code_slot in code_slots:
@@ -207,9 +207,7 @@ async def add_code(
         ATTR_USER_CODE: usercode,
     }
 
-    if async_using_zwave_js(
-        entity_id=entity_id, ent_reg=async_get_entity_registry(hass)
-    ):
+    if async_using_zwave_js(hass=hass, entity_id=entity_id):
         servicedata[ATTR_ENTITY_ID] = entity_id
         await call_service(
             hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
@@ -223,9 +221,7 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
     """Clear the usercode from a code slot."""
     _LOGGER.debug("Attempting to call clear_usercode...")
 
-    if async_using_zwave_js(
-        entity_id=entity_id, ent_reg=async_get_entity_registry(hass)
-    ):
+    if async_using_zwave_js(hass=hass, entity_id=entity_id):
         servicedata = {
             ATTR_ENTITY_ID: entity_id,
             ATTR_CODE_SLOT: code_slot,
@@ -352,30 +348,30 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
     }
 
     # Replace variables in common file
-    for in_f, out_f, write_mode in (
-        (
-            f"keymaster_common{child_file}.yaml",
-            f"{lockname}_keymaster_common.yaml",
-            "w+",
-        ),
-        (f"lovelace{child_file}.head", f"{lockname}_lovelace", "w+"),
-    ):
-        output_to_file_from_template(
-            input_path, in_f, output_path, out_f, replacements, write_mode
-        )
+    # for in_f, out_f, write_mode in (
+    #     (
+    #         f"keymaster_common{child_file}.yaml",
+    #         f"{lockname}_keymaster_common.yaml",
+    #         "w+",
+    #     ),
+    #     (f"lovelace{child_file}.head", f"{lockname}_lovelace", "w+"),
+    # ):
+    #     output_to_file_from_template(
+    #         input_path, in_f, output_path, out_f, replacements, write_mode
+    #     )
 
     _LOGGER.debug("Creating per slot YAML and lovelace cards...")
     # Replace variables in code slot files
     for x in range(start_from, start_from + code_slots):
         replacements["TEMPLATENUM"] = str(x)
 
-        for in_f, out_f, write_mode in (
-            (f"keymaster{child_file}.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
-            (f"lovelace{child_file}.code", f"{lockname}_lovelace", "a"),
-        ):
-            output_to_file_from_template(
-                input_path, in_f, output_path, out_f, replacements, write_mode
-            )
+        # for in_f, out_f, write_mode in (
+        #     (f"keymaster{child_file}.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
+        #     (f"lovelace{child_file}.code", f"{lockname}_lovelace", "a"),
+        # ):
+        #     output_to_file_from_template(
+        #         input_path, in_f, output_path, out_f, replacements, write_mode
+        #     )
 
     if reload_package_platforms(hass):
         create(
