@@ -134,10 +134,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         CHILD_LOCKS: child_locks,
         UNSUB_LISTENERS: [],
     }
-    coordinator = LockUsercodeUpdateCoordinator(
-        hass, config_entry, async_get_entity_registry(hass)
-    )
-    hass.data[DOMAIN][config_entry.entry_id][COORDINATOR] = coordinator
+    if COORDINATOR not in hass.data[DOMAIN]:
+        coordinator = LockUsercodeUpdateCoordinator(
+            hass, config_entry, async_get_entity_registry(hass)
+        )
+        hass.data[DOMAIN][COORDINATOR] = coordinator
+    else:
+        coordinator = hass.data[DOMAIN][COORDINATOR]
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
