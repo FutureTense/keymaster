@@ -1,9 +1,10 @@
 """Adds config flow for keymaster."""
 
 import asyncio
+from collections.abc import Mapping
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import voluptuous as vol
 from voluptuous.schema_builder import ALLOW_EXTRA
@@ -68,7 +69,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
-    async def _get_unique_name_error(self, user_input) -> Dict[str, str]:
+    async def _get_unique_name_error(self, user_input) -> Mapping[str, str]:
         """Check if name is unique, returning dictionary error if so."""
         # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
@@ -79,8 +80,8 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return {}
 
     async def async_step_user(
-        self, user_input: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+        self, user_input: Mapping[str, Any] = None
+    ) -> Mapping[str, Any]:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
             self,
@@ -114,8 +115,8 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
         return {}
 
     async def async_step_init(
-        self, user_input: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+        self, user_input: Mapping[str, Any] = None
+    ) -> Mapping[str, Any]:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
             self,
@@ -147,9 +148,9 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
 def _get_entities(
     hass: HomeAssistant,
     domain: str,
-    search: List[str] = None,
-    extra_entities: List[str] = None,
-) -> List[str]:
+    search: list[str] = None,
+    extra_entities: list[str] = None,
+) -> list[str]:
     data = []
     if domain not in hass.data:
         return data
@@ -167,8 +168,8 @@ def _get_entities(
 
 def _get_schema(
     hass: HomeAssistant,
-    user_input: Optional[Dict[str, Any]],
-    default_dict: Dict[str, Any],
+    user_input: Mapping[str, Any] | None,
+    default_dict: Mapping[str, Any],
     entry_id: str = None,
 ) -> vol.Schema:
     """Gets a schema using the default_dict as a backup."""
@@ -244,14 +245,14 @@ def _get_schema(
 
 
 def _show_config_form(
-    cls: Union[KeyMasterFlowHandler, KeyMasterOptionsFlow],
+    cls: KeyMasterFlowHandler | KeyMasterOptionsFlow,
     step_id: str,
-    user_input: Dict[str, Any],
-    errors: Dict[str, str],
-    description_placeholders: Dict[str, str],
-    defaults: Dict[str, Any] = None,
+    user_input: Mapping[str, Any],
+    errors: Mapping[str, str],
+    description_placeholders: Mapping[str, str],
+    defaults: Mapping[str, Any] = None,
     entry_id: str = None,
-) -> Dict[str, Any]:
+) -> Mapping[str, Any]:
     """Show the configuration form to edit location data."""
     return cls.async_show_form(
         step_id=step_id,
@@ -262,11 +263,11 @@ def _show_config_form(
 
 
 async def _start_config_flow(
-    cls: Union[KeyMasterFlowHandler, KeyMasterOptionsFlow],
+    cls: KeyMasterFlowHandler | KeyMasterOptionsFlow,
     step_id: str,
     title: str,
-    user_input: Dict[str, Any],
-    defaults: Dict[str, Any] = None,
+    user_input: Mapping[str, Any],
+    defaults: Mapping[str, Any] = None,
     entry_id: str = None,
 ):
     """Start a config flow."""

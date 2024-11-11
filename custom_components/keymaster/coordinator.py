@@ -1,8 +1,9 @@
 """keymaster Integration."""
 
-from datetime import timedelta
 import logging
-from typing import Any, Dict, List, Optional, Union
+from collections.abc import Mapping
+from datetime import timedelta
+from typing import Any, Optional, Union
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON
@@ -21,10 +22,14 @@ from .const import (
 )
 from .exceptions import (
     NoNodeSpecifiedError,
-    NotFoundError as NativeNotFoundError,
-    NotSupportedError as NativeNotSupportedError,
     ZWaveIntegrationNotConfiguredError,
     ZWaveNetworkNotReady,
+)
+from .exceptions import (
+    NotFoundError as NativeNotFoundError,
+)
+from .exceptions import (
+    NotSupportedError as NativeNotSupportedError,
 )
 from .helpers import async_using_zwave_js, get_code_slots_list
 from .lock import KeymasterLock
@@ -48,7 +53,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
         self._primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
             PRIMARY_LOCK
         ]
-        self._child_locks: List[KeymasterLock] = hass.data[DOMAIN][
+        self._child_locks: list[KeymasterLock] = hass.data[DOMAIN][
             config_entry.entry_id
         ][CHILD_LOCKS]
         self.config_entry = config_entry
@@ -91,7 +96,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
 
         return data
 
-    async def async_update_usercodes(self) -> Dict[Union[str, int], Any]:
+    async def async_update_usercodes(self) -> Mapping[Union[str, int], Any]:
         """Wrapper to update usercodes."""
         self.slots = get_code_slots_list(self.config_entry.data)
         if not self.network_sensor:
@@ -125,7 +130,7 @@ class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
                 return {}
             raise UpdateFailed from err
 
-    async def _async_update(self) -> Dict[Union[str, int], Any]:
+    async def _async_update(self) -> Mapping[Union[str, int], Any]:
         """Update usercodes."""
         # loop to get user code data from entity_id node
         data = {CONF_LOCK_ENTITY_ID: self._primary_lock.lock_entity_id}

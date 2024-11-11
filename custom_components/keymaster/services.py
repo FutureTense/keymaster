@@ -2,7 +2,8 @@
 
 import logging
 import os
-from typing import Any, Dict, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
@@ -42,14 +43,13 @@ from .helpers import (
 from .lock import KeymasterLock
 
 try:
-    from zwave_js_server.util.lock import get_usercode_from_node
-
     from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
     from homeassistant.components.zwave_js.helpers import async_get_node_from_entity_id
     from homeassistant.components.zwave_js.lock import (
         SERVICE_CLEAR_LOCK_USERCODE,
         SERVICE_SET_LOCK_USERCODE,
     )
+    from zwave_js_server.util.lock import get_usercode_from_node
 except (ModuleNotFoundError, ImportError):
     pass
 
@@ -158,7 +158,10 @@ async def init_child_locks(
 
 
 async def call_service(
-    hass: HomeAssistant, domain: str, service: str, service_data: Dict[str, Any] = None
+    hass: HomeAssistant,
+    domain: str,
+    service: str,
+    service_data: Mapping[str, Any] = None,
 ):
     """Call a hass service and log a failure on an error."""
     try:

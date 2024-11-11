@@ -1,10 +1,11 @@
 """Helpers for keymaster."""
 
 import asyncio
-from datetime import timedelta
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from collections.abc import Mapping
+from datetime import timedelta
+from typing import Optional
 
 from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
@@ -28,6 +29,8 @@ from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers.device_registry import async_get as async_get_device_registry
 from homeassistant.helpers.entity_registry import (
     EntityRegistry,
+)
+from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
 )
 from homeassistant.util import dt as dt_util
@@ -61,15 +64,18 @@ from .lock import KeymasterLock
 zwave_js_supported = True
 
 try:
-    from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
-
     from homeassistant.components.zwave_js.const import (
         ATTR_EVENT_LABEL,
         ATTR_NODE_ID,
         ATTR_PARAMETERS,
+    )
+    from homeassistant.components.zwave_js.const import (
         DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
+    )
+    from homeassistant.components.zwave_js.const import (
         DOMAIN as ZWAVE_JS_DOMAIN,
     )
+    from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
 except (ModuleNotFoundError, ImportError):
     zwave_js_supported = False
     ATTR_CODE_SLOT = "code_slot"
@@ -107,14 +113,14 @@ def async_using_zwave_js(
     )
 
 
-def get_code_slots_list(data: Dict[str, int]) -> List[int]:
+def get_code_slots_list(data: Mapping[str, int]) -> list[int]:
     """Get list of code slots."""
     return list(range(data[CONF_START], data[CONF_START] + data[CONF_SLOTS]))
 
 
 async def generate_keymaster_locks(
     hass: HomeAssistant, config_entry: ConfigEntry
-) -> Tuple[KeymasterLock, List[KeymasterLock]]:
+) -> tuple[KeymasterLock, list[KeymasterLock]]:
     """Generate primary and child keymaster locks from config entry."""
     ent_reg = async_get_entity_registry(hass)
     primary_lock = KeymasterLock(
@@ -144,7 +150,7 @@ async def async_update_zwave_js_nodes_and_devices(
     hass: HomeAssistant,
     entry_id: str,
     primary_lock: KeymasterLock,
-    child_locks: List[KeymasterLock],
+    child_locks: list[KeymasterLock],
 ) -> None:
     """Update Z-Wave JS nodes and devices."""
     try:
@@ -176,7 +182,7 @@ def output_to_file_from_template(
     input_filename: str,
     output_path: str,
     output_filename: str,
-    replacements_dict: Dict[str, str],
+    replacements_dict: Mapping[str, str],
     write_mode: str,
 ) -> None:
     """Generate file output from input templates while replacing string references."""
@@ -215,7 +221,7 @@ def delete_folder(absolute_path: str, *relative_paths: str) -> None:
 def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: Event):
     """Handle Z-Wave JS event."""
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
+    child_locks: list[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
         CHILD_LOCKS
     ]
 
@@ -274,7 +280,7 @@ def handle_state_change(
         return
 
     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
+    child_locks: list[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
         CHILD_LOCKS
     ]
     new_state = event.data["new_state"]

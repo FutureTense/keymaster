@@ -3,7 +3,6 @@
 import asyncio
 import functools
 import logging
-from typing import List
 
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
@@ -15,7 +14,6 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import slugify
 
-from .binary_sensor import generate_binary_sensor_name as generate_binary_sensor_name
 from .const import (
     CHILD_LOCKS,
     CONF_ALARM_LEVEL,
@@ -44,15 +42,6 @@ from .const import (
     VERSION,
 )
 from .coordinator import LockUsercodeUpdateCoordinator
-from .exceptions import (
-    NoNodeSpecifiedError as NoNodeSpecifiedError,
-)
-from .exceptions import (
-    ZWaveIntegrationNotConfiguredError as ZWaveIntegrationNotConfiguredError,
-)
-from .exceptions import (
-    ZWaveNetworkNotReady as ZWaveNetworkNotReady,
-)
 from .helpers import (
     async_reload_package_platforms,
     async_using_zwave_js,
@@ -80,7 +69,7 @@ CLEAR_USERCODE = "clear_usercode"
 async def homeassistant_started_listener(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    locks_to_watch: List[KeymasterLock],  # pylint: disable-next=unused-argument
+    locks_to_watch: list[KeymasterLock],  # pylint: disable-next=unused-argument
     evt: Event = None,
 ):
     """Start tracking state changes after HomeAssistant has started."""

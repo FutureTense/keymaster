@@ -1,7 +1,6 @@
 """Sensor for keymaster."""
 
 import logging
-from typing import List
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -19,6 +18,8 @@ from .lock import KeymasterLock
 try:
     from homeassistant.components.zwave_js.const import (
         DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
+    )
+    from homeassistant.components.zwave_js.const import (
         DOMAIN as ZWAVE_JS_DOMAIN,
     )
 except (ModuleNotFoundError, ImportError):
@@ -53,7 +54,7 @@ class BaseNetworkReadySensor(BinarySensorEntity):
     def __init__(
         self,
         primary_lock: KeymasterLock,
-        child_locks: List[KeymasterLock],
+        child_locks: list[KeymasterLock],
         integration_name: str,
     ) -> None:
         """Initialize sensor."""
@@ -90,7 +91,7 @@ class ZwaveJSNetworkReadySensor(BaseNetworkReadySensor):
     """Binary sensor to indicate whether or not `zwave_js` network is ready."""
 
     def __init__(
-        self, primary_lock: KeymasterLock, child_locks: List[KeymasterLock]
+        self, primary_lock: KeymasterLock, child_locks: list[KeymasterLock]
     ) -> None:
         """Initialize sensor."""
         super().__init__(primary_lock, child_locks, ZWAVE_JS_DOMAIN)

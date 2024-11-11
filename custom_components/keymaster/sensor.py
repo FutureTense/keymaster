@@ -1,8 +1,8 @@
 """Sensor for keymaster."""
 
-from functools import partial
 import logging
-from typing import List, Optional
+from functools import partial
+from typing import Optional
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -11,6 +11,8 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_registry import (
     EntityRegistry,
+)
+from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -50,8 +52,8 @@ async def async_setup_entry(
         ent_reg: EntityRegistry,
         platform: entity_platform.EntityPlatform,
         config_entry: ConfigEntry,
-        old_slots: List[int],
-        new_slots: List[int],
+        old_slots: list[int],
+        new_slots: list[int],
     ):
         """Handle code slots changed."""
         slots_to_add = list(set(new_slots) - set(old_slots))
@@ -97,7 +99,7 @@ class CodesSensor(CoordinatorEntity, SensorEntity):
         self.primary_lock: KeymasterLock = hass.data[DOMAIN][entry.entry_id][
             PRIMARY_LOCK
         ]
-        self.child_locks: List[KeymasterLock] = hass.data[DOMAIN][entry.entry_id][
+        self.child_locks: list[KeymasterLock] = hass.data[DOMAIN][entry.entry_id][
             CHILD_LOCKS
         ]
 
