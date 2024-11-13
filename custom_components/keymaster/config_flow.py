@@ -102,13 +102,13 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry):
         """Initialize."""
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     def _get_unique_name_error(self, user_input):
         """Check if name is unique, returning dictionary error if so."""
         # If lock name has changed, make sure new name isn't already being used
         # otherwise show an error
-        if self.config_entry.unique_id != user_input[CONF_LOCK_NAME]:
+        if self._config_entry.unique_id != user_input[CONF_LOCK_NAME]:
             for entry in self.hass.config_entries.async_entries(DOMAIN):
                 if entry.unique_id == user_input[CONF_LOCK_NAME]:
                     return {CONF_LOCK_NAME: "same_name"}
@@ -123,8 +123,8 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
             "init",
             "",
             user_input,
-            self.config_entry.data,
-            self.config_entry.entry_id,
+            self._config_entry.data,
+            self._config_entry.entry_id,
         )
 
 

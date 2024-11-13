@@ -27,10 +27,11 @@ async def async_setup_entry(
     start_from = config_entry.data[CONF_START]
     code_slots = config_entry.data[CONF_SLOTS]
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    lock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
+    kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
         config_entry.entry_id
     )
     entities: list = []
+    # TODO: Remove this one? Doesn't need to be text. Maybe just a static sensor?
     entities.append(
         KeymasterText(
             entity_description=KeymasterTextEntityDescription(
@@ -41,21 +42,20 @@ async def async_setup_entry(
                 config_entry=config_entry,
                 coordinator=coordinator,
             ),
-            initial_value=lock.lock_name,
         )
     )
-    if hasattr(lock, "parent") and lock.parent is not None:
+    # TODO: Remove this one? Doesn't need to be text. Maybe just a static sensor?
+    if hasattr(kmlock, "parent_name") and kmlock.parent_name is not None:
         entities.append(
             KeymasterText(
                 entity_description=KeymasterTextEntityDescription(
-                    key="text.parent",
+                    key="text.parent_name",
                     name="Parent Lock",
                     entity_registry_enabled_default=True,
                     hass=hass,
                     config_entry=config_entry,
                     coordinator=coordinator,
                 ),
-                initial_value=lock.parent,
             )
         )
 
@@ -63,7 +63,7 @@ async def async_setup_entry(
         entities.append(
             KeymasterText(
                 entity_description=KeymasterTextEntityDescription(
-                    key=f"text.code_slot.name:{x}",
+                    key=f"text.code_slots:{x}.name",
                     name=f"Name {x}",
                     entity_registry_enabled_default=True,
                     hass=hass,
@@ -75,7 +75,7 @@ async def async_setup_entry(
         entities.append(
             KeymasterText(
                 entity_description=KeymasterTextEntityDescription(
-                    key=f"text.code_slot.pin:{x}",
+                    key=f"text.code_slots:{x}.pin",
                     name=f"PIN {x}",
                     mode=(
                         TextMode.PASSWORD
@@ -105,21 +105,33 @@ class KeymasterText(KeymasterEntity, TextEntity):
     def __init__(
         self,
         entity_description: KeymasterTextEntityDescription,
-        initial_value: str = None,
     ) -> None:
         """Initialize text."""
         super().__init__(
             entity_description=entity_description,
         )
-        self._attr_native_value: str = initial_value
+        self._attr_native_value: str = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        _LOGGER.debug(
-            f"[Text handle_coordinator_update] self.coordinator.data: {self.coordinator.data}"
-        )
+        # _LOGGER.debug(f"[Text handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
+        if not self._kmlock.connected:
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
 
+        if "code_slots" in self._property and (
+            self._code_slot not in self._kmlock.code_slots
+            or not self._kmlock.code_slots[self._code_slot].enabled
+        ):
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
+        self._attr_available = True
+        self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()
 
     def set_value(self, value: str) -> None:
+        # TODO: Update kmlock and lock
         self._attr_native_value = value

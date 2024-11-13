@@ -29,15 +29,14 @@ try:
     from zwave_js_server.util.lock import get_usercode_from_node, get_usercodes
 
     from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
+    from homeassistant.components.zwave_js.const import (
+        DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
+        DOMAIN as ZWAVE_JS_DOMAIN,
+    )
 except (ModuleNotFoundError, ImportError):
     pass
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
-
-
-# def generate_binary_sensor_name(lock_name: str) -> str:
-#     """Generate unique ID for network ready sensor."""
-#     return f"{lock_name}: Network"
 
 
 class KeymasterCoordinator(DataUpdateCoordinator):
@@ -46,7 +45,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant) -> None:
         self._device_registry = dr.async_get(hass)
         self._entity_registry = er.async_get(hass)
-        self.locks: Mapping[str, KeymasterLock] = {}
+        self.kmlocks: Mapping[str, KeymasterLock] = {}
         super().__init__(
             hass,
             _LOGGER,
@@ -82,294 +81,228 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     #     return data
 
-    # async def async_update_usercodes(self) -> Mapping[Union[str, int], Any]:
-    #     """Wrapper to update usercodes."""
-    #     self.slots = get_code_slots_list(self.config_entry.data)
-    #     if not self.network_sensor:
-    #         self.network_sensor = self._entity_registry.async_get_entity_id(
-    #             "binary_sensor",
-    #             DOMAIN,
-    #             slugify(generate_binary_sensor_name(self._primary_lock.lock_name)),
-    #         )
-    #     if self.network_sensor is None:
-    #         raise UpdateFailed
-    #     try:
-    #         network_ready = self.hass.states.get(self.network_sensor)
-    #         if not network_ready:
-    #             # We may need to get a new entity ID
-    #             self.network_sensor = None
-    #             raise ZWaveNetworkNotReady
-
-    #         if network_ready.state != STATE_ON:
-    #             raise ZWaveNetworkNotReady
-
-    #         return await self._async_update()
-    #     except (
-    #         NativeNotFoundError,
-    #         NativeNotSupportedError,
-    #         NoNodeSpecifiedError,
-    #         ZWaveIntegrationNotConfiguredError,
-    #         ZWaveNetworkNotReady,
-    #     ) as err:
-    #         # We can silently fail if we've never been able to retrieve data
-    #         if not self.locks:
-    #             return {}
-    #         raise UpdateFailed from err
-
-    # async def _async_update(self) -> Mapping[Union[str, int], Any]:
-    #     """Update usercodes."""
-    #     # loop to get user code data from entity_id node
-    #     data = {CONF_LOCK_ENTITY_ID: self._primary_lock.lock_entity_id}
-
-    #     # # make button call
-    #     # servicedata = {"entity_id": self._entity_id}
-    #     # await self.hass.services.async_call(
-    #     #    DOMAIN, SERVICE_REFRESH_CODES, servicedata
-    #     # )
-
-    #     if async_using_zwave_js(lock=self._primary_lock):
-    #         node: ZwaveJSNode = self._primary_lock.zwave_js_lock_node
-    #         if node is None:
-    #             raise NativeNotFoundError
-    #         code_slot = 1
-
-    #         for slot in get_usercodes(node):
-    #             code_slot = int(slot[ATTR_CODE_SLOT])
-    #             usercode: Optional[str] = slot[ATTR_USERCODE]
-    #             in_use: Optional[bool] = slot[ATTR_IN_USE]
-    #             # Retrieve code slots that haven't been populated yet
-    #             if in_use is None and code_slot in self.slots:
-    #                 usercode_resp = await get_usercode_from_node(node, code_slot)
-    #                 usercode = slot[ATTR_USERCODE] = usercode_resp[ATTR_USERCODE]
-    #                 in_use = slot[ATTR_IN_USE] = usercode_resp[ATTR_IN_USE]
-    #             if not in_use:
-    #                 _LOGGER.debug("DEBUG: Code slot %s not enabled", code_slot)
-    #                 data[code_slot] = ""
-    #             elif usercode and "*" in str(usercode):
-    #                 _LOGGER.debug(
-    #                     "DEBUG: Ignoring code slot with * in value for code slot %s",
-    #                     code_slot,
-    #                 )
-    #                 data[code_slot] = self._invalid_code(code_slot)
-    #             else:
-    #                 _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
-    #                 data[code_slot] = usercode
-
-    #     else:
-    #         raise ZWaveIntegrationNotConfiguredError
-
-    #     return data
-
     async def _rebuild_lock_relationships(self):
-        for keymaster_device_id, lock in self.locks.items():
-            if lock.parent is not None:
-                for parent_device_id, parent_lock in self.locks.items():
-                    if lock.parent == parent_lock.lock_name:
-                        if lock.parent_device_id is None:
-                            lock.parent_device_id = parent_device_id
-                        if keymaster_device_id not in parent_lock.child_device_ids:
-                            parent_lock.child_device_ids.append(keymaster_device_id)
+        for keymaster_config_entry_id, kmlock in self.kmlocks.items():
+            if kmlock.parent_name is not None:
+                for parent_config_entry_id, parent_lock in self.kmlocks.items():
+                    if kmlock.parent_name == parent_lock.lock_name:
+                        if kmlock.parent_config_entry_id is None:
+                            kmlock.parent_config_entry_id = parent_config_entry_id
+                        if (
+                            keymaster_config_entry_id
+                            not in parent_lock.child_config_entry_ids
+                        ):
+                            parent_lock.child_config_entry_ids.append(
+                                keymaster_config_entry_id
+                            )
                         break
-            for child_device_id in lock.child_device_ids:
+            for child_config_entry_id in kmlock.child_config_entry_ids:
                 if (
-                    child_device_id not in self.locks
-                    or self.locks[child_device_id].parent_device_id
-                    != keymaster_device_id
+                    child_config_entry_id not in self.kmlocks
+                    or self.kmlocks[child_config_entry_id].parent_config_entry_id
+                    != keymaster_config_entry_id
                 ):
                     try:
-                        lock.child_device_ids.remove(child_device_id)
+                        kmlock.child_config_entry_ids.remove(child_config_entry_id)
                     except ValueError:
                         pass
 
     async def _update_code_slots(self):
         pass
 
-    async def _unsubscribe_listeners(self, lock: KeymasterLock):
+    async def _unsubscribe_listeners(self, kmlock: KeymasterLock):
         # Unsubscribe to any listeners
-        for unsub_listener in lock.listeners:
+        for unsub_listener in kmlock.listeners:
             unsub_listener()
-        lock.listeners = []
+        kmlock.listeners = []
 
-    async def _update_listeners(self, lock: KeymasterLock):
-        await self._unsubscribe_listeners(lock)
-        if async_using_zwave_js(hass=self.hass, lock=lock):
+    async def _update_listeners(self, kmlock: KeymasterLock):
+        await self._unsubscribe_listeners(kmlock)
+        if async_using_zwave_js(hass=self.hass, kmlock=kmlock):
             # Listen to Z-Wave JS events so we can fire our own events
-            lock.listeners.append(
+            kmlock.listeners.append(
                 self.hass.bus.async_listen(
                     ZWAVE_JS_NOTIFICATION_EVENT,
-                    functools.partial(handle_zwave_js_event, self.hass, lock),
+                    functools.partial(handle_zwave_js_event, self.hass, kmlock),
                 )
             )
 
         # Check if we need to check alarm type/alarm level sensors, in which case
         # we need to listen for lock state changes
-        if lock.alarm_level_or_user_code_entity_id not in (
+        if kmlock.alarm_level_or_user_code_entity_id not in (
             None,
             "sensor.fake",
-        ) and lock.alarm_type_or_access_control_entity_id not in (
+        ) and kmlock.alarm_type_or_access_control_entity_id not in (
             None,
             "sensor.fake",
         ):
             if self.hass.state == CoreState.running:
-                await homeassistant_started_listener(self.hass, lock)
+                await homeassistant_started_listener(self.hass, kmlock)
             else:
                 self.hass.bus.async_listen_once(
                     EVENT_HOMEASSISTANT_STARTED,
-                    functools.partial(homeassistant_started_listener, self.hass, lock),
+                    functools.partial(
+                        homeassistant_started_listener, self.hass, kmlock
+                    ),
                 )
 
-    async def add_lock(self, lock: KeymasterLock) -> bool:
-        if lock.keymaster_device_id in self.locks:
+    async def add_lock(self, kmlock: KeymasterLock) -> bool:
+        if kmlock.keymaster_config_entry_id in self.kmlocks:
             return False
-        self.locks[lock.keymaster_device_id] = lock
+        self.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
         await self._rebuild_lock_relationships()
         await self._update_code_slots()
-        await self._update_listeners(lock)
+        await self._update_listeners(kmlock)
         return True
 
-    async def update_lock(self, lock: KeymasterLock) -> bool:
-        if lock.keymaster_device_id not in self.locks:
+    async def update_lock(self, kmlock: KeymasterLock) -> bool:
+        if kmlock.keymaster_config_entry_id not in self.kmlocks:
             return False
-        self.locks.update({lock.keymaster_device_id: lock})
+        self.kmlocks.update({kmlock.keymaster_config_entry_id: kmlock})
         await self._rebuild_lock_relationships()
         await self._update_code_slots()
-        await self._update_listeners(self.locks[lock.keymaster_device_id])
+        await self._update_listeners(self.kmlocks[kmlock.keymaster_config_entry_id])
         return True
 
-    async def update_lock_by_device_id(
-        self, keymaster_device_id: str, **kwargs
+    async def update_lock_by_config_entry_id(
+        self, config_entry_id: str, **kwargs
     ) -> bool:
-        if keymaster_device_id not in self.locks:
+        if config_entry_id not in self.kmlocks:
             return False
         for attr, value in kwargs.items():
-            if hasattr(self.locks[keymaster_device_id], attr):
-                setattr(self.locks[keymaster_device_id], attr, value)
+            if hasattr(self.kmlocks[config_entry_id], attr):
+                setattr(self.kmlocks[config_entry_id], attr, value)
         await self._rebuild_lock_relationships()
         await self._update_code_slots()
-        await self._update_listeners(self.locks[keymaster_device_id])
+        await self._update_listeners(self.kmlocks[config_entry_id])
         return True
 
-    async def delete_lock(self, lock: KeymasterLock) -> bool:
-        if lock.keymaster_device_id not in self.locks:
+    async def delete_lock(self, kmlock: KeymasterLock) -> bool:
+        if kmlock.keymaster_config_entry_id not in self.kmlocks:
             return True
-        await self._unsubscribe_listeners(self.locks[lock.keymaster_device_id])
-        self.locks.pop(lock.keymaster_device_id, None)
+        await self._unsubscribe_listeners(
+            self.kmlocks[kmlock.keymaster_config_entry_id]
+        )
+        self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
         await self._rebuild_lock_relationships()
         await self._update_code_slots()
         return True
 
-    async def delete_lock_by_device_id(self, keymaster_device_id: str) -> bool:
-        if keymaster_device_id not in self.locks:
+    async def delete_lock_by_config_entry_id(self, config_entry_id: str) -> bool:
+        if config_entry_id not in self.kmlocks:
             return True
-        await self._unsubscribe_listeners(self.locks[keymaster_device_id])
-        self.locks.pop(keymaster_device_id, None)
+        await self._unsubscribe_listeners(self.kmlocks[config_entry_id])
+        self.kmlocks.pop(config_entry_id, None)
         await self._rebuild_lock_relationships()
         await self._update_code_slots()
         return True
 
     async def get_lock_by_name(self, lock_name: str) -> KeymasterLock | None:
-        for lock in self.locks.values():
-            if lock_name == lock.lock_name:
-                return lock
+        for kmlock in self.kmlocks.values():
+            if lock_name == kmlock.lock_name:
+                return kmlock
         return None
 
     async def get_lock_by_config_entry_id(
         self, config_entry_id: str
     ) -> KeymasterLock | None:
-        _LOGGER.debug(
-            f"[get_lock_by_config_entry_id] config_entry_id: {config_entry_id}"
-        )
-        devices = dr.async_entries_for_config_entry(
-            self._device_registry, config_entry_id
-        )
-        if (
-            not isinstance(devices, list)
-            or len(devices) != 1
-            or devices[0].id not in self.locks
-        ):
+        # _LOGGER.debug(f"[get_lock_by_config_entry_id] config_entry_id: {config_entry_id}")
+        if config_entry_id not in self.kmlocks:
             return None
-        return self.locks[devices[0].id]
+        return self.kmlocks[config_entry_id]
 
     def sync_get_lock_by_config_entry_id(
         self, config_entry_id: str
     ) -> KeymasterLock | None:
-        _LOGGER.debug(
-            f"[sync_get_lock_by_config_entry_id] config_entry_id: {config_entry_id}"
-        )
-        devices = dr.async_entries_for_config_entry(
-            self._device_registry, config_entry_id
-        )
-        if (
-            not isinstance(devices, list)
-            or len(devices) != 1
-            or devices[0].id not in self.locks
-        ):
+        # _LOGGER.debug(f"[sync_get_lock_by_config_entry_id] config_entry_id: {config_entry_id}")
+        if config_entry_id not in self.kmlocks:
             return None
-        return self.locks[devices[0].id]
+        return self.kmlocks[config_entry_id]
 
-    async def get_lock_by_device_id(
-        self, keymaster_device_id: str
-    ) -> KeymasterLock | None:
-        _LOGGER.debug(
-            f"[get_lock_by_device_id] keymaster_device_id: {keymaster_device_id}"
-        )
-        if keymaster_device_id not in self.locks:
+    async def get_device_id_from_config_entry_id(
+        self, config_entry_id: str
+    ) -> str | None:
+        if config_entry_id not in self.kmlocks:
             return None
-        return self.locks[keymaster_device_id]
+        return self.kmlocks[config_entry_id].keymaster_device_id
 
-    def sync_get_lock_by_device_id(
-        self, keymaster_device_id: str
-    ) -> KeymasterLock | None:
-        _LOGGER.debug(
-            f"[sync_get_lock_by_device_id] keymaster_device_id: {keymaster_device_id}"
-        )
-        if keymaster_device_id not in self.locks:
+    def sync_get_device_id_from_config_entry_id(
+        self, config_entry_id: str
+    ) -> str | None:
+        if config_entry_id not in self.kmlocks:
             return None
-        return self.locks[keymaster_device_id]
+        return self.kmlocks[config_entry_id].keymaster_device_id
 
-    async def _check_lock_connection(self, lock) -> bool:
-        # TODO: redo this to use lock.connected
-        return lock.connected
+    async def _connect_and_update_lock(self, kmlock: KeymasterLock) -> None:
+        prev_lock_connected: bool = kmlock.connected
+        kmlock.connected = False
+        if kmlock.lock_config_entry_id is None:
+            lock_ent_reg_entry = self._entity_registry.async_get(kmlock.lock_entity_id)
 
-        # self.network_sensor = self._entity_registry.async_get_entity_id(
-        #     "binary_sensor",
-        #     DOMAIN,
-        #     slugify(generate_binary_sensor_name(lock.lock_name)),
-        # )
-        # if self.network_sensor is None:
-        #     return False
-        # try:
-        #     network_ready = self.hass.states.get(self.network_sensor)
-        #     if not network_ready:
-        #         # We may need to get a new entity ID
-        #         self.network_sensor = None
-        #         raise ZWaveNetworkNotReady
+            if not lock_ent_reg_entry:
+                _LOGGER.error(
+                    f"[Coordinator] {kmlock.lock_name}: Can't find the lock in the Entity Registry"
+                )
+                kmlock.connected = False
+                return
 
-        #     if network_ready.state != STATE_ON:
-        #         raise ZWaveNetworkNotReady
+            kmlock.lock_config_entry_id = lock_ent_reg_entry.config_entry_id
 
-        #     return True
-        # except (
-        #     NativeNotFoundError,
-        #     NativeNotSupportedError,
-        #     NoNodeSpecifiedError,
-        #     ZWaveIntegrationNotConfiguredError,
-        #     ZWaveNetworkNotReady,
-        # ):
-        #     return False
+        try:
+            zwave_entry = self.hass.config_entries.async_get_entry(
+                kmlock.lock_config_entry_id
+            )
+            client = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
+        except Exception as e:
+            _LOGGER.error(
+                f"[Coordinator] {kmlock.lock_name}: Can't access the Z-Wave JS client. {e.__class__.__qualname__}: {e}"
+            )
+            kmlock.connected = False
+            return
+
+        kmlock.connected = bool(
+            client.connected and client.driver and client.driver.controller
+        )
+
+        if not kmlock.connected:
+            return
+
+        if kmlock.connected and prev_lock_connected:
+            return
+
+        _LOGGER.debug(
+            f"[Coordinator] {kmlock.lock_name}: Now connected, updating Device and Nodes"
+        )
+        lock_dev_reg_entry = self._device_registry.async_get(
+            lock_ent_reg_entry.device_id
+        )
+        if not lock_dev_reg_entry:
+            _LOGGER.error(
+                f"[Coordinator] {kmlock.lock_name}: Can't find the lock in the Device Registry"
+            )
+            kmlock.connected = False
+            return
+        node_id: int = 0
+        for identifier in lock_dev_reg_entry.identifiers:
+            if identifier[0] == ZWAVE_JS_DOMAIN:
+                node_id = int(identifier[1].split("-")[1])
+
+        kmlock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
+        kmlock.zwave_js_lock_device = lock_dev_reg_entry
 
     async def _async_update_data(self) -> Mapping[str, Any]:
-        _LOGGER.debug(f"[Coordinator] self.locks: {self.locks}")
-        for lock in self.locks.values():
-            if not await self._check_lock_connection(lock):
-                _LOGGER.error(f"[Coordinator] {lock.lock_name} not Connected")
+        _LOGGER.debug(f"[Coordinator] self.kmlocks: {self.kmlocks}")
+        for kmlock in self.kmlocks.values():
+            await self._connect_and_update_lock(kmlock)
+            if not kmlock.connected:
+                _LOGGER.error(f"[Coordinator] {kmlock.lock_name}: Not Connected")
                 continue
 
-            if async_using_zwave_js(hass=self.hass, lock=lock):
-                node: ZwaveJSNode = lock.zwave_js_lock_node
+            if async_using_zwave_js(hass=self.hass, kmlock=kmlock):
+                node: ZwaveJSNode = kmlock.zwave_js_lock_node
                 if node is None:
-                    _LOGGER.debug(
-                        f"[Coordinator] {lock.lock_name} Z-Wave Node not defined"
+                    _LOGGER.error(
+                        f"[Coordinator] {kmlock.lock_name}: Z-Wave JS Node not defined"
                     )
                     continue
 
@@ -378,33 +311,37 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     usercode: str | None = slot[ATTR_USERCODE]
                     slot_name: str | None = slot[ATTR_NAME]
                     in_use: bool | None = slot[ATTR_IN_USE]
+                    if code_slot not in kmlock.code_slots:
+                        # _LOGGER.debug(f"[Coordinator] {kmlock.lock_name}: Code Slot {code_slot} defined in lock but not in Keymaster, ignoring")
+                        continue
                     # Retrieve code slots that haven't been populated yet
-                    if in_use is None and code_slot in lock.code_slots:
+                    if in_use is None and code_slot in kmlock.code_slots:
                         usercode_resp = await get_usercode_from_node(node, code_slot)
                         usercode = slot[ATTR_USERCODE] = usercode_resp[ATTR_USERCODE]
                         slot_name = slot[ATTR_NAME] = usercode_resp[ATTR_NAME]
                         in_use = slot[ATTR_IN_USE] = usercode_resp[ATTR_IN_USE]
                     if not in_use:
-                        _LOGGER.debug("DEBUG: Code slot %s not enabled", code_slot)
-                        lock.code_slots[code_slot].enabled = False
+                        _LOGGER.debug(
+                            f"[Coordinator] {kmlock.lock_name}: Code slot {code_slot} not enabled"
+                        )
+                        kmlock.code_slots[code_slot].enabled = False
                     elif usercode and "*" in str(usercode):
                         _LOGGER.debug(
-                            "DEBUG: Ignoring code slot with * in value for code slot %s",
-                            code_slot,
+                            f"[Coordinator] {kmlock.lock_name}: Ignoring code slot with * in value for code slot {code_slot}"
                         )
                     else:
                         _LOGGER.debug(
-                            "DEBUG: Code slot %s value: %s", code_slot, usercode
+                            f"[Coordinator] {kmlock.lock_name}: Code slot {code_slot} value: {usercode}"
                         )
-                        lock.code_slots[code_slot].enabled = True
-                        lock.code_slots[code_slot].name = slot_name
-                        lock.code_slots[code_slot].pin = usercode
+                        kmlock.code_slots[code_slot].enabled = True
+                        kmlock.code_slots[code_slot].name = slot_name
+                        kmlock.code_slots[code_slot].pin = usercode
 
             else:
-                _LOGGER.error(f"[Coordinator] {lock.lock_name} not using Z-Wave")
+                _LOGGER.error(f"[Coordinator] {kmlock.lock_name}: Not using Z-Wave JS")
                 continue
 
         # TODO: Loop through locks again and filter down any changes to children
         # (If changes, need to also push those to the physical child lock as well)
 
-        return self.locks
+        return self.kmlocks

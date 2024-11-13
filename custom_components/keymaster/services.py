@@ -252,7 +252,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
 
     # Append _child to child lock yaml files
     child_file = ""
-    if primary_lock.parent is not None:
+    if primary_lock.parent_name is not None:
         child_file = "_child"
 
     lockname = slugify(primary_lock.lock_name)
@@ -343,7 +343,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
         "SENSORALARMLEVEL": sensoralarmlevel,
         "HIDE_PINS": hide_pins,
         "PARENTLOCK": (
-            "" if primary_lock.parent is None else slugify(primary_lock.parent)
+            "" if primary_lock.parent_name is None else slugify(primary_lock.parent)
         ),
     }
 
@@ -386,7 +386,7 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
             "Package generation complete and all changes have been hot reloaded"
         )
         reset_code_slot_if_pin_unknown(hass, lockname, code_slots, start_from)
-        if primary_lock.parent is not None:
+        if primary_lock.parent_name is not None:
             init_child_locks(hass, start_from, code_slots, lockname)
     else:
         create(

@@ -39,6 +39,8 @@ class KeymasterLock:
     lock_name: str
     lock_entity_id: str
     keymaster_device_id: str
+    keymaster_config_entry_id: str
+    lock_config_entry_id: str | None = None
     alarm_level_or_user_code_entity_id: str | None = None
     alarm_type_or_access_control_entity_id: str | None = None
     door_sensor_entity_id: str | None = None
@@ -48,7 +50,7 @@ class KeymasterLock:
     number_of_code_slots: int | None = None
     starting_code_slot: int = 1
     code_slots: Mapping[int, KeymasterCodeSlot] | None = None
-    parent: str | None = None
-    parent_device_id: str | None = None
-    child_device_ids: list = field(default_factory=list)
+    parent_name: str | None = None
+    parent_config_entry_id: str | None = None
+    child_config_entry_ids: list = field(default_factory=list)
     listeners: list = field(default_factory=list)

@@ -40,7 +40,7 @@ async def async_setup_entry(
         [
             KeymasterCodesSensor(
                 entity_description=KeymasterSensorEntityDescription(
-                    key=f"sensor.code_slot.pin:{x}",  # <Platform>.<Property>.<SubProperty>.<SubProperty>:<Slot Number>
+                    key=f"sensor.code_slots:{x}.pin",  # <Platform>.<Property>.<SubProperty>.<SubProperty>:<Slot Number>
                     name=f"Code Slot {x}",
                     icon="mdi:lock-smart",
                     entity_registry_enabled_default=True,
@@ -78,7 +78,7 @@ async def async_setup_entry(
             [
                 KeymasterCodesSensor(
                     entity_description=KeymasterSensorEntityDescription(
-                        key=f"sensor.code_slot.pin:{x}",  # <Platform>.<Property>.<SubProperty>.<SubProperty>:<Slot Number>
+                        key=f"sensor.code_slots:{x}.pin",  # <Platform>.<Property>.<SubProperty>.<SubProperty>:<Slot Number>
                         name=f"Code Slot {x}",
                         icon="mdi:lock-smart",
                         entity_registry_enabled_default=True,
@@ -123,14 +123,25 @@ class KeymasterCodesSensor(KeymasterEntity, SensorEntity):
         super().__init__(
             entity_description=entity_description,
         )
-        self._code_slot = self._property.split(":")[1]
         self._attr_extra_state_attributes = {ATTR_CODE_SLOT: self._code_slot}
         self._attr_native_value = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        _LOGGER.debug(
-            f"[Sensor handle_coordinator_update] self.coordinator.data: {self.coordinator.data}"
-        )
+        # _LOGGER.debug(f"[Sensor handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
+        if not self._kmlock.connected:
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
 
+        if "code_slots" in self._property and (
+            self._code_slot not in self._kmlock.code_slots
+            or not self._kmlock.code_slots[self._code_slot].enabled
+        ):
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
+        self._attr_available = True
+        self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()

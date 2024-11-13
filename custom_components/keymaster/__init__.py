@@ -103,7 +103,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        code_slots[x] = KeymasterCodeSlot(number=x)
         dow_slots: Mapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(
             [
@@ -117,13 +116,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             ]
         ):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(
-                day_of_week_num=1, day_of_week_name=dow
+                day_of_week_num=i, day_of_week_name=dow
             )
+        code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
-    lock = KeymasterLock(
+    kmlock = KeymasterLock(
         lock_name=config_entry.data[CONF_LOCK_NAME],
         lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
         keymaster_device_id=device.id,
+        keymaster_config_entry_id=config_entry.entry_id,
         alarm_level_or_user_code_entity_id=config_entry.data[
             CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
         ],
@@ -131,12 +132,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
         ],
         door_sensor_entity_id=config_entry.data[CONF_SENSOR_NAME],
-        # zwave_js_lock_node = config_entry.data[
-        # zwave_js_lock_device = config_entry.data[
         number_of_code_slots=config_entry.data[CONF_SLOTS],
         starting_code_slot=config_entry.data[CONF_START],
-        code_slots={},
-        parent=config_entry.data[CONF_PARENT],
+        code_slots=code_slots,
+        parent_name=config_entry.data[CONF_PARENT],
     )
     hass.data[DOMAIN][config_entry.entry_id] = device.id
 
@@ -146,7 +145,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     else:
         coordinator = hass.data[DOMAIN][COORDINATOR]
 
-    await coordinator.add_lock(lock=lock)
+    await coordinator.add_lock(kmlock=kmlock)
 
     # await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
@@ -161,11 +160,11 @@ async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) ->
     _LOGGER.debug(
         f"[system_health_check] hass.data[DOMAIN][config_entry.entry_id]: {hass.data[DOMAIN][config_entry.entry_id]}"
     )
-    lock: KeymasterLock = await coordinator.get_lock_by_device_id(
-        hass.data[DOMAIN][config_entry.entry_id]
+    kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
+        config_entry.entry_id
     )
 
-    if async_using_zwave_js(hass=hass, lock=lock):
+    if async_using_zwave_js(hass=hass, kmlock=kmlock):
         hass.data[DOMAIN][INTEGRATION] = "zwave_js"
     else:
         hass.data[DOMAIN][INTEGRATION] = "unknown"
@@ -204,9 +203,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
         # await async_reload_package_platforms(hass)
 
-        await coordinator.delete_lock_by_device_id(
-            hass.data[DOMAIN][config_entry.entry_id]
-        )
+        await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id)
 
         hass.data[DOMAIN].pop(config_entry.entry_id, None)
 
@@ -305,10 +302,11 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
                 day_of_week_num=1, day_of_week_name=dow
             )
 
-    lock = KeymasterLock(
+    kmlock = KeymasterLock(
         lock_name=config_entry.data[CONF_LOCK_NAME],
         lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
         keymaster_device_id=device.id,
+        keymaster_config_entry_id=config_entry.entry_id,
         alarm_level_or_user_code_entity_id=config_entry.data[
             CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
         ],
@@ -321,7 +319,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         number_of_code_slots=config_entry.data[CONF_SLOTS],
         starting_code_slot=config_entry.data[CONF_START],
         code_slots={},
-        parent=config_entry.data[CONF_PARENT],
+        parent_name=config_entry.data[CONF_PARENT],
     )
     hass.data[DOMAIN][config_entry.entry_id] = device.id
 
@@ -331,7 +329,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     else:
         coordinator = hass.data[DOMAIN][COORDINATOR]
 
-    await coordinator.update_lock(lock=lock)
+    await coordinator.update_lock(kmlock=kmlock)
 
     if old_slots != new_slots:
         async_dispatcher_send(
