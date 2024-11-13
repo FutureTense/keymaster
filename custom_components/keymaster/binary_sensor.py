@@ -1,5 +1,6 @@
 """Sensor for keymaster."""
 
+from dataclasses import dataclass
 import logging
 
 from homeassistant.components.binary_sensor import (
@@ -7,13 +8,11 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 
-from .const import CONF_LOCK_NAME, COORDINATOR, DOMAIN
-from .coordinator import KeymasterCoordinator
-from .entity import KeymasterEntity
+from .const import COORDINATOR, DOMAIN
+from .entity import KeymasterEntity, KeymasterEntityDescription
 from .helpers import async_using_zwave_js
 
 try:
@@ -22,23 +21,23 @@ except (ModuleNotFoundError, ImportError):
     pass
 
 _LOGGER = logging.getLogger(__name__)
-ENTITY_NAME = "Network"
-
-
-def generate_binary_sensor_name(lock_name: str) -> str:
-    """Generate unique ID for network ready sensor."""
-    return f"{lock_name}: {ENTITY_NAME}"
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Setup config entry."""
     coordinator = hass.data[DOMAIN][COORDINATOR]
-    lock = await coordinator.get_lock_by_name(config_entry.data.get(CONF_LOCK_NAME))
+    lock = await coordinator.get_lock_by_config_entry_id(config_entry.entry_id)
     if async_using_zwave_js(hass=hass, lock=lock):
         entity = ZwaveJSNetworkReadySensor(
-            hass=hass,
-            config_entry=config_entry,
-            coordinator=coordinator,
+            entity_description=KeymasterBinarySensorEntityDescription(
+                key="binary_sensor.connected",
+                name="Network",
+                device_class=BinarySensorDeviceClass.CONNECTIVITY,
+                entity_registry_enabled_default=True,
+                hass=hass,
+                config_entry=config_entry,
+                coordinator=coordinator,
+            ),
         )
     else:
         _LOGGER.error("Z-Wave integration not found")
@@ -48,28 +47,27 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     return True
 
 
+@dataclass(kw_only=True)
+class KeymasterBinarySensorEntityDescription(
+    KeymasterEntityDescription, BinarySensorEntityDescription
+):
+    pass
+
+
 class BaseNetworkReadySensor(KeymasterEntity, BinarySensorEntity):
     """Base binary sensor to indicate whether or not Z-Wave network is ready."""
 
     def __init__(
         self,
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-        coordinator: KeymasterCoordinator,
-        entity_description: BinarySensorEntityDescription,
+        entity_description: KeymasterBinarySensorEntityDescription,
         integration_name: str,
     ) -> None:
         """Initialize binary sensor."""
         super().__init__(
-            hass=hass,
-            config_entry=config_entry,
-            coordinator=coordinator,
             entity_description=entity_description,
         )
         self.integration_name = integration_name
         self._attr_is_on = False
-        self._attr_name = "Network"
-        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
         self._attr_should_poll = False
 
     @callback
@@ -103,23 +101,15 @@ class ZwaveJSNetworkReadySensor(BaseNetworkReadySensor):
     """Binary sensor to indicate whether or not `zwave_js` network is ready."""
 
     def __init__(
-        self,
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-        coordinator: KeymasterCoordinator,
-        entity_description: BinarySensorEntityDescription
+        self, entity_description: KeymasterBinarySensorEntityDescription
     ) -> None:
         """Initialize sensor."""
         super().__init__(
-            hass=hass,
-            config_entry=config_entry,
-            coordinator=coordinator,
             integration_name=ZWAVE_JS_DOMAIN,
             entity_description=entity_description,
         )
         self.lock_config_entry_id = None
         self._lock_found = True
-        # self.ent_reg = None
         self._attr_should_poll = True
 
     # async def async_update(self) -> None:

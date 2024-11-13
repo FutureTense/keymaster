@@ -1,31 +1,17 @@
 """keymaster Integration."""
 
-import asyncio
-import functools
-import logging
 from collections.abc import Mapping
 from datetime import timedelta
+import functools
+import logging
 from typing import Any
 
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_ON
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, HomeAssistant
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import slugify
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import ATTR_CODE_SLOT, DOMAIN
-from .exceptions import (
-    NoNodeSpecifiedError,
-    ZWaveIntegrationNotConfiguredError,
-    ZWaveNetworkNotReady,
-)
-from .exceptions import (
-    NotFoundError as NativeNotFoundError,
-)
-from .exceptions import (
-    NotSupportedError as NativeNotSupportedError,
-)
 from .helpers import (
     async_using_zwave_js,
     handle_zwave_js_event,
@@ -34,7 +20,6 @@ from .helpers import (
 from .lock import KeymasterLock
 
 try:
-    from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
     from zwave_js_server.const.command_class.lock import (
         ATTR_IN_USE,
         ATTR_NAME,
@@ -42,15 +27,17 @@ try:
     )
     from zwave_js_server.model.node import Node as ZwaveJSNode
     from zwave_js_server.util.lock import get_usercode_from_node, get_usercodes
+
+    from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 except (ModuleNotFoundError, ImportError):
     pass
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-def generate_binary_sensor_name(lock_name: str) -> str:
-    """Generate unique ID for network ready sensor."""
-    return f"{lock_name}: Network"
+# def generate_binary_sensor_name(lock_name: str) -> str:
+#     """Generate unique ID for network ready sensor."""
+#     return f"{lock_name}: Network"
 
 
 class KeymasterCoordinator(DataUpdateCoordinator):
@@ -286,11 +273,45 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 return lock
         return None
 
+    async def get_lock_by_config_entry_id(
+        self, config_entry_id: str
+    ) -> KeymasterLock | None:
+        _LOGGER.debug(
+            f"[get_lock_by_config_entry_id] config_entry_id: {config_entry_id}"
+        )
+        devices = dr.async_entries_for_config_entry(
+            self._device_registry, config_entry_id
+        )
+        if (
+            not isinstance(devices, list)
+            or len(devices) != 1
+            or devices[0].id not in self.locks
+        ):
+            return None
+        return self.locks[devices[0].id]
+
+    def sync_get_lock_by_config_entry_id(
+        self, config_entry_id: str
+    ) -> KeymasterLock | None:
+        _LOGGER.debug(
+            f"[sync_get_lock_by_config_entry_id] config_entry_id: {config_entry_id}"
+        )
+        devices = dr.async_entries_for_config_entry(
+            self._device_registry, config_entry_id
+        )
+        if (
+            not isinstance(devices, list)
+            or len(devices) != 1
+            or devices[0].id not in self.locks
+        ):
+            return None
+        return self.locks[devices[0].id]
+
     async def get_lock_by_device_id(
         self, keymaster_device_id: str
     ) -> KeymasterLock | None:
         _LOGGER.debug(
-            f"[get_lock_by_device_id] keymaster_device_id: {keymaster_device_id} ({type(keymaster_device_id)})"
+            f"[get_lock_by_device_id] keymaster_device_id: {keymaster_device_id}"
         )
         if keymaster_device_id not in self.locks:
             return None
@@ -299,52 +320,58 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     def sync_get_lock_by_device_id(
         self, keymaster_device_id: str
     ) -> KeymasterLock | None:
-        return asyncio.run_coroutine_threadsafe(
-            self.get_lock_by_device_id(keymaster_device_id),
-            self.hass.loop,
-        ).result()
+        _LOGGER.debug(
+            f"[sync_get_lock_by_device_id] keymaster_device_id: {keymaster_device_id}"
+        )
+        if keymaster_device_id not in self.locks:
+            return None
+        return self.locks[keymaster_device_id]
 
     async def _check_lock_connection(self, lock) -> bool:
         # TODO: redo this to use lock.connected
-        self.network_sensor = self._entity_registry.async_get_entity_id(
-            "binary_sensor",
-            DOMAIN,
-            slugify(generate_binary_sensor_name(lock.lock_name)),
-        )
-        if self.network_sensor is None:
-            return False
-        try:
-            network_ready = self.hass.states.get(self.network_sensor)
-            if not network_ready:
-                # We may need to get a new entity ID
-                self.network_sensor = None
-                raise ZWaveNetworkNotReady
+        return lock.connected
 
-            if network_ready.state != STATE_ON:
-                raise ZWaveNetworkNotReady
+        # self.network_sensor = self._entity_registry.async_get_entity_id(
+        #     "binary_sensor",
+        #     DOMAIN,
+        #     slugify(generate_binary_sensor_name(lock.lock_name)),
+        # )
+        # if self.network_sensor is None:
+        #     return False
+        # try:
+        #     network_ready = self.hass.states.get(self.network_sensor)
+        #     if not network_ready:
+        #         # We may need to get a new entity ID
+        #         self.network_sensor = None
+        #         raise ZWaveNetworkNotReady
 
-            return True
-        except (
-            NativeNotFoundError,
-            NativeNotSupportedError,
-            NoNodeSpecifiedError,
-            ZWaveIntegrationNotConfiguredError,
-            ZWaveNetworkNotReady,
-        ):
-            return False
+        #     if network_ready.state != STATE_ON:
+        #         raise ZWaveNetworkNotReady
 
-    async def _async_setup(self):
-        pass
+        #     return True
+        # except (
+        #     NativeNotFoundError,
+        #     NativeNotSupportedError,
+        #     NoNodeSpecifiedError,
+        #     ZWaveIntegrationNotConfiguredError,
+        #     ZWaveNetworkNotReady,
+        # ):
+        #     return False
 
     async def _async_update_data(self) -> Mapping[str, Any]:
+        _LOGGER.debug(f"[Coordinator] self.locks: {self.locks}")
         for lock in self.locks.values():
             if not await self._check_lock_connection(lock):
-                raise UpdateFailed()
+                _LOGGER.error(f"[Coordinator] {lock.lock_name} not Connected")
+                continue
 
             if async_using_zwave_js(hass=self.hass, lock=lock):
                 node: ZwaveJSNode = lock.zwave_js_lock_node
                 if node is None:
-                    raise NativeNotFoundError
+                    _LOGGER.debug(
+                        f"[Coordinator] {lock.lock_name} Z-Wave Node not defined"
+                    )
+                    continue
 
                 for slot in get_usercodes(node):
                     code_slot = int(slot[ATTR_CODE_SLOT])
@@ -372,9 +399,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         lock.code_slots[code_slot].enabled = True
                         lock.code_slots[code_slot].name = slot_name
                         lock.code_slots[code_slot].pin = usercode
-                    # TODO: What if there are child locks?
 
             else:
-                raise ZWaveIntegrationNotConfiguredError
+                _LOGGER.error(f"[Coordinator] {lock.lock_name} not using Z-Wave")
+                continue
+
+        # TODO: Loop through locks again and filter down any changes to children
+        # (If changes, need to also push those to the physical child lock as well)
 
         return self.locks

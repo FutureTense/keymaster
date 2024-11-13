@@ -1,7 +1,8 @@
 """Sensor for keymaster."""
 
-import logging
+from dataclasses import dataclass
 from functools import partial
+import logging
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -10,8 +11,6 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_registry import (
     EntityRegistry,
-)
-from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
 )
 from homeassistant.util import slugify
@@ -24,8 +23,7 @@ from .const import (
     COORDINATOR,
     DOMAIN,
 )
-from .coordinator import KeymasterCoordinator
-from .entity import KeymasterEntity
+from .entity import KeymasterEntity, KeymasterEntityDescription
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -41,10 +39,15 @@ async def async_setup_entry(
     async_add_entities(
         [
             KeymasterCodesSensor(
-                hass=hass,
-                config_entry=entry,
-                coordinator=coordinator,
-                code_slot=x,
+                entity_description=KeymasterSensorEntityDescription(
+                    key=f"sensor.code_slot.pin:{x}",  # <Platform>.<Property>.<SubProperty>.<SubProperty>:<Slot Number>
+                    name=f"Code Slot {x}",
+                    icon="mdi:lock-smart",
+                    entity_registry_enabled_default=True,
+                    hass=hass,
+                    config_entry=entry,
+                    coordinator=coordinator,
+                )
             )
             for x in range(start_from, start_from + code_slots)
         ],
@@ -74,10 +77,15 @@ async def async_setup_entry(
         async_add_entities(
             [
                 KeymasterCodesSensor(
-                    hass=hass,
-                    config_entry=entry,
-                    coordinator=coordinator,
-                    code_slot=x,
+                    entity_description=KeymasterSensorEntityDescription(
+                        key=f"sensor.code_slot.pin:{x}",  # <Platform>.<Property>.<SubProperty>.<SubProperty>:<Slot Number>
+                        name=f"Code Slot {x}",
+                        icon="mdi:lock-smart",
+                        entity_registry_enabled_default=True,
+                        hass=hass,
+                        config_entry=entry,
+                        coordinator=coordinator,
+                    )
                 )
                 for x in slots_to_add
             ],
@@ -98,27 +106,25 @@ async def async_setup_entry(
     return True
 
 
+@dataclass(kw_only=True)
+class KeymasterSensorEntityDescription(
+    KeymasterEntityDescription, SensorEntityDescription
+):
+    pass
+
+
 class KeymasterCodesSensor(KeymasterEntity, SensorEntity):
 
     def __init__(
         self,
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-        coordinator: KeymasterCoordinator,
-        entity_description: SensorEntityDescription,
-        code_slot: int,
+        entity_description: KeymasterSensorEntityDescription,
     ) -> None:
         """Initialize sensor"""
         super().__init__(
-            hass=hass,
-            config_entry=config_entry,
-            coordinator=coordinator,
             entity_description=entity_description,
         )
-        self._code_slot = code_slot
-        self._attr_icon = "mdi:lock-smart"
+        self._code_slot = self._property.split(":")[1]
         self._attr_extra_state_attributes = {ATTR_CODE_SLOT: self._code_slot}
-        self._attr_name = f"Code Slot {code_slot}"
         self._attr_native_value = None
 
     @callback

@@ -1,8 +1,8 @@
 """keymaster Integration."""
 
 import asyncio
-import logging
 from collections.abc import Mapping
+import logging
 
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
