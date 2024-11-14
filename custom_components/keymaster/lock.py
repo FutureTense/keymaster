@@ -23,12 +23,15 @@ class KeymasterCodeSlot:
     enabled: bool = True
     name: str | None = None
     pin: str | None = None
-    connected: bool = False
+    active: bool = True
     override_parent: bool = False
     accesslimit: bool = False
-    accesslimit_count: int | None = None
+    accesslimit_count_enabled: bool = False
+    accesslimit_count: tuple[int, int] | None = None
+    accesslimit_date_range_enabled: bool = False
     accesslimit_date_range_start: datetime | None = None
     accesslimit_date_range_end: datetime | None = None
+    accesslimit_day_of_week_enabled: bool = False
     accesslimit_day_of_week: Mapping[int, KeymasterCodeSlotDayOfWeek] | None = None
 
 
@@ -38,8 +41,8 @@ class KeymasterLock:
 
     lock_name: str
     lock_entity_id: str
-    keymaster_device_id: str
     keymaster_config_entry_id: str
+    keymaster_device_id: str | None = None
     lock_config_entry_id: str | None = None
     alarm_level_or_user_code_entity_id: str | None = None
     alarm_type_or_access_control_entity_id: str | None = None

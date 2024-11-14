@@ -285,7 +285,6 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        code_slots[x] = KeymasterCodeSlot(number=x)
         dow_slots: Mapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(
             [
@@ -299,8 +298,9 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
             ]
         ):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(
-                day_of_week_num=1, day_of_week_name=dow
+                day_of_week_num=i, day_of_week_name=dow
             )
+        code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     kmlock = KeymasterLock(
         lock_name=config_entry.data[CONF_LOCK_NAME],
@@ -314,11 +314,9 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
             CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
         ],
         door_sensor_entity_id=config_entry.data[CONF_SENSOR_NAME],
-        # zwave_js_lock_node = config_entry.data[
-        # zwave_js_lock_device = config_entry.data[
         number_of_code_slots=config_entry.data[CONF_SLOTS],
         starting_code_slot=config_entry.data[CONF_START],
-        code_slots={},
+        code_slots=code_slots,
         parent_name=config_entry.data[CONF_PARENT],
     )
     hass.data[DOMAIN][config_entry.entry_id] = device.id

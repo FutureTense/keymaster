@@ -15,7 +15,8 @@ from .lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
 
-# Naming convention for EntityDescription key (Property) for all entities: <Platform>.<Property>.<SubProperty>.<SubProperty>:<Slot Number>
+# Naming convention for EntityDescription key (Property) for all entities:
+# <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
 # Not all items will exist for a property
 # Items cannot contain . or : in their names
 
@@ -29,7 +30,9 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self._config_entry: ConfigEntry = entity_description.config_entry
         self.entity_description: EntityDescription = entity_description
         self._attr_available = False
-        self._property: str = entity_description.key
+        self._property: str = (
+            entity_description.key
+        )  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
         self._kmlock: KeymasterLock = self.coordinator.sync_get_lock_by_config_entry_id(
             self._config_entry.entry_id
         )
@@ -53,6 +56,9 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
                 self._kmlock.parent_config_entry_id
             ),
         }
+        _LOGGER.debug(
+            f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}"
+        )
         super().__init__(self.coordinator, self._attr_unique_id)
 
     @property
