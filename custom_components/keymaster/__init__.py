@@ -23,6 +23,7 @@ from .const import (
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PARENT,
+    CONF_PARENT_ENTRY_ID,
     CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
@@ -82,21 +83,56 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     elif config_entry.data[CONF_PARENT] == "(none)":
         updated_config[CONF_PARENT] = None
 
+    if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
+        updated_config[CONF_PARENT_ENTRY_ID] = None
+
+    if updated_config.get(CONF_PARENT) is None:
+        updated_config[CONF_PARENT_ENTRY_ID] = None
+    elif updated_config.get(CONF_PARENT_ENTRY_ID) is None:
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            if updated_config.get(CONF_PARENT) == entry.data.get(CONF_LOCK_NAME):
+                updated_config[CONF_PARENT_ENTRY_ID] = entry.entry_id
+                break
+
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
+
+    _LOGGER.debug(
+        f"[init async_setup_entry] updated config_entry.data: {config_entry.data}"
+    )
 
     config_entry.add_update_listener(update_listener)
 
     await async_setup_services(hass)
 
+    if COORDINATOR not in hass.data[DOMAIN]:
+        coordinator = KeymasterCoordinator(hass)
+        hass.data[DOMAIN][COORDINATOR] = coordinator
+    else:
+        coordinator = hass.data[DOMAIN][COORDINATOR]
+
     device_registry = dr.async_get(hass)
+
+    via_device: str | None = None
+    if config_entry.data.get(CONF_PARENT_ENTRY_ID):
+        via_device = (DOMAIN, config_entry.data.get(CONF_PARENT_ENTRY_ID))
+
+    _LOGGER.debug(
+        f"[init async_setup_entry] name: {config_entry.data.get(CONF_LOCK_NAME)}, "
+        f"parent_name: {config_entry.data.get(CONF_PARENT)}, "
+        f"parent_entry_id: {config_entry.data.get(CONF_PARENT_ENTRY_ID)}, "
+        f"via_device: {via_device}"
+    )
 
     device = device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
         identifiers={(DOMAIN, config_entry.entry_id)},
-        name=config_entry.data[CONF_LOCK_NAME],
+        name=config_entry.data.get(CONF_LOCK_NAME),
         configuration_url="https://github.com/FutureTense/keymaster",
+        via_device=via_device,
     )
+
+    _LOGGER.debug(f"[init async_setup_entry] device: {device}")
 
     code_slots: Mapping[int, KeymasterCodeSlot] = {}
     for x in range(
@@ -121,29 +157,24 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     kmlock = KeymasterLock(
-        lock_name=config_entry.data[CONF_LOCK_NAME],
-        lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
+        lock_name=config_entry.data.get(CONF_LOCK_NAME),
+        lock_entity_id=config_entry.data.get(CONF_LOCK_ENTITY_ID),
         keymaster_device_id=device.id,
         keymaster_config_entry_id=config_entry.entry_id,
-        alarm_level_or_user_code_entity_id=config_entry.data[
+        alarm_level_or_user_code_entity_id=config_entry.data.get(
             CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
-        ],
-        alarm_type_or_access_control_entity_id=config_entry.data[
+        ),
+        alarm_type_or_access_control_entity_id=config_entry.data.get(
             CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
-        ],
-        door_sensor_entity_id=config_entry.data[CONF_SENSOR_NAME],
-        number_of_code_slots=config_entry.data[CONF_SLOTS],
-        starting_code_slot=config_entry.data[CONF_START],
+        ),
+        door_sensor_entity_id=config_entry.data.get(CONF_SENSOR_NAME),
+        number_of_code_slots=config_entry.data.get(CONF_SLOTS),
+        starting_code_slot=config_entry.data.get(CONF_START),
         code_slots=code_slots,
-        parent_name=config_entry.data[CONF_PARENT],
+        parent_name=config_entry.data.get(CONF_PARENT),
+        parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
     )
     hass.data[DOMAIN][config_entry.entry_id] = device.id
-
-    if COORDINATOR not in hass.data[DOMAIN]:
-        coordinator = KeymasterCoordinator(hass)
-        hass.data[DOMAIN][COORDINATOR] = coordinator
-    else:
-        coordinator = hass.data[DOMAIN][COORDINATOR]
 
     await coordinator.add_lock(kmlock=kmlock)
 
@@ -172,7 +203,7 @@ async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
-    lockname = config_entry.data[CONF_LOCK_NAME]
+    lockname = config_entry.data.get(CONF_LOCK_NAME)
     notification_id = f"{DOMAIN}_{lockname}_unload"
     async_create(
         hass,
@@ -260,6 +291,8 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
 
     old_slots = get_code_slots_list(config_entry.data)
     new_slots = get_code_slots_list(config_entry.options)
+
+    # TODO: Get this working and reduce duplicate code
 
     new_data = config_entry.options.copy()
     new_data.pop(CONF_GENERATE, None)

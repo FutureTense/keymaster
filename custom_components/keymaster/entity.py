@@ -52,9 +52,6 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self._attr_extra_state_attributes: Mapping[str, Any] = {}
         self._attr_device_info: Mapping[str, Any] = {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
-            "via_device": self.coordinator.sync_get_device_id_from_config_entry_id(
-                self._kmlock.parent_config_entry_id
-            ),
         }
         _LOGGER.debug(
             f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}"
