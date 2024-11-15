@@ -3,9 +3,6 @@
 from collections.abc import Mapping
 import logging
 import os
-from typing import Any
-
-import voluptuous as vol
 
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.persistent_notification import create
@@ -27,14 +24,11 @@ from .const import (
     DEFAULT_HIDE_PINS,
     DOMAIN,
     PRIMARY_LOCK,
-    SERVICE_ADD_CODE,
-    SERVICE_CLEAR_CODE,
-    SERVICE_GENERATE_PACKAGE,
-    SERVICE_REFRESH_CODES,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
 from .helpers import (
     async_using_zwave_js,
+    call_hass_service,
     get_code_slots_list,
     reload_package_platforms,
     reset_code_slot_if_pin_unknown,
@@ -68,16 +62,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         instance_id = 1
         await refresh_codes(hass, entity_id, instance_id)
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_REFRESH_CODES,
-        _refresh_codes,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-            }
-        ),
-    )
+    # hass.services.async_register(
+    #     DOMAIN,
+    #     SERVICE_REFRESH_CODES,
+    #     _refresh_codes,
+    #     schema=vol.Schema(
+    #         {
+    #             vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
+    #         }
+    #     ),
+    # )
 
     # Add code
     async def _add_code(service: ServiceCall) -> None:
@@ -88,18 +82,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         usercode = service.data[ATTR_USER_CODE]
         await add_code(hass, entity_id, code_slot, usercode)
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_ADD_CODE,
-        _add_code,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
-                vol.Required(ATTR_USER_CODE): vol.Coerce(str),
-            }
-        ),
-    )
+    # hass.services.async_register(
+    #     DOMAIN,
+    #     SERVICE_ADD_CODE,
+    #     _add_code,
+    #     schema=vol.Schema(
+    #         {
+    #             vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
+    #             vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
+    #             vol.Required(ATTR_USER_CODE): vol.Coerce(str),
+    #         }
+    #     ),
+    # )
 
     # Clear code
     async def _clear_code(service: ServiceCall) -> None:
@@ -109,17 +103,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         code_slot = service.data[ATTR_CODE_SLOT]
         await clear_code(hass, entity_id, code_slot)
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_CLEAR_CODE,
-        _clear_code,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
-            }
-        ),
-    )
+    # hass.services.async_register(
+    #     DOMAIN,
+    #     SERVICE_CLEAR_CODE,
+    #     _clear_code,
+    #     schema=vol.Schema(
+    #         {
+    #             vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
+    #             vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
+    #         }
+    #     ),
+    # )
 
     # Generate package files
     def _generate_package(service: ServiceCall) -> None:
@@ -128,12 +122,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         name = service.data[ATTR_NAME]
         generate_package_files(hass, name)
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_GENERATE_PACKAGE,
-        _generate_package,
-        schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
-    )
+    # hass.services.async_register(
+    #     DOMAIN,
+    #     SERVICE_GENERATE_PACKAGE,
+    #     _generate_package,
+    #     schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
+    # )
 
     # TODO: Redo this
     # await async_reset_code_slot_if_pin_unknown(
@@ -153,24 +147,8 @@ async def init_child_locks(
     for x in range(start, start + slots):
         the_service = f"keymaster_{lockname}_copy_from_parent_{x}"
         _LOGGER.debug("Attempting to call script: %s", the_service)
-        await call_service(hass, SCRIPT_DOMAIN, the_service)
+        await call_hass_service(hass, SCRIPT_DOMAIN, the_service)
     _LOGGER.debug("Sync complete")
-
-
-async def call_service(
-    hass: HomeAssistant,
-    domain: str,
-    service: str,
-    service_data: Mapping[str, Any] = None,
-):
-    """Call a hass service and log a failure on an error."""
-    try:
-        await hass.services.async_call(
-            domain, service, service_data=service_data, blocking=True
-        )
-    except Exception as err:
-        _LOGGER.error("Error calling %s.%s service call: %s", domain, service, str(err))
-        raise err
 
 
 async def refresh_codes(  # pylint: disable-next=unused-argument
@@ -209,7 +187,7 @@ async def add_code(
 
     if async_using_zwave_js(hass=hass, entity_id=entity_id):
         servicedata[ATTR_ENTITY_ID] = entity_id
-        await call_service(
+        await call_hass_service(
             hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
         )
 
@@ -226,7 +204,7 @@ async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> Non
             ATTR_ENTITY_ID: entity_id,
             ATTR_CODE_SLOT: code_slot,
         }
-        await call_service(
+        await call_hass_service(
             hass, ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
         )
 

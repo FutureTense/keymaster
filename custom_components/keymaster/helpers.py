@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from datetime import timedelta
 import functools
 import logging
-
+from typing import Any
 from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
 from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
@@ -356,3 +356,19 @@ async def async_reload_package_platforms(hass: HomeAssistant) -> bool:
         except ServiceNotFound:
             return False
     return True
+
+
+async def call_hass_service(
+    hass: HomeAssistant,
+    domain: str,
+    service: str,
+    service_data: Mapping[str, Any] = None,
+):
+    """Call a hass service and log a failure on an error."""
+    try:
+        await hass.services.async_call(
+            domain, service, service_data=service_data, blocking=True
+        )
+    except Exception as err:
+        _LOGGER.error("Error calling %s.%s service call: %s", domain, service, str(err))
+        raise err

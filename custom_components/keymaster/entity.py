@@ -64,29 +64,50 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
     def _get_property_value(self) -> Any:
         if "." not in self._property:
             return None
-        prop_list: str = self._property.split(".")
-        result = self._kmlock
-        for key in prop_list[1:]:
-            num = None
-            try:
+
+        prop_list: list[str] = self._property.split(".")
+        result: Any = self._kmlock
+
+        try:
+            for key in prop_list[1:]:  # Skip the first part (entity name)
                 if ":" in key:
-                    num = int(key.split(":")[1])
-                    key = key.split(":")[0]
-                if not hasattr(result, key):
-                    return None
-                result = getattr(result, key)
-                if num is not None:
-                    result = result[num]
-            except (TypeError, KeyError, AttributeError):
-                return None
-        if result == self._kmlock:
+                    attr, num = key.split(":")
+                    result = getattr(result, attr)
+                    result = result[int(num)]
+                else:
+                    result = getattr(result, key)
+        except (TypeError, KeyError, AttributeError, IndexError):
             return None
+
         return result
+
+    def _set_property_value(self, value) -> bool:
+        if "." not in self._property:
+            return False
+
+        prop_list: list[str] = self._property.split(".")
+        obj: Any = self._kmlock
+
+        for key in prop_list[1:-1]:  # Skip the first part (entity name)
+            if ":" in key:
+                attr, num = key.split(":")
+                obj = getattr(obj, attr)
+                obj = obj[int(num)]
+            else:
+                obj = getattr(obj, key)
+
+        final_prop: str = prop_list[-1]
+        if ":" in final_prop:
+            attr, num = final_prop.split(":")
+            getattr(obj, attr)[int(num)] = value
+        else:
+            setattr(obj, final_prop, value)
+        return True
 
     def _get_code_slots_num(self) -> None | int:
         if "code_slots" not in self._property:
             return None
-        slots = self._property.split(".")
+        slots: list[str] = self._property.split(".")
         for slot in slots:
             if slot.startswith("code_slots"):
                 if ":" not in slot:
@@ -97,7 +118,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
     def _get_day_of_week_num(self) -> None | int:
         if "accesslimit_day_of_week" not in self._property:
             return None
-        slots = self._property.split(".")
+        slots: list[str] = self._property.split(".")
         for slot in slots:
             if slot.startswith("accesslimit_day_of_week"):
                 if ":" not in slot:

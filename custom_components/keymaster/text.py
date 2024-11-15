@@ -132,6 +132,27 @@ class KeymasterText(KeymasterEntity, TextEntity):
         self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()
 
-    def set_value(self, value: str) -> None:
-        # TODO: Update kmlock and lock
-        self._attr_native_value = value
+    async def async_set_value(self, value: str) -> None:
+        _LOGGER.debug(
+            f"[async_set_value] {self.name}: config_entry_id: {self._config_entry.entry_id}, value: {value}"
+        )
+
+        if self._property.endswith(".pin") and not (
+            await self.coordinator.set_pin_on_lock(
+                config_entry_id=self._config_entry.entry_id,
+                code_slot=self._code_slot,
+                pin=value,
+            )
+        ):
+            return
+        elif (
+            self._property.endswith(".name")
+            and self._kmlock.parent_name is not None
+            and not self._kmlock.code_slots[self._code_slot].override_parent
+        ):
+            _LOGGER.debug(
+                f"[async_set_value] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
+            )
+            return
+        if self._set_property_value(value):
+            self._attr_native_value = value
