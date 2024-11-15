@@ -42,7 +42,6 @@ class KeymasterLock:
     lock_name: str
     lock_entity_id: str
     keymaster_config_entry_id: str
-    keymaster_device_id: str | None = None
     lock_config_entry_id: str | None = None
     alarm_level_or_user_code_entity_id: str | None = None
     alarm_type_or_access_control_entity_id: str | None = None

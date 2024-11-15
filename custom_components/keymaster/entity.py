@@ -36,7 +36,6 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self._kmlock: KeymasterLock = self.coordinator.sync_get_lock_by_config_entry_id(
             self._config_entry.entry_id
         )
-        self._keymaster_device_id: str = self._kmlock.keymaster_device_id
         self._attr_name: str = (
             f"{self._kmlock.lock_name} {self.entity_description.name}"
         )

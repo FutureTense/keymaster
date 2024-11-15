@@ -7,7 +7,7 @@ DOMAIN = "keymaster"
 VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.TEXT]
-INTEGRATION = "zwave_integration"
+# INTEGRATION = "zwave_integration"
 
 # hass.data attributes
 CHILD_LOCKS = "child_locks"

@@ -30,13 +30,12 @@ from .const import (
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
-    INTEGRATION,
     ISSUE_URL,
     PLATFORMS,
     VERSION,
 )
 from .coordinator import KeymasterCoordinator
-from .helpers import async_using_zwave_js, get_code_slots_list
+from .helpers import get_code_slots_list
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 from .services import async_setup_services
 
@@ -97,9 +96,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
 
-    _LOGGER.debug(
-        f"[init async_setup_entry] updated config_entry.data: {config_entry.data}"
-    )
+    # _LOGGER.debug(f"[init async_setup_entry] updated config_entry.data: {config_entry.data}")
 
     config_entry.add_update_listener(update_listener)
 
@@ -117,12 +114,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     if config_entry.data.get(CONF_PARENT_ENTRY_ID):
         via_device = (DOMAIN, config_entry.data.get(CONF_PARENT_ENTRY_ID))
 
-    _LOGGER.debug(
-        f"[init async_setup_entry] name: {config_entry.data.get(CONF_LOCK_NAME)}, "
-        f"parent_name: {config_entry.data.get(CONF_PARENT)}, "
-        f"parent_entry_id: {config_entry.data.get(CONF_PARENT_ENTRY_ID)}, "
-        f"via_device: {via_device}"
-    )
+    # _LOGGER.debug(
+    #     f"[init async_setup_entry] name: {config_entry.data.get(CONF_LOCK_NAME)}, "
+    #     f"parent_name: {config_entry.data.get(CONF_PARENT)}, "
+    #     f"parent_entry_id: {config_entry.data.get(CONF_PARENT_ENTRY_ID)}, "
+    #     f"via_device: {via_device}"
+    # )
 
     device = device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
@@ -132,7 +129,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         via_device=via_device,
     )
 
-    _LOGGER.debug(f"[init async_setup_entry] device: {device}")
+    # _LOGGER.debug(f"[init async_setup_entry] device: {device}")
 
     code_slots: Mapping[int, KeymasterCodeSlot] = {}
     for x in range(
@@ -159,7 +156,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     kmlock = KeymasterLock(
         lock_name=config_entry.data.get(CONF_LOCK_NAME),
         lock_entity_id=config_entry.data.get(CONF_LOCK_ENTITY_ID),
-        keymaster_device_id=device.id,
         keymaster_config_entry_id=config_entry.entry_id,
         alarm_level_or_user_code_entity_id=config_entry.data.get(
             CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
@@ -174,31 +170,27 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         parent_name=config_entry.data.get(CONF_PARENT),
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
     )
-    hass.data[DOMAIN][config_entry.entry_id] = device.id
 
     await coordinator.add_lock(kmlock=kmlock)
 
     # await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
-    await system_health_check(hass, config_entry)
+    # await system_health_check(hass, config_entry)
     return True
 
 
-async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    """Update system health check data."""
-    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    _LOGGER.debug(
-        f"[system_health_check] hass.data[DOMAIN][config_entry.entry_id]: {hass.data[DOMAIN][config_entry.entry_id]}"
-    )
-    kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
-        config_entry.entry_id
-    )
+# async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+#     """Update system health check data."""
+#     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+#     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
+#         config_entry.entry_id
+#     )
 
-    if async_using_zwave_js(hass=hass, kmlock=kmlock):
-        hass.data[DOMAIN][INTEGRATION] = "zwave_js"
-    else:
-        hass.data[DOMAIN][INTEGRATION] = "unknown"
+#     if async_using_zwave_js(hass=hass, kmlock=kmlock):
+#         hass.data[DOMAIN][INTEGRATION] = "zwave_js"
+#     else:
+#         hass.data[DOMAIN][INTEGRATION] = "unknown"
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -338,7 +330,6 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
     kmlock = KeymasterLock(
         lock_name=config_entry.data[CONF_LOCK_NAME],
         lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
-        keymaster_device_id=device.id,
         keymaster_config_entry_id=config_entry.entry_id,
         alarm_level_or_user_code_entity_id=config_entry.data[
             CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
@@ -352,7 +343,6 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
         code_slots=code_slots,
         parent_name=config_entry.data[CONF_PARENT],
     )
-    hass.data[DOMAIN][config_entry.entry_id] = device.id
 
     if COORDINATOR not in hass.data[DOMAIN]:
         coordinator = KeymasterCoordinator(hass)

@@ -219,20 +219,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return None
         return self.kmlocks[config_entry_id]
 
-    async def get_device_id_from_config_entry_id(
-        self, config_entry_id: str
-    ) -> str | None:
-        if config_entry_id not in self.kmlocks:
-            return None
-        return self.kmlocks[config_entry_id].keymaster_device_id
-
-    def sync_get_device_id_from_config_entry_id(
-        self, config_entry_id: str
-    ) -> str | None:
-        if config_entry_id not in self.kmlocks:
-            return None
-        return self.kmlocks[config_entry_id].keymaster_device_id
-
     async def _is_slot_active(self, slot: KeymasterCodeSlot) -> bool:
         # _LOGGER.debug(f"[is_slot_active] slot: {slot} ({type(slot)})")
         if not isinstance(slot, KeymasterCodeSlot) or not slot.enabled:
