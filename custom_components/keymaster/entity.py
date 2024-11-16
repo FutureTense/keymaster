@@ -102,6 +102,9 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
             getattr(obj, attr)[int(num)] = value
         else:
             setattr(obj, final_prop, value)
+        _LOGGER.debug(
+            f"[set_property_value] property: {self._property}, final_prop: {final_prop}, value: {value}"
+        )
         return True
 
     def _get_code_slots_num(self) -> None | int:

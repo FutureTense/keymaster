@@ -1,6 +1,7 @@
 """Switch for Keymaster"""
 
 from dataclasses import dataclass
+from datetime import datetime
 import logging
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
@@ -215,6 +216,23 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         #     return
         if self._set_property_value(True):
             self._attr_is_on = True
+            if self._property.endswith(".enabled"):
+                self._kmlock.code_slots[self._code_slot].last_enabled = (
+                    datetime.now().astimezone()
+                )
+                await self.coordinator.update_slot_active_state(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot=self._code_slot,
+                )
+                pin: str | None = self._kmlock.code_slots[self._code_slot].pin
+                if not pin or not pin.isdigit():
+                    pin = "0000"
+                await self.coordinator.set_pin_on_lock(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot=self._code_slot,
+                    pin=pin,
+                    update_after=False,
+                )
             await self.coordinator.async_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
@@ -238,4 +256,14 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         #     return
         if self._set_property_value(False):
             self._attr_is_on = False
+            if self._property.endswith(".enabled"):
+                await self.coordinator.update_slot_active_state(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot=self._code_slot,
+                )
+                await self.coordinator.clear_pin_from_lock(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot=self._code_slot,
+                    update_after=False,
+                )
             await self.coordinator.async_refresh()
