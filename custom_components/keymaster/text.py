@@ -5,7 +5,6 @@ import logging
 
 from homeassistant.components.text import TextEntity, TextEntityDescription, TextMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -15,8 +14,6 @@ from .entity import KeymasterEntity, KeymasterEntityDescription
 from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
-PLATFORM: Platform = Platform.TEXT
-ENTITY_ID_FORMAT: str = PLATFORM + ".{}"
 
 
 async def async_setup_entry(
@@ -100,13 +97,12 @@ class KeymasterTextEntityDescription(KeymasterEntityDescription, TextEntityDescr
 
 
 class KeymasterText(KeymasterEntity, TextEntity):
-    """Representation of a keymaster text."""
 
     def __init__(
         self,
         entity_description: KeymasterTextEntityDescription,
     ) -> None:
-        """Initialize text."""
+        """Initialize Text"""
         super().__init__(
             entity_description=entity_description,
         )
@@ -134,7 +130,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
     async def async_set_value(self, value: str) -> None:
         _LOGGER.debug(
-            f"[async_set_value] {self.name}: config_entry_id: {self._config_entry.entry_id}, value: {value}"
+            f"[Text async_set_value] {self.name}: config_entry_id: {self._config_entry.entry_id}, value: {value}"
         )
 
         if self._property.endswith(".pin") and not (
@@ -151,7 +147,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
             and not self._kmlock.code_slots[self._code_slot].override_parent
         ):
             _LOGGER.debug(
-                f"[async_set_value] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
+                f"[Text async_set_value] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
             )
             return
         if self._set_property_value(value):

@@ -27,7 +27,7 @@ class KeymasterCodeSlot:
     override_parent: bool = False
     accesslimit: bool = False
     accesslimit_count_enabled: bool = False
-    accesslimit_count: tuple[int, int] | None = None
+    accesslimit_count: int | None = None
     accesslimit_date_range_enabled: bool = False
     accesslimit_date_range_start: datetime | None = None
     accesslimit_date_range_end: datetime | None = None
@@ -52,6 +52,9 @@ class KeymasterLock:
     number_of_code_slots: int | None = None
     starting_code_slot: int = 1
     code_slots: Mapping[int, KeymasterCodeSlot] | None = None
+    autolock_enabled: bool = False
+    autolock_min_day: int | None = None
+    autolock_min_night: int | None = None
     parent_name: str | None = None
     parent_config_entry_id: str | None = None
     child_config_entry_ids: list = field(default_factory=list)
