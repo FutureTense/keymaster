@@ -21,6 +21,7 @@ class KeymasterCodeSlotDayOfWeek:
 class KeymasterCodeSlot:
     number: int
     enabled: bool = True
+    last_enabled: datetime = datetime.now().astimezone()
     name: str | None = None
     pin: str | None = None
     active: bool = True
