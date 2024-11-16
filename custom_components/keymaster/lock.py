@@ -11,7 +11,7 @@ from homeassistant.helpers.device_registry import DeviceEntry
 class KeymasterCodeSlotDayOfWeek:
     day_of_week_num: int
     day_of_week_name: str
-    enabled: bool = False
+    dow_enabled: bool = False
     include_exclude: bool = True
     time_start: time | None = None
     time_end: time | None = None
@@ -25,7 +25,7 @@ class KeymasterCodeSlot:
     pin: str | None = None
     active: bool = True
     override_parent: bool = False
-    accesslimit: bool = False
+    notifications: bool = False
     accesslimit_count_enabled: bool = False
     accesslimit_count: int | None = None
     accesslimit_date_range_enabled: bool = False
@@ -52,9 +52,12 @@ class KeymasterLock:
     number_of_code_slots: int | None = None
     starting_code_slot: int = 1
     code_slots: Mapping[int, KeymasterCodeSlot] | None = None
+    lock_notifications: bool = False
+    door_notifications: bool = False
     autolock_enabled: bool = False
     autolock_min_day: int | None = None
     autolock_min_night: int | None = None
+    retry_lock: bool = False
     parent_name: str | None = None
     parent_config_entry_id: str | None = None
     child_config_entry_ids: list = field(default_factory=list)

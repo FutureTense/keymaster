@@ -11,7 +11,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import CONF_HIDE_PINS, CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -21,42 +20,14 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    start_from = config_entry.data[CONF_START]
-    code_slots = config_entry.data[CONF_SLOTS]
-    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
-        config_entry.entry_id
-    )
-    entities: list = []
-    # TODO: Remove this one? Doesn't need to be text. Maybe just a static sensor?
-    entities.append(
-        KeymasterText(
-            entity_description=KeymasterTextEntityDescription(
-                key="text.lock_name",
-                name="Lock Name",
-                entity_registry_enabled_default=True,
-                hass=hass,
-                config_entry=config_entry,
-                coordinator=coordinator,
-            ),
-        )
-    )
-    # TODO: Remove this one? Doesn't need to be text. Maybe just a static sensor?
-    if hasattr(kmlock, "parent_name") and kmlock.parent_name is not None:
-        entities.append(
-            KeymasterText(
-                entity_description=KeymasterTextEntityDescription(
-                    key="text.parent_name",
-                    name="Parent Lock",
-                    entity_registry_enabled_default=True,
-                    hass=hass,
-                    config_entry=config_entry,
-                    coordinator=coordinator,
-                ),
-            )
-        )
 
-    for x in range(start_from, start_from + code_slots):
+    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    entities: list = []
+
+    for x in range(
+        config_entry.data[CONF_START],
+        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+    ):
         entities.append(
             KeymasterText(
                 entity_description=KeymasterTextEntityDescription(
@@ -116,6 +87,15 @@ class KeymasterText(KeymasterEntity, TextEntity):
             self.async_write_ha_state()
             return
 
+        if (
+            "code_slots" in self._property
+            and self._kmlock.parent_name is not None
+            and not self._kmlock.code_slots[self._code_slot].override_parent
+        ):
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
         if "code_slots" in self._property and (
             self._code_slot not in self._kmlock.code_slots
             or not self._kmlock.code_slots[self._code_slot].enabled
@@ -152,3 +132,4 @@ class KeymasterText(KeymasterEntity, TextEntity):
             return
         if self._set_property_value(value):
             self._attr_native_value = value
+            await self.coordinator.async_refresh()

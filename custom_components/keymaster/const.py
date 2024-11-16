@@ -6,7 +6,13 @@ from homeassistant.const import Platform
 DOMAIN = "keymaster"
 VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.TEXT, Platform.NUMBER]
+PLATFORMS: list = [
+    Platform.BINARY_SENSOR,
+    Platform.SENSOR,
+    Platform.TEXT,
+    Platform.NUMBER,
+    Platform.SWITCH,
+]
 # INTEGRATION = "zwave_integration"
 
 # hass.data attributes

@@ -71,7 +71,7 @@ async def async_setup_entry(
             KeymasterNumber(
                 entity_description=KeymasterNumberEntityDescription(
                     key=f"number.code_slots:{x}.accesslimit_count",
-                    name=f"Unlock Events {x}",
+                    name=f"Code Slot {x}: Uses Remaining",
                     mode=NumberMode.BOX,
                     native_min_value=0,
                     native_max_value=100,
@@ -115,9 +115,26 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             self.async_write_ha_state()
             return
 
+        if (
+            "code_slots" in self._property
+            and self._kmlock.parent_name is not None
+            and not self._kmlock.code_slots[self._code_slot].override_parent
+        ):
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
         if "code_slots" in self._property and (
             self._code_slot not in self._kmlock.code_slots
             or not self._kmlock.code_slots[self._code_slot].enabled
+        ):
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
+        if (
+            self._property.endswith(".accesslimit_count")
+            and not self._kmlock.code_slots[self._code_slot].accesslimit_count_enabled
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -127,7 +144,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
         self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()
 
-    async def async_set_value(self, value: str) -> None:
+    async def async_set_native_value(self, value: float) -> None:
         _LOGGER.debug(
             f"[Number async_set_value] {self.name}: config_entry_id: {self._config_entry.entry_id}, value: {value}"
         )
@@ -138,8 +155,9 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             and not self._kmlock.code_slots[self._code_slot].override_parent
         ):
             _LOGGER.debug(
-                f"[async_set_value] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
+                f"[Number async_set_value] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
             )
             return
         if self._set_property_value(value):
             self._attr_native_value = value
+            await self.coordinator.async_refresh()
