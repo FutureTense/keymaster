@@ -6,22 +6,6 @@
 ################  COMMON ENTITIES  ###############
 ##################################################
 
-###############  input_boolean:  #################
-input_boolean:
-  LOCKNAME_lock_notifications:
-    name: CASE_LOCK_NAME Lock Notifications
-  LOCKNAME_dooraccess_notifications:
-    name: CASE_LOCK_NAME Door Notifications
-  LOCKNAME_garageacess_notifications:
-    name: CASE_LOCK_NAME Garage Notifications
-  LOCKNAME_reset_lock:
-    name: CASE_LOCK_NAME reset lock
-  keymaster_LOCKNAME_autolock:
-    name: "Auto Lock Enabled"
-    icon: mdi:key-remove
-  keymaster_LOCKNAME_retry:
-    name: "Auto Lock Enabled"
-
 ###################  script:  ####################
 script:
   keymaster_LOCKNAME_reset_lock:
@@ -436,18 +420,3 @@ lock:
       service: lock.unlock
       data:
         entity_id: LOCKENTITYNAME
-###############  input_text:  #################
-# input_text:
-#   LOCKNAME_lockname:
-#     initial: LOCKNAME
-#     name: "Lock Name"
-
-#   keymaster_LOCKNAME_autolock_door_time_day:
-#     name: "Day Auto Lock HH:MM:SS"
-#   keymaster_LOCKNAME_autolock_door_time_night:
-#     name: "Night Auto Lock HH:MM:SS"
-
-###############  PARENT entities  #################
-# LOCKNAME_PARENTLOCK_parent:
-#   initial: PARENTLOCK
-#   name: "Parent lock"
