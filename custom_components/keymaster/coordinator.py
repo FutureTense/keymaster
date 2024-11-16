@@ -169,7 +169,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
         await self._rebuild_lock_relationships()
         await self._update_listeners(kmlock)
-        await self._async_update_data()
+        await self.async_refresh()
         return True
 
     async def update_lock(self, kmlock: KeymasterLock) -> bool:
@@ -178,7 +178,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self.kmlocks.update({kmlock.keymaster_config_entry_id: kmlock})
         await self._rebuild_lock_relationships()
         await self._update_listeners(self.kmlocks[kmlock.keymaster_config_entry_id])
-        await self._async_update_data()
+        await self.async_refresh()
         return True
 
     async def update_lock_by_config_entry_id(
@@ -191,7 +191,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 setattr(self.kmlocks[config_entry_id], attr, value)
         await self._rebuild_lock_relationships()
         await self._update_listeners(self.kmlocks[config_entry_id])
-        await self._async_update_data()
+        await self.async_refresh()
         return True
 
     async def delete_lock(self, kmlock: KeymasterLock) -> bool:
@@ -202,7 +202,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
         await self._rebuild_lock_relationships()
-        await self._async_update_data()
+        await self.async_refresh()
         return True
 
     async def delete_lock_by_config_entry_id(self, config_entry_id: str) -> bool:
@@ -211,7 +211,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._unsubscribe_listeners(self.kmlocks[config_entry_id])
         self.kmlocks.pop(config_entry_id, None)
         await self._rebuild_lock_relationships()
-        await self._async_update_data()
+        await self.async_refresh()
         return True
 
     async def get_lock_by_name(self, lock_name: str) -> KeymasterLock | None:
@@ -289,7 +289,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self.hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
             )
             if update_after:
-                await self._async_update_data()
+                await self.async_refresh()
             return True
 
         else:
@@ -342,7 +342,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self.hass, ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
             )
             if update_after:
-                await self._async_update_data()
+                await self.async_refresh()
             return True
 
         else:
@@ -353,8 +353,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not isinstance(slot, KeymasterCodeSlot) or not slot.enabled:
             return False
 
-        if not slot.accesslimit:
-            return True
+        # if not slot.accesslimit:
+        #     return True
 
         # TODO: Build the rest of the access limit logic
         return True
@@ -551,8 +551,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                                         child_kmlock.code_slots[
                                             num
                                         ].accesslimit_day_of_week[dow_num],
-                                        attr,
-                                        getattr(dow_slot, attr),
+                                        dow_attr,
+                                        getattr(dow_slot, dow_attr),
                                     )
 
                     _LOGGER.debug(
