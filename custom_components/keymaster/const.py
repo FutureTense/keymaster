@@ -8,10 +8,12 @@ VERSION = "v0.0.0"  # this will be automatically updated as part of the release 
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
 PLATFORMS: list = [
     Platform.BINARY_SENSOR,
-    Platform.SENSOR,
-    Platform.TEXT,
+    Platform.DATETIME,
     Platform.NUMBER,
+    Platform.SENSOR,
     Platform.SWITCH,
+    Platform.TEXT,
+    Platform.TIME,
 ]
 # INTEGRATION = "zwave_integration"
 

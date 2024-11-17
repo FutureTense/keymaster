@@ -13,7 +13,7 @@ from .const import DOMAIN
 from .coordinator import KeymasterCoordinator
 from .lock import KeymasterLock
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 # Naming convention for EntityDescription key (Property) for all entities:
 # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
@@ -44,7 +44,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
             f"{self._config_entry.entry_id}_{slugify(self._property)}"
         )
         # _LOGGER.debug(f"[Entity init] self._property: {self._property}, unique_id: {self.unique_id}")
-        if "code_slots" in self._property:
+        if ".code_slots" in self._property:
             self._code_slot: None | int = self._get_code_slots_num()
         if "accesslimit_day_of_week" in self._property:
             self._day_of_week_num: None | int = self._get_day_of_week_num()
@@ -108,7 +108,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         return True
 
     def _get_code_slots_num(self) -> None | int:
-        if "code_slots" not in self._property:
+        if ".code_slots" not in self._property:
             return None
         slots: list[str] = self._property.split(".")
         for slot in slots:
