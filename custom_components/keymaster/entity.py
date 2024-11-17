@@ -52,9 +52,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self._attr_device_info: Mapping[str, Any] = {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
         }
-        _LOGGER.debug(
-            f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}"
-        )
+        # _LOGGER.debug(f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}")
         super().__init__(self.coordinator, self._attr_unique_id)
 
     @property
