@@ -134,13 +134,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         dow_slots: Mapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(
             [
-                "Sunday",
                 "Monday",
                 "Tuesday",
                 "Wednesday",
                 "Thursday",
                 "Friday",
                 "Saturday",
+                "Sunday",
             ]
         ):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(

@@ -39,7 +39,7 @@ from .helpers import (
     handle_zwave_js_event,
     homeassistant_started_listener,
 )
-from .lock import KeymasterCodeSlot, KeymasterLock
+from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -621,10 +621,37 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not isinstance(slot, KeymasterCodeSlot) or not slot.enabled:
             return False
 
-        # if not slot.accesslimit:
-        #     return True
+        if slot.accesslimit_count_enabled and (
+            not isinstance(slot.accesslimit_count, float) or slot.accesslimit_count <= 0
+        ):
+            return False
 
-        # TODO: Build the rest of the access limit logic
+        if slot.accesslimit_date_range_enabled and (
+            not isinstance(slot.accesslimit_date_range_start, datetime)
+            or not isinstance(slot.accesslimit_date_range_end, datetime)
+            or datetime.now().astimezone() < slot.accesslimit_date_range_start
+            or datetime.now().astimezone() > slot.accesslimit_date_range_end
+        ):
+            return False
+
+        if slot.accesslimit_day_of_week_enabled:
+            today_index: int = datetime.now().astimezone().weekday()
+            today: KeymasterCodeSlotDayOfWeek = slot.accesslimit_day_of_week[
+                today_index
+            ]
+            if not today.dow_enabled:
+                return False
+            if today.include_exclude and (
+                time.localtime() < today.time_start or time.localtime() > today.time_end
+            ):
+                return False
+            if (
+                not today.include_exclude
+                and time.localtime() >= today.time_start
+                and time.localtime() <= today.time_end
+            ):
+                return False
+
         return True
 
     async def update_slot_active_state(self, config_entry_id: str, code_slot: int):
@@ -778,7 +805,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         f"[Coordinator] {kmlock.lock_name}: Code slot {code_slot} not enabled"
                     )
                     kmlock.code_slots[code_slot].enabled = False
-                    kmlock.code_slots[code_slot].active = False
+                    # kmlock.code_slots[code_slot].active = False
                     continue
                 if usercode and "*" in str(usercode):
                     _LOGGER.debug(
@@ -790,10 +817,28 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 )
                 kmlock.code_slots[code_slot].enabled = True
                 kmlock.code_slots[code_slot].pin = usercode
-                kmlock.code_slots[code_slot].active = await self._is_slot_active(
-                    kmlock.code_slots[code_slot]
-                )
-                # TODO: Clear pin from lock if not active
+
+            for num, slot in kmlock.code_slots.items():
+                new_active: bool = await self._is_slot_active(slot)
+                if slot.active == new_active:
+                    continue
+
+                slot.active = new_active
+                if not slot.active or slot.pin is None:
+                    await self.clear_pin_from_lock(
+                        config_entry_id=kmlock.keymaster_config_entry_id,
+                        code_slot=num,
+                        update_after=False,
+                        override=True,
+                    )
+                else:
+                    await self.set_pin_on_lock(
+                        config_entry_id=kmlock.keymaster_config_entry_id,
+                        code_slot=num,
+                        pin=slot.pin,
+                        update_after=False,
+                        override=True,
+                    )
 
         for kmlock in self.kmlocks.values():
 
@@ -898,64 +943,3 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self.hass.async_add_executor_job(self._write_config_to_json)
         # _LOGGER.debug(f"[Coordinator] final self.kmlocks: {self.kmlocks}")
         return self.kmlocks
-
-
-# binary_sensor:
-#   - platform: template
-#     sensors:
-#       active_LOCKNAME_TEMPLATENUM:
-#         friendly_name: "Desired PIN State"
-#         unique_id: "binary_sensor.active_LOCKNAME_TEMPLATENUM"
-#         value_template: >-
-#           {## This template checks whether the PIN should be considered active based on ##}
-#           {## all of the different ways the PIN can be conditionally enabled/disabled ##}
-
-#           {## Get current date and time ##}
-#           {% set now = now() %}
-
-#           {## Get current day of week, date (integer yyyymmdd), and time (integer hhmm) ##}
-#           {% set current_day = now.strftime('%a')[0:3] | lower %}
-#           {% set current_date = now.strftime('%Y%m%d') | int %}
-#           {% set current_time = now.strftime('%H%M') | int %}
-#           {% set current_timestamp = as_timestamp(now) | int %}
-
-#           {## Get whether date range toggle is enabled as well as start and end date (integer yyyymmdd) ##}
-#           {## Determine whether current date is within date range using integer (yyyymmdd) comparison ##}
-#           {% set is_date_range_enabled = is_state('input_boolean.daterange_LOCKNAME_TEMPLATENUM', 'on') %}
-#           {% set start_date = state_attr('input_datetime.start_date_LOCKNAME_TEMPLATENUM', 'timestamp') | int %}
-#           {% set end_date = state_attr('input_datetime.end_date_LOCKNAME_TEMPLATENUM', 'timestamp') | int %}
-
-#           {## Only active if within the full datetime range. To get a single day both start and stop times must be set ##}
-#           {% set is_in_date_range = (start_date < end_date and current_timestamp >= start_date and current_timestamp <= end_date) %}
-
-#           {## Get current days start and end time (integer hhmm). Assume time range is considered enabled if start time != end time. ##}
-#           {## If time range is inclusive, check if current time is between start and end times. If exclusive, check if current time is before start time or after end time. ##}
-#           {% set current_day_start_time = (states('input_datetime.' + current_day + '_start_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int %}
-#           {% set current_day_end_time = (states('input_datetime.' + current_day + '_end_date_LOCKNAME_TEMPLATENUM')[0:5]).replace(':', '') | int %}
-#           {% set is_time_range_enabled = (current_day_start_time != current_day_end_time) %}
-#           {% set is_time_range_inclusive = is_state('input_boolean.' + current_day + '_inc_LOCKNAME_TEMPLATENUM', 'on') %}
-#           {% set is_in_time_range = (
-#             (is_time_range_inclusive and (current_time >= current_day_start_time and current_time <= current_day_end_time))
-#             or
-#             (not is_time_range_inclusive and (current_time < current_day_start_time or current_time > current_day_end_time))
-#           ) %}
-
-#           {## Get whether code slot is active and current day is enabled ##}
-#           {% set is_slot_enabled = is_state('input_boolean.enabled_LOCKNAME_TEMPLATENUM', 'on') %}
-#           {% set is_current_day_enabled = is_state('input_boolean.' + current_day + '_LOCKNAME_TEMPLATENUM', 'on') %}
-
-#           {## Check if access limit is enabled and if there are access counts left. ##}
-#           {% set is_access_limit_enabled = is_state('input_boolean.accesslimit_LOCKNAME_TEMPLATENUM', 'on') %}
-#           {% set is_access_count_valid = states('input_number.accesscount_LOCKNAME_TEMPLATENUM') | int > 0 %}
-
-#           {## Code slot is active if slot is enabled + current day is enabled + date range is not enabled or current date is within date range ##}
-#           {## + time range is not enabled or current time is within time range (based on include/exclude) + access limit is not enabled or there are more access counts left ##}
-#           {{
-#             is_slot_enabled and is_current_day_enabled
-#             and
-#             (not is_date_range_enabled or is_in_date_range)
-#             and
-#             (not is_time_range_enabled or is_in_time_range)
-#             and
-#             (not is_access_limit_enabled or is_access_count_valid)
-#           }}
