@@ -1,4 +1,4 @@
-"""Support for keymaster text."""
+"""Support for keymaster Number"""
 
 from dataclasses import dataclass
 import logging
@@ -17,7 +17,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -27,12 +26,8 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    start_from = config_entry.data[CONF_START]
-    code_slots = config_entry.data[CONF_SLOTS]
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
-        config_entry.entry_id
-    )
+
     entities: list = []
 
     entities.append(
@@ -66,7 +61,10 @@ async def async_setup_entry(
         )
     )
 
-    for x in range(start_from, start_from + code_slots):
+    for x in range(
+        config_entry.data[CONF_START],
+        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+    ):
         entities.append(
             KeymasterNumber(
                 entity_description=KeymasterNumberEntityDescription(
@@ -105,7 +103,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
         super().__init__(
             entity_description=entity_description,
         )
-        self._attr_native_value: str = None
+        self._attr_native_value: float | None = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -116,7 +114,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             return
 
         if (
-            "code_slots" in self._property
+            ".code_slots" in self._property
             and self._kmlock.parent_name is not None
             and not self._kmlock.code_slots[self._code_slot].override_parent
         ):
@@ -124,7 +122,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             self.async_write_ha_state()
             return
 
-        if "code_slots" in self._property and (
+        if ".code_slots" in self._property and (
             self._code_slot not in self._kmlock.code_slots
             or not self._kmlock.code_slots[self._code_slot].enabled
         ):
@@ -136,6 +134,14 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             self._property.endswith(".accesslimit_count")
             and not self._kmlock.code_slots[self._code_slot].accesslimit_count_enabled
         ):
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
+        if (
+            self._property.endswith(".autolock_min_day")
+            or self._property.endswith(".autolock_min_night")
+        ) and not self._kmlock.autolock_enabled:
             self._attr_available = False
             self.async_write_ha_state()
             return

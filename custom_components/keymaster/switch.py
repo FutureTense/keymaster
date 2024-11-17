@@ -1,5 +1,6 @@
 """Switch for Keymaster"""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 import logging
@@ -9,24 +10,23 @@ from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .helpers import async_using_zwave_js
-
-try:
-    from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
-except (ModuleNotFoundError, ImportError):
-    pass
+from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Setup config entry."""
-    coordinator = hass.data[DOMAIN][COORDINATOR]
-    kmlock = await coordinator.get_lock_by_config_entry_id(config_entry.entry_id)
-    entities = []
+    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
+        config_entry.entry_id
+    )
+    entities: list = []
     if async_using_zwave_js(hass=hass, kmlock=kmlock):
-        lock_switch_entities = {
+        lock_switch_entities: Mapping[str, str] = {
             "switch.autolock_enabled": "Auto Lock",
             "switch.lock_notifications": "Lock Notifications",
             "switch.door_notifications": "Door Notifications",
@@ -63,7 +63,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         )
                     )
                 )
-            code_slot_switch_entities = {
+            code_slot_switch_entities: Mapping[str, str] = {
                 f"switch.code_slots:{x}.enabled": f"Code Slot {x}: Enabled",
                 f"switch.code_slots:{x}.notifications": f"Code Slot {x}: Notifications",
                 f"switch.code_slots:{x}.accesslimit_date_range_enabled": f"Code Slot {x}: Use Date Range Limits",
@@ -94,7 +94,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     "Saturday",
                 ]
             ):
-                dow_switch_entities = {
+                dow_switch_entities: Mapping[str, str] = {
                     f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.dow_enabled": f"Code Slot {x}: {dow}",
                     f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.include_exclude": f"Code Slot {x}: {dow} - Include (On)/Exclude (Off) Time",
                 }
@@ -146,7 +146,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             return
 
         if (
-            "code_slots" in self._property
+            ".code_slots" in self._property
             and not (
                 self._property.endswith(".override_parent")
                 or self._property.endswith(".notifications")
@@ -160,7 +160,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
 
         if (
             not self._property.endswith(".enabled")
-            and "code_slots" in self._property
+            and ".code_slots" in self._property
             and (
                 self._code_slot not in self._kmlock.code_slots
                 or not self._kmlock.code_slots[self._code_slot].enabled
@@ -192,7 +192,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             return
 
         self._attr_available = True
-        self._attr_is_on = self._get_property_value()
+        self._attr_is_on: bool = self._get_property_value()
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -205,15 +205,6 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             f"[Switch async_turn_on] {self.name}: config_entry_id: {self._config_entry.entry_id}"
         )
 
-        # if (
-        #     self._property.endswith(".accesslimit_count")
-        #     and self._kmlock.parent_name is not None
-        #     and not self._kmlock.code_slots[self._code_slot].override_parent
-        # ):
-        #     _LOGGER.debug(
-        #         f"[Switch async_turn_on] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
-        #     )
-        #     return
         if self._set_property_value(True):
             self._attr_is_on = True
             if self._property.endswith(".enabled"):
@@ -245,15 +236,6 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             f"[Switch async_turn_off] {self.name}: config_entry_id: {self._config_entry.entry_id}"
         )
 
-        # if (
-        #     self._property.endswith(".accesslimit_count")
-        #     and self._kmlock.parent_name is not None
-        #     and not self._kmlock.code_slots[self._code_slot].override_parent
-        # ):
-        #     _LOGGER.debug(
-        #         f"[Switch async_turn_off] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
-        #     )
-        #     return
         if self._set_property_value(False):
             self._attr_is_on = False
             if self._property.endswith(".enabled"):
