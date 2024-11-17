@@ -30,9 +30,7 @@ from .const import (
     COORDINATOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
-    ISSUE_URL,
     PLATFORMS,
-    VERSION,
 )
 from .coordinator import KeymasterCoordinator
 from .helpers import get_code_slots_list
@@ -55,11 +53,7 @@ async def async_setup(  # pylint: disable-next=unused-argument
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up is called when Home Assistant is loading our component."""
     hass.data.setdefault(DOMAIN, {})
-    _LOGGER.info(
-        "Version %s is starting, if you have any issues please report them here: %s",
-        VERSION,
-        ISSUE_URL,
-    )
+
     # should_generate_package = config_entry.data.get(CONF_GENERATE)
 
     updated_config = config_entry.data.copy()
@@ -103,8 +97,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     await async_setup_services(hass)
 
     if COORDINATOR not in hass.data[DOMAIN]:
-        coordinator = KeymasterCoordinator(hass)
+        coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
         hass.data[DOMAIN][COORDINATOR] = coordinator
+        await coordinator.async_config_entry_first_refresh()
     else:
         coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -121,7 +116,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     #     f"via_device: {via_device}"
     # )
 
-    device = device_registry.async_get_or_create(
+    device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
         identifiers={(DOMAIN, config_entry.entry_id)},
         name=config_entry.data.get(CONF_LOCK_NAME),
@@ -173,7 +168,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     await coordinator.add_lock(kmlock=kmlock)
 
-    # await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     # await system_health_check(hass, config_entry)
@@ -195,8 +189,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
-    lockname = config_entry.data.get(CONF_LOCK_NAME)
-    notification_id = f"{DOMAIN}_{lockname}_unload"
+    lockname: str = config_entry.data.get(CONF_LOCK_NAME)
+    notification_id: str = f"{DOMAIN}_{lockname}_unload"
     async_create(
         hass,
         (
@@ -208,7 +202,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         notification_id=notification_id,
     )
 
-    unload_ok = all(
+    unload_ok: bool = all(
         await asyncio.gather(
             *[
                 hass.config_entries.async_forward_entry_unload(config_entry, platform)
@@ -298,7 +292,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> Non
 
     device_registry = dr.async_get(hass)
 
-    device = device_registry.async_get_or_create(
+    device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
         identifiers={(DOMAIN, config_entry.entry_id)},
         name=config_entry.data[CONF_LOCK_NAME],

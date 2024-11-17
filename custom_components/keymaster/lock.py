@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, time
 
+from zwave_js_server.model.node import Node as ZwaveJSNode
+
 from homeassistant.helpers.device_registry import DeviceEntry
 
 
@@ -48,7 +50,7 @@ class KeymasterLock:
     alarm_type_or_access_control_entity_id: str | None = None
     door_sensor_entity_id: str | None = None
     connected: bool = False
-    zwave_js_lock_node = None
+    zwave_js_lock_node: ZwaveJSNode | None = None
     zwave_js_lock_device: DeviceEntry | None = None
     number_of_code_slots: int | None = None
     starting_code_slot: int = 1
