@@ -14,6 +14,7 @@ class KeymasterCodeSlotDayOfWeek:
     day_of_week_num: int
     day_of_week_name: str
     dow_enabled: bool = False
+    limit_by_time: bool = False
     include_exclude: bool = True
     time_start: time | None = None
     time_end: time | None = None

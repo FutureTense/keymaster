@@ -97,6 +97,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 dow_switch_entities: Mapping[str, str] = {
                     f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.dow_enabled": f"Code Slot {x}: {dow}",
                     f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.include_exclude": f"Code Slot {x}: {dow} - Include (On)/Exclude (Off) Time",
+                    f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.limit_by_time": f"Code Slot {x}: {dow} - Limit by Time of Day",
                 }
                 for key, name in dow_switch_entities.items():
                     entities.append(
@@ -182,10 +183,22 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             return
 
         if (
-            self._property.endswith(".include_exclude")
+            self._property.endswith(".limit_by_time")
             and not self._kmlock.code_slots[self._code_slot]
             .accesslimit_day_of_week[self._day_of_week_num]
             .dow_enabled
+        ):
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
+        if self._property.endswith(".include_exclude") and (
+            not self._kmlock.code_slots[self._code_slot]
+            .accesslimit_day_of_week[self._day_of_week_num]
+            .dow_enabled
+            or not self._kmlock.code_slots[self._code_slot]
+            .accesslimit_day_of_week[self._day_of_week_num]
+            .limit_by_time
         ):
             self._attr_available = False
             self.async_write_ha_state()
