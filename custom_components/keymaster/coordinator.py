@@ -639,16 +639,35 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             today: KeymasterCodeSlotDayOfWeek = slot.accesslimit_day_of_week[
                 today_index
             ]
+            _LOGGER.debug(
+                f"[is_slot_active] today_index: {today_index}, today: {today}"
+            )
             if not today.dow_enabled:
                 return False
-            if today.include_exclude and (
-                time.localtime() < today.time_start or time.localtime() > today.time_end
+
+            if (
+                today.limit_by_time
+                and today.include_exclude
+                and (
+                    not isinstance(today.time_start, time)
+                    or not isinstance(today.time_end, time)
+                    or datetime.now().time() < today.time_start
+                    or datetime.now().time() > today.time_end
+                )
             ):
                 return False
+
             if (
-                not today.include_exclude
-                and time.localtime() >= today.time_start
-                and time.localtime() <= today.time_end
+                today.limit_by_time
+                and not today.include_exclude
+                and (
+                    not isinstance(today.time_start, time)
+                    or not isinstance(today.time_end, time)
+                    or (
+                        datetime.now().time() >= today.time_start
+                        and datetime.now().time() <= today.time_end
+                    )
+                )
             ):
                 return False
 

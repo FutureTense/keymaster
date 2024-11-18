@@ -117,9 +117,14 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
         if (
             self._property.endswith(".time_start")
             or self._property.endswith(".time_end")
-        ) and not self._kmlock.code_slots[self._code_slot].accesslimit_day_of_week[
-            self._day_of_week_num
-        ].dow_enabled:
+        ) and (
+            not self._kmlock.code_slots[self._code_slot]
+            .accesslimit_day_of_week[self._day_of_week_num]
+            .dow_enabled
+            or not self._kmlock.code_slots[self._code_slot]
+            .accesslimit_day_of_week[self._day_of_week_num]
+            .limit_by_time
+        ):
             self._attr_available = False
             self.async_write_ha_state()
             return
