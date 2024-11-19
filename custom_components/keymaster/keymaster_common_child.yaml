@@ -101,23 +101,6 @@ script:
               {{ states('input_text.keymaster_LOCKNAME_autolock_door_time_day')}}
             {% endif %}
 
-  boltchecked_lock_LOCKNAME:
-    sequence:
-      - service: lock.lock
-        data:
-          entity_id: LOCKENTITYNAME
-
-  boltchecked_retry_LOCKNAME:
-    sequence:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.keymaster_LOCKNAME_retry
-      - service: persistent_notification.create
-        data_template:
-          title: "Unable to lock LOCKNAME"
-          message: >-
-            {{ 'Unable to lock LOCKNAME as the sensor indicates the door is currently opened.  The operation will be automatically retried when the door is closed.'}}
-
 ###################  automation:  ####################
 automation:
   - alias: keymaster_CASE_LOCK_NAME Reset Code Slot
@@ -131,121 +114,6 @@ automation:
         data_template:
           code_slot: "{{ trigger.entity_id.split('_')[-1] }}"
 
-  - alias: keymaster_CASE_LOCK_NAME Lock Notifications
-    id: keymaster_CASE_LOCK_NAME Lock Notifications
-    trigger:
-      platform: event
-      event_type: keymaster_lock_state_changed
-      event_data:
-        lockname: LOCKNAME
-    condition:
-      - condition: state
-        entity_id: input_boolean.LOCKNAME_lock_notifications
-        state: "on"
-    action:
-      - service: script.keymaster_LOCKNAME_manual_notify
-        data_template:
-          title: CASE_LOCK_NAME
-          message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
-
-  - alias: keymaster_CASE_LOCK_NAME User Notifications
-    id: keymaster_CASE_LOCK_NAME User Notifications
-    trigger:
-      platform: event
-      event_type: keymaster_lock_state_changed
-      event_data:
-        lockname: LOCKNAME
-    condition:
-      - condition: template
-        value_template: "{{ trigger.event.data.code_slot > 0 }}"
-      - condition: template
-        value_template: "{{ is_state('input_boolean.notify_LOCKNAME_' + trigger.event.data.code_slot | string, 'on') }}"
-      - condition: state
-        entity_id: input_boolean.LOCKNAME_lock_notifications
-        state: "off"
-    action:
-      - service: script.keymaster_LOCKNAME_manual_notify
-        data_template:
-          title: CASE_LOCK_NAME
-          message: "{{ trigger.event.data.action_text }} ({{ trigger.event.data.code_slot_name }})"
-
-  - alias: keymaster_CASE_LOCK_NAME Door Open and Close
-    id: keymaster_CASE_LOCK_NAME Door Open and Close
-    trigger:
-      entity_id: DOORSENSORENTITYNAME
-      platform: state
-    condition:
-      - condition: state
-        entity_id: "input_boolean.LOCKNAME_dooraccess_notifications"
-        state: "on"
-      - condition: template
-        value_template: "{{ trigger.from_state.state in ('on', 'off') and trigger.to_state.state in ('on', 'off') }}"
-    action:
-      - service: script.keymaster_LOCKNAME_manual_notify
-        data_template:
-          title: CASE_LOCK_NAME
-          message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
-
-  - alias: keymaster_CASE_LOCK_NAME Changed Code
-    id: keymaster_CASE_LOCK_NAME Changed Code
-    trigger:
-      entity_id: INPUTLOCKPINHEADER
-      platform: state
-    condition:
-      - condition: template
-        value_template: >-
-          {{
-            is_state('input_boolean.enabled_LOCKNAME_' + trigger.entity_id.split('_')[-1], 'on')
-            and
-            (trigger.from_state.state != trigger.to_state.state)
-          }}
-    action:
-      - service: persistent_notification.create
-        data_template:
-          title: CASE_LOCK_NAME LOCK MANAGER
-          message: >-
-            {{ 'You changed the PIN for CASE_LOCK_NAME code slot ' + trigger.entity_id.split('_')[-1] + '. Please enable it in order to make it active.'}}
-      - service: input_boolean.turn_off
-        data_template:
-          entity_id: >-
-            {{ 'input_boolean.enabled_LOCKNAME_' + trigger.entity_id.split('_')[-1] }}
-
-  - alias: keymaster_CASE_LOCK_NAME Reset
-    id: keymaster_CASE_LOCK_NAME Reset
-    trigger:
-      entity_id: input_boolean.LOCKNAME_reset_lock
-      platform: state
-      from: "off"
-      to: "on"
-    action:
-      - service: script.keymaster_LOCKNAME_reset_lock
-      - service: input_boolean.turn_off
-        entity_id: input_boolean.LOCKNAME_reset_lock
-
-  - alias: keymaster_CASE_LOCK_NAME Decrement Access Count
-    id: keymaster_CASE_LOCK_NAME Decrement Access Count
-    trigger:
-      platform: event
-      event_type: keymaster_lock_state_changed
-      event_data:
-        lockname: LOCKNAME
-    condition:
-      - condition: template
-        # make sure decrementing access entries is enabled
-        value_template: "{{ is_state('input_boolean.accesslimit_LOCKNAME_' + trigger.event.data.code_slot | string, 'on') }}"
-      - condition: template
-        # Check for Keypad Unlock code
-        value_template: >-
-          {{
-            trigger.event.data.code_slot > 0
-            and
-            (trigger.event.data.action_code is undefined or trigger.event.data.action_code in (6, 19))
-          }}
-    action:
-      - service: input_number.decrement
-        data_template:
-          entity_id: "{{ 'input_number.accesscount_LOCKNAME_' + trigger.event.data.code_slot | string }}"
-
   - alias: keymaster_LOCKNAME_locked
     id: keymaster_LOCKNAME_locked
     trigger:
@@ -255,39 +123,6 @@ automation:
     action:
       - service: timer.cancel
         entity_id: timer.keymaster_LOCKNAME_autolock
-
-  - alias: keymaster_turn_off_retry_LOCKNAME
-    id: keymaster_turn_off_retry_LOCKNAME
-    trigger:
-      entity_id: LOCKENTITYNAME
-      platform: state
-      to: locked
-    action:
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.keymaster_LOCKNAME_retry
-
-  - alias: keymaster_retry_bolt_closed_LOCKNAME
-    id: keymaster_retry_bolt_closed_LOCKNAME
-    trigger:
-      platform: state
-      entity_id: DOORSENSORENTITYNAME
-      to: "off"
-    condition:
-      - condition: state
-        entity_id: input_boolean.keymaster_LOCKNAME_retry
-        state: "on"
-      - condition: state
-        entity_id: input_boolean.keymaster_LOCKNAME_autolock
-        state: "on"
-    action:
-      - service: persistent_notification.create
-        data_template:
-          title: "LOCKNAME is closed"
-          message: >-
-            {{ 'The LOCKNAME sensor indicates the door has been closed, re-attempting to lock.'}}
-      - service: lock.lock
-        entity_id: lock.boltchecked_LOCKNAME
 
   - alias: keymaster_LOCKNAME_opened
     id: keymaster_LOCKNAME_opened
@@ -407,16 +242,3 @@ automation:
 timer:
   keymaster_LOCKNAME_autolock:
     name: "Auto Lock Timer"
-
-###################  lock:  ####################
-lock:
-  - platform: template
-    name: boltchecked_LOCKNAME
-    unique_id: "lock.boltchecked_LOCKNAME"
-    value_template: "{{ is_state('LOCKENTITYNAME', 'locked') }}"
-    lock:
-      service: "{{ 'script.boltchecked_retry_LOCKNAME' if (is_state('DOORSENSORENTITYNAME', 'on')) else 'script.boltchecked_lock_LOCKNAME' }}"
-    unlock:
-      service: lock.unlock
-      data:
-        entity_id: LOCKENTITYNAME
