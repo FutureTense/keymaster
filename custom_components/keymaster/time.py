@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import time
+from datetime import time as dt_time
 import logging
 
 from homeassistant.components.time import TimeEntity, TimeEntityDescription
@@ -77,7 +77,7 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
         super().__init__(
             entity_description=entity_description,
         )
-        self._attr_native_value: time | None = None
+        self._attr_native_value: dt_time | None = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -133,7 +133,7 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
         self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()
 
-    async def async_set_value(self, value: time) -> None:
+    async def async_set_value(self, value: dt_time) -> None:
         _LOGGER.debug(
             f"[Time async_set_value] {self.name}: config_entry_id: {self._config_entry.entry_id}, value: {value}"
         )

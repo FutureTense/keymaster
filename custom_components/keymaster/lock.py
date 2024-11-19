@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import datetime, time as dt_time
 
 from zwave_js_server.model.node import Node as ZwaveJSNode
 
@@ -13,11 +13,11 @@ from homeassistant.helpers.device_registry import DeviceEntry
 class KeymasterCodeSlotDayOfWeek:
     day_of_week_num: int
     day_of_week_name: str
-    dow_enabled: bool = False
+    dow_enabled: bool = True
     limit_by_time: bool = False
     include_exclude: bool = True
-    time_start: time | None = None
-    time_end: time | None = None
+    time_start: dt_time | None = None
+    time_end: dt_time | None = None
 
 
 @dataclass

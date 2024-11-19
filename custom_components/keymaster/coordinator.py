@@ -4,7 +4,7 @@ import asyncio
 import base64
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
-from datetime import datetime, time, timedelta
+from datetime import datetime, time as dt_time, timedelta
 import functools
 import json
 import logging
@@ -12,7 +12,44 @@ import os
 import types
 from typing import Any, get_args, get_origin
 
-from zwave_js_server.const.command_class.lock import ATTR_IN_USE, ATTR_USERCODE
+from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
+
+from homeassistant.components.lock.const import LockState
+from homeassistant.components.zwave_js.const import (
+    ATTR_NODE_ID,
+    ATTR_PARAMETERS,
+    DOMAIN as ZWAVE_JS_DOMAIN,
+)
+from homeassistant.const import (
+    ATTR_DEVICE_ID,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    ACCESS_CONTROL,
+    ACTION_MAP,
+    ALARM_TYPE,
+    ATTR_NODE_ID,
+    LOCK_STATE_MAP,
+    THROTTLE_SECONDS,
+)
+from .lock import KeymasterLock
+
+ATTR_CODE_SLOT = "code_slot"
+zwave_js_supported = True
+_LOGGER: logging.Logger = logging.getLogger(__name__)
+
+from zwave_js_server.const.command_class.lock import (
+    ATTR_CODE_SLOT,
+    ATTR_IN_USE,
+    ATTR_USERCODE,
+)
 from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
 from zwave_js_server.model.node import Node as ZwaveJSNode
 from zwave_js_server.util.lock import (
@@ -27,25 +64,27 @@ from homeassistant.components.zwave_js.const import (
     DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
     DOMAIN as ZWAVE_JS_DOMAIN,
 )
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import CoreState, HomeAssistant
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_STATE, EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import CoreState, Event, HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import ATTR_CODE_SLOT, DOMAIN, ISSUE_URL, VERSION
-from .exceptions import ZWaveIntegrationNotConfiguredError
-from .helpers import (
-    async_using_zwave_js,
-    handle_zwave_js_event,
-    homeassistant_started_listener,
+from .const import (
+    ATTR_ACTION_CODE,
+    ATTR_ACTION_TEXT,
+    ATTR_CODE_SLOT,
+    ATTR_CODE_SLOT_NAME,
+    ATTR_NAME,
+    ATTR_NOTIFICATION_SOURCE,
+    DOMAIN,
+    EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+    ISSUE_URL,
+    VERSION,
 )
+from .exceptions import ZWaveIntegrationNotConfiguredError
+from .helpers import Throttle, async_using_zwave_js
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
-
-# from homeassistant.components.zwave_js.lock import (
-#     SERVICE_CLEAR_LOCK_USERCODE,
-#     SERVICE_SET_LOCK_USERCODE,
-# )
-# from homeassistant.const import ATTR_ENTITY_ID
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -59,6 +98,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self.kmlocks: Mapping[str, KeymasterLock] = {}
         self._prev_kmlocks_dict: Mapping[str, Any] = {}
         self._initial_setup_done_event = asyncio.Event()
+        self._throttle = Throttle()
+
         super().__init__(
             hass,
             _LOGGER,
@@ -70,7 +111,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         self._json_filename: str = f"{DOMAIN}_kmlocks.json"
 
-    async def _async_setup(self):
+    async def _async_setup(self) -> None:
         _LOGGER.info(
             "Keymaster %s is starting, if you have any issues please report them here: %s",
             VERSION,
@@ -90,7 +131,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             await self._update_listeners(lock)
         self._initial_setup_done_event.set()
 
-    def _create_json_folder(self):
+    def _create_json_folder(self) -> None:
         _LOGGER.debug(f"[Coordinator] json_kmlocks Location: {self._json_folder}")
 
         try:
@@ -195,9 +236,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         pass
 
                 # Convert time string to time object
-                elif isinstance(field_value, str) and field_type == time:
+                elif isinstance(field_value, str) and field_type == dt_time:
                     try:
-                        field_value = time.fromisoformat(field_value)
+                        field_value = dt_time.fromisoformat(field_value)
                     except ValueError:
                         pass
 
@@ -261,7 +302,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     field_value = field_value.isoformat()
 
                 # Convert time object to ISO string
-                if isinstance(field_value, time):
+                if isinstance(field_value, dt_time):
                     field_value = field_value.isoformat()
 
                 # Handle nested dataclasses and lists
@@ -306,7 +347,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         # _LOGGER.debug(f"[Coordinator] Config to Save: {config}")
         if config == self._prev_kmlocks_dict:
             _LOGGER.debug(
-                f"[Coordinator] No changes to kmlocks. Not updating json file"
+                f"[Coordinator] No changes to kmlocks. Not updating JSON file"
             )
             return True
         self._prev_kmlocks_dict = config
@@ -328,6 +369,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 f"{e.__class__.__qualname__}: {e}"
             )
             return False
+        _LOGGER.debug(f"[Coordinator] JSON File Updated")
 
     # def _invalid_code(self, code_slot):
     #     """Return the PIN slot value as we are unable to read the slot value
@@ -382,23 +424,212 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     except ValueError:
                         pass
 
-    async def _unsubscribe_listeners(self, kmlock: KeymasterLock):
-        # Unsubscribe to any listeners
-        if not hasattr(kmlock, "listeners") or kmlock.listeners is None:
-            kmlock.listeners = []
-            return
-        for unsub_listener in kmlock.listeners:
-            unsub_listener()
-        kmlock.listeners = []
+    async def _handle_zwave_js_lock_event(
+        self, kmlock: KeymasterLock, event: Event
+    ) -> None:
+        """Handle Z-Wave JS event."""
 
-    async def _update_listeners(self, kmlock: KeymasterLock):
-        await self._unsubscribe_listeners(kmlock)
+        if (
+            not kmlock.zwave_js_lock_node
+            or not kmlock.zwave_js_lock_device
+            or event.data[ATTR_NODE_ID] != kmlock.zwave_js_lock_node.node_id
+            or event.data[ATTR_DEVICE_ID] != kmlock.zwave_js_lock_device.id
+        ):
+            return
+
+        # Get lock state to provide as part of event data
+        new_state = self.hass.states.get(kmlock.lock_entity_id).state
+
+        params = event.data.get(ATTR_PARAMETERS) or {}
+        code_slot = params.get("userId", 0)
+
+        _LOGGER.debug(
+            f"[handle_zwave_js_lock_event] {kmlock.lock_name}: event: {event}, new_state: {new_state}, params: {params}, code_slot: {code_slot}"
+        )
+
+        if new_state == LockState.UNLOCKED:
+            await self._lock_unlocked(
+                kmlock=kmlock,
+                code_slot=code_slot,
+                source="event",
+                event_label=event.data.get("event_label", None),
+                action_code=None,
+            )
+        elif new_state == LockState.LOCKED:
+            await self._lock_locked(
+                kmlock=kmlock,
+                source="event",
+                event_label=event.data.get("event_label", None),
+                action_code=None,
+            )
+        else:
+            _LOGGER.warning(
+                f"[handle_zwave_js_lock_event] {kmlock.lock_name}: Unknown lock state: {new_state}"
+            )
+
+    async def _handle_lock_state_change(
+        self,
+        kmlock: KeymasterLock,
+        event: Event[EventStateChangedData],
+    ) -> None:
+        """Listener to track state changes to lock entities."""
+        _LOGGER.debug(f"[handle_lock_state_change] {kmlock.lock_name}: event: {event}")
+        if not event:
+            return
+
+        changed_entity: str = event.data["entity_id"]
+
+        # Don't do anything if the changed entity is not this lock
+        if changed_entity != kmlock.lock_entity_id:
+            return
+
+        new_state = event.data["new_state"].state
+
+        # Determine action type to set appropriate action text using ACTION_MAP
+        action_type: str = ""
+        if kmlock.alarm_type_or_access_control_entity_id and (
+            ALARM_TYPE in kmlock.alarm_type_or_access_control_entity_id
+            or ALARM_TYPE.replace("_", "")
+            in kmlock.alarm_type_or_access_control_entity_id
+        ):
+            action_type = ALARM_TYPE
+        if (
+            kmlock.alarm_type_or_access_control_entity_id
+            and ACCESS_CONTROL in kmlock.alarm_type_or_access_control_entity_id
+        ):
+            action_type = ACCESS_CONTROL
+
+        # Get alarm_level/usercode and alarm_type/access_control states
+        alarm_level_state = self.hass.states.get(
+            kmlock.alarm_level_or_user_code_entity_id
+        )
+        alarm_level_value: int | None = (
+            int(alarm_level_state.state)
+            if alarm_level_state
+            and alarm_level_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+            else None
+        )
+
+        alarm_type_state = self.hass.states.get(
+            kmlock.alarm_type_or_access_control_entity_id
+        )
+        alarm_type_value: int | None = (
+            int(alarm_type_state.state)
+            if alarm_type_state
+            and alarm_type_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+            else None
+        )
+
+        _LOGGER.debug(
+            f"[handle_lock_state_change] {kmlock.lock_name}: alarm_level_value: {alarm_level_value}, alarm_type_value: {alarm_type_value}"
+        )
+
+        # Bail out if we can't use the sensors to provide a meaningful message
+        if alarm_level_value is None or alarm_type_value is None:
+            return
+
+        # If lock has changed state but alarm_type/access_control state hasn't changed
+        # in a while set action_value to RF lock/unlock
+        if (
+            alarm_level_state is not None
+            and int(alarm_level_state.state) == 0
+            and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
+            > timedelta(seconds=5)
+            and action_type in LOCK_STATE_MAP
+        ):
+            alarm_type_value = LOCK_STATE_MAP[action_type][new_state]
+
+        # Lookup action text based on alarm type value
+        action_text: str | None = (
+            ACTION_MAP.get(action_type, {}).get(
+                alarm_type_value, "Unknown Alarm Type Value"
+            )
+            if alarm_type_value is not None
+            else None
+        )
+
+        if new_state == LockState.UNLOCKED:
+            await self._lock_unlocked(
+                kmlock=kmlock,
+                code_slot=alarm_level_value,  # TODO: Test this out more, not sure this is correct
+                source="entity_state",
+                event_label=action_text,
+                action_code=alarm_type_value,
+            )
+        elif new_state == LockState.LOCKED:
+            await self._lock_locked(
+                kmlock=kmlock,
+                source="entity_state",
+                event_label=action_text,
+                action_code=alarm_type_value,
+            )
+        else:
+            _LOGGER.warning(
+                f"[handle_lock_state_change] {kmlock.lock_name}: Unknown lock state: {new_state}"
+            )
+
+    async def _handle_door_state_change(
+        self,
+        kmlock: KeymasterLock,
+        event: Event[EventStateChangedData],
+    ) -> None:
+        """Listener to track state changes to door entities."""
+        _LOGGER.debug(f"[handle_door_state_change] {kmlock.lock_name}: event: {event}")
+        if not event:
+            return
+
+        changed_entity: str = event.data["entity_id"]
+
+        # Don't do anything if the changed entity is not this lock
+        if changed_entity != kmlock.door_sensor_entity_id:
+            return
+
+        old_state: str = event.data["old_state"].state
+        new_state: str = event.data["new_state"].state
+        _LOGGER.debug(
+            f"[handle_door_state_change] {kmlock.lock_name}: old_state: {old_state}, new_state: {new_state}"
+        )
+        if old_state not in [STATE_ON, STATE_OFF]:
+            _LOGGER.debug(
+                f"[handle_door_state_change] {kmlock.lock_name}: Ignoring state change"
+            )
+        elif new_state == STATE_ON:
+            await self._door_opened(kmlock)
+        elif new_state == STATE_OFF:
+            await self._door_closed(kmlock)
+        else:
+            _LOGGER.warning(
+                f"[handle_door_state_change] {kmlock.lock_name}: Door state unknown: {new_state}"
+            )
+
+    async def _create_listeners(
+        self,
+        kmlock: KeymasterLock,
+        _: Event | None = None,
+    ) -> None:
+        """Start tracking state changes after HomeAssistant has started."""
+
+        _LOGGER.debug(
+            f"[create_listeners] {kmlock.lock_name}: Creating handle_zwave_js_lock_event listener"
+        )
         if async_using_zwave_js(hass=self.hass, kmlock=kmlock):
             # Listen to Z-Wave JS events so we can fire our own events
             kmlock.listeners.append(
                 self.hass.bus.async_listen(
                     ZWAVE_JS_NOTIFICATION_EVENT,
-                    functools.partial(handle_zwave_js_event, self.hass, kmlock),
+                    functools.partial(self._handle_zwave_js_lock_event, kmlock),
+                )
+            )
+
+        if kmlock.door_sensor_entity_id not in (None, "binary_sensor.fake"):
+            _LOGGER.debug(
+                f"[create_listeners] {kmlock.lock_name}: Creating handle_door_state_change listener"
+            )
+            kmlock.listeners.append(
+                async_track_state_change_event(
+                    hass=self.hass,
+                    entity_ids=kmlock.door_sensor_entity_id,
+                    action=functools.partial(self._handle_door_state_change, kmlock),
                 )
             )
 
@@ -411,15 +642,257 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             None,
             "sensor.fake",
         ):
-            if self.hass.state == CoreState.running:
-                await homeassistant_started_listener(self.hass, kmlock)
-            else:
-                self.hass.bus.async_listen_once(
-                    EVENT_HOMEASSISTANT_STARTED,
-                    functools.partial(
-                        homeassistant_started_listener, self.hass, kmlock
-                    ),
+            # Listen to lock state changes so we can fire an event
+            _LOGGER.debug(
+                f"[create_listeners] {kmlock.lock_name}: Creating handle_lock_state_change listener"
+            )
+            kmlock.listeners.append(
+                async_track_state_change_event(
+                    hass=self.hass,
+                    entity_ids=kmlock.lock_entity_id,
+                    action=functools.partial(self._handle_lock_state_change, kmlock),
                 )
+            )
+
+    async def _unsubscribe_listeners(self, kmlock: KeymasterLock) -> None:
+        # Unsubscribe to any listeners
+        _LOGGER.debug(
+            f"[unsubscribe_listeners] {kmlock.lock_name}: Removing all listeners"
+        )
+        if not hasattr(kmlock, "listeners") or kmlock.listeners is None:
+            kmlock.listeners = []
+            return
+        for unsub_listener in kmlock.listeners:
+            unsub_listener()
+        kmlock.listeners = []
+
+    async def _update_listeners(self, kmlock: KeymasterLock) -> None:
+        await self._unsubscribe_listeners(kmlock=kmlock)
+        if self.hass.state == CoreState.running:
+            _LOGGER.debug(
+                f"[update_listeners] {kmlock.lock_name}: Calling create_listeners now"
+            )
+            await self._create_listeners(kmlock=kmlock)
+        else:
+            _LOGGER.debug(
+                f"[update_listeners] {kmlock.lock_name}: Setting create_listeners to run when HA starts"
+            )
+            self.hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED,
+                functools.partial(self._create_listeners, kmlock),
+            )
+
+    async def _lock_unlocked(
+        self,
+        kmlock,
+        code_slot=None,
+        source=None,
+        event_label=None,
+        action_code=None,
+    ) -> None:
+        if not self._throttle.is_allowed(
+            "lock_unlocked", kmlock.keymaster_config_entry_id, THROTTLE_SECONDS
+        ):
+            _LOGGER.debug(
+                f"[lock_unlocked] {kmlock.lock_name}: Throttled. source: {source}"
+            )
+            return
+
+        _LOGGER.debug(
+            f"[lock_unlocked] {kmlock.lock_name}: Running. "
+            f"code_slot: {code_slot}, source: {source}, event_label: {event_label}, action_code: {action_code}"
+        )
+
+        if isinstance(code_slot, int):
+            code_slot = 0
+
+        if kmlock.autolock_enabled:
+            # TODO: Start timer if auto-lock enabled
+            pass
+
+        if kmlock.lock_notifications:
+            # TODO: Send notification
+            # - service: script.keymaster_LOCKNAME_manual_notify
+            #   data_template:
+            #     title: CASE_LOCK_NAME
+            #     message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
+            pass
+
+        if code_slot > 0 and code_slot in kmlock.code_slots:
+            if (
+                kmlock.parent_name is not None
+                and not kmlock.code_slots[code_slot].override_parent
+            ):
+                parent_kmlock: KeymasterLock | None = (
+                    await self.get_lock_by_config_entry_id(
+                        kmlock.parent_config_entry_id
+                    )
+                )
+                if (
+                    isinstance(parent_kmlock, KeymasterLock)
+                    and code_slot in parent_kmlock.code_slots
+                    and parent_kmlock.code_slots[code_slot].accesslimit_count_enabled
+                    and isinstance(
+                        parent_kmlock.code_slots[code_slot].accesslimit_count, int
+                    )
+                    and parent_kmlock.code_slots[code_slot].accesslimit_count > 0
+                ):
+                    parent_kmlock.code_slots[code_slot].accesslimit_count -= 1
+
+            elif (
+                kmlock.code_slots[code_slot].accesslimit_count_enabled
+                and isinstance(kmlock.code_slots[code_slot].accesslimit_count, int)
+                and kmlock.code_slots[code_slot].accesslimit_count > 0
+            ):
+                kmlock.code_slots[code_slot].accesslimit_count -= 1
+
+            if (
+                kmlock.code_slots[code_slot].notifications
+                and not kmlock.lock_notifications
+            ):
+                # TODO: Send code slot notification
+                # - service: script.keymaster_LOCKNAME_manual_notify
+                #   data_template:
+                #     title: CASE_LOCK_NAME
+                #     message: "{{ trigger.event.data.action_text }} ({{ trigger.event.data.code_slot_name }})"
+                pass
+
+        # Fire state change event
+        self.hass.bus.fire(
+            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+            event_data={
+                ATTR_NOTIFICATION_SOURCE: source,
+                ATTR_NAME: kmlock.lock_name,
+                ATTR_ENTITY_ID: kmlock.lock_entity_id,
+                ATTR_STATE: LockState.UNLOCKED,
+                ATTR_ACTION_CODE: action_code,
+                ATTR_ACTION_TEXT: event_label,
+                ATTR_CODE_SLOT: code_slot,
+                ATTR_CODE_SLOT_NAME: (
+                    kmlock.code_slots[code_slot].name if code_slot != 0 else ""
+                ),
+            },
+        )
+
+    async def _lock_locked(
+        self, kmlock, source=None, event_label=None, action_code=None
+    ) -> None:
+        if not self._throttle.is_allowed(
+            "lock_locked", kmlock.keymaster_config_entry_id, THROTTLE_SECONDS
+        ):
+            _LOGGER.debug(
+                f"[lock_locked] {kmlock.lock_name}: Throttled. source: {source}"
+            )
+            return
+
+        _LOGGER.debug(
+            f"[lock_locked] {kmlock.lock_name}: Running. "
+            f"source: {source}, event_label: {event_label}, action_code: {action_code}"
+        )
+
+        # TODO: Cancel/Stop timer
+
+        if kmlock.lock_notifications:
+            # TODO: Send notification
+            # - service: script.keymaster_LOCKNAME_manual_notify
+            #   data_template:
+            #     title: CASE_LOCK_NAME
+            #     message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
+            pass
+
+        # Fire state change event
+        self.hass.bus.fire(
+            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+            event_data={
+                ATTR_NOTIFICATION_SOURCE: source,
+                ATTR_NAME: kmlock.lock_name,
+                ATTR_ENTITY_ID: kmlock.lock_entity_id,
+                ATTR_STATE: LockState.LOCKED,
+                ATTR_ACTION_CODE: action_code,
+                ATTR_ACTION_TEXT: event_label,
+            },
+        )
+
+    async def _door_opened(self, kmlock) -> None:
+        if not self._throttle.is_allowed(
+            "door_opened", kmlock.keymaster_config_entry_id, THROTTLE_SECONDS
+        ):
+            _LOGGER.debug(f"[door_opened] {kmlock.lock_name}: Throttled")
+            return
+
+        _LOGGER.debug(f"[door_opened] {kmlock.lock_name}: Running")
+
+        # TODO: Store door state in order to prevent locking when open (if enabled)
+
+        if kmlock.door_notifications:
+            # TODO: Send notification
+            # - service: script.keymaster_LOCKNAME_manual_notify
+            #   data_template:
+            #     title: CASE_LOCK_NAME
+            #     message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
+            pass
+
+    async def _door_closed(self, kmlock) -> None:
+        if not self._throttle.is_allowed(
+            "door_closed", kmlock.keymaster_config_entry_id, THROTTLE_SECONDS
+        ):
+            _LOGGER.debug(f"[door_closed] {kmlock.lock_name}: Throttled")
+            return
+
+        _LOGGER.debug(f"[door_closed] {kmlock.lock_name}: Running")
+
+        if kmlock.door_notifications:
+            # TODO: Send notification
+            # - service: script.keymaster_LOCKNAME_manual_notify
+            #   data_template:
+            #     title: CASE_LOCK_NAME
+            #     message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
+            pass
+
+    # boltchecked_retry_LOCKNAME:
+    #   sequence:
+    #     - service: input_boolean.turn_on
+    #       target:
+    #         entity_id: input_boolean.keymaster_LOCKNAME_retry
+    #     - service: persistent_notification.create
+    #       data_template:
+    #         title: "Unable to lock LOCKNAME"
+    #         message: >-
+    #           {{ 'Unable to lock LOCKNAME as the sensor indicates the door is currently opened.  The operation will be automatically retried when the door is closed.'}}
+
+    #   - alias: keymaster_retry_bolt_closed_LOCKNAME
+    #     id: keymaster_retry_bolt_closed_LOCKNAME
+    #     trigger:
+    #       platform: state
+    #       entity_id: DOORSENSORENTITYNAME
+    #       to: "off"
+    #     condition:
+    #       - condition: state
+    #         entity_id: input_boolean.keymaster_LOCKNAME_retry
+    #         state: "on"
+    #       - condition: state
+    #         entity_id: input_boolean.keymaster_LOCKNAME_autolock
+    #         state: "on"
+    #     action:
+    #       - service: persistent_notification.create
+    #         data_template:
+    #           title: "LOCKNAME is closed"
+    #           message: >-
+    #             {{ 'The LOCKNAME sensor indicates the door has been closed, re-attempting to lock.'}}
+    #       - service: lock.lock
+    #         entity_id: lock.boltchecked_LOCKNAME
+
+    # lock:
+    #   - platform: template
+    #     name: boltchecked_LOCKNAME
+    #     unique_id: "lock.boltchecked_LOCKNAME"
+    #     value_template: "{{ is_state('LOCKENTITYNAME', 'locked') }}"
+    #     lock:
+    #       service: "{{ 'script.boltchecked_retry_LOCKNAME' if (is_state('DOORSENSORENTITYNAME', 'on')) else 'script.boltchecked_lock_LOCKNAME' }}"
+    #     unlock:
+    #       service: lock.unlock
+    #       data:
+    #         entity_id: LOCKENTITYNAME
 
     async def add_lock(self, kmlock: KeymasterLock) -> bool:
         await self._initial_setup_done_event.wait()
@@ -661,8 +1134,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 today.limit_by_time
                 and today.include_exclude
                 and (
-                    not isinstance(today.time_start, time)
-                    or not isinstance(today.time_end, time)
+                    not isinstance(today.time_start, dt_time)
+                    or not isinstance(today.time_end, dt_time)
                     or datetime.now().time() < today.time_start
                     or datetime.now().time() > today.time_end
                 )
@@ -673,8 +1146,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 today.limit_by_time
                 and not today.include_exclude
                 and (
-                    not isinstance(today.time_start, time)
-                    or not isinstance(today.time_end, time)
+                    not isinstance(today.time_start, dt_time)
+                    or not isinstance(today.time_end, dt_time)
                     or (
                         datetime.now().time() >= today.time_start
                         and datetime.now().time() <= today.time_end

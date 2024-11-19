@@ -15,6 +15,7 @@ PLATFORMS: list = [
     Platform.TEXT,
     Platform.TIME,
 ]
+THROTTLE_SECONDS: int = 5
 # INTEGRATION = "zwave_integration"
 
 # hass.data attributes

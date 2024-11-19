@@ -83,6 +83,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: Mapping[str, Any] = None
     ) -> Mapping[str, Any]:
         """Handle a flow initialized by the user."""
+        # TODO: Only allow once instance per physical lock
         return await _start_config_flow(
             self,
             "user",
