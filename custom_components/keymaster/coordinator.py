@@ -520,7 +520,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if code_slot not in kmlock.code_slots:
             _LOGGER.debug(
-                f"[set_pin_on_lock] {kmlock.lock_name}: Keymaster code slot {code_slot} doesn't exist."
+                f"[set_pin_on_lock] {kmlock.lock_name}: Code Slot {code_slot}: Code slot doesn't exist"
             )
             return False
 
@@ -530,18 +530,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             and not kmlock.code_slots[code_slot].override_parent
         ):
             _LOGGER.debug(
-                f"[set_pin_on_lock] {kmlock.lock_name}: Child lock and code slot {code_slot} not set to override parent. Ignoring change"
+                f"[set_pin_on_lock] {kmlock.lock_name}: Code Slot {code_slot}: Child lock code slot not set to override parent. Ignoring change"
             )
             return False
 
         if not kmlock.code_slots[code_slot].active:
             _LOGGER.debug(
-                f"[set_pin_on_lock] {kmlock.lock_name}: Keymaster code slot {code_slot} not active"
+                f"[set_pin_on_lock] {kmlock.lock_name}: Code Slot {code_slot}: Not Active"
             )
             return False
 
         _LOGGER.debug(
-            f"[set_pin_on_lock] {kmlock.lock_name}: code_slot: {code_slot}. Setting"
+            f"[set_pin_on_lock] {kmlock.lock_name}: Code Slot {code_slot}: Setting PIN to {pin}"
         )
 
         # servicedata: Mapping[str, Any] = {
@@ -568,13 +568,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 await set_usercode(kmlock.zwave_js_lock_node, code_slot, pin)
             except BaseZwaveJSServerError as e:
                 _LOGGER.error(
-                    f"[Coordinator] {kmlock.lock_name}: Unable to set PIN on code slot {code_slot}. "
+                    f"[Coordinator] {kmlock.lock_name}: Code Slot {code_slot}: Unable to set PIN. "
                     f"{e.__class__.__qualname__}: {e}"
                 )
                 return False
             else:
                 _LOGGER.debug(
-                    "[set_pin_on_lock] %s: PIN in code slot %s set to %s",
+                    "[set_pin_on_lock] %s: Code Slot %s: PIN set to %s",
                     kmlock.lock_name,
                     code_slot,
                     pin,
@@ -606,7 +606,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if code_slot not in kmlock.code_slots:
             _LOGGER.debug(
-                f"[clear_pin_from_lock] {kmlock.lock_name}: Keymaster code slot {code_slot} doesn't exist."
+                f"[clear_pin_from_lock] {kmlock.lock_name}: Code Slot {code_slot}: Code slot doesn't exist"
             )
             return False
 
@@ -616,12 +616,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             and not kmlock.code_slots[code_slot].override_parent
         ):
             _LOGGER.debug(
-                f"[clear_pin_from_lock] {kmlock.lock_name}: Child lock and code slot {code_slot} not set to override parent. Ignoring change"
+                f"[clear_pin_from_lock] {kmlock.lock_name}: Code Slot {code_slot}: Child lock code slot not set to override parent. Ignoring change"
             )
             return False
 
         _LOGGER.debug(
-            f"[clear_pin_from_lock] {kmlock.lock_name}: code_slot: {code_slot}. Clearing"
+            f"[clear_pin_from_lock] {kmlock.lock_name}: Code Slot {code_slot}: Clearing PIN"
         )
 
         if async_using_zwave_js(hass=self.hass, entity_id=kmlock.lock_entity_id):
@@ -646,13 +646,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 await clear_usercode(kmlock.zwave_js_lock_node, code_slot)
             except BaseZwaveJSServerError as e:
                 _LOGGER.error(
-                    f"[Coordinator] {kmlock.lock_name}: Unable to clear pin from code slot {code_slot}. "
+                    f"[Coordinator] {kmlock.lock_name}: Code Slot {code_slot}: Unable to clear PIN"
                     f"{e.__class__.__qualname__}: {e}"
                 )
                 return False
             else:
                 _LOGGER.debug(
-                    "[clear_pin_from_lock] %s: PIN in code slot %s cleared",
+                    "[clear_pin_from_lock] %s: Code Slot %s: PIN Cleared",
                     kmlock.lock_name,
                     code_slot,
                 )
@@ -856,6 +856,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug(
                 f"[async_update_data] {kmlock.lock_name}: usercodes: {usercodes[(kmlock.starting_code_slot-1):(kmlock.starting_code_slot+kmlock.number_of_code_slots-1)]}"
             )
+            # Get usercodes from Z-Wave JS Lock and update kmlock PINs
             for slot in usercodes:
                 code_slot = int(slot[ATTR_CODE_SLOT])
                 usercode: str | None = slot[ATTR_USERCODE]
@@ -878,23 +879,32 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     / 60
                     > 2
                 ):
+                    # _LOGGER.debug(f"[async_update_data] {kmlock.lock_name}: Code Slot {code_slot} not active")
                     _LOGGER.debug(
-                        f"[async_update_data] {kmlock.lock_name}: Code slot {code_slot} not enabled"
+                        f"[async_update_data] {kmlock.lock_name}: Code Slot {code_slot}: "
+                        f"pin: {kmlock.code_slots[code_slot].pin}, value: {usercode}, in_use: {in_use}, "
+                        f"enabled: {kmlock.code_slots[code_slot].enabled}, active: {kmlock.code_slots[code_slot].active}"
                     )
-                    kmlock.code_slots[code_slot].enabled = False
+                    # kmlock.code_slots[code_slot].enabled = False
                     # kmlock.code_slots[code_slot].active = False
                     continue
                 if usercode and "*" in str(usercode):
+                    # _LOGGER.debug(f"[async_update_data] {kmlock.lock_name}: Ignoring code slot with * in value for code slot {code_slot}")
                     _LOGGER.debug(
-                        f"[async_update_data] {kmlock.lock_name}: Ignoring code slot with * in value for code slot {code_slot}"
+                        f"[async_update_data] {kmlock.lock_name}: Code Slot {code_slot}: "
+                        f"pin: {kmlock.code_slots[code_slot].pin}, value: {usercode}, in_use: {in_use}, "
+                        f"enabled: {kmlock.code_slots[code_slot].enabled}, active: {kmlock.code_slots[code_slot].active}"
                     )
                     continue
-                _LOGGER.debug(
-                    f"[async_update_data] {kmlock.lock_name}: Code slot {code_slot} value: {usercode}"
-                )
-                kmlock.code_slots[code_slot].enabled = True
+                # kmlock.code_slots[code_slot].enabled = True
                 kmlock.code_slots[code_slot].pin = usercode
+                _LOGGER.debug(
+                    f"[async_update_data] {kmlock.lock_name}: Code Slot {code_slot}: "
+                    f"pin: {kmlock.code_slots[code_slot].pin}, value: {usercode}, in_use: {in_use}, "
+                    f"enabled: {kmlock.code_slots[code_slot].enabled}, active: {kmlock.code_slots[code_slot].active}"
+                )
 
+            # Check active status of code slots and set/clear PINs on Z-Wave JS Lock
             for num, slot in kmlock.code_slots.items():
                 new_active: bool = await self._is_slot_active(slot)
                 if slot.active == new_active:
@@ -917,6 +927,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         override=True,
                     )
 
+        # Propogate parent kmlock settings to child kmlocks
         for kmlock in self.kmlocks.values():
 
             if not kmlock.connected:
@@ -961,6 +972,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
                     for attr in [
                         "enabled",
+                        "last_enabled",
                         "name",
                         "active",
                         "accesslimit",
@@ -982,7 +994,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     ):
                         for dow_num, dow_slot in slot.accesslimit_day_of_week.items():
                             for dow_attr in [
-                                "enabled",
+                                "dow_enabled",
+                                "limit_by_time",
                                 "include_exclude",
                                 "time_start",
                                 "time_end",
@@ -997,7 +1010,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                                     )
 
                     _LOGGER.debug(
-                        f"[async_update_data] Code Slot {num}: parent pin: {slot.pin}, child pin: {child_kmlock.code_slots[num].pin}"
+                        f"[async_update_data] {kmlock.lock_name}/{child_kmlock.lock_name} Code Slot {num}: "
+                        f"pin: {slot.pin}/{child_kmlock.code_slots[num].pin}, "
+                        f"enabled: {slot.enabled}/{child_kmlock.code_slots[num].enabled}, "
+                        f"active: {slot.active}/{child_kmlock.code_slots[num].active}"
                     )
                     if slot.pin != child_kmlock.code_slots[num].pin:
                         if not slot.active or slot.pin is None:
