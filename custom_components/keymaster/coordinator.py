@@ -544,25 +544,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             f"[set_pin_on_lock] {kmlock.lock_name}: Code Slot {code_slot}: Setting PIN to {pin}"
         )
 
-        # servicedata: Mapping[str, Any] = {
-        #     ATTR_CODE_SLOT: code_slot,
-        #     ATTR_USER_CODE: pin,
-        # }
-
         if async_using_zwave_js(hass=self.hass, entity_id=kmlock.lock_entity_id):
-            # servicedata[ATTR_ENTITY_ID] = kmlock.lock_entity_id
-            # try:
-            #     await call_hass_service(
-            #         self.hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
-            #     )
-            # except FailedZWaveCommand as e:
-            #     _LOGGER.error(
-            #         f"[Coordinator] {kmlock.lock_name}: Z-Wave JS Command Failed. {e.__class__.__qualname__}: {e}"
-            #     )
-            # else:
-            #     if update_after:
-            #         await self.async_refresh()
-            # return True
 
             try:
                 await set_usercode(kmlock.zwave_js_lock_node, code_slot, pin)
@@ -625,23 +607,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         if async_using_zwave_js(hass=self.hass, entity_id=kmlock.lock_entity_id):
-            # servicedata: Mapping[str, Any] = {
-            #     ATTR_ENTITY_ID: kmlock.lock_entity_id,
-            #     ATTR_CODE_SLOT: code_slot,
-            # }
-            # try:
-            #     await call_hass_service(
-            #         self.hass, ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
-            #     )
-            # except FailedZWaveCommand as e:
-            #     _LOGGER.error(
-            #         f"[Coordinator] {kmlock.lock_name}: Z-Wave JS Command Failed. {e.__class__.__qualname__}: {e}"
-            #     )
-            # else:
-            #     if update_after:
-            #         await self.async_refresh()
-            # return True
-
             try:
                 await clear_usercode(kmlock.zwave_js_lock_node, code_slot)
             except BaseZwaveJSServerError as e:
@@ -885,8 +850,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         f"pin: {kmlock.code_slots[code_slot].pin}, value: {usercode}, in_use: {in_use}, "
                         f"enabled: {kmlock.code_slots[code_slot].enabled}, active: {kmlock.code_slots[code_slot].active}"
                     )
-                    # kmlock.code_slots[code_slot].enabled = False
-                    # kmlock.code_slots[code_slot].active = False
                     continue
                 if usercode and "*" in str(usercode):
                     # _LOGGER.debug(f"[async_update_data] {kmlock.lock_name}: Ignoring code slot with * in value for code slot {code_slot}")
@@ -896,7 +859,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         f"enabled: {kmlock.code_slots[code_slot].enabled}, active: {kmlock.code_slots[code_slot].active}"
                     )
                     continue
-                # kmlock.code_slots[code_slot].enabled = True
                 kmlock.code_slots[code_slot].pin = usercode
                 _LOGGER.debug(
                     f"[async_update_data] {kmlock.lock_name}: Code Slot {code_slot}: "
