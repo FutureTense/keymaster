@@ -16,6 +16,7 @@ PLATFORMS: list = [
     Platform.TIME,
 ]
 THROTTLE_SECONDS: int = 5
+SYNC_STATUS_THRESHOLD: int = 15
 # INTEGRATION = "zwave_integration"
 
 # hass.data attributes
