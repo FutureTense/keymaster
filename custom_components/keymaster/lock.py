@@ -60,8 +60,8 @@ class KeymasterLock:
     code_slots: Mapping[int, KeymasterCodeSlot] | None = None
     lock_notifications: bool = False
     door_notifications: bool = False
-    lock_status: str | None = None
-    door_status: str | None = None
+    lock_state: str | None = None
+    door_state: str | None = None
     autolock_enabled: bool = False
     autolock_min_day: int | None = None
     autolock_min_night: int | None = None
