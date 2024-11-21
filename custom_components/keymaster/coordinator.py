@@ -1,5 +1,7 @@
 """keymaster Coordinator"""
 
+from __future__ import annotations
+
 import asyncio
 import base64
 from collections.abc import Mapping
@@ -9,53 +11,9 @@ import functools
 import json
 import logging
 import os
-import types
-from typing import Any, get_args, get_origin
+from typing import Any, Mapping, Type, Union, get_args, get_origin
 
-from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
-
-from homeassistant.components.lock.const import LockState
-from homeassistant.components.zwave_js.const import (
-    ATTR_NODE_ID,
-    ATTR_PARAMETERS,
-    DOMAIN as ZWAVE_JS_DOMAIN,
-)
-from homeassistant.const import (
-    ATTR_DEVICE_ID,
-    STATE_CLOSED,
-    STATE_OFF,
-    STATE_ON,
-    STATE_OPEN,
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
-)
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant
-from homeassistant.helpers import entity_registry as er
-from homeassistant.util import dt as dt_util
-
-from .const import (
-    ACCESS_CONTROL,
-    ACTION_MAP,
-    ALARM_TYPE,
-    ATTR_NODE_ID,
-    DEFAULT_ALARM_LEVEL_SENSOR,
-    DEFAULT_ALARM_TYPE_SENSOR,
-    DEFAULT_DOOR_SENSOR,
-    LOCK_STATE_MAP,
-    SYNC_STATUS_THRESHOLD,
-    THROTTLE_SECONDS,
-)
-from .lock import KeymasterLock
-
-ATTR_CODE_SLOT = "code_slot"
-# zwave_js_supported = True
-_LOGGER: logging.Logger = logging.getLogger(__name__)
-
-from zwave_js_server.const.command_class.lock import (
-    ATTR_CODE_SLOT,
-    ATTR_IN_USE,
-    ATTR_USERCODE,
-)
+from zwave_js_server.const.command_class.lock import ATTR_IN_USE, ATTR_USERCODE
 from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
 from zwave_js_server.model.node import Node as ZwaveJSNode
 from zwave_js_server.util.lock import (
@@ -65,32 +23,62 @@ from zwave_js_server.util.lock import (
     set_usercode,
 )
 
+from homeassistant.components.lock.const import LockState
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 from homeassistant.components.zwave_js.const import (
+    ATTR_NODE_ID,
+    ATTR_PARAMETERS,
     DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
     DOMAIN as ZWAVE_JS_DOMAIN,
 )
-from homeassistant.const import ATTR_ENTITY_ID, ATTR_STATE, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import CoreState, Event, HomeAssistant
+from homeassistant.const import (
+    ATTR_DEVICE_ID,
+    ATTR_ENTITY_ID,
+    ATTR_STATE,
+    EVENT_HOMEASSISTANT_STARTED,
+    STATE_CLOSED,
+    STATE_OFF,
+    STATE_ON,
+    STATE_OPEN,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import CoreState, Event, EventStateChangedData, HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
+    ACCESS_CONTROL,
+    ACTION_MAP,
+    ALARM_TYPE,
     ATTR_ACTION_CODE,
     ATTR_ACTION_TEXT,
     ATTR_CODE_SLOT,
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
+    ATTR_NODE_ID,
     ATTR_NOTIFICATION_SOURCE,
+    DEFAULT_ALARM_LEVEL_SENSOR,
+    DEFAULT_ALARM_TYPE_SENSOR,
+    DEFAULT_DOOR_SENSOR,
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
+    LOCK_STATE_MAP,
+    SYNC_STATUS_THRESHOLD,
+    THROTTLE_SECONDS,
     VERSION,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
 from .helpers import KeymasterTimer, Throttle, async_using_zwave_js
-from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
+from .lock import (
+    KeymasterCodeSlot,
+    KeymasterCodeSlotDayOfWeek,
+    KeymasterLock,
+    keymasterlock_type_lookup,
+)
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -131,7 +119,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         _LOGGER.debug(f"[Coordinator] Imported {len(imported_config)} keymaster locks")
-        # _LOGGER.debug(f"[Coordinator] imported_kmlocks: {imported_config}")
         self.kmlocks = imported_config
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_state()
@@ -188,12 +175,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         slot["pin"], lock["keymaster_config_entry_id"]
                     )
 
-        # _LOGGER.debug(f"[Coordinator] imported json: {config}")
+        # _LOGGER.debug(f"[get_dict_from_json_file] Imported JSON: {config}")
         kmlocks: Mapping = {
             key: self._dict_to_kmlocks(value, KeymasterLock)
             for key, value in config.items()
         }
 
+        _LOGGER.debug(f"[get_dict_from_json_file] Imported kmlocks: {kmlocks}")
         return kmlocks
 
     def _encode_pin(self, pin: str, unique_id: str) -> str:
@@ -209,37 +197,40 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     def _dict_to_kmlocks(self, data: dict, cls: type) -> Any:
         """Recursively convert a dictionary to a dataclass instance."""
-        # _LOGGER.debug(f"[dict_to_kmlocks] cls: {cls}, data: {data}")
-
         if hasattr(cls, "__dataclass_fields__"):
             field_values: Mapping = {}
+
             for field in fields(cls):
                 field_name: str = field.name
-                field_type: type = field.type
+                field_type: Type = keymasterlock_type_lookup.get(field_name, field.type)
+
                 field_value: Any = data.get(field_name)
 
                 # Extract type information
                 origin_type = get_origin(field_type)
                 type_args = get_args(field_type)
+
                 # _LOGGER.debug(
                 #     f"[dict_to_kmlocks] field_name: {field_name}, field_type: {field_type}, "
                 #     f"origin_type: {origin_type}, type_args: {type_args}, "
                 #     f"field_value_type: {type(field_value)}, field_value: {field_value}"
                 # )
 
-                # Handle optional types
-                if origin_type is types.UnionType:
-                    # Filter out NoneType
-                    non_optional_types: list = [
-                        t for t in type_args if t is not type(None)
-                    ]
+                # Handle optional types (Union)
+                if origin_type is Union:
+                    non_optional_types = [t for t in type_args if t is not type(None)]
                     if len(non_optional_types) == 1:
                         field_type = non_optional_types[0]
                         origin_type = get_origin(field_type)
                         type_args = get_args(field_type)
+                        # _LOGGER.debug(
+                        #     f"[dict_to_kmlocks] Updated for Union: field_name: {field_name}, field_type: {field_type}, "
+                        #     f"origin_type: {origin_type}, type_args: {type_args}"
+                        # )
 
                 # Convert datetime string to datetime object
                 if isinstance(field_value, str) and field_type == datetime:
+                    # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to datetime")
                     try:
                         field_value = datetime.fromisoformat(field_value)
                     except ValueError:
@@ -247,43 +238,65 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
                 # Convert time string to time object
                 elif isinstance(field_value, str) and field_type == dt_time:
+                    # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to time")
                     try:
                         field_value = dt_time.fromisoformat(field_value)
                     except ValueError:
                         pass
 
-                # Handle Mapping types with potential nested dataclasses
-                elif origin_type in (Mapping, dict) and len(type_args) == 2:
-                    key_type, value_type = type_args
-                    if isinstance(field_value, dict):
-                        if is_dataclass(value_type):
-                            # Convert keys and values
-                            converted_dict: Mapping = {
-                                (
-                                    int(k)
-                                    if key_type == int
-                                    and isinstance(k, str)
-                                    and k.isdigit()
-                                    else k
-                                ): self._dict_to_kmlocks(v, value_type)
-                                for k, v in field_value.items()
-                            }
-                            field_value = converted_dict
-                        elif key_type == int:
-                            # Convert keys to integers if specified
-                            field_value = {
-                                (int(k) if isinstance(k, str) and k.isdigit() else k): v
-                                for k, v in field_value.items()
-                            }
+                # _LOGGER.debug(f"[dict_to_kmlocks] isinstance(origin_type, type): {isinstance(origin_type, type)}")
+                # if isinstance(origin_type, type):
+                # _LOGGER.debug(f"[dict_to_kmlocks] issubclass(origin_type, Mapping): {issubclass(origin_type, Mapping)}, origin_type == dict: {origin_type == dict}")
+
+                # Handle Mapping types: when origin_type is Mapping
+                if isinstance(origin_type, type) and (
+                    issubclass(origin_type, Mapping) or origin_type == dict
+                ):
+                    # Define key_type and value_type from type_args
+                    if len(type_args) == 2:
+                        key_type, value_type = type_args
+                        # _LOGGER.debug(
+                        #     f"[dict_to_kmlocks] field_name: {field_name}: Is Mapping or dict. key_type: {key_type}, "
+                        #     f"value_type: {value_type}, isinstance(field_value, dict): {isinstance(field_value, dict)}, "
+                        #     f"is_dataclass(value_type): {is_dataclass(value_type)}"
+                        # )
+                        if isinstance(field_value, dict):
+                            # If the value_type is a dataclass, recursively process it
+                            if is_dataclass(value_type):
+                                # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting dict items for {field_name}")
+                                field_value = {
+                                    (
+                                        int(k)
+                                        if key_type == int
+                                        and isinstance(k, str)
+                                        and k.isdigit()
+                                        else k
+                                    ): self._dict_to_kmlocks(v, value_type)
+                                    for k, v in field_value.items()
+                                }
+                            else:
+                                # If value_type is not a dataclass, just copy the value
+                                field_value = {
+                                    (
+                                        int(k)
+                                        if key_type == int
+                                        and isinstance(k, str)
+                                        and k.isdigit()
+                                        else k
+                                    ): v
+                                    for k, v in field_value.items()
+                                }
 
                 # Handle nested dataclasses
                 elif isinstance(field_value, dict) and is_dataclass(field_type):
+                    # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting nested dataclass: {field_name}")
                     field_value = self._dict_to_kmlocks(field_value, field_type)
 
                 # Handle list of nested dataclasses
                 elif isinstance(field_value, list) and type_args:
                     list_type = type_args[0]
                     if is_dataclass(list_type):
+                        # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting list of dataclasses: {field_name}")
                         field_value = [
                             (
                                 self._dict_to_kmlocks(item, list_type)
@@ -355,7 +368,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         slot["pin"], lock["keymaster_config_entry_id"]
                     )
 
-        # _LOGGER.debug(f"[Coordinator] Config to Save: {config}")
+        # _LOGGER.debug(f"[write_config_to_json] Dict to Save: {config}")
         if config == self._prev_kmlocks_dict:
             _LOGGER.debug(
                 f"[Coordinator] No changes to kmlocks. Not updating JSON file"
@@ -937,8 +950,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         for kmlock in self.kmlocks.values():
             if isinstance(kmlock.lock_entity_id, str) and kmlock.lock_entity_id:
                 lock_state: str = self.hass.states.get(kmlock.lock_entity_id).state
-                if lock_state in [LockState.LOCKED, LockState.UNLOCKED]:
-                    if kmlock.lock_state != lock_state:
+                if lock_state in [
+                    LockState.LOCKED,
+                    LockState.UNLOCKED,
+                ]:
+                    if (
+                        kmlock.lock_state in [LockState.LOCKED, LockState.UNLOCKED]
+                        and kmlock.lock_state != lock_state
+                    ):
                         _LOGGER.debug(
                             f"[update_door_and_lock_state] Lock Status out of sync: kmlock.lock_state: {kmlock.lock_state}, lock_state: {lock_state}"
                         )
@@ -959,8 +978,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                                 source="status_sync",
                                 event_label="Sync Status Update Lock",
                             )
-                        else:
-                            kmlock.lock_state = lock_state
+                    else:
+                        kmlock.lock_state = lock_state
 
             if (
                 isinstance(kmlock.door_sensor_entity_id, str)
@@ -971,14 +990,26 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     kmlock.door_sensor_entity_id
                 ).state
                 if door_state in [STATE_OPEN, STATE_CLOSED]:
-                    if kmlock.door_state != door_state:
+                    if (
+                        kmlock.door_state
+                        in [
+                            STATE_OPEN,
+                            STATE_CLOSED,
+                        ]
+                        and kmlock.door_state != door_state
+                    ):
                         _LOGGER.debug(
                             f"[update_door_and_lock_state] Door Status out of sync: kmlock.door_state: {kmlock.door_state}, door_state: {door_state}"
                         )
-                    if door_state in [STATE_OPEN]:
-                        await self._door_opened(kmlock=kmlock)
-                    elif door_state in [STATE_CLOSED]:
-                        await self._door_closed(kmlock=kmlock)
+                    if (
+                        trigger_actions_if_changed
+                        and kmlock.door_state in [STATE_OPEN, STATE_CLOSED]
+                        and kmlock.door_state != door_state
+                    ):
+                        if door_state in [STATE_OPEN]:
+                            await self._door_opened(kmlock=kmlock)
+                        elif door_state in [STATE_CLOSED]:
+                            await self._door_closed(kmlock=kmlock)
                     else:
                         kmlock.door_state = door_state
 

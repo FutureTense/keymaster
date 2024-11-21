@@ -1,10 +1,12 @@
 """Helpers for keymaster."""
 
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Callable, Mapping
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
 
@@ -29,20 +31,21 @@ from .const import (
     DEFAULT_AUTOLOCK_MIN_DAY,
     DEFAULT_AUTOLOCK_MIN_NIGHT,
 )
-from .lock import KeymasterLock
 
-ATTR_CODE_SLOT = "code_slot"
+if TYPE_CHECKING:
+    from .lock import KeymasterLock
+
 zwave_js_supported = True
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 class Throttle:
-    def __init__(self):
+    def __init__(self) -> None:
         self.cooldowns = (
             {}
         )  # Nested dictionary: {function_name: {key: last_called_time}}
 
-    def is_allowed(self, func_name, key, cooldown_seconds):
+    def is_allowed(self, func_name, key, cooldown_seconds) -> bool:
         current_time = time.time()
         if func_name not in self.cooldowns:
             self.cooldowns[func_name] = {}
@@ -132,8 +135,8 @@ def _async_using(
 @callback
 def async_using_zwave_js(
     hass: HomeAssistant,
-    kmlock: KeymasterLock = None,
-    entity_id: str = None,
+    kmlock: KeymasterLock | None = None,
+    entity_id: str | None = None,
 ) -> bool:
     """Returns whether the zwave_js integration is configured."""
     return zwave_js_supported and _async_using(
