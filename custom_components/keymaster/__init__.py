@@ -1,5 +1,7 @@
 """keymaster Integration."""
 
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Mapping
 import logging
@@ -7,9 +9,8 @@ import logging
 from homeassistant.components.persistent_notification import async_create, async_dismiss
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_ALARM_LEVEL,
@@ -37,17 +38,8 @@ from .helpers import get_code_slots_list
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 from .services import async_setup_services
 
-_LOGGER = logging.getLogger(__name__)
-
-SET_USERCODE = "set_usercode"
-CLEAR_USERCODE = "clear_usercode"
-
-
-async def async_setup(  # pylint: disable-next=unused-argument
-    hass: HomeAssistant, config: ConfigType
-) -> bool:
-    """Disallow configuration via YAML."""
-    return True
+_LOGGER: logging.Logger = logging.getLogger(__name__)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -166,7 +158,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
     )
 
-    await coordinator.add_lock(kmlock=kmlock)
+    try:
+        await coordinator.add_lock(kmlock=kmlock)
+    except asyncio.exceptions.CancelledError as e:
+        _LOGGER.error(f"Timeout on add_lock. {e.__class__.__qualname__}: {e}")
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
