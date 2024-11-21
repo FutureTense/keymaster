@@ -8,6 +8,8 @@ from zwave_js_server.model.node import Node as ZwaveJSNode
 
 from homeassistant.helpers.device_registry import DeviceEntry
 
+from .helpers import KeymasterTimer
+
 
 @dataclass
 class KeymasterCodeSlotDayOfWeek:
@@ -63,6 +65,7 @@ class KeymasterLock:
     autolock_enabled: bool = False
     autolock_min_day: int | None = None
     autolock_min_night: int | None = None
+    autolock_timer: KeymasterTimer | None = None
     retry_lock: bool = False
     parent_name: str | None = None
     parent_config_entry_id: str | None = None
