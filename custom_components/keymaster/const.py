@@ -72,6 +72,8 @@ DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
 DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"
 DEFAULT_ALARM_TYPE_SENSOR = "sensor.fake"
 DEFAULT_HIDE_PINS = False
+DEFAULT_AUTOLOCK_MIN_DAY: int = 120
+DEFAULT_AUTOLOCK_MIN_NIGHT: int = 5
 
 # Action maps
 # FE599 locks only send alarmType 16 for all lock/unlock commands

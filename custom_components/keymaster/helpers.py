@@ -1,7 +1,7 @@
 """Helpers for keymaster."""
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import logging
 import time
 from typing import Any
@@ -21,9 +21,14 @@ from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.const import SERVICE_RELOAD, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceNotFound
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import entity_registry as er, sun
 
-from .const import CONF_SLOTS, CONF_START
+from .const import (
+    CONF_SLOTS,
+    CONF_START,
+    DEFAULT_AUTOLOCK_MIN_DAY,
+    DEFAULT_AUTOLOCK_MIN_NIGHT,
+)
 from .lock import KeymasterLock
 
 ATTR_CODE_SLOT = "code_slot"
@@ -47,6 +52,62 @@ class Throttle:
             self.cooldowns[func_name][key] = current_time
             return True
         return False
+
+
+class KeymasterTimer:
+    def __init__(self) -> None:
+        self.hass: HomeAssistant | None = None
+        self._running: bool = False
+        self._unsub_event = None
+        self._kmlock: KeymasterLock | None = None
+        self._call_action: Callable | None = None
+
+    async def setup(
+        self, hass: HomeAssistant, kmlock: KeymasterLock, call_action: Callable
+    ) -> None:
+        self.hass = hass
+        self._kmlock = kmlock
+        self._call_action = call_action
+
+    async def start(self) -> bool:
+        if not self.hass or not self._kmlock or not self._call_action:
+            _LOGGER.error(f"[KeymasterTimer] Cannot start timer as timer not setup")
+            return False
+
+        if self._running and self._unsub_event is not None:
+            # Already running so reset and restart timer
+            self._unsub_event()
+        self._running = True
+
+        if sun.is_up(self.hass):
+            delay: int = (
+                self._kmlock.autolock_min_day
+                if self._kmlock.autolock_min_day
+                else DEFAULT_AUTOLOCK_MIN_DAY * 60
+            )
+        else:
+            delay = (
+                self._kmlock.autolock_min_night
+                if self._kmlock.autolock_min_night
+                else DEFAULT_AUTOLOCK_MIN_NIGHT * 60
+            )
+
+        self._unsub_event = self.hass.async_call_later(
+            hass=self.hass, delay=delay, action=self._call_action
+        )
+
+    async def cancel(self) -> bool:
+        if self._unsub_event is not None:
+            self._unsub_event()
+        self._running = False
+
+    @property
+    def is_running(self) -> bool:
+        return self._running
+
+    @property
+    def is_setup(self) -> bool:
+        return self.hass and self._kmlock and self._call_action
 
 
 @callback

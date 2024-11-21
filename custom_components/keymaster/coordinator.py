@@ -38,6 +38,9 @@ from .const import (
     ACTION_MAP,
     ALARM_TYPE,
     ATTR_NODE_ID,
+    DEFAULT_ALARM_LEVEL_SENSOR,
+    DEFAULT_ALARM_TYPE_SENSOR,
+    DEFAULT_DOOR_SENSOR,
     LOCK_STATE_MAP,
     SYNC_STATUS_THRESHOLD,
     THROTTLE_SECONDS,
@@ -86,7 +89,7 @@ from .const import (
     VERSION,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
-from .helpers import Throttle, async_using_zwave_js
+from .helpers import KeymasterTimer, Throttle, async_using_zwave_js
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -132,6 +135,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self.kmlocks = imported_config
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_status()
+        await self._setup_timers()
         for lock in self.kmlocks.values():
             await self._update_listeners(lock)
         self._initial_setup_done_event.set()
@@ -176,6 +180,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         for lock in config.values():
             lock["zwave_js_lock_node"] = None
             lock["zwave_js_lock_device"] = None
+            lock["autolock_timer"] = None
             lock["listeners"] = []
             for slot in lock.get("code_slots", {}).values():
                 if isinstance(slot.get("pin", None), str):
@@ -342,6 +347,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         for lock in config.values():
             lock.pop("zwave_js_lock_device", None)
             lock.pop("zwave_js_lock_node", None)
+            lock.pop("autolock_timer", None)
             lock.pop("listeners", None)
             for slot in lock.get("code_slots", {}).values():
                 if isinstance(slot.get("pin", None), str):
@@ -626,7 +632,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 )
             )
 
-        if kmlock.door_sensor_entity_id not in (None, "binary_sensor.fake"):
+        if kmlock.door_sensor_entity_id not in (None, DEFAULT_DOOR_SENSOR):
             _LOGGER.debug(
                 f"[create_listeners] {kmlock.lock_name}: Creating handle_door_state_change listener"
             )
@@ -642,10 +648,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         # we need to listen for lock state changes
         if kmlock.alarm_level_or_user_code_entity_id not in (
             None,
-            "sensor.fake",
+            DEFAULT_ALARM_LEVEL_SENSOR,
         ) and kmlock.alarm_type_or_access_control_entity_id not in (
             None,
-            "sensor.fake",
+            DEFAULT_ALARM_TYPE_SENSOR,
         ):
             # Listen to lock state changes so we can fire an event
             _LOGGER.debug(
@@ -902,6 +908,28 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     #       data:
     #         entity_id: LOCKENTITYNAME
 
+    async def _setup_timers(self) -> None:
+        for kmlock in self.kmlocks.values():
+            if not isinstance(kmlock, KeymasterLock):
+                continue
+            await self._setup_timer(kmlock)
+
+    async def _setup_timer(self, kmlock: KeymasterLock) -> None:
+        if not isinstance(kmlock, KeymasterLock):
+            return
+
+        if not hasattr(kmlock, "autolock_timer") or not kmlock.autolock_timer:
+            kmlock.autolock_timer = KeymasterTimer()
+        if not kmlock.autolock_timer.is_setup:
+            await kmlock.autolock_timer.setup(
+                hass=self.hass,
+                kmlock=kmlock,
+                call_action=self._timer_triggered(kmlock=kmlock),
+            )
+
+    async def _timer_triggered(self, kmlock) -> None:
+        _LOGGER.debug(f"[timer_triggered] {kmlock.lock_name}")
+
     async def _update_door_and_lock_status(
         self, trigger_actions_if_changed=False
     ) -> None:
@@ -933,7 +961,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if (
                 isinstance(kmlock.door_sensor_entity_id, str)
                 and kmlock.door_sensor_entity_id
-                and kmlock.door_sensor_entity_id != "binary_sensor.fake"
+                and kmlock.door_sensor_entity_id != DEFAULT_DOOR_SENSOR
             ):
                 door_state: str = self.hass.states.get(
                     kmlock.door_sensor_entity_id
@@ -954,6 +982,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_status()
         await self._update_listeners(kmlock)
+        await self._setup_timer(kmlock)
         await self.async_refresh()
         return True
 
@@ -965,6 +994,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_status()
         await self._update_listeners(self.kmlocks[kmlock.keymaster_config_entry_id])
+        await self._setup_timer(self.kmlocks[kmlock.keymaster_config_entry_id])
         await self.async_refresh()
         return True
 
@@ -980,6 +1010,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_status()
         await self._update_listeners(self.kmlocks[config_entry_id])
+        await self._setup_timer(self.kmlocks[config_entry_id])
         await self.async_refresh()
         return True
 
@@ -987,6 +1018,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._initial_setup_done_event.wait()
         if kmlock.keymaster_config_entry_id not in self.kmlocks:
             return True
+        if kmlock.autolock_timer:
+            kmlock.autolock_timer.cancel()
         await self._unsubscribe_listeners(
             self.kmlocks[kmlock.keymaster_config_entry_id]
         )
@@ -999,6 +1032,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._initial_setup_done_event.wait()
         if config_entry_id not in self.kmlocks:
             return True
+        if self.kmlocks[config_entry_id].autolock_timer:
+            self.kmlocks[config_entry_id].autolock_timer.cancel()
         await self._unsubscribe_listeners(self.kmlocks[config_entry_id])
         self.kmlocks.pop(config_entry_id, None)
         await self._rebuild_lock_relationships()
