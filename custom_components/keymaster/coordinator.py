@@ -134,7 +134,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         # _LOGGER.debug(f"[Coordinator] imported_kmlocks: {imported_config}")
         self.kmlocks = imported_config
         await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_status()
+        await self._update_door_and_lock_state()
         await self._setup_timers()
         for lock in self.kmlocks.values():
             await self._update_listeners(lock)
@@ -709,7 +709,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return
 
-        kmlock.lock_status = LockState.UNLOCKED
+        kmlock.lock_state = LockState.UNLOCKED
         _LOGGER.debug(
             f"[lock_unlocked] {kmlock.lock_name}: Running. "
             f"code_slot: {code_slot}, source: {source}, event_label: {event_label}, action_code: {action_code}"
@@ -796,7 +796,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 f"[lock_locked] {kmlock.lock_name}: Throttled. source: {source}"
             )
             return
-        kmlock.lock_status = LockState.LOCKED
+        kmlock.lock_state = LockState.LOCKED
         _LOGGER.debug(
             f"[lock_locked] {kmlock.lock_name}: Running. "
             f"source: {source}, event_label: {event_label}, action_code: {action_code}"
@@ -832,7 +832,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug(f"[door_opened] {kmlock.lock_name}: Throttled")
             return
 
-        kmlock.door_status = STATE_OPEN
+        kmlock.door_state = STATE_OPEN
         _LOGGER.debug(f"[door_opened] {kmlock.lock_name}: Running")
 
         # TODO: Store door state in order to prevent locking when open (if enabled)
@@ -852,7 +852,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug(f"[door_closed] {kmlock.lock_name}: Throttled")
             return
 
-        kmlock.door_status = STATE_CLOSED
+        kmlock.door_state = STATE_CLOSED
         _LOGGER.debug(f"[door_closed] {kmlock.lock_name}: Running")
 
         if kmlock.door_notifications:
@@ -930,18 +930,22 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def _timer_triggered(self, kmlock) -> None:
         _LOGGER.debug(f"[timer_triggered] {kmlock.lock_name}")
 
-    async def _update_door_and_lock_status(
+    async def _update_door_and_lock_state(
         self, trigger_actions_if_changed=False
     ) -> None:
-        _LOGGER.debug(f"[update_door_and_lock_status] Running")
+        _LOGGER.debug(f"[update_door_and_lock_state] Running")
         for kmlock in self.kmlocks.values():
             if isinstance(kmlock.lock_entity_id, str) and kmlock.lock_entity_id:
                 lock_state: str = self.hass.states.get(kmlock.lock_entity_id).state
                 if lock_state in [LockState.LOCKED, LockState.UNLOCKED]:
+                    if kmlock.lock_state != lock_state:
+                        _LOGGER.debug(
+                            f"[update_door_and_lock_state] Lock Status out of sync: kmlock.lock_state: {kmlock.lock_state}, lock_state: {lock_state}"
+                        )
                     if (
                         trigger_actions_if_changed
-                        and kmlock.lock_status in [LockState.LOCKED, LockState.UNLOCKED]
-                        and kmlock.lock_status != lock_state
+                        and kmlock.lock_state in [LockState.LOCKED, LockState.UNLOCKED]
+                        and kmlock.lock_state != lock_state
                     ):
                         if lock_state in [LockState.UNLOCKED]:
                             await self._lock_unlocked(
@@ -956,7 +960,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                                 event_label="Sync Status Update Lock",
                             )
                         else:
-                            kmlock.lock_status = lock_state
+                            kmlock.lock_state = lock_state
 
             if (
                 isinstance(kmlock.door_sensor_entity_id, str)
@@ -967,12 +971,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     kmlock.door_sensor_entity_id
                 ).state
                 if door_state in [STATE_OPEN, STATE_CLOSED]:
+                    if kmlock.door_state != door_state:
+                        _LOGGER.debug(
+                            f"[update_door_and_lock_state] Door Status out of sync: kmlock.door_state: {kmlock.door_state}, door_state: {door_state}"
+                        )
                     if door_state in [STATE_OPEN]:
                         await self._door_opened(kmlock=kmlock)
                     elif door_state in [STATE_CLOSED]:
                         await self._door_closed(kmlock=kmlock)
                     else:
-                        kmlock.door_status = door_state
+                        kmlock.door_state = door_state
 
     async def add_lock(self, kmlock: KeymasterLock) -> bool:
         await self._initial_setup_done_event.wait()
@@ -980,7 +988,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
         self.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
         await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_status()
+        await self._update_door_and_lock_state()
         await self._update_listeners(kmlock)
         await self._setup_timer(kmlock)
         await self.async_refresh()
@@ -992,7 +1000,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
         self.kmlocks.update({kmlock.keymaster_config_entry_id: kmlock})
         await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_status()
+        await self._update_door_and_lock_state()
         await self._update_listeners(self.kmlocks[kmlock.keymaster_config_entry_id])
         await self._setup_timer(self.kmlocks[kmlock.keymaster_config_entry_id])
         await self.async_refresh()
@@ -1008,7 +1016,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if hasattr(self.kmlocks[config_entry_id], attr):
                 setattr(self.kmlocks[config_entry_id], attr, value)
         await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_status()
+        await self._update_door_and_lock_state()
         await self._update_listeners(self.kmlocks[config_entry_id])
         await self._setup_timer(self.kmlocks[config_entry_id])
         await self.async_refresh()
@@ -1564,7 +1572,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if self._sync_status_counter > SYNC_STATUS_THRESHOLD:
             self._sync_status_counter = 0
-            await self._update_door_and_lock_status(trigger_actions_if_changed=True)
+            await self._update_door_and_lock_state(trigger_actions_if_changed=True)
         await self.hass.async_add_executor_job(self._write_config_to_json)
         # _LOGGER.debug(f"[Coordinator] final self.kmlocks: {self.kmlocks}")
         return self.kmlocks
