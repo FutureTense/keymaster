@@ -23,7 +23,7 @@ from zwave_js_server.util.lock import (
     set_usercode,
 )
 
-from homeassistant.components.lock.const import LockState
+from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 from homeassistant.components.zwave_js.const import (
     ATTR_NODE_ID,
@@ -36,6 +36,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_STATE,
     EVENT_HOMEASSISTANT_STARTED,
+    SERVICE_LOCK,
     STATE_CLOSED,
     STATE_OFF,
     STATE_ON,
@@ -72,7 +73,13 @@ from .const import (
     VERSION,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
-from .helpers import KeymasterTimer, Throttle, async_using_zwave_js
+from .helpers import (
+    KeymasterTimer,
+    Throttle,
+    async_using_zwave_js,
+    call_hass_service,
+    send_persistent_notification,
+)
 from .lock import (
     KeymasterCodeSlot,
     KeymasterCodeSlotDayOfWeek,
@@ -732,8 +739,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             code_slot = 0
 
         if kmlock.autolock_enabled:
-            # TODO: Start timer if auto-lock enabled
-            pass
+            await kmlock.autolock_timer.start()
 
         if kmlock.lock_notifications:
             # TODO: Send notification
@@ -815,7 +821,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             f"source: {source}, event_label: {event_label}, action_code: {action_code}"
         )
 
-        # TODO: Cancel/Stop timer
+        await kmlock.autolock_timer.cancel()
 
         if kmlock.lock_notifications:
             # TODO: Send notification
@@ -848,8 +854,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.door_state = STATE_OPEN
         _LOGGER.debug(f"[door_opened] {kmlock.lock_name}: Running")
 
-        # TODO: Store door state in order to prevent locking when open (if enabled)
-
         if kmlock.door_notifications:
             # TODO: Send notification
             # - service: script.keymaster_LOCKNAME_manual_notify
@@ -868,6 +872,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.door_state = STATE_CLOSED
         _LOGGER.debug(f"[door_closed] {kmlock.lock_name}: Running")
 
+        if kmlock.retry_lock and kmlock.pending_retry_lock:
+            await self._lock_lock(kmlock=kmlock)
+            #       - service: persistent_notification.create
+            #         data_template:
+            #           title: "LOCKNAME is closed"
+            #           message: >-
+            #             {{ 'The LOCKNAME sensor indicates the door has been closed, re-attempting to lock.'}}
+
         if kmlock.door_notifications:
             # TODO: Send notification
             # - service: script.keymaster_LOCKNAME_manual_notify
@@ -876,50 +888,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             #     message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
             pass
 
-    # boltchecked_retry_LOCKNAME:
-    #   sequence:
-    #     - service: input_boolean.turn_on
-    #       target:
-    #         entity_id: input_boolean.keymaster_LOCKNAME_retry
-    #     - service: persistent_notification.create
-    #       data_template:
-    #         title: "Unable to lock LOCKNAME"
-    #         message: >-
-    #           {{ 'Unable to lock LOCKNAME as the sensor indicates the door is currently opened.  The operation will be automatically retried when the door is closed.'}}
-
-    #   - alias: keymaster_retry_bolt_closed_LOCKNAME
-    #     id: keymaster_retry_bolt_closed_LOCKNAME
-    #     trigger:
-    #       platform: state
-    #       entity_id: DOORSENSORENTITYNAME
-    #       to: "off"
-    #     condition:
-    #       - condition: state
-    #         entity_id: input_boolean.keymaster_LOCKNAME_retry
-    #         state: "on"
-    #       - condition: state
-    #         entity_id: input_boolean.keymaster_LOCKNAME_autolock
-    #         state: "on"
-    #     action:
-    #       - service: persistent_notification.create
-    #         data_template:
-    #           title: "LOCKNAME is closed"
-    #           message: >-
-    #             {{ 'The LOCKNAME sensor indicates the door has been closed, re-attempting to lock.'}}
-    #       - service: lock.lock
-    #         entity_id: lock.boltchecked_LOCKNAME
-
-    # lock:
-    #   - platform: template
-    #     name: boltchecked_LOCKNAME
-    #     unique_id: "lock.boltchecked_LOCKNAME"
-    #     value_template: "{{ is_state('LOCKENTITYNAME', 'locked') }}"
-    #     lock:
-    #       service: "{{ 'script.boltchecked_retry_LOCKNAME' if (is_state('DOORSENSORENTITYNAME', 'on')) else 'script.boltchecked_lock_LOCKNAME' }}"
-    #     unlock:
-    #       service: lock.unlock
-    #       data:
-    #         entity_id: LOCKENTITYNAME
+    async def _lock_lock(self, kmlock: KeymasterLock):
+        _LOGGER.debug(f"[lock_lock] {kmlock.lock_name}: Locking")
+        kmlock.pending_retry_lock = False
+        target: Mapping[str, Any] = {ATTR_ENTITY_ID: kmlock.lock_entity_id}
+        call_hass_service(
+            hass=self.hass,
+            domain=LOCK_DOMAIN,
+            service=SERVICE_LOCK,
+            target=target,
+        )
 
     async def _setup_timers(self) -> None:
         for kmlock in self.kmlocks.values():
@@ -937,11 +915,24 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             await kmlock.autolock_timer.setup(
                 hass=self.hass,
                 kmlock=kmlock,
-                call_action=self._timer_triggered(kmlock=kmlock),
+                call_action=functools.partial(self._timer_triggered, kmlock),
             )
 
-    async def _timer_triggered(self, kmlock) -> None:
+    async def _timer_triggered(self, kmlock: KeymasterLock, _: datetime) -> None:
         _LOGGER.debug(f"[timer_triggered] {kmlock.lock_name}")
+        if kmlock.retry_lock and kmlock.door_state == STATE_OPEN:
+            kmlock.pending_retry_lock = True
+            send_persistent_notification(
+                hass=self.hass, message="", title="", notification_id=""
+            )
+            #     - service: persistent_notification.create
+            #       data_template:
+            #         title: "Unable to lock LOCKNAME"
+            #         message: >-
+            #           {{ 'Unable to lock LOCKNAME as the sensor indicates the door is currently opened.  The operation will be automatically retried when the door is closed.'}}
+
+        else:
+            await self._lock_lock(kmlock=kmlock)
 
     async def _update_door_and_lock_state(
         self, trigger_actions_if_changed=False
