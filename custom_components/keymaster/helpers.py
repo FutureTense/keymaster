@@ -313,8 +313,12 @@ async def call_hass_service(
     service: str,
     service_data: Mapping[str, Any] = None,
     target: Mapping[str, Any] = None,
-):
+) -> None:
     """Call a hass service and log a failure on an error."""
+    _LOGGER.debug(
+        f"[call_hass_service] service: {domain}.{service}, target: {target}, service_data: {service_data}"
+    )
+
     try:
         await hass.services.async_call(
             domain, service, service_data=service_data, target=target
@@ -336,6 +340,9 @@ async def send_manual_notification(
     message: str,
     title: str = None,
 ) -> None:
+    _LOGGER.debug(
+        f"[send_manual_notification] service: {SCRIPT_DOMAIN}.{service_name}, title: {title}, message: {message}"
+    )
     await call_hass_service(
         hass=hass,
         domain=SCRIPT_DOMAIN,
@@ -347,6 +354,9 @@ async def send_manual_notification(
 async def send_persistent_notification(
     hass: HomeAssistant, message: str, title: str = None, notification_id: str = None
 ) -> None:
+    _LOGGER.debug(
+        f"[send_persistent_notification] title: {title}, message: {message}, notification_id: {notification_id}"
+    )
     persistent_notification.async_create(
         hass=hass, message=message, title=title, notification_id=notification_id
     )
@@ -355,4 +365,7 @@ async def send_persistent_notification(
 async def dismiss_persistent_notification(
     hass: HomeAssistant, notification_id: str
 ) -> None:
+    _LOGGER.debug(
+        f"[dismiss_persistent_notification] notification_id: {notification_id}"
+    )
     persistent_notification.async_dismiss(hass=hass, notification_id=notification_id)

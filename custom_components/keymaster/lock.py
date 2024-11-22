@@ -76,6 +76,7 @@ class KeymasterLock:
     parent_config_entry_id: str | None = None
     child_config_entry_ids: list = field(default_factory=list)
     listeners: list = field(default_factory=list)
+    pending_delete: bool = False
 
 
 keymasterlock_type_lookup: Mapping[str, Any] = {
@@ -106,6 +107,7 @@ keymasterlock_type_lookup: Mapping[str, Any] = {
     "parent_config_entry_id": str,
     "child_config_entry_ids": list,
     # "listeners": list,
+    "pending_delete": bool,
     "day_of_week_num": int,
     "day_of_week_name": str,
     "dow_enabled": bool,

@@ -1,25 +1,8 @@
 """Services for keymaster."""
 
-from collections.abc import Mapping
 import logging
-import os
 
-from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
-from homeassistant.components.persistent_notification import create
 from homeassistant.core import HomeAssistant
-from homeassistant.util import slugify
-
-from .const import (
-    CONF_HIDE_PINS,
-    CONF_PATH,
-    CONF_SLOTS,
-    CONF_START,
-    DEFAULT_HIDE_PINS,
-    DOMAIN,
-    PRIMARY_LOCK,
-)
-from .helpers import reload_package_platforms, reset_code_slot_if_pin_unknown
-from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -187,168 +170,168 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 #         raise ZWaveIntegrationNotConfiguredError
 
 
-def generate_package_files(hass: HomeAssistant, name: str) -> None:
-    """Generate the package files."""
-    config_entry = next(
-        (
-            hass.config_entries.async_get_entry(entry_id)
-            for entry_id in hass.data[DOMAIN]
-            if isinstance(hass.data[DOMAIN][entry_id], Mapping)
-            and hass.data[DOMAIN][entry_id][PRIMARY_LOCK].lock_name == name
-        ),
-        None,
-    )
-    if not config_entry:
-        raise ValueError(f"Couldn't find existing lock entry for {name}")
+# def generate_package_files(hass: HomeAssistant, name: str) -> None:
+#     """Generate the package files."""
+#     config_entry = next(
+#         (
+#             hass.config_entries.async_get_entry(entry_id)
+#             for entry_id in hass.data[DOMAIN]
+#             if isinstance(hass.data[DOMAIN][entry_id], Mapping)
+#             and hass.data[DOMAIN][entry_id][PRIMARY_LOCK].lock_name == name
+#         ),
+#         None,
+#     )
+#     if not config_entry:
+#         raise ValueError(f"Couldn't find existing lock entry for {name}")
 
-    primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
+#     primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
 
-    # Append _child to child lock yaml files
-    child_file = ""
-    if primary_lock.parent_name is not None:
-        child_file = "_child"
+#     # Append _child to child lock yaml files
+#     child_file = ""
+#     if primary_lock.parent_name is not None:
+#         child_file = "_child"
 
-    lockname = slugify(primary_lock.lock_name)
+#     lockname = slugify(primary_lock.lock_name)
 
-    _LOGGER.debug("Starting file generation...")
+#     _LOGGER.debug("Starting file generation...")
 
-    create(
-        hass,
-        (
-            f"Package file generation for `{lockname}` has started. Once complete, we "
-            "will attempt to automatically update Home Assistant to avoid requiring "
-            "a full restart."
-        ),
-        title=f"{DOMAIN.title()} - Starting package file generation",
-    )
+#     create(
+#         hass,
+#         (
+#             f"Package file generation for `{lockname}` has started. Once complete, we "
+#             "will attempt to automatically update Home Assistant to avoid requiring "
+#             "a full restart."
+#         ),
+#         title=f"{DOMAIN.title()} - Starting package file generation",
+#     )
 
-    _LOGGER.debug("DEBUG conf_lock: %s name: %s", lockname, name)
+#     _LOGGER.debug("DEBUG conf_lock: %s name: %s", lockname, name)
 
-    if lockname != name:
-        return
+#     if lockname != name:
+#         return
 
-    inputlockpinheader = f"input_text.{lockname}_pin"
-    activelockheader = f"binary_sensor.active_{lockname}"
-    input_reset_code_slot_header = f"input_boolean.reset_codeslot_{lockname}"
-    lockentityname = primary_lock.lock_entity_id
-    sensorname = lockname
-    doorsensorentityname = primary_lock.door_sensor_entity_id or ""
-    sensoralarmlevel = primary_lock.alarm_level_or_user_code_entity_id or "sensor.fake"
-    sensoralarmtype = (
-        primary_lock.alarm_type_or_access_control_entity_id or "sensor.fake"
-    )
-    hide_pins = (
-        MODE_PASSWORD
-        if config_entry.data.get(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
-        else MODE_TEXT
-    )
+#     inputlockpinheader = f"input_text.{lockname}_pin"
+#     activelockheader = f"binary_sensor.active_{lockname}"
+#     input_reset_code_slot_header = f"input_boolean.reset_codeslot_{lockname}"
+#     lockentityname = primary_lock.lock_entity_id
+#     sensorname = lockname
+#     doorsensorentityname = primary_lock.door_sensor_entity_id or ""
+#     sensoralarmlevel = primary_lock.alarm_level_or_user_code_entity_id or "sensor.fake"
+#     sensoralarmtype = (
+#         primary_lock.alarm_type_or_access_control_entity_id or "sensor.fake"
+#     )
+#     hide_pins = (
+#         MODE_PASSWORD
+#         if config_entry.data.get(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
+#         else MODE_TEXT
+#     )
 
-    output_path = os.path.join(
-        hass.config.path(), config_entry.data[CONF_PATH], lockname
-    )
-    input_path = os.path.dirname(__file__)
+#     output_path = os.path.join(
+#         hass.config.path(), config_entry.data[CONF_PATH], lockname
+#     )
+#     input_path = os.path.dirname(__file__)
 
-    # If packages folder exists, delete it so we can recreate it
-    if os.path.isdir(output_path):
-        _LOGGER.debug("Directory %s already exists, cleaning it up", output_path)
-        for file in os.listdir(output_path):
-            os.remove(os.path.join(output_path, file))
-    else:
-        _LOGGER.debug("Creating packages directory %s", output_path)
-        try:
-            os.makedirs(output_path)
-        except Exception as err:
-            _LOGGER.critical("Error creating directory: %s", str(err))
+#     # If packages folder exists, delete it so we can recreate it
+#     if os.path.isdir(output_path):
+#         _LOGGER.debug("Directory %s already exists, cleaning it up", output_path)
+#         for file in os.listdir(output_path):
+#             os.remove(os.path.join(output_path, file))
+#     else:
+#         _LOGGER.debug("Creating packages directory %s", output_path)
+#         try:
+#             os.makedirs(output_path)
+#         except Exception as err:
+#             _LOGGER.critical("Error creating directory: %s", str(err))
 
-    _LOGGER.debug("Packages directory is ready for file generation")
+#     _LOGGER.debug("Packages directory is ready for file generation")
 
-    # Generate list of code slots
-    code_slots = config_entry.data[CONF_SLOTS]
-    start_from = config_entry.data[CONF_START]
+#     # Generate list of code slots
+#     code_slots = config_entry.data[CONF_SLOTS]
+#     start_from = config_entry.data[CONF_START]
 
-    activelockheaders = ",".join(
-        [f"{activelockheader}_{x}" for x in range(start_from, start_from + code_slots)]
-    )
-    inputlockpinheaders = ",".join(
-        [
-            f"{inputlockpinheader}_{x}"
-            for x in range(start_from, start_from + code_slots)
-        ]
-    )
-    input_reset_code_slot_headers = ",".join(
-        [
-            f"{input_reset_code_slot_header}_{x}"
-            for x in range(start_from, start_from + code_slots)
-        ]
-    )
+#     activelockheaders = ",".join(
+#         [f"{activelockheader}_{x}" for x in range(start_from, start_from + code_slots)]
+#     )
+#     inputlockpinheaders = ",".join(
+#         [
+#             f"{inputlockpinheader}_{x}"
+#             for x in range(start_from, start_from + code_slots)
+#         ]
+#     )
+#     input_reset_code_slot_headers = ",".join(
+#         [
+#             f"{input_reset_code_slot_header}_{x}"
+#             for x in range(start_from, start_from + code_slots)
+#         ]
+#     )
 
-    _LOGGER.debug("Creating common YAML files...")
-    replacements = {
-        "LOCKNAME": lockname,
-        "CASE_LOCK_NAME": lockname,
-        "INPUTLOCKPINHEADER": inputlockpinheaders,
-        "ACTIVELOCKHEADER": activelockheaders,
-        "INPUT_RESET_CODE_SLOT_HEADER": input_reset_code_slot_headers,
-        "LOCKENTITYNAME": lockentityname,
-        "SENSORNAME": sensorname,
-        "DOORSENSORENTITYNAME": doorsensorentityname,
-        "SENSORALARMTYPE": sensoralarmtype,
-        "SENSORALARMLEVEL": sensoralarmlevel,
-        "HIDE_PINS": hide_pins,
-        "PARENTLOCK": (
-            "" if primary_lock.parent_name is None else slugify(primary_lock.parent)
-        ),
-    }
+#     _LOGGER.debug("Creating common YAML files...")
+#     replacements = {
+#         "LOCKNAME": lockname,
+#         "CASE_LOCK_NAME": lockname,
+#         "INPUTLOCKPINHEADER": inputlockpinheaders,
+#         "ACTIVELOCKHEADER": activelockheaders,
+#         "INPUT_RESET_CODE_SLOT_HEADER": input_reset_code_slot_headers,
+#         "LOCKENTITYNAME": lockentityname,
+#         "SENSORNAME": sensorname,
+#         "DOORSENSORENTITYNAME": doorsensorentityname,
+#         "SENSORALARMTYPE": sensoralarmtype,
+#         "SENSORALARMLEVEL": sensoralarmlevel,
+#         "HIDE_PINS": hide_pins,
+#         "PARENTLOCK": (
+#             "" if primary_lock.parent_name is None else slugify(primary_lock.parent)
+#         ),
+#     }
 
-    # Replace variables in common file
-    # for in_f, out_f, write_mode in (
-    #     (
-    #         f"keymaster_common{child_file}.yaml",
-    #         f"{lockname}_keymaster_common.yaml",
-    #         "w+",
-    #     ),
-    #     (f"lovelace{child_file}.head", f"{lockname}_lovelace", "w+"),
-    # ):
-    #     output_to_file_from_template(
-    #         input_path, in_f, output_path, out_f, replacements, write_mode
-    #     )
+#     # Replace variables in common file
+#     # for in_f, out_f, write_mode in (
+#     #     (
+#     #         f"keymaster_common{child_file}.yaml",
+#     #         f"{lockname}_keymaster_common.yaml",
+#     #         "w+",
+#     #     ),
+#     #     (f"lovelace{child_file}.head", f"{lockname}_lovelace", "w+"),
+#     # ):
+#     #     output_to_file_from_template(
+#     #         input_path, in_f, output_path, out_f, replacements, write_mode
+#     #     )
 
-    _LOGGER.debug("Creating per slot YAML and lovelace cards...")
-    # Replace variables in code slot files
-    for x in range(start_from, start_from + code_slots):
-        replacements["TEMPLATENUM"] = str(x)
+#     _LOGGER.debug("Creating per slot YAML and lovelace cards...")
+#     # Replace variables in code slot files
+#     for x in range(start_from, start_from + code_slots):
+#         replacements["TEMPLATENUM"] = str(x)
 
-        # for in_f, out_f, write_mode in (
-        #     (f"keymaster{child_file}.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
-        #     (f"lovelace{child_file}.code", f"{lockname}_lovelace", "a"),
-        # ):
-        #     output_to_file_from_template(
-        #         input_path, in_f, output_path, out_f, replacements, write_mode
-        #     )
+#         # for in_f, out_f, write_mode in (
+#         #     (f"keymaster{child_file}.yaml", f"{lockname}_keymaster_{x}.yaml", "w+"),
+#         #     (f"lovelace{child_file}.code", f"{lockname}_lovelace", "a"),
+#         # ):
+#         #     output_to_file_from_template(
+#         #         input_path, in_f, output_path, out_f, replacements, write_mode
+#         #     )
 
-    if reload_package_platforms(hass):
-        create(
-            hass,
-            (
-                f"Package generation for `{lockname}` complete!\n\n"
-                "All changes have been automatically applied, so no restart is needed."
-            ),
-            title=f"{DOMAIN.title()} - Package file generation complete!",
-        )
-        _LOGGER.debug(
-            "Package generation complete and all changes have been hot reloaded"
-        )
-        reset_code_slot_if_pin_unknown(hass, lockname, code_slots, start_from)
-        # if primary_lock.parent_name is not None:
-        #     init_child_locks(hass, start_from, code_slots, lockname)
-    # else:
-    #     create(
-    #         hass,
-    #         (
-    #             f"Package generation for `{lockname}` complete!\n\n"
-    #             "Changes couldn't be automatically applied, so a Home Assistant "
-    #             "restart is needed to fully apply the changes."
-    #         ),
-    #         title=f"{DOMAIN.title()} - Package file generation complete!",
-    #     )
-    #     _LOGGER.debug("Package generation complete, Home Assistant restart needed")
+#     if reload_package_platforms(hass):
+#         create(
+#             hass,
+#             (
+#                 f"Package generation for `{lockname}` complete!\n\n"
+#                 "All changes have been automatically applied, so no restart is needed."
+#             ),
+#             title=f"{DOMAIN.title()} - Package file generation complete!",
+#         )
+#         _LOGGER.debug(
+#             "Package generation complete and all changes have been hot reloaded"
+#         )
+#         reset_code_slot_if_pin_unknown(hass, lockname, code_slots, start_from)
+#         # if primary_lock.parent_name is not None:
+#         #     init_child_locks(hass, start_from, code_slots, lockname)
+#     # else:
+#     #     create(
+#     #         hass,
+#     #         (
+#     #             f"Package generation for `{lockname}` complete!\n\n"
+#     #             "Changes couldn't be automatically applied, so a Home Assistant "
+#     #             "restart is needed to fully apply the changes."
+#     #         ),
+#     #         title=f"{DOMAIN.title()} - Package file generation complete!",
+#     #     )
+#     #     _LOGGER.debug("Package generation complete, Home Assistant restart needed")

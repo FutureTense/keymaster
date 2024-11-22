@@ -46,7 +46,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import CoreState, Event, EventStateChangedData, HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -983,71 +983,149 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     else:
                         kmlock.door_state = door_state
 
-    async def add_lock(self, kmlock: KeymasterLock) -> bool:
+    async def add_lock(self, kmlock: KeymasterLock) -> None:
         await self._initial_setup_done_event.wait()
+        _LOGGER.debug(f"[add_lock] {kmlock.lock_name}")
         if kmlock.keymaster_config_entry_id in self.kmlocks:
-            return False
+            if self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete:
+                self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete = False
+                _LOGGER.debug(
+                    f"[add_lock] {kmlock.lock_name}: Appears to be a reload, updating lock"
+                )
+                await self._update_lock(kmlock)
+                return
+            else:
+                _LOGGER.debug(
+                    f"[add_lock] {kmlock.lock_name}: Not adding, lock already exists"
+                )
+                return
         self.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_state()
         await self._update_listeners(kmlock)
         await self._setup_timer(kmlock)
         await self.async_refresh()
-        return True
+        return
 
-    async def update_lock(self, kmlock: KeymasterLock) -> bool:
+    async def _update_lock(self, new: KeymasterLock) -> bool:
         await self._initial_setup_done_event.wait()
-        if kmlock.keymaster_config_entry_id not in self.kmlocks:
+        _LOGGER.debug(f"[update_lock] {new.lock_name}")
+        if new.keymaster_config_entry_id not in self.kmlocks:
+            _LOGGER.debug(
+                f"[update_lock] {new.lock_name}: Can't update, lock doesn't exist"
+            )
             return False
-        self.kmlocks.update({kmlock.keymaster_config_entry_id: kmlock})
+        old: KeymasterLock = self.kmlocks[new.keymaster_config_entry_id]
+        await self._unsubscribe_listeners(old)
+        _LOGGER.debug(f"[update_lock] {new.lock_name}: old: {old}")
+        _LOGGER.debug(f"[update_lock] {new.lock_name}: new: {new}")
+        new.lock_state = old.lock_state
+        new.door_state = old.door_state
+        new.autolock_enabled = old.autolock_enabled
+        new.autolock_min_day = old.autolock_min_day
+        new.autolock_min_night = old.autolock_min_night
+        new.retry_lock = old.retry_lock
+        for num, new_slot in new.code_slots.items():
+            if num in old.code_slots:
+                old_slot: KeymasterCodeSlot = old.code_slots[num]
+                new_slot.enabled = old_slot.enabled
+                new_slot.name = old_slot.name
+                new_slot.override_parent = old_slot.override_parent
+                new_slot.notifications = old_slot.notifications
+                new_slot.accesslimit_count_enabled = old_slot.accesslimit_count_enabled
+                new_slot.accesslimit_count = old_slot.accesslimit_count
+                new_slot.accesslimit_date_range_enabled = (
+                    old_slot.accesslimit_date_range_enabled
+                )
+                new_slot.accesslimit_date_range_start = (
+                    old_slot.accesslimit_date_range_start
+                )
+                new_slot.accesslimit_date_range_end = (
+                    old_slot.accesslimit_date_range_end
+                )
+                new_slot.accesslimit_day_of_week_enabled = (
+                    old_slot.accesslimit_day_of_week_enabled
+                )
+                for dow_num, new_dow in new_slot.accesslimit_day_of_week.items():
+                    old_dow: KeymasterCodeSlotDayOfWeek = (
+                        old_slot.accesslimit_day_of_week[dow_num]
+                    )
+                    new_dow.dow_enabled = old_dow.dow_enabled
+                    new_dow.limit_by_time = old_dow.limit_by_time
+                    new_dow.include_exclude = old_dow.include_exclude
+                    new_dow.time_start = old_dow.time_start
+                    new_dow.time_end = old_dow.time_end
+        self.kmlocks[new.keymaster_config_entry_id] = new
+        # TODO: If less code slots, delete entities
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_state()
-        await self._update_listeners(self.kmlocks[kmlock.keymaster_config_entry_id])
-        await self._setup_timer(self.kmlocks[kmlock.keymaster_config_entry_id])
+        await self._update_listeners(self.kmlocks[new.keymaster_config_entry_id])
+        await self._setup_timer(self.kmlocks[new.keymaster_config_entry_id])
         await self.async_refresh()
         return True
 
-    async def update_lock_by_config_entry_id(
-        self, config_entry_id: str, **kwargs
-    ) -> bool:
-        await self._initial_setup_done_event.wait()
-        if config_entry_id not in self.kmlocks:
-            return False
-        for attr, value in kwargs.items():
-            if hasattr(self.kmlocks[config_entry_id], attr):
-                setattr(self.kmlocks[config_entry_id], attr, value)
-        await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_state()
-        await self._update_listeners(self.kmlocks[config_entry_id])
-        await self._setup_timer(self.kmlocks[config_entry_id])
-        await self.async_refresh()
-        return True
+    # async def update_lock_by_config_entry_id(
+    #     self, config_entry_id: str, **kwargs
+    # ) -> bool:
+    #     await self._initial_setup_done_event.wait()
+    #     _LOGGER.debug(
+    #         f"[update_lock_by_config_entry_id] config_entry_id: {config_entry_id}"
+    #     )
+    #     if config_entry_id not in self.kmlocks:
+    #         _LOGGER.debug(
+    #             f"[update_lock_by_config_entry_id] config_entry_id: {config_entry_id}: Can't update, lock doesn't exist"
+    #         )
+    #         return False
+    #     for attr, value in kwargs.items():
+    #         if hasattr(self.kmlocks[config_entry_id], attr):
+    #             setattr(self.kmlocks[config_entry_id], attr, value)
+    #     await self._rebuild_lock_relationships()
+    #     await self._update_door_and_lock_state()
+    #     await self._update_listeners(self.kmlocks[config_entry_id])
+    #     await self._setup_timer(self.kmlocks[config_entry_id])
+    #     await self.async_refresh()
+    #     return True
 
-    async def delete_lock(self, kmlock: KeymasterLock) -> bool:
+    async def _delete_lock(self, kmlock: KeymasterLock, _: datetime) -> None:
         await self._initial_setup_done_event.wait()
+        _LOGGER.debug(f"[delete_lock] {kmlock.lock_name}: Triggered")
         if kmlock.keymaster_config_entry_id not in self.kmlocks:
             return True
+        if not kmlock.pending_delete:
+            _LOGGER.debug(
+                f"[delete_lock] {kmlock.lock_name}: Appears to be a reload, delete cancelled"
+            )
+            return
+        _LOGGER.debug(f"[delete_lock] {kmlock.lock_name}: Deleting")
         if kmlock.autolock_timer:
-            kmlock.autolock_timer.cancel()
+            await kmlock.autolock_timer.cancel()
         await self._unsubscribe_listeners(
             self.kmlocks[kmlock.keymaster_config_entry_id]
         )
         self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
         await self._rebuild_lock_relationships()
         await self.async_refresh()
-        return True
+        return
 
-    async def delete_lock_by_config_entry_id(self, config_entry_id: str) -> bool:
+    async def delete_lock_by_config_entry_id(self, config_entry_id: str) -> None:
         await self._initial_setup_done_event.wait()
         if config_entry_id not in self.kmlocks:
-            return True
-        if self.kmlocks[config_entry_id].autolock_timer:
-            self.kmlocks[config_entry_id].autolock_timer.cancel()
-        await self._unsubscribe_listeners(self.kmlocks[config_entry_id])
-        self.kmlocks.pop(config_entry_id, None)
-        await self._rebuild_lock_relationships()
-        await self.async_refresh()
-        return True
+            return
+        kmlock: KeymasterLock = self.kmlocks[config_entry_id]
+        # if kmlock.autolock_timer:
+        #     await self.kmlocks[config_entry_id].autolock_timer.cancel()
+        kmlock.pending_delete = True
+        _LOGGER.debug(
+            f"[delete_lock_by_config_entry_id] {kmlock.lock_name}: Scheduled to delete at {datetime.now().astimezone() + timedelta(seconds=15)}"
+        )
+        kmlock.listeners.append(
+            async_call_later(
+                hass=self.hass,
+                delay=15,
+                action=functools.partial(self._delete_lock, kmlock),
+            )
+        )
+        return
 
     async def get_lock_by_name(self, lock_name: str) -> KeymasterLock | None:
         await self._initial_setup_done_event.wait()
