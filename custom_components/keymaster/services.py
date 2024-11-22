@@ -4,28 +4,13 @@ from collections.abc import Mapping
 import logging
 import os
 
-from zwave_js_server.util.lock import get_usercode_from_node
-
 from homeassistant.components.input_text import MODE_PASSWORD, MODE_TEXT
 from homeassistant.components.persistent_notification import create
-from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
-from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
-from homeassistant.components.zwave_js.helpers import async_get_node_from_entity_id
-from homeassistant.components.zwave_js.lock import (
-    SERVICE_CLEAR_LOCK_USERCODE,
-    SERVICE_SET_LOCK_USERCODE,
-)
-from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
 
 from .const import (
-    ATTR_CODE_SLOT,
-    ATTR_NAME,
-    ATTR_USER_CODE,
     CONF_HIDE_PINS,
-    CONF_LOCK_ENTITY_ID,
     CONF_PATH,
     CONF_SLOTS,
     CONF_START,
@@ -33,14 +18,7 @@ from .const import (
     DOMAIN,
     PRIMARY_LOCK,
 )
-from .exceptions import ZWaveIntegrationNotConfiguredError
-from .helpers import (
-    async_using_zwave_js,
-    call_hass_service,
-    get_code_slots_list,
-    reload_package_platforms,
-    reset_code_slot_if_pin_unknown,
-)
+from .helpers import reload_package_platforms, reset_code_slot_if_pin_unknown
 from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -50,13 +28,14 @@ CLEAR_USERCODE = "clear_usercode"
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
+    pass
     # Button Press
-    async def _refresh_codes(service: ServiceCall) -> None:
-        """Refresh lock codes."""
-        _LOGGER.debug("Refresh Codes service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        instance_id = 1
-        await refresh_codes(hass, entity_id, instance_id)
+    # async def _refresh_codes(service: ServiceCall) -> None:
+    #     """Refresh lock codes."""
+    #     _LOGGER.debug("Refresh Codes service: %s", service)
+    #     entity_id = service.data[ATTR_ENTITY_ID]
+    #     instance_id = 1
+    #     await refresh_codes(hass, entity_id, instance_id)
 
     # hass.services.async_register(
     #     DOMAIN,
@@ -70,13 +49,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     # )
 
     # Add code
-    async def _add_code(service: ServiceCall) -> None:
-        """Set a user code."""
-        _LOGGER.debug("Add Code service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        code_slot = service.data[ATTR_CODE_SLOT]
-        usercode = service.data[ATTR_USER_CODE]
-        await add_code(hass, entity_id, code_slot, usercode)
+    # async def _add_code(service: ServiceCall) -> None:
+    #     """Set a user code."""
+    #     _LOGGER.debug("Add Code service: %s", service)
+    #     entity_id = service.data[ATTR_ENTITY_ID]
+    #     code_slot = service.data[ATTR_CODE_SLOT]
+    #     usercode = service.data[ATTR_USER_CODE]
+    #     await add_code(hass, entity_id, code_slot, usercode)
 
     # hass.services.async_register(
     #     DOMAIN,
@@ -91,13 +70,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     #     ),
     # )
 
-    # Clear code
-    async def _clear_code(service: ServiceCall) -> None:
-        """Clear a user code."""
-        _LOGGER.debug("Clear Code service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        code_slot = service.data[ATTR_CODE_SLOT]
-        await clear_code(hass, entity_id, code_slot)
+    # # Clear code
+    # async def _clear_code(service: ServiceCall) -> None:
+    #     """Clear a user code."""
+    #     _LOGGER.debug("Clear Code service: %s", service)
+    #     entity_id = service.data[ATTR_ENTITY_ID]
+    #     code_slot = service.data[ATTR_CODE_SLOT]
+    #     await clear_code(hass, entity_id, code_slot)
 
     # hass.services.async_register(
     #     DOMAIN,
@@ -112,11 +91,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     # )
 
     # Generate package files
-    def _generate_package(service: ServiceCall) -> None:
-        """Generate the package files."""
-        _LOGGER.debug("DEBUG: %s", service)
-        name = service.data[ATTR_NAME]
-        generate_package_files(hass, name)
+    # def _generate_package(service: ServiceCall) -> None:
+    #     """Generate the package files."""
+    #     _LOGGER.debug("DEBUG: %s", service)
+    #     name = service.data[ATTR_NAME]
+    #     generate_package_files(hass, name)
 
     # hass.services.async_register(
     #     DOMAIN,
@@ -134,78 +113,78 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     # )
 
 
-async def init_child_locks(
-    hass: HomeAssistant, start: int, slots: int, lockname: str
-) -> None:
-    """Populates child locks values with parent values"""
-    # LOCKNAME_copy_from_parent_TEMPLATENUM
-    _LOGGER.debug("Syncing lock: %s", lockname)
-    for x in range(start, start + slots):
-        the_service = f"keymaster_{lockname}_copy_from_parent_{x}"
-        _LOGGER.debug("Attempting to call script: %s", the_service)
-        await call_hass_service(hass, SCRIPT_DOMAIN, the_service)
-    _LOGGER.debug("Sync complete")
+# async def init_child_locks(
+#     hass: HomeAssistant, start: int, slots: int, lockname: str
+# ) -> None:
+#     """Populates child locks values with parent values"""
+#     # LOCKNAME_copy_from_parent_TEMPLATENUM
+#     _LOGGER.debug("Syncing lock: %s", lockname)
+#     for x in range(start, start + slots):
+#         the_service = f"keymaster_{lockname}_copy_from_parent_{x}"
+#         _LOGGER.debug("Attempting to call script: %s", the_service)
+#         await call_hass_service(hass, SCRIPT_DOMAIN, the_service)
+#     _LOGGER.debug("Sync complete")
 
 
-async def refresh_codes(  # pylint: disable-next=unused-argument
-    hass: HomeAssistant, entity_id: str, instance_id: int = 1
-) -> None:
-    """Refresh lock codes."""
-    try:
-        config_entry = next(
-            config_entry
-            for config_entry in hass.config_entries.async_entries(DOMAIN)
-            if config_entry.data[CONF_LOCK_ENTITY_ID] == entity_id
-        )
-    except StopIteration:
-        _LOGGER.error("Entity ID %s not set up in keymaster", entity_id)
-        return
+# async def refresh_codes(  # pylint: disable-next=unused-argument
+#     hass: HomeAssistant, entity_id: str, instance_id: int = 1
+# ) -> None:
+#     """Refresh lock codes."""
+#     try:
+#         config_entry = next(
+#             config_entry
+#             for config_entry in hass.config_entries.async_entries(DOMAIN)
+#             if config_entry.data[CONF_LOCK_ENTITY_ID] == entity_id
+#         )
+#     except StopIteration:
+#         _LOGGER.error("Entity ID %s not set up in keymaster", entity_id)
+#         return
 
-    ent_reg = async_get_entity_registry(hass)
-    if async_using_zwave_js(hass=hass, entity_id=entity_id):
-        code_slots = get_code_slots_list(config_entry.data)
-        node = async_get_node_from_entity_id(hass, entity_id, ent_reg=ent_reg)
-        for code_slot in code_slots:
-            await get_usercode_from_node(node, code_slot)
-        return
-
-
-async def add_code(
-    hass: HomeAssistant, entity_id: str, code_slot: int, usercode: str
-) -> None:
-    """Set a user code."""
-    _LOGGER.debug("Attempting to call set_usercode...")
-
-    servicedata = {
-        ATTR_CODE_SLOT: code_slot,
-        ATTR_USER_CODE: usercode,
-    }
-
-    if async_using_zwave_js(hass=hass, entity_id=entity_id):
-        servicedata[ATTR_ENTITY_ID] = entity_id
-        await call_hass_service(
-            hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
-        )
-
-    else:
-        raise ZWaveIntegrationNotConfiguredError
+#     ent_reg = async_get_entity_registry(hass)
+#     if async_using_zwave_js(hass=hass, entity_id=entity_id):
+#         code_slots = get_code_slots_list(config_entry.data)
+#         node = async_get_node_from_entity_id(hass, entity_id, ent_reg=ent_reg)
+#         for code_slot in code_slots:
+#             await get_usercode_from_node(node, code_slot)
+#         return
 
 
-async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> None:
-    """Clear the usercode from a code slot."""
-    _LOGGER.debug("Attempting to call clear_usercode...")
+# async def add_code(
+#     hass: HomeAssistant, entity_id: str, code_slot: int, usercode: str
+# ) -> None:
+#     """Set a user code."""
+#     _LOGGER.debug("Attempting to call set_usercode...")
 
-    if async_using_zwave_js(hass=hass, entity_id=entity_id):
-        servicedata = {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_CODE_SLOT: code_slot,
-        }
-        await call_hass_service(
-            hass, ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
-        )
+#     servicedata = {
+#         ATTR_CODE_SLOT: code_slot,
+#         ATTR_USER_CODE: usercode,
+#     }
 
-    else:
-        raise ZWaveIntegrationNotConfiguredError
+#     if async_using_zwave_js(hass=hass, entity_id=entity_id):
+#         servicedata[ATTR_ENTITY_ID] = entity_id
+#         await call_hass_service(
+#             hass, ZWAVE_JS_DOMAIN, SERVICE_SET_LOCK_USERCODE, servicedata
+#         )
+
+#     else:
+#         raise ZWaveIntegrationNotConfiguredError
+
+
+# async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> None:
+#     """Clear the usercode from a code slot."""
+#     _LOGGER.debug("Attempting to call clear_usercode...")
+
+#     if async_using_zwave_js(hass=hass, entity_id=entity_id):
+#         servicedata = {
+#             ATTR_ENTITY_ID: entity_id,
+#             ATTR_CODE_SLOT: code_slot,
+#         }
+#         await call_hass_service(
+#             hass, ZWAVE_JS_DOMAIN, SERVICE_CLEAR_LOCK_USERCODE, servicedata
+#         )
+
+#     else:
+#         raise ZWaveIntegrationNotConfiguredError
 
 
 def generate_package_files(hass: HomeAssistant, name: str) -> None:
@@ -360,16 +339,16 @@ def generate_package_files(hass: HomeAssistant, name: str) -> None:
             "Package generation complete and all changes have been hot reloaded"
         )
         reset_code_slot_if_pin_unknown(hass, lockname, code_slots, start_from)
-        if primary_lock.parent_name is not None:
-            init_child_locks(hass, start_from, code_slots, lockname)
-    else:
-        create(
-            hass,
-            (
-                f"Package generation for `{lockname}` complete!\n\n"
-                "Changes couldn't be automatically applied, so a Home Assistant "
-                "restart is needed to fully apply the changes."
-            ),
-            title=f"{DOMAIN.title()} - Package file generation complete!",
-        )
-        _LOGGER.debug("Package generation complete, Home Assistant restart needed")
+        # if primary_lock.parent_name is not None:
+        #     init_child_locks(hass, start_from, code_slots, lockname)
+    # else:
+    #     create(
+    #         hass,
+    #         (
+    #             f"Package generation for `{lockname}` complete!\n\n"
+    #             "Changes couldn't be automatically applied, so a Home Assistant "
+    #             "restart is needed to fully apply the changes."
+    #         ),
+    #         title=f"{DOMAIN.title()} - Package file generation complete!",
+    #     )
+    #     _LOGGER.debug("Package generation complete, Home Assistant restart needed")

@@ -78,6 +78,8 @@ from .helpers import (
     Throttle,
     async_using_zwave_js,
     call_hass_service,
+    dismiss_persistent_notification,
+    send_manual_notification,
     send_persistent_notification,
 )
 from .lock import (
@@ -402,33 +404,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
         _LOGGER.debug(f"[Coordinator] JSON File Updated")
 
-    # def _invalid_code(self, code_slot):
-    #     """Return the PIN slot value as we are unable to read the slot value
-    #     from the lock."""
-
-    #     _LOGGER.debug("Work around code in use.")
-    #     # This is a fail safe and should not be needing to return ""
-    #     data = ""
-
-    #     # Build data from entities
-    #     active_binary_sensor = (
-    #         f"binary_sensor.active_{self._primary_lock.lock_name}_{code_slot}"
-    #     )
-    #     active = self.hass.states.get(active_binary_sensor)
-    #     pin_data = f"input_text.{self._primary_lock.lock_name}_pin_{code_slot}"
-    #     pin = self.hass.states.get(pin_data)
-
-    #     # If slot is enabled return the PIN
-    #     if active is not None and pin is not None:
-    #         if active.state == "on" and pin.state.isnumeric():
-    #             _LOGGER.debug("Utilizing BE469 work around code.")
-    #             data = pin.state
-    #         else:
-    #             _LOGGER.debug("Utilizing FE599 work around code.")
-    #             data = ""
-
-    #     return data
-
     async def _rebuild_lock_relationships(self) -> None:
         for keymaster_config_entry_id, kmlock in self.kmlocks.items():
             if kmlock.parent_name is not None:
@@ -742,12 +717,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             await kmlock.autolock_timer.start()
 
         if kmlock.lock_notifications:
-            # TODO: Send notification
-            # - service: script.keymaster_LOCKNAME_manual_notify
-            #   data_template:
-            #     title: CASE_LOCK_NAME
-            #     message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
-            pass
+            message: str = event_label
+            if code_slot > 0:
+                message = message + f" ({code_slot})"
+            await send_manual_notification(
+                hass=self.hass,
+                service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                title=kmlock.lock_name,
+                message=message,
+            )
 
         if code_slot > 0 and code_slot in kmlock.code_slots:
             if (
@@ -781,12 +759,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock.code_slots[code_slot].notifications
                 and not kmlock.lock_notifications
             ):
-                # TODO: Send code slot notification
-                # - service: script.keymaster_LOCKNAME_manual_notify
-                #   data_template:
-                #     title: CASE_LOCK_NAME
-                #     message: "{{ trigger.event.data.action_text }} ({{ trigger.event.data.code_slot_name }})"
-                pass
+                await send_manual_notification(
+                    hass=self.hass,
+                    service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                    title=kmlock.lock_name,
+                    message=f"{event_label} ({code_slot})",
+                )
 
         # Fire state change event
         self.hass.bus.fire(
@@ -824,12 +802,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await kmlock.autolock_timer.cancel()
 
         if kmlock.lock_notifications:
-            # TODO: Send notification
-            # - service: script.keymaster_LOCKNAME_manual_notify
-            #   data_template:
-            #     title: CASE_LOCK_NAME
-            #     message: "{{ trigger.event.data.action_text }} {% if trigger.event.data.code_slot > 0 %}({{ trigger.event.data.code_slot_name }}){% endif %}"
-            pass
+            await send_manual_notification(
+                hass=self.hass,
+                service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                title=kmlock.lock_name,
+                message=event_label,
+            )
 
         # Fire state change event
         self.hass.bus.fire(
@@ -855,12 +833,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         _LOGGER.debug(f"[door_opened] {kmlock.lock_name}: Running")
 
         if kmlock.door_notifications:
-            # TODO: Send notification
-            # - service: script.keymaster_LOCKNAME_manual_notify
-            #   data_template:
-            #     title: CASE_LOCK_NAME
-            #     message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
-            pass
+            await send_manual_notification(
+                hass=self.hass,
+                service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                title=kmlock.lock_name,
+                message="Door Opened",
+            )
 
     async def _door_closed(self, kmlock) -> None:
         if not self._throttle.is_allowed(
@@ -874,19 +852,23 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if kmlock.retry_lock and kmlock.pending_retry_lock:
             await self._lock_lock(kmlock=kmlock)
-            #       - service: persistent_notification.create
-            #         data_template:
-            #           title: "LOCKNAME is closed"
-            #           message: >-
-            #             {{ 'The LOCKNAME sensor indicates the door has been closed, re-attempting to lock.'}}
+            await dismiss_persistent_notification(
+                hass=self.hass, notification_id=f"{kmlock.lock_name}_autolock_door_open"
+            )
+            await send_persistent_notification(
+                hass=self.hass,
+                title=f"{kmlock.lock_name} is closed",
+                message=f"The {kmlock.lock_name} sensor indicates the door has been closed, re-attempting to lock.",
+                notification_id=f"{kmlock.lock_name}_autolock_door_closed",
+            )
 
         if kmlock.door_notifications:
-            # TODO: Send notification
-            # - service: script.keymaster_LOCKNAME_manual_notify
-            #   data_template:
-            #     title: CASE_LOCK_NAME
-            #     message: "{% if trigger.to_state.state == 'on' %}Door Opened{% else %}Door Closed{% endif %}"
-            pass
+            await send_manual_notification(
+                hass=self.hass,
+                service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                title=kmlock.lock_name,
+                message="Door Closed",
+            )
 
     async def _lock_lock(self, kmlock: KeymasterLock):
         _LOGGER.debug(f"[lock_lock] {kmlock.lock_name}: Locking")
@@ -922,15 +904,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         _LOGGER.debug(f"[timer_triggered] {kmlock.lock_name}")
         if kmlock.retry_lock and kmlock.door_state == STATE_OPEN:
             kmlock.pending_retry_lock = True
-            send_persistent_notification(
-                hass=self.hass, message="", title="", notification_id=""
+            await send_persistent_notification(
+                hass=self.hass,
+                title=f"Unable to lock {kmlock.lock_name}",
+                message=f"Unable to lock {kmlock.lock_name} as the sensor indicates the door is currently opened.  The operation will be automatically retried when the door is closed.",
+                notification_id=f"{kmlock.lock_name}_autolock_door_open",
             )
-            #     - service: persistent_notification.create
-            #       data_template:
-            #         title: "Unable to lock LOCKNAME"
-            #         message: >-
-            #           {{ 'Unable to lock LOCKNAME as the sensor indicates the door is currently opened.  The operation will be automatically retried when the door is closed.'}}
-
         else:
             await self._lock_lock(kmlock=kmlock)
 
