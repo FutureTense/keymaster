@@ -1,26 +1,21 @@
-"""Adds config flow for keymaster."""
+"""Config flow for keymaster"""
 
-import asyncio
 from collections.abc import Mapping
 import logging
-import os
 from typing import Any
 
 import voluptuous as vol
-from voluptuous.schema_builder import ALLOW_EXTRA
 
 from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSORS_DOMAIN
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import config_validation as cv
 from homeassistant.util import slugify
 
 from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_GENERATE,
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
@@ -33,35 +28,20 @@ from .const import (
     DEFAULT_ALARM_TYPE_SENSOR,
     DEFAULT_CODE_SLOTS,
     DEFAULT_DOOR_SENSOR,
-    DEFAULT_GENERATE,
     DEFAULT_HIDE_PINS,
     DEFAULT_PACKAGES_PATH,
     DEFAULT_START,
     DOMAIN,
 )
 
-_LOGGER = logging.getLogger(__name__)
-
-CHILD_LOCKS_SCHEMA = cv.schema_with_slug_keys(
-    {
-        vol.Required(CONF_LOCK_ENTITY_ID): cv.entity_id,
-        vol.Optional(
-            CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, default="sensor.fake"
-        ): vol.Any(None, cv.entity_id),
-        vol.Optional(
-            CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID, default="sensor.fake"
-        ): vol.Any(None, cv.entity_id),
-    }
-)
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-@config_entries.HANDLERS.register(DOMAIN)
-class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for KeyMaster."""
+class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+    """Config flow for keymaster"""
 
     VERSION = 2
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
-    DEFAULTS = {
+    DEFAULTS: Mapping[str, Any] = {
         CONF_SLOTS: DEFAULT_CODE_SLOTS,
         CONF_START: DEFAULT_START,
         CONF_SENSOR_NAME: DEFAULT_DOOR_SENSOR,
@@ -70,7 +50,7 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     }
 
     async def _get_unique_name_error(self, user_input) -> Mapping[str, str]:
-        """Check if name is unique, returning dictionary error if so."""
+        """Check if name is unique, returning dictionary error if so"""
         # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
             user_input[CONF_LOCK_NAME], raise_on_progress=True
@@ -82,31 +62,32 @@ class KeyMasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: Mapping[str, Any] = None
     ) -> Mapping[str, Any]:
-        """Handle a flow initialized by the user."""
+        """Handle a flow initialized by the user"""
         # TODO: Only allow once instance per physical lock
+        # TODO: Store lock config_entry_id
         return await _start_config_flow(
-            self,
-            "user",
-            user_input[CONF_LOCK_NAME] if user_input else None,
-            user_input,
-            self.DEFAULTS,
+            cls=self,
+            step_id="user",
+            title=user_input[CONF_LOCK_NAME] if user_input else None,
+            user_input=user_input,
+            defaults=self.DEFAULTS,
         )
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        return KeyMasterOptionsFlow(config_entry)
+        return KeymasterOptionsFlow(config_entry)
 
 
-class KeyMasterOptionsFlow(config_entries.OptionsFlow):
-    """Options flow for KeyMaster."""
+class KeymasterOptionsFlow(config_entries.OptionsFlow):
+    """Options flow for keymaster"""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry):
-        """Initialize."""
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize"""
         self._config_entry = config_entry
 
-    def _get_unique_name_error(self, user_input):
-        """Check if name is unique, returning dictionary error if so."""
+    async def _get_unique_name_error(self, user_input) -> Mapping[str, str]:
+        """Check if name is unique, returning dictionary error if so"""
         # If lock name has changed, make sure new name isn't already being used
         # otherwise show an error
         if self._config_entry.unique_id != user_input[CONF_LOCK_NAME]:
@@ -118,27 +99,27 @@ class KeyMasterOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: Mapping[str, Any] = None
     ) -> Mapping[str, Any]:
-        """Handle a flow initialized by the user."""
+        """Handle a flow initialized by the user"""
         return await _start_config_flow(
-            self,
-            "init",
-            "",
-            user_input,
-            self._config_entry.data,
-            self._config_entry.entry_id,
+            cls=self,
+            step_id="init",
+            title="",
+            user_input=user_input,
+            defaults=self._config_entry.data,
+            entry_id=self._config_entry.entry_id,
         )
 
 
 def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
     """Find other keymaster configurations and list them as posible
-    parent locks if they are not a child lock already."""
+    parent locks if they are not a child lock already"""
 
-    data = ["(none)"]
+    data: list[str] = ["(none)"]
     if DOMAIN not in hass.data:
         return data
 
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if CONF_PARENT not in entry.data.keys() and entry.entry_id != entry_id:
+        if CONF_PARENT not in entry.data and entry.entry_id != entry_id:
             data.append(entry.title)
         elif entry.data[CONF_PARENT] is None and entry.entry_id != entry_id:
             data.append(entry.title)
@@ -152,7 +133,7 @@ def _get_entities(
     search: list[str] = None,
     extra_entities: list[str] = None,
 ) -> list[str]:
-    data = []
+    data: list[str] = []
     if domain not in hass.data:
         return data
 
@@ -173,17 +154,17 @@ def _get_schema(
     default_dict: Mapping[str, Any],
     entry_id: str = None,
 ) -> vol.Schema:
-    """Gets a schema using the default_dict as a backup."""
+    """Gets a schema using the default_dict as a backup"""
     if user_input is None:
         user_input = {}
 
     if CONF_PARENT in default_dict.keys() and default_dict[CONF_PARENT] is None:
-        check_dict = default_dict.copy()
+        check_dict: Mapping[str, Any] = default_dict.copy()
         check_dict.pop(CONF_PARENT, None)
         default_dict = check_dict
 
     def _get_default(key: str, fallback_default: Any = None) -> None:
-        """Gets default value for key."""
+        """Gets default value for key"""
         return user_input.get(key, default_dict.get(key, fallback_default))
 
     return vol.Schema(
@@ -234,86 +215,100 @@ def _get_schema(
                     extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
                 )
             ),
-            vol.Required(
-                CONF_PATH, default=_get_default(CONF_PATH, DEFAULT_PACKAGES_PATH)
-            ): str,
+            # vol.Required(
+            #     CONF_PATH, default=_get_default(CONF_PATH, DEFAULT_PACKAGES_PATH)
+            # ): str,
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
         },
-        extra=ALLOW_EXTRA,
+        # extra=ALLOW_EXTRA,
     )
 
 
-def _show_config_form(
-    cls: KeyMasterFlowHandler | KeyMasterOptionsFlow,
-    step_id: str,
-    user_input: Mapping[str, Any],
-    errors: Mapping[str, str],
-    description_placeholders: Mapping[str, str],
-    defaults: Mapping[str, Any] = None,
-    entry_id: str = None,
-) -> Mapping[str, Any]:
-    """Show the configuration form to edit location data."""
-    return cls.async_show_form(
-        step_id=step_id,
-        data_schema=_get_schema(cls.hass, user_input, defaults, entry_id),
-        errors=errors,
-        description_placeholders=description_placeholders,
-    )
+# def _show_config_form(
+#     cls: KeymasterFlowHandler | KeymasterOptionsFlow,
+#     step_id: str,
+#     user_input: Mapping[str, Any],
+#     errors: Mapping[str, str],
+#     description_placeholders: Mapping[str, str],
+#     defaults: Mapping[str, Any] = None,
+#     entry_id: str = None,
+# ) -> Mapping[str, Any]:
+#     """Show the configuration form to edit location data"""
+#     return cls.async_show_form(
+#         step_id=step_id,
+#         data_schema=_get_schema(cls.hass, user_input, defaults, entry_id),
+#         errors=errors,
+#         description_placeholders=description_placeholders,
+#     )
 
 
 async def _start_config_flow(
-    cls: KeyMasterFlowHandler | KeyMasterOptionsFlow,
+    cls: KeymasterFlowHandler | KeymasterOptionsFlow,
     step_id: str,
     title: str,
     user_input: Mapping[str, Any],
     defaults: Mapping[str, Any] = None,
     entry_id: str = None,
 ):
-    """Start a config flow."""
+    """Start a config flow"""
     errors = {}
     description_placeholders = {}
 
     if user_input is not None:
-        user_input[CONF_GENERATE] = DEFAULT_GENERATE
+        # user_input[CONF_GENERATE] = DEFAULT_GENERATE
         user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME].lower())
 
         # Convert (none) to None
         if user_input[CONF_PARENT] == "(none)":
             user_input[CONF_PARENT] = None
 
+        errors.update(await cls._get_unique_name_error(user_input))
         # Regular flow has an async function, options flow has a sync function
         # so we need to handle them conditionally
-        if asyncio.iscoroutinefunction(cls._get_unique_name_error):
-            errors.update(await cls._get_unique_name_error(user_input))
-        else:
-            errors.update(cls._get_unique_name_error(user_input))
+        # if asyncio.iscoroutinefunction(cls._get_unique_name_error):
+        #     errors.update(await cls._get_unique_name_error(user_input))
+        # else:
+        #     errors.update(cls._get_unique_name_error(user_input))
 
         # Validate that package path is relative
-        if os.path.isabs(user_input[CONF_PATH]):
-            errors[CONF_PATH] = "invalid_path"
+        # if os.path.isabs(user_input[CONF_PATH]):
+        #     errors[CONF_PATH] = "invalid_path"
 
         # Update options if no errors
         if not errors:
-            return cls.async_create_entry(title=title, data=user_input)
+            if step_id == "user":
+                return cls.async_create_entry(title=title, data=user_input)
+            cls.hass.config_entries.async_update_entry(
+                cls._config_entry, data=user_input
+            )
+            await cls.hass.config_entries.async_reload(entry_id)
+            return cls.async_create_entry(title="", data={})
 
-        return _show_config_form(
-            cls,
-            step_id,
-            user_input,
-            errors,
-            description_placeholders,
-            defaults,
-            entry_id,
-        )
+        # return _show_config_form(
+        #     cls,
+        #     step_id,
+        #     user_input,
+        #     errors,
+        #     description_placeholders,
+        #     defaults,
+        #     entry_id,
+        # )
 
-    return _show_config_form(
-        cls,
-        step_id,
-        user_input,
-        errors,
-        description_placeholders,
-        defaults,
-        entry_id,
+    # return _show_config_form(
+    #     cls=cls,
+    #     step_id=step_id,
+    #     user_input=user_input,
+    #     errors=errors,
+    #     description_placeholders=description_placeholders,
+    #     defaults=defaults,
+    #     entry_id=entry_id,
+    # )
+
+    return cls.async_show_form(
+        step_id=step_id,
+        data_schema=_get_schema(cls.hass, user_input, defaults, entry_id),
+        errors=errors,
+        description_placeholders=description_placeholders,
     )

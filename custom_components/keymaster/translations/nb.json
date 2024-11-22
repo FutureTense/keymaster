@@ -21,7 +21,7 @@
           "hide_pins": "Hide PINs in UI?"
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
-        "title": "KeyMaster"
+        "title": "keymaster"
       }
     }
   },
@@ -47,7 +47,7 @@
           "hide_pins": "Hide PINs in UI?"
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
-        "title": "KeyMaster"
+        "title": "keymaster"
       }
     }
   }
