@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Mapping
+from datetime import datetime, timedelta
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -24,6 +25,7 @@ from homeassistant.const import SERVICE_RELOAD, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers import entity_registry as er, sun
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     CONF_SLOTS,
@@ -41,18 +43,18 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 class Throttle:
     def __init__(self) -> None:
-        self.cooldowns = (
+        self._cooldowns = (
             {}
         )  # Nested dictionary: {function_name: {key: last_called_time}}
 
     def is_allowed(self, func_name, key, cooldown_seconds) -> bool:
         current_time = time.time()
-        if func_name not in self.cooldowns:
-            self.cooldowns[func_name] = {}
+        if func_name not in self._cooldowns:
+            self._cooldowns[func_name] = {}
 
-        last_called = self.cooldowns[func_name].get(key, 0)
+        last_called = self._cooldowns[func_name].get(key, 0)
         if current_time - last_called >= cooldown_seconds:
-            self.cooldowns[func_name][key] = current_time
+            self._cooldowns[func_name][key] = current_time
             return True
         return False
 
@@ -60,10 +62,10 @@ class Throttle:
 class KeymasterTimer:
     def __init__(self) -> None:
         self.hass: HomeAssistant | None = None
-        self._running: bool = False
-        self._unsub_event = None
+        self._unsub_events: list = []
         self._kmlock: KeymasterLock | None = None
         self._call_action: Callable | None = None
+        self._end_time: datetime | None = None
 
     async def setup(
         self, hass: HomeAssistant, kmlock: KeymasterLock, call_action: Callable
@@ -77,40 +79,108 @@ class KeymasterTimer:
             _LOGGER.error(f"[KeymasterTimer] Cannot start timer as timer not setup")
             return False
 
-        if self._running and self._unsub_event is not None:
+        if isinstance(self._end_time, datetime) and isinstance(
+            self._unsub_events, list
+        ):
             # Already running so reset and restart timer
-            self._unsub_event()
-        self._running = True
+            for unsub in self._unsub_events:
+                unsub()
+            self._unsub_events = []
 
         if sun.is_up(self.hass):
             delay: int = (
                 self._kmlock.autolock_min_day
                 if self._kmlock.autolock_min_day
-                else DEFAULT_AUTOLOCK_MIN_DAY * 60
-            )
+                else DEFAULT_AUTOLOCK_MIN_DAY
+            ) * 60
         else:
             delay = (
                 self._kmlock.autolock_min_night
                 if self._kmlock.autolock_min_night
-                else DEFAULT_AUTOLOCK_MIN_NIGHT * 60
-            )
-
-        self._unsub_event = self.hass.async_call_later(
-            hass=self.hass, delay=delay, action=self._call_action
+                else DEFAULT_AUTOLOCK_MIN_NIGHT
+            ) * 60
+        self._end_time = datetime.now().astimezone() + timedelta(seconds=delay)
+        _LOGGER.debug(
+            f"[KeymasterTimer] Starting auto-lock timer for {int(delay)} seconds. Ending {self._end_time}"
+        )
+        self._unsub_events.append(
+            async_call_later(hass=self.hass, delay=delay, action=self._call_action)
+        )
+        self._unsub_events.append(
+            async_call_later(hass=self.hass, delay=delay, action=self.cancel)
         )
 
-    async def cancel(self) -> bool:
-        if self._unsub_event is not None:
-            self._unsub_event()
-        self._running = False
+    async def cancel(self, timer_elapsed: datetime = None) -> bool:
+        if timer_elapsed:
+            _LOGGER.debug(f"[KeymasterTimer] Timer elapsed")
+        else:
+            _LOGGER.debug(f"[KeymasterTimer] Cancelling auto-lock timer")
+        if isinstance(self._unsub_events, list):
+            for unsub in self._unsub_events:
+                unsub()
+            self._unsub_events = []
+        self._end_time = None
 
     @property
     def is_running(self) -> bool:
-        return self._running
+        if not self._end_time:
+            return False
+        if (
+            isinstance(self._end_time, datetime)
+            and self._end_time >= datetime.now().astimezone()
+        ):
+            if isinstance(self._unsub_events, list):
+                for unsub in self._unsub_events:
+                    unsub()
+                self._unsub_events = []
+            self._end_time = None
+            return False
+        return True
 
     @property
     def is_setup(self) -> bool:
+        if (
+            isinstance(self._end_time, datetime)
+            and self._end_time >= datetime.now().astimezone()
+        ):
+            if isinstance(self._unsub_events, list):
+                for unsub in self._unsub_events:
+                    unsub()
+                self._unsub_events = []
+            self._end_time = None
         return self.hass and self._kmlock and self._call_action
+
+    @property
+    def end_time(self) -> datetime | None:
+        if not self._end_time:
+            return None
+        if (
+            isinstance(self._end_time, datetime)
+            and self._end_time >= datetime.now().astimezone()
+        ):
+            if isinstance(self._unsub_events, list):
+                for unsub in self._unsub_events:
+                    unsub()
+                self._unsub_events = []
+            self._end_time = None
+            return None
+        return self._end_time
+
+    @property
+    def remaining_seconds(self) -> int | None:
+        if not self._end_time:
+            return None
+        if (
+            isinstance(self._end_time, datetime)
+            and self._end_time >= datetime.now().astimezone()
+        ):
+            if isinstance(self._unsub_events, list):
+                for unsub in self._unsub_events:
+                    unsub()
+                self._unsub_events = []
+            self._end_time = None
+            return None
+        return (datetime.now().astimezone() - self._end_time).total_seconds()
 
 
 @callback
@@ -259,11 +329,12 @@ async def call_hass_service(
     domain: str,
     service: str,
     service_data: Mapping[str, Any] = None,
+    target: Mapping[str, Any] = None,
 ):
     """Call a hass service and log a failure on an error."""
     try:
         await hass.services.async_call(
-            domain, service, service_data=service_data, blocking=True
+            domain, service, service_data=service_data, target=target
         )
     except Exception as e:
         _LOGGER.error(

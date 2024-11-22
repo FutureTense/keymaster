@@ -1,4 +1,4 @@
-"""KeymasterLock class."""
+"""KeymasterLock class"""
 
 from __future__ import annotations
 
@@ -71,6 +71,7 @@ class KeymasterLock:
     autolock_min_night: int | None = None
     autolock_timer: KeymasterTimer | None = None
     retry_lock: bool = False
+    pending_retry_lock: bool = False
     parent_name: str | None = None
     parent_config_entry_id: str | None = None
     child_config_entry_ids: list = field(default_factory=list)
@@ -100,6 +101,7 @@ keymasterlock_type_lookup: Mapping[str, Any] = {
     "autolock_min_night": int,
     # "autolock_timer": KeymasterTimer,
     "retry_lock": bool,
+    "pending_retry_lock": bool,
     "parent_name": str,
     "parent_config_entry_id": str,
     "child_config_entry_ids": list,
