@@ -78,6 +78,7 @@ from .helpers import (
     Throttle,
     async_using_zwave_js,
     call_hass_service,
+    delete_code_slot_entities,
     dismiss_persistent_notification,
     send_manual_notification,
     send_persistent_notification,
@@ -1017,8 +1018,19 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
         old: KeymasterLock = self.kmlocks[new.keymaster_config_entry_id]
         await self._unsubscribe_listeners(old)
-        _LOGGER.debug(f"[update_lock] {new.lock_name}: old: {old}")
-        _LOGGER.debug(f"[update_lock] {new.lock_name}: new: {new}")
+        # _LOGGER.debug(f"[update_lock] {new.lock_name}: old: {old}")
+        # _LOGGER.debug(f"[update_lock] {new.lock_name}: new: {new}")
+        del_code_slots: list[int] = [
+            old.starting_code_slot + i for i in range(old.number_of_code_slots)
+        ]
+        for x in range(
+            new.starting_code_slot,
+            new.starting_code_slot + new.number_of_code_slots,
+        ):
+            try:
+                del_code_slots.remove(x)
+            except ValueError:
+                continue
         new.lock_state = old.lock_state
         new.door_state = old.door_state
         new.autolock_enabled = old.autolock_enabled
@@ -1057,6 +1069,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     new_dow.time_end = old_dow.time_end
         self.kmlocks[new.keymaster_config_entry_id] = new
         # TODO: If less code slots, delete entities
+        _LOGGER.debug(f"[update_lock] Code slot entities to delete: {del_code_slots}")
+        for x in del_code_slots:
+            await delete_code_slot_entities(
+                hass=self.hass,
+                keymaster_config_entry_id=new.keymaster_config_entry_id,
+                code_slot=x,
+            )
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_state()
         await self._update_listeners(self.kmlocks[new.keymaster_config_entry_id])

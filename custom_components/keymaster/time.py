@@ -41,8 +41,8 @@ async def async_setup_entry(
             ]
         ):
             dow_switch_entities: Mapping[str, str] = {
-                f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.time_start": f"Code Slot {x}: {dow} - Start Time",
-                f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.time_end": f"Code Slot {x}: {dow} - End Time",
+                f"time.code_slots:{x}.accesslimit_day_of_week:{i}.time_start": f"Code Slot {x}: {dow} - Start Time",
+                f"time.code_slots:{x}.accesslimit_day_of_week:{i}.time_end": f"Code Slot {x}: {dow} - End Time",
             }
             for key, name in dow_switch_entities.items():
                 entities.append(

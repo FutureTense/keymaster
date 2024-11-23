@@ -14,8 +14,9 @@ from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er, sun
 from homeassistant.helpers.event import async_call_later
+from homeassistant.util import slugify
 
-from .const import DEFAULT_AUTOLOCK_MIN_DAY, DEFAULT_AUTOLOCK_MIN_NIGHT
+from .const import DEFAULT_AUTOLOCK_MIN_DAY, DEFAULT_AUTOLOCK_MIN_NIGHT, DOMAIN
 
 if TYPE_CHECKING:
     from .lock import KeymasterLock
@@ -305,6 +306,80 @@ def async_using_zwave_js(
 #         except ServiceNotFound:
 #             return False
 #     return True
+
+
+async def delete_code_slot_entities(
+    hass: HomeAssistant, keymaster_config_entry_id: str, code_slot: int
+) -> None:
+    _LOGGER.debug(
+        f"[delete_code_slot_entities] Deleting code slot {code_slot} entities from config_entry_id: {keymaster_config_entry_id}"
+    )
+    entity_registry = er.async_get(hass)
+    # entities = er.async_entries_for_config_entry(
+    #     entity_registry, keymaster_config_entry_id
+    # )
+    # _LOGGER.debug(f"[delete_code_slot_entities] entities: {entities}")
+    properties: list = [
+        f"binary_sensor.code_slots:{code_slot}.active",
+        f"datetime.code_slots:{code_slot}.accesslimit_date_range_start",
+        f"datetime.code_slots:{code_slot}.accesslimit_date_range_end",
+        f"number.code_slots:{code_slot}.accesslimit_count",
+        f"switch.code_slots:{code_slot}.override_parent",
+        f"switch.code_slots:{code_slot}.enabled",
+        f"switch.code_slots:{code_slot}.notifications",
+        f"switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
+        f"switch.code_slots:{code_slot}.accesslimit_count_enabled",
+        f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+        f"text.code_slots:{code_slot}.name",
+        f"text.code_slots:{code_slot}.pin",
+    ]
+    for prop in properties:
+        entity_id: str | None = entity_registry.async_get_entity_id(
+            domain=prop.split(".")[0],
+            platform=DOMAIN,
+            unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
+        )
+        if entity_id:
+            try:
+                entity_registry.async_remove(entity_id)
+                _LOGGER.debug(
+                    f"[delete_code_slot_entities] Removed entity: {entity_id}"
+                )
+            except (KeyError, ValueError) as e:
+                _LOGGER.warning(
+                    f"Error removing entity: {entity_id}. {e.__class__.__qualname__}: {e}"
+                )
+        else:
+            _LOGGER.debug(f"[delete_code_slot_entities] No entity_id found for {prop}")
+
+    for dow in range(0, 7):
+        dow_prop: list = [
+            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.dow_enabled",
+            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.include_exclude",
+            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.limit_by_time",
+            f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.time_start",
+            f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.time_end",
+        ]
+        for prop in dow_prop:
+            entity_id: str | None = entity_registry.async_get_entity_id(
+                domain=prop.split(".")[0],
+                platform=DOMAIN,
+                unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
+            )
+            if entity_id:
+                try:
+                    entity_registry.async_remove(entity_id)
+                    _LOGGER.debug(
+                        f"[delete_code_slot_entities] Removed entity: {entity_id}"
+                    )
+                except (KeyError, ValueError) as e:
+                    _LOGGER.warning(
+                        f"Error removing entity: {entity_id}. {e.__class__.__qualname__}: {e}"
+                    )
+            else:
+                _LOGGER.debug(
+                    f"[delete_code_slot_entities] No entity_id found for {prop}"
+                )
 
 
 async def call_hass_service(
