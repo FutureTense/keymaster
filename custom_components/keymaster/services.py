@@ -1,4 +1,4 @@
-"""Services for keymaster."""
+"""Services for keymaster"""
 
 import logging
 
@@ -10,11 +10,11 @@ SET_USERCODE = "set_usercode"
 CLEAR_USERCODE = "clear_usercode"
 
 
-async def async_setup_services(hass: HomeAssistant) -> None:
+async def async_setup_services(_: HomeAssistant) -> None:
     pass
     # Button Press
     # async def _refresh_codes(service: ServiceCall) -> None:
-    #     """Refresh lock codes."""
+    #     """Refresh lock codes"""
     #     _LOGGER.debug("Refresh Codes service: %s", service)
     #     entity_id = service.data[ATTR_ENTITY_ID]
     #     instance_id = 1
@@ -33,7 +33,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     # Add code
     # async def _add_code(service: ServiceCall) -> None:
-    #     """Set a user code."""
+    #     """Set a user code"""
     #     _LOGGER.debug("Add Code service: %s", service)
     #     entity_id = service.data[ATTR_ENTITY_ID]
     #     code_slot = service.data[ATTR_CODE_SLOT]
@@ -55,7 +55,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     # # Clear code
     # async def _clear_code(service: ServiceCall) -> None:
-    #     """Clear a user code."""
+    #     """Clear a user code"""
     #     _LOGGER.debug("Clear Code service: %s", service)
     #     entity_id = service.data[ATTR_ENTITY_ID]
     #     code_slot = service.data[ATTR_CODE_SLOT]
@@ -75,7 +75,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     # Generate package files
     # def _generate_package(service: ServiceCall) -> None:
-    #     """Generate the package files."""
+    #     """Generate the package files"""
     #     _LOGGER.debug("DEBUG: %s", service)
     #     name = service.data[ATTR_NAME]
     #     generate_package_files(hass, name)
@@ -112,7 +112,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 # async def refresh_codes(  # pylint: disable-next=unused-argument
 #     hass: HomeAssistant, entity_id: str, instance_id: int = 1
 # ) -> None:
-#     """Refresh lock codes."""
+#     """Refresh lock codes"""
 #     try:
 #         config_entry = next(
 #             config_entry
@@ -135,7 +135,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 # async def add_code(
 #     hass: HomeAssistant, entity_id: str, code_slot: int, usercode: str
 # ) -> None:
-#     """Set a user code."""
+#     """Set a user code"""
 #     _LOGGER.debug("Attempting to call set_usercode...")
 
 #     servicedata = {
@@ -154,7 +154,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
 
 # async def clear_code(hass: HomeAssistant, entity_id: str, code_slot: int) -> None:
-#     """Clear the usercode from a code slot."""
+#     """Clear the usercode from a code slot"""
 #     _LOGGER.debug("Attempting to call clear_usercode...")
 
 #     if async_using_zwave_js(hass=hass, entity_id=entity_id):
@@ -171,7 +171,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
 
 # def generate_package_files(hass: HomeAssistant, name: str) -> None:
-#     """Generate the package files."""
+#     """Generate the package files"""
 #     config_entry = next(
 #         (
 #             hass.config_entries.async_get_entry(entry_id)

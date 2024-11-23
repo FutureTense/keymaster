@@ -1,4 +1,4 @@
-"""Helpers for keymaster."""
+"""Helpers for keymaster"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers import entity_registry as er, sun
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import slugify
@@ -21,7 +22,7 @@ from .const import DEFAULT_AUTOLOCK_MIN_DAY, DEFAULT_AUTOLOCK_MIN_NIGHT, DOMAIN
 if TYPE_CHECKING:
     from .lock import KeymasterLock
 
-zwave_js_supported = True
+ZWAVE_JS_SUPPORTED = True
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
@@ -60,7 +61,7 @@ class KeymasterTimer:
 
     async def start(self) -> bool:
         if not self.hass or not self._kmlock or not self._call_action:
-            _LOGGER.error(f"[KeymasterTimer] Cannot start timer as timer not setup")
+            _LOGGER.error("[KeymasterTimer] Cannot start timer as timer not setup")
             return False
 
         if isinstance(self._end_time, datetime) and isinstance(
@@ -85,7 +86,9 @@ class KeymasterTimer:
             ) * 60
         self._end_time = datetime.now().astimezone() + timedelta(seconds=delay)
         _LOGGER.debug(
-            f"[KeymasterTimer] Starting auto-lock timer for {int(delay)} seconds. Ending {self._end_time}"
+            "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
+            int(delay),
+            self._end_time,
         )
         self._unsub_events.append(
             async_call_later(hass=self.hass, delay=delay, action=self._call_action)
@@ -96,9 +99,9 @@ class KeymasterTimer:
 
     async def cancel(self, timer_elapsed: datetime = None) -> bool:
         if timer_elapsed:
-            _LOGGER.debug(f"[KeymasterTimer] Timer elapsed")
+            _LOGGER.debug("[KeymasterTimer] Timer elapsed")
         else:
-            _LOGGER.debug(f"[KeymasterTimer] Cancelling auto-lock timer")
+            _LOGGER.debug("[KeymasterTimer] Cancelling auto-lock timer")
         if isinstance(self._unsub_events, list):
             for unsub in self._unsub_events:
                 unsub()
@@ -174,9 +177,9 @@ def _async_using(
     kmlock: KeymasterLock | None,
     entity_id: str | None,
 ) -> bool:
-    """Base function for using_<zwave integration> logic."""
+    """Base function for using_<zwave integration> logic"""
     if not (kmlock or entity_id):
-        raise Exception("Missing arguments")
+        raise TypeError("Missing arguments")
     ent_reg = er.async_get(hass)
     if kmlock:
         entity = ent_reg.async_get(kmlock.lock_entity_id)
@@ -192,8 +195,8 @@ def async_using_zwave_js(
     kmlock: KeymasterLock | None = None,
     entity_id: str | None = None,
 ) -> bool:
-    """Returns whether the zwave_js integration is configured."""
-    return zwave_js_supported and _async_using(
+    """Returns whether the zwave_js integration is configured"""
+    return ZWAVE_JS_SUPPORTED and _async_using(
         hass=hass,
         domain=ZWAVE_JS_DOMAIN,
         kmlock=kmlock,
@@ -202,7 +205,7 @@ def async_using_zwave_js(
 
 
 # def get_code_slots_list(data: Mapping[str, int]) -> list[int]:
-#     """Get list of code slots."""
+#     """Get list of code slots"""
 #     return list(range(data[CONF_START], data[CONF_START] + data[CONF_SLOTS]))
 
 
@@ -214,7 +217,7 @@ def async_using_zwave_js(
 #     replacements_dict: Mapping[str, str],
 #     write_mode: str,
 # ) -> None:
-#     """Generate file output from input templates while replacing string references."""
+#     """Generate file output from input templates while replacing string references"""
 #     _LOGGER.debug("Starting generation of %s from %s", output_filename, input_filename)
 #     with open(os.path.join(input_path, input_filename), "r") as infile, open(
 #         os.path.join(output_path, output_filename), write_mode
@@ -227,7 +230,7 @@ def async_using_zwave_js(
 
 
 # def delete_lock_and_base_folder(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-#     """Delete packages folder for lock and base keymaster folder if empty."""
+#     """Delete packages folder for lock and base keymaster folder if empty"""
 #     base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
 #     kmlock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
 
@@ -237,7 +240,7 @@ def async_using_zwave_js(
 
 
 # def delete_folder(absolute_path: str, *relative_paths: str) -> None:
-#     """Recursively delete folder and all children files and folders (depth first)."""
+#     """Recursively delete folder and all children files and folders (depth first)"""
 #     path = os.path.join(absolute_path, *relative_paths)
 #     if os.path.isfile(path):
 #         os.remove(path)
@@ -283,14 +286,14 @@ def async_using_zwave_js(
 
 
 # def reload_package_platforms(hass: HomeAssistant) -> bool:
-#     """Reload package platforms to pick up any changes to package files."""
+#     """Reload package platforms to pick up any changes to package files"""
 #     return asyncio.run_coroutine_threadsafe(
 #         async_reload_package_platforms(hass), hass.loop
 #     ).result()
 
 
 # async def async_reload_package_platforms(hass: HomeAssistant) -> bool:
-#     """Reload package platforms to pick up any changes to package files."""
+#     """Reload package platforms to pick up any changes to package files"""
 #     for domain in [
 #         AUTO_DOMAIN,
 #         IN_BOOL_DOMAIN,
@@ -312,7 +315,9 @@ async def delete_code_slot_entities(
     hass: HomeAssistant, keymaster_config_entry_id: str, code_slot: int
 ) -> None:
     _LOGGER.debug(
-        f"[delete_code_slot_entities] Deleting code slot {code_slot} entities from config_entry_id: {keymaster_config_entry_id}"
+        "[delete_code_slot_entities] Deleting code slot %s entities from config_entry_id: %s",
+        code_slot,
+        keymaster_config_entry_id,
     )
     entity_registry = er.async_get(hass)
     # entities = er.async_entries_for_config_entry(
@@ -335,7 +340,7 @@ async def delete_code_slot_entities(
     ]
     for prop in properties:
         entity_id: str | None = entity_registry.async_get_entity_id(
-            domain=prop.split(".")[0],
+            domain=prop.split(".", maxsplit=1)[0],
             platform=DOMAIN,
             unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
         )
@@ -343,14 +348,17 @@ async def delete_code_slot_entities(
             try:
                 entity_registry.async_remove(entity_id)
                 _LOGGER.debug(
-                    f"[delete_code_slot_entities] Removed entity: {entity_id}"
+                    "[delete_code_slot_entities] Removed entity: %s", entity_id
                 )
             except (KeyError, ValueError) as e:
                 _LOGGER.warning(
-                    f"Error removing entity: {entity_id}. {e.__class__.__qualname__}: {e}"
+                    "Error removing entity: %s. %s: %s",
+                    entity_id,
+                    e.__class__.__qualname__,
+                    e,
                 )
         else:
-            _LOGGER.debug(f"[delete_code_slot_entities] No entity_id found for {prop}")
+            _LOGGER.debug("[delete_code_slot_entities] No entity_id found for %s", prop)
 
     for dow in range(0, 7):
         dow_prop: list = [
@@ -362,7 +370,7 @@ async def delete_code_slot_entities(
         ]
         for prop in dow_prop:
             entity_id: str | None = entity_registry.async_get_entity_id(
-                domain=prop.split(".")[0],
+                domain=prop.split(".", maxsplit=1)[0],
                 platform=DOMAIN,
                 unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
             )
@@ -370,15 +378,18 @@ async def delete_code_slot_entities(
                 try:
                     entity_registry.async_remove(entity_id)
                     _LOGGER.debug(
-                        f"[delete_code_slot_entities] Removed entity: {entity_id}"
+                        "[delete_code_slot_entities] Removed entity: %s", entity_id
                     )
                 except (KeyError, ValueError) as e:
                     _LOGGER.warning(
-                        f"Error removing entity: {entity_id}. {e.__class__.__qualname__}: {e}"
+                        "Error removing entity: %s. %s: %s",
+                        entity_id,
+                        e.__class__.__qualname__,
+                        e,
                     )
             else:
                 _LOGGER.debug(
-                    f"[delete_code_slot_entities] No entity_id found for {prop}"
+                    "[delete_code_slot_entities] No entity_id found for %s", prop
                 )
 
 
@@ -389,15 +400,21 @@ async def call_hass_service(
     service_data: Mapping[str, Any] = None,
     target: Mapping[str, Any] = None,
 ) -> None:
-    """Call a hass service and log a failure on an error."""
+    """Call a hass service and log a failure on an error"""
     _LOGGER.debug(
-        f"[call_hass_service] service: {domain}.{service}, target: {target}, service_data: {service_data}"
+        "[call_hass_service] service: %s.%s, target: %s, service_data: %s",
+        domain,
+        service,
+        target,
+        service_data,
     )
 
     try:
         await hass.services.async_call(
             domain, service, service_data=service_data, target=target
         )
+    except ServiceNotFound:
+        _LOGGER.warning("Action Not Found: %s.%s", domain, service)
     except Exception as e:
         _LOGGER.error(
             "Error calling %s.%s service call. %s: %s",
@@ -406,7 +423,6 @@ async def call_hass_service(
             str(e.__class__.__qualname__),
             str(e),
         )
-        # raise e
 
 
 async def send_manual_notification(
@@ -416,7 +432,11 @@ async def send_manual_notification(
     title: str = None,
 ) -> None:
     _LOGGER.debug(
-        f"[send_manual_notification] service: {SCRIPT_DOMAIN}.{service_name}, title: {title}, message: {message}"
+        "[send_manual_notification] service: %s.%s, title: %s, message: %s",
+        SCRIPT_DOMAIN,
+        service_name,
+        title,
+        message,
     )
     await call_hass_service(
         hass=hass,
@@ -430,7 +450,10 @@ async def send_persistent_notification(
     hass: HomeAssistant, message: str, title: str = None, notification_id: str = None
 ) -> None:
     _LOGGER.debug(
-        f"[send_persistent_notification] title: {title}, message: {message}, notification_id: {notification_id}"
+        "[send_persistent_notification] title: %s, message: %s, notification_id: %s",
+        title,
+        message,
+        notification_id,
     )
     persistent_notification.async_create(
         hass=hass, message=message, title=title, notification_id=notification_id
@@ -441,6 +464,6 @@ async def dismiss_persistent_notification(
     hass: HomeAssistant, notification_id: str
 ) -> None:
     _LOGGER.debug(
-        f"[dismiss_persistent_notification] notification_id: {notification_id}"
+        "[dismiss_persistent_notification] notification_id: %s", notification_id
     )
     persistent_notification.async_dismiss(hass=hass, notification_id=notification_id)

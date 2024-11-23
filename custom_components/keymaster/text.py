@@ -110,9 +110,11 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
     async def async_set_value(self, value: str) -> None:
         _LOGGER.debug(
-            f"[Text async_set_value] {self.name}: config_entry_id: {self._config_entry.entry_id}, value: {value}"
+            "[Text async_set_value] %s: config_entry_id: %s, value: %s",
+            self.name,
+            self._config_entry.entry_id,
+            value,
         )
-
         if self._property.endswith(".pin") and not (
             await self.coordinator.set_pin_on_lock(
                 config_entry_id=self._config_entry.entry_id,
@@ -121,13 +123,16 @@ class KeymasterText(KeymasterEntity, TextEntity):
             )
         ):
             return
-        elif (
+        if (
             self._property.endswith(".name")
             and self._kmlock.parent_name is not None
             and not self._kmlock.code_slots[self._code_slot].override_parent
         ):
             _LOGGER.debug(
-                f"[Text async_set_value] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
+                "[Text async_set_value] %s: "
+                "Child lock and code slot %s not set to override parent. Ignoring change",
+                self._kmlock.lock_name,
+                self._code_slot,
             )
             return
         if self._set_property_value(value):

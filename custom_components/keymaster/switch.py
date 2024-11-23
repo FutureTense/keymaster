@@ -1,4 +1,4 @@
-"""Switch for Keymaster"""
+"""Switch for keymaster"""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -19,7 +19,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Setup config entry."""
+    """Setup keymaster switches"""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
         config_entry.entry_id
@@ -137,6 +137,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         super().__init__(
             entity_description=entity_description,
         )
+        self._attr_is_on = False
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -208,14 +209,16 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         self._attr_is_on: bool = self._get_property_value()
         self.async_write_ha_state()
 
-    async def async_turn_on(self, **kwargs) -> None:
-        """Turn the entity on."""
+    async def async_turn_on(self, **_) -> None:
+        """Turn the entity on"""
 
         if self.is_on:
             return
 
         _LOGGER.debug(
-            f"[Switch async_turn_on] {self.name}: config_entry_id: {self._config_entry.entry_id}"
+            "[Switch async_turn_on] %s: config_entry_id: %s",
+            self.name,
+            self._config_entry.entry_id,
         )
 
         if self._set_property_value(True):
@@ -239,14 +242,16 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                 )
             await self.coordinator.async_refresh()
 
-    async def async_turn_off(self, **kwargs) -> None:
-        """Turn the entity off."""
+    async def async_turn_off(self, **_) -> None:
+        """Turn the entity off"""
 
         if not self.is_on:
             return
 
         _LOGGER.debug(
-            f"[Switch async_turn_off] {self.name}: config_entry_id: {self._config_entry.entry_id}"
+            "[Switch async_turn_off] %s: config_entry_id: %s",
+            self.name,
+            self._config_entry.entry_id,
         )
 
         if self._set_property_value(False):

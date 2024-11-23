@@ -1,4 +1,4 @@
-"""Constants for keymaster."""
+"""Constants for keymaster"""
 
 from homeassistant.components.lock.const import LockState
 from homeassistant.const import Platform
@@ -17,7 +17,6 @@ PLATFORMS: list = [
 ]
 THROTTLE_SECONDS: int = 5
 SYNC_STATUS_THRESHOLD: int = 15
-# INTEGRATION = "zwave_integration"
 
 # hass.data attributes
 CHILD_LOCKS = "child_locks"
@@ -52,7 +51,6 @@ CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID = "alarm_type_or_access_control_enti
 CONF_CHILD_LOCKS = "child_locks"
 CONF_CHILD_LOCKS_FILE = "child_locks_file"
 CONF_ENTITY_ID = "entity_id"
-# CONF_GENERATE = "generate_package"
 CONF_HIDE_PINS = "hide_pins"
 CONF_LOCK_ENTITY_ID = "lock_entity_id"
 CONF_LOCK_NAME = "lockname"
@@ -67,7 +65,6 @@ CONF_START = "start_from"
 DEFAULT_CODE_SLOTS = 10
 DEFAULT_PACKAGES_PATH = "packages/keymaster/"
 DEFAULT_START = 1
-# DEFAULT_GENERATE = True
 DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
 DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"
 DEFAULT_ALARM_TYPE_SENSOR = "sensor.fake"
@@ -138,7 +135,6 @@ LOCK_STATE_MAP = {
     },
 }
 
-# SERVICE_GENERATE_PACKAGE = "generate_package"
 SERVICE_ADD_CODE = "add_code"
 SERVICE_CLEAR_CODE = "clear_code"
 SERVICE_REFRESH_CODES = "refresh_codes"

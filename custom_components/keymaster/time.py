@@ -135,9 +135,11 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
 
     async def async_set_value(self, value: dt_time) -> None:
         _LOGGER.debug(
-            f"[Time async_set_value] {self.name}: config_entry_id: {self._config_entry.entry_id}, value: {value}"
+            "[Time async_set_value] %s: config_entry_id: %s, value: %s",
+            self.name,
+            self._config_entry.entry_id,
+            value,
         )
-
         if (
             (
                 self._property.endswith(".time_start")
@@ -147,73 +149,11 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             and not self._kmlock.code_slots[self._code_slot].override_parent
         ):
             _LOGGER.debug(
-                f"[Time async_set_value] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
+                "[Time async_set_value] %s: Child lock and code slot %s not set to override parent. Ignoring change",
+                self._kmlock.lock_name,
+                self._code_slot,
             )
             return
         if self._set_property_value(value):
             self._attr_native_value = value
             await self.coordinator.async_refresh()
-
-
-#   sun_start_date_LOCKNAME_TEMPLATENUM:
-#     name: "Start"
-#     has_time: true
-#     has_date: false
-#   sun_end_date_LOCKNAME_TEMPLATENUM:
-#     name: "End"
-#     has_time: true
-#     has_date: false
-
-#   mon_start_date_LOCKNAME_TEMPLATENUM:
-#     name: "Start"
-#     has_time: true
-#     has_date: false
-#   mon_end_date_LOCKNAME_TEMPLATENUM:
-#     name: "End"
-#     has_time: true
-#     has_date: false
-
-#   tue_start_date_LOCKNAME_TEMPLATENUM:
-#     name: "Start"
-#     has_time: true
-#     has_date: false
-#   tue_end_date_LOCKNAME_TEMPLATENUM:
-#     name: "End"
-#     has_time: true
-#     has_date: false
-
-#   wed_start_date_LOCKNAME_TEMPLATENUM:
-#     name: "Start"
-#     has_time: true
-#     has_date: false
-#   wed_end_date_LOCKNAME_TEMPLATENUM:
-#     name: "End"
-#     has_time: true
-#     has_date: false
-
-#   thu_start_date_LOCKNAME_TEMPLATENUM:
-#     name: "Start"
-#     has_time: true
-#     has_date: false
-#   thu_end_date_LOCKNAME_TEMPLATENUM:
-#     name: "End"
-#     has_time: true
-#     has_date: false
-
-#   fri_start_date_LOCKNAME_TEMPLATENUM:
-#     name: "Start"
-#     has_time: true
-#     has_date: false
-#   fri_end_date_LOCKNAME_TEMPLATENUM:
-#     name: "End"
-#     has_time: true
-#     has_date: false
-
-#   sat_start_date_LOCKNAME_TEMPLATENUM:
-#     name: "Start"
-#     has_time: true
-#     has_date: false
-#   sat_end_date_LOCKNAME_TEMPLATENUM:
-#     name: "End"
-#     has_time: true
-#     has_date: false

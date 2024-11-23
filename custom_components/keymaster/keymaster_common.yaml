@@ -105,17 +105,3 @@ automation:
       - service: script.keymaster_LOCKNAME_reset_lock
       - service: input_boolean.turn_off
         entity_id: input_boolean.LOCKNAME_reset_lock
-
-  - alias: keymaster_LOCKNAME_disable_auto_lock
-    id: keymaster_LOCKNAME_disable_auto_lock
-    trigger:
-      entity_id: input_boolean.keymaster_LOCKNAME_autolock
-      platform: state
-      to: "off"
-    action:
-      - service: timer.cancel
-        entity_id:
-          - timer.keymaster_LOCKNAME_autolock
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.keymaster_LOCKNAME_retry

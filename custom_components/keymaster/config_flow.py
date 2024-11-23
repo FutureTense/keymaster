@@ -49,7 +49,7 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
-    async def _get_unique_name_error(self, user_input) -> Mapping[str, str]:
+    async def get_unique_name_error(self, user_input) -> Mapping[str, str]:
         """Check if name is unique, returning dictionary error if so"""
         # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
@@ -84,13 +84,13 @@ class KeymasterOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize"""
-        self._config_entry = config_entry
+        self.config_entry = config_entry
 
-    async def _get_unique_name_error(self, user_input) -> Mapping[str, str]:
+    async def get_unique_name_error(self, user_input) -> Mapping[str, str]:
         """Check if name is unique, returning dictionary error if so"""
         # If lock name has changed, make sure new name isn't already being used
         # otherwise show an error
-        if self._config_entry.unique_id != user_input[CONF_LOCK_NAME]:
+        if self.config_entry.unique_id != user_input[CONF_LOCK_NAME]:
             for entry in self.hass.config_entries.async_entries(DOMAIN):
                 if entry.unique_id == user_input[CONF_LOCK_NAME]:
                     return {CONF_LOCK_NAME: "same_name"}
@@ -105,8 +105,8 @@ class KeymasterOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             title="",
             user_input=user_input,
-            defaults=self._config_entry.data,
-            entry_id=self._config_entry.entry_id,
+            defaults=self.config_entry.data,
+            entry_id=self.config_entry.entry_id,
         )
 
 
@@ -222,26 +222,7 @@ def _get_schema(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
         },
-        # extra=ALLOW_EXTRA,
     )
-
-
-# def _show_config_form(
-#     cls: KeymasterFlowHandler | KeymasterOptionsFlow,
-#     step_id: str,
-#     user_input: Mapping[str, Any],
-#     errors: Mapping[str, str],
-#     description_placeholders: Mapping[str, str],
-#     defaults: Mapping[str, Any] = None,
-#     entry_id: str = None,
-# ) -> Mapping[str, Any]:
-#     """Show the configuration form to edit location data"""
-#     return cls.async_show_form(
-#         step_id=step_id,
-#         data_schema=_get_schema(cls.hass, user_input, defaults, entry_id),
-#         errors=errors,
-#         description_placeholders=description_placeholders,
-#     )
 
 
 async def _start_config_flow(
@@ -257,20 +238,13 @@ async def _start_config_flow(
     description_placeholders = {}
 
     if user_input is not None:
-        # user_input[CONF_GENERATE] = DEFAULT_GENERATE
         user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME].lower())
 
         # Convert (none) to None
         if user_input[CONF_PARENT] == "(none)":
             user_input[CONF_PARENT] = None
 
-        errors.update(await cls._get_unique_name_error(user_input))
-        # Regular flow has an async function, options flow has a sync function
-        # so we need to handle them conditionally
-        # if asyncio.iscoroutinefunction(cls._get_unique_name_error):
-        #     errors.update(await cls._get_unique_name_error(user_input))
-        # else:
-        #     errors.update(cls._get_unique_name_error(user_input))
+        errors.update(await cls.get_unique_name_error(user_input))
 
         # Validate that package path is relative
         # if os.path.isabs(user_input[CONF_PATH]):
@@ -281,30 +255,10 @@ async def _start_config_flow(
             if step_id == "user":
                 return cls.async_create_entry(title=title, data=user_input)
             cls.hass.config_entries.async_update_entry(
-                cls._config_entry, data=user_input
+                cls.config_entry, data=user_input
             )
             await cls.hass.config_entries.async_reload(entry_id)
             return cls.async_create_entry(title="", data={})
-
-        # return _show_config_form(
-        #     cls,
-        #     step_id,
-        #     user_input,
-        #     errors,
-        #     description_placeholders,
-        #     defaults,
-        #     entry_id,
-        # )
-
-    # return _show_config_form(
-    #     cls=cls,
-    #     step_id=step_id,
-    #     user_input=user_input,
-    #     errors=errors,
-    #     description_placeholders=description_placeholders,
-    #     defaults=defaults,
-    #     entry_id=entry_id,
-    # )
 
     return cls.async_show_form(
         step_id=step_id,

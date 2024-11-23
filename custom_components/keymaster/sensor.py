@@ -1,4 +1,4 @@
-"""Sensor for keymaster."""
+"""Sensor for keymaster"""
 
 from dataclasses import dataclass
 import logging
