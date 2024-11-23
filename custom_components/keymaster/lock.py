@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, time as dt_time
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 from zwave_js_server.model.node import Node as ZwaveJSNode
 
@@ -47,7 +47,7 @@ class KeymasterCodeSlot:
 
 @dataclass
 class KeymasterLock:
-    """Class to represent a keymaster lock."""
+    """Class to represent a keymaster lock"""
 
     lock_name: str
     lock_entity_id: str

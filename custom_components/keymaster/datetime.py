@@ -117,7 +117,10 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
 
     async def async_set_value(self, value: datetime) -> None:
         _LOGGER.debug(
-            f"[DateTime async_set_value] {self.name}: config_entry_id: {self._config_entry.entry_id}, value: {value}"
+            "[DateTime async_set_value] %s: config_entry_id: %s, value: %s",
+            self.name,
+            self._config_entry.entry_id,
+            value,
         )
 
         if (
@@ -126,19 +129,12 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
             and not self._kmlock.code_slots[self._code_slot].override_parent
         ):
             _LOGGER.debug(
-                f"[DateTime async_set_value] {self._kmlock.lock_name}: Child lock and code slot {self._code_slot} not set to override parent. Ignoring change"
+                "[DateTime async_set_value] %s: "
+                "Child lock and code slot %s not set to override parent. Ignoring change",
+                self._kmlock.lock_name,
+                self._code_slot,
             )
             return
         if self._set_property_value(value):
             self._attr_native_value = value
             await self.coordinator.async_refresh()
-
-
-#   end_date_LOCKNAME_TEMPLATENUM:
-#     name: "End"
-#     has_time: true
-#     has_date: true
-#   start_date_LOCKNAME_TEMPLATENUM:
-#     name: "Start"
-#     has_time: true
-#     has_date: true

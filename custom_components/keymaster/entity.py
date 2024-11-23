@@ -101,7 +101,10 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         else:
             setattr(obj, final_prop, value)
         _LOGGER.debug(
-            f"[set_property_value] property: {self._property}, final_prop: {final_prop}, value: {value}"
+            "[set_property_value] property: %s, final_prop: %s, value: %s",
+            self._property,
+            final_prop,
+            value,
         )
         return True
 
