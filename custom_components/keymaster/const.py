@@ -1,12 +1,13 @@
 """Constants for keymaster."""
 
 from homeassistant.components.lock.const import LockState
+from homeassistant.const import Platform
 
 DOMAIN = "keymaster"
 VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
-PLATFORMS = ["binary_sensor", "sensor"]
-INTEGRATION = "zwave_integration"
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.TEXT]
+# INTEGRATION = "zwave_integration"
 
 # hass.data attributes
 CHILD_LOCKS = "child_locks"
@@ -46,6 +47,7 @@ CONF_HIDE_PINS = "hide_pins"
 CONF_LOCK_ENTITY_ID = "lock_entity_id"
 CONF_LOCK_NAME = "lockname"
 CONF_PARENT = "parent"
+CONF_PARENT_ENTRY_ID = "parent_entry_id"
 CONF_PATH = "packages_path"
 CONF_SENSOR_NAME = "sensorname"
 CONF_SLOTS = "slots"
@@ -123,3 +125,8 @@ LOCK_STATE_MAP = {
         LockState.UNLOCKED: 4,
     },
 }
+
+SERVICE_GENERATE_PACKAGE = "generate_package"
+SERVICE_ADD_CODE = "add_code"
+SERVICE_CLEAR_CODE = "clear_code"
+SERVICE_REFRESH_CODES = "refresh_codes"

@@ -1,155 +1,111 @@
 """Sensor for keymaster."""
 
+from dataclasses import dataclass
 import logging
-from typing import List
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
+    BinarySensorEntityDescription,
 )
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
-from homeassistant.util import slugify
 
-from .const import CHILD_LOCKS, DOMAIN, PRIMARY_LOCK
-from .helpers import async_update_zwave_js_nodes_and_devices, async_using_zwave_js
-from .lock import KeymasterLock
+from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from .entity import KeymasterEntity, KeymasterEntityDescription
+from .helpers import async_using_zwave_js
 
 try:
-    from homeassistant.components.zwave_js.const import (
-        DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
-        DOMAIN as ZWAVE_JS_DOMAIN,
-    )
+    from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 except (ModuleNotFoundError, ImportError):
     pass
 
 _LOGGER = logging.getLogger(__name__)
-ENTITY_NAME = "Network"
-
-
-def generate_binary_sensor_name(lock_name: str) -> str:
-    """Generate unique ID for network ready sensor."""
-    return f"{lock_name}: {ENTITY_NAME}"
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Setup config entry."""
-    primary_lock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks = hass.data[DOMAIN][config_entry.entry_id][CHILD_LOCKS]
-    if async_using_zwave_js(lock=primary_lock):
-        entity = ZwaveJSNetworkReadySensor(primary_lock, child_locks)
+    coordinator = hass.data[DOMAIN][COORDINATOR]
+    kmlock = await coordinator.get_lock_by_config_entry_id(config_entry.entry_id)
+    entities = []
+    if async_using_zwave_js(hass=hass, kmlock=kmlock):
+        entities.append(
+            KeymasterBinarySensor(
+                entity_description=KeymasterBinarySensorEntityDescription(
+                    key="binary_sensor.connected",
+                    name="Network",
+                    device_class=BinarySensorDeviceClass.CONNECTIVITY,
+                    entity_registry_enabled_default=True,
+                    hass=hass,
+                    config_entry=config_entry,
+                    coordinator=coordinator,
+                ),
+            )
+        )
+        for x in range(
+            config_entry.data[CONF_START],
+            config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+        ):
+            entities.append(
+                KeymasterBinarySensor(
+                    entity_description=KeymasterBinarySensorEntityDescription(
+                        key=f"binary_sensor.code_slots:{x}.active",
+                        name=f"Code Slot {x} Active",
+                        entity_registry_enabled_default=True,
+                        hass=hass,
+                        config_entry=config_entry,
+                        coordinator=coordinator,
+                    )
+                )
+            )
     else:
         _LOGGER.error("Z-Wave integration not found")
         raise PlatformNotReady
 
-    async_add_entities([entity], True)
+    async_add_entities(entities, True)
     return True
 
 
-class BaseNetworkReadySensor(BinarySensorEntity):
-    """Base binary sensor to indicate whether or not Z-Wave network is ready."""
+@dataclass(kw_only=True)
+class KeymasterBinarySensorEntityDescription(
+    KeymasterEntityDescription, BinarySensorEntityDescription
+):
+    pass
+
+
+class KeymasterBinarySensor(KeymasterEntity, BinarySensorEntity):
 
     def __init__(
         self,
-        primary_lock: KeymasterLock,
-        child_locks: List[KeymasterLock],
-        integration_name: str,
+        entity_description: KeymasterBinarySensorEntityDescription,
     ) -> None:
-        """Initialize sensor."""
-        self.primary_lock = primary_lock
-        self.child_locks = child_locks
-        self.integration_name = integration_name
-
+        """Initialize binary sensor."""
+        super().__init__(
+            entity_description=entity_description,
+        )
         self._attr_is_on = False
-        self._attr_name = generate_binary_sensor_name(self.primary_lock.lock_name)
-        self._attr_unique_id = slugify(self._attr_name)
-        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-        self._attr_should_poll = False
+        self._attr_available = True
 
     @callback
-    def async_set_is_on_property(
-        self, value_to_set: bool, write_state: bool = True
-    ) -> None:
-        """Update state."""
-        # Return immediately if we are not changing state
-        if value_to_set == self._attr_is_on:
-            return
-
-        if value_to_set:
-            _LOGGER.debug("Connected to %s network", self.integration_name)
-        else:
-            _LOGGER.debug("Disconnected from %s network", self.integration_name)
-
-        self._attr_is_on = value_to_set
-        if write_state:
-            self.async_write_ha_state()
+    def _handle_coordinator_update(self) -> None:
+        # _LOGGER.debug(f"[Binary Sensor handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
+        self._attr_is_on = self._get_property_value()
+        self.async_write_ha_state()
 
 
-class ZwaveJSNetworkReadySensor(BaseNetworkReadySensor):
-    """Binary sensor to indicate whether or not `zwave_js` network is ready."""
-
-    def __init__(
-        self, primary_lock: KeymasterLock, child_locks: List[KeymasterLock]
-    ) -> None:
-        """Initialize sensor."""
-        super().__init__(primary_lock, child_locks, ZWAVE_JS_DOMAIN)
-        self.lock_config_entry_id = None
-        self._lock_found = True
-        self.ent_reg = None
-        self._attr_should_poll = True
-
-    async def async_update(self) -> None:
-        """Update sensor."""
-        if not self.ent_reg:
-            self.ent_reg = async_get_entity_registry(self.hass)
-
-        if (
-            not self.lock_config_entry_id
-            or not self.hass.config_entries.async_get_entry(self.lock_config_entry_id)
-        ):
-            entity_id = self.primary_lock.lock_entity_id
-            lock_ent_reg_entry = self.ent_reg.async_get(entity_id)
-
-            if not lock_ent_reg_entry:
-                if self._lock_found:
-                    self._lock_found = False
-                    _LOGGER.warning("Can't find your lock %s.", entity_id)
-                return
-
-            self.lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-
-            if not self._lock_found:
-                _LOGGER.info("Found your lock %s", entity_id)
-                self._lock_found = True
-
-        try:
-            zwave_entry = self.hass.config_entries.async_get_entry(
-                self.lock_config_entry_id
-            )
-            client = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
-        except:
-            _LOGGER.exception("Can't access Z-Wave JS client.")
-            self._attr_is_on = False
-            return
-
-        network_ready = bool(
-            client.connected and client.driver and client.driver.controller
-        )
-
-        # If network_ready and self._attr_is_on are both true or both false, we don't need
-        # to do anything since there is nothing to update.
-        if not network_ready ^ self.is_on:
-            return
-
-        self.async_set_is_on_property(network_ready, False)
-
-        # If we just turned the sensor on, we need to get the latest lock
-        # nodes and devices
-        if self.is_on:
-            await async_update_zwave_js_nodes_and_devices(
-                self.hass,
-                self.lock_config_entry_id,
-                self.primary_lock,
-                self.child_locks,
-            )
+# Not going to use
+#       pin_synched_LOCKNAME_TEMPLATENUM:
+#         friendly_name: "PIN synchronized with lock"
+#         unique_id: "binary_sensor.pin_synched_LOCKNAME_TEMPLATENUM"
+#         value_template: >
+#           {% set lockpin = states('sensor.LOCKNAME_code_slot_TEMPLATENUM').strip()  %}
+#           {% set localpin = states('input_text.LOCKNAME_pin_TEMPLATENUM').strip()  %}
+#           {% set pin_active = is_state('binary_sensor.active_LOCKNAME_TEMPLATENUM', 'on')  %}
+#           {% if lockpin == "0000" %}
+#           {%   set lockpin = "" %}
+#           {% endif %}
+#           {% if pin_active %}
+#             {{ localpin == lockpin }}
+#           {% else %}
+#             {{ lockpin == "" }}
+#           {% endif %}
