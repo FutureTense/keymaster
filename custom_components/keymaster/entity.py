@@ -13,7 +13,7 @@ from .const import DOMAIN
 from .coordinator import KeymasterCoordinator
 from .lock import KeymasterLock
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 # Naming convention for EntityDescription key (Property) for all entities:
 # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
@@ -44,7 +44,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
             f"{self._config_entry.entry_id}_{slugify(self._property)}"
         )
         # _LOGGER.debug(f"[Entity init] self._property: {self._property}, unique_id: {self.unique_id}")
-        if "code_slots" in self._property:
+        if ".code_slots" in self._property:
             self._code_slot: None | int = self._get_code_slots_num()
         if "accesslimit_day_of_week" in self._property:
             self._day_of_week_num: None | int = self._get_day_of_week_num()
@@ -52,9 +52,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self._attr_device_info: Mapping[str, Any] = {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
         }
-        _LOGGER.debug(
-            f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}"
-        )
+        # _LOGGER.debug(f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}")
         super().__init__(self.coordinator, self._attr_unique_id)
 
     @property
@@ -102,10 +100,16 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
             getattr(obj, attr)[int(num)] = value
         else:
             setattr(obj, final_prop, value)
+        _LOGGER.debug(
+            "[set_property_value] property: %s, final_prop: %s, value: %s",
+            self._property,
+            final_prop,
+            value,
+        )
         return True
 
     def _get_code_slots_num(self) -> None | int:
-        if "code_slots" not in self._property:
+        if ".code_slots" not in self._property:
             return None
         slots: list[str] = self._property.split(".")
         for slot in slots:
