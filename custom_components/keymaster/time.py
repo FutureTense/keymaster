@@ -31,13 +31,13 @@ async def async_setup_entry(
     ):
         for i, dow in enumerate(
             [
-                "Sunday",
                 "Monday",
                 "Tuesday",
                 "Wednesday",
                 "Thursday",
                 "Friday",
                 "Saturday",
+                "Sunday",
             ]
         ):
             dow_switch_entities: Mapping[str, str] = {
