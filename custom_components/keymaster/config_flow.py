@@ -20,7 +20,6 @@ from .const import (
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PARENT,
-    CONF_PATH,
     CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
@@ -29,7 +28,6 @@ from .const import (
     DEFAULT_CODE_SLOTS,
     DEFAULT_DOOR_SENSOR,
     DEFAULT_HIDE_PINS,
-    DEFAULT_PACKAGES_PATH,
     DEFAULT_START,
     DOMAIN,
 )
@@ -40,12 +38,11 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for keymaster"""
 
-    VERSION = 2
+    VERSION = 3
     DEFAULTS: Mapping[str, Any] = {
         CONF_SLOTS: DEFAULT_CODE_SLOTS,
         CONF_START: DEFAULT_START,
         CONF_SENSOR_NAME: DEFAULT_DOOR_SENSOR,
-        CONF_PATH: DEFAULT_PACKAGES_PATH,
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
@@ -215,9 +212,6 @@ def _get_schema(
                     extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
                 )
             ),
-            # vol.Required(
-            #     CONF_PATH, default=_get_default(CONF_PATH, DEFAULT_PACKAGES_PATH)
-            # ): str,
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
@@ -245,10 +239,6 @@ async def _start_config_flow(
             user_input[CONF_PARENT] = None
 
         errors.update(await cls.get_unique_name_error(user_input))
-
-        # Validate that package path is relative
-        # if os.path.isabs(user_input[CONF_PATH]):
-        #     errors[CONF_PATH] = "invalid_path"
 
         # Update options if no errors
         if not errors:

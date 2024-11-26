@@ -35,6 +35,7 @@ from .const import (
 )
 from .coordinator import KeymasterCoordinator
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
+from .migrate import migrate_2to3
 from .services import async_setup_services
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -46,16 +47,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     hass.data.setdefault(DOMAIN, {})
 
     updated_config = config_entry.data.copy()
-
-    # If CONF_PATH is absolute, make it relative. This can be removed in the future,
-    # it is only needed for entries that are being migrated from using the old absolute
-    # path
-    # config_path = hass.config.path()
-    # if config_entry.data[CONF_PATH].startswith(config_path):
-    #     num_chars_config_path = len(config_path)
-    #     updated_config[CONF_PATH] = updated_config[CONF_PATH][num_chars_config_path:]
-    #     # Remove leading slashes
-    #     updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
 
     if "parent" not in config_entry.data.keys():
         updated_config[CONF_PARENT] = None
@@ -153,9 +144,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     try:
         await coordinator.add_lock(kmlock=kmlock)
     except asyncio.exceptions.CancelledError as e:
-        _LOGGER.error(
-            "Timeout on add_lock. %s: %s", str(e.__class__.__qualname__), str(e)
-        )
+        _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
@@ -175,18 +164,6 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     """Handle removal of an entry"""
     lockname: str = config_entry.data.get(CONF_LOCK_NAME)
     _LOGGER.info("Unloading %s", lockname)
-    # notification_id: str = f"{DOMAIN}_{lockname}_unload"
-    # await send_persistent_notification(
-    #     hass=hass,
-    #     message=(
-    #         f"Removing `{lockname}` and all of the files that were generated for "
-    #         "it. This may take some time so don't panic. This message will "
-    #         "automatically clear when removal is complete."
-    #     ),
-    #     title=f"{DOMAIN.title()} - Removing `{lockname}`",
-    #     notification_id=notification_id,
-    # )
-
     unload_ok: bool = all(
         await asyncio.gather(
             *[
@@ -198,13 +175,6 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
     if unload_ok:
         coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-        # Remove all package files and the base folder if needed
-        # await hass.async_add_executor_job(
-        #     delete_lock_and_base_folder, hass, config_entry
-        # )
-
-        # await async_reload_package_platforms(hass)
-
         await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id)
 
         if len(coordinator.data) <= 1:
@@ -217,7 +187,6 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
                 delay=30,
                 action=functools.partial(delete_coordinator, hass),
             )
-    # await dismiss_persistent_notification(hass=hass, notification_id=notification_id)
     return unload_ok
 
 
@@ -232,6 +201,13 @@ async def delete_coordinator(hass: HomeAssistant, _: datetime):
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Migrate an old config entry"""
     version = config_entry.version
+
+    # 2 -> 3: Migrate to integrated functions
+    if version == 2:
+        _LOGGER.debug("Migrating from config version %s", version)
+        if not await migrate_2to3(hass=hass, config_entry=config_entry):
+            return False
+        _LOGGER.debug("Migration to version %s complete", config_entry.version)
 
     # 1 -> 2: Migrate to new keys
     if version == 1:
