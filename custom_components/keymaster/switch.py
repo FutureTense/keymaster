@@ -85,13 +85,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 )
             for i, dow in enumerate(
                 [
-                    "Sunday",
                     "Monday",
                     "Tuesday",
                     "Wednesday",
                     "Thursday",
                     "Friday",
                     "Saturday",
+                    "Sunday",
                 ]
             ):
                 dow_switch_entities: Mapping[str, str] = {
