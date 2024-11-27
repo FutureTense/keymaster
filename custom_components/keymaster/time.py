@@ -96,9 +96,9 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             self.async_write_ha_state()
             return
 
-        if ".code_slots" in self._property and (
-            self._code_slot not in self._kmlock.code_slots
-            or not self._kmlock.code_slots[self._code_slot].enabled
+        if (
+            ".code_slots" in self._property
+            and self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
