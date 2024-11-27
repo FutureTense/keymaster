@@ -110,19 +110,29 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
     async def async_set_value(self, value: str) -> None:
         _LOGGER.debug(
-            "[Text async_set_value] %s: config_entry_id: %s, value: %s",
+            "[Text async_set_value] %s: value: %s",
             self.name,
-            self._config_entry.entry_id,
             value,
         )
-        if self._property.endswith(".pin") and not (
-            await self.coordinator.set_pin_on_lock(
-                config_entry_id=self._config_entry.entry_id,
-                code_slot=self._code_slot,
-                pin=value,
-            )
-        ):
-            return
+        if self._property.endswith(".pin"):
+            if not value.isdigit() or len(value) < 4:
+                return
+
+            if value and not (
+                await self.coordinator.set_pin_on_lock(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot=self._code_slot,
+                    pin=value,
+                )
+            ):
+                return
+            if not (
+                await self.coordinator.clear_pin_from_lock(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot=self._code_slot,
+                )
+            ):
+                return
         if (
             self._property.endswith(".name")
             and self._kmlock.parent_name is not None
