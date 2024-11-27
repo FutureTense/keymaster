@@ -8,7 +8,14 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 
-from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from .const import (
+    CONF_SENSOR_NAME,
+    CONF_SLOTS,
+    CONF_START,
+    COORDINATOR,
+    DEFAULT_DOOR_SENSOR,
+    DOMAIN,
+)
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .helpers import async_using_zwave_js
@@ -28,9 +35,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         lock_switch_entities: Mapping[str, str] = {
             "switch.autolock_enabled": "Auto Lock",
             "switch.lock_notifications": "Lock Notifications",
-            "switch.door_notifications": "Door Notifications",
-            "switch.retry_lock": "Retry Lock",
         }
+        if config_entry.data.get(CONF_SENSOR_NAME) not in (None, DEFAULT_DOOR_SENSOR):
+            lock_switch_entities.update(
+                {
+                    "switch.door_notifications": "Door Notifications",
+                    "switch.retry_lock": "Retry Lock",
+                }
+            )
         for key, name in lock_switch_entities.items():
             entities.append(
                 KeymasterSwitch(
