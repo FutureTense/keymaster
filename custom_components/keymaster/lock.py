@@ -11,6 +11,8 @@ from zwave_js_server.model.node import Node as ZwaveJSNode
 
 from homeassistant.helpers.device_registry import DeviceEntry
 
+from .const import Synced
+
 if TYPE_CHECKING:
     from .helpers import KeymasterTimer
 
@@ -34,6 +36,7 @@ class KeymasterCodeSlot:
     name: str | None = None
     pin: str | None = None
     active: bool = True
+    synced: Synced = Synced.DISCONNECTED
     override_parent: bool = False
     notifications: bool = False
     accesslimit_count_enabled: bool = False
@@ -121,6 +124,7 @@ keymasterlock_type_lookup: Mapping[str, Any] = {
     "name": str,
     "pin": str,
     "active": bool,
+    "synced": str,
     "override_parent": bool,
     "notifications": bool,
     "accesslimit_count_enabled": bool,

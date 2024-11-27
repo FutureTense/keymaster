@@ -8,7 +8,7 @@ from homeassistant.components.sensor import SensorEntity, SensorEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
-from .const import COORDINATOR, DOMAIN
+from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .lock import KeymasterLock
@@ -45,6 +45,23 @@ async def async_setup_entry(
                 entity_description=KeymasterSensorEntityDescription(
                     key="sensor.parent_name",
                     name="Parent Lock",
+                    entity_registry_enabled_default=True,
+                    hass=hass,
+                    config_entry=config_entry,
+                    coordinator=coordinator,
+                ),
+            )
+        )
+
+    for x in range(
+        config_entry.data[CONF_START],
+        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+    ):
+        entities.append(
+            KeymasterSensor(
+                entity_description=KeymasterSensorEntityDescription(
+                    key=f"sensor.code_slots:{x}.synced",
+                    name=f"Code Slot {x}: Sync Status",
                     entity_registry_enabled_default=True,
                     hass=hass,
                     config_entry=config_entry,

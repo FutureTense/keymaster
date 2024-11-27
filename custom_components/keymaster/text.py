@@ -115,25 +115,20 @@ class KeymasterText(KeymasterEntity, TextEntity):
             value,
         )
         if self._property.endswith(".pin"):
-            if not value.isdigit() or len(value) < 4:
-                return
-
-            if value and not (
+            if value.isdigit() and len(value) >= 4:
                 await self.coordinator.set_pin_on_lock(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot=self._code_slot,
                     pin=value,
                 )
-            ):
-                return
-            if not (
+            elif not value:
                 await self.coordinator.clear_pin_from_lock(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot=self._code_slot,
                 )
-            ):
+            else:
                 return
-        if (
+        elif (
             self._property.endswith(".name")
             and self._kmlock.parent_name is not None
             and not self._kmlock.code_slots[self._code_slot].override_parent
