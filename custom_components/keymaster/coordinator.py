@@ -1032,22 +1032,28 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     else:
                         kmlock.door_state = door_state
 
-    async def add_lock(self, kmlock: KeymasterLock) -> None:
+    async def add_lock(self, kmlock: KeymasterLock, update: bool = False) -> None:
         await self._initial_setup_done_event.wait()
-        _LOGGER.debug("[add_lock] %s", kmlock.lock_name)
         if kmlock.keymaster_config_entry_id in self.kmlocks:
-            if self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete:
+            if update or self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete:
+                if self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete:
+                    _LOGGER.debug(
+                        "[add_lock] %s: Appears to be a reload, updating lock",
+                        kmlock.lock_name,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "[add_lock] %s: Lock already exists, updating lock",
+                        kmlock.lock_name,
+                    )
                 self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete = False
-                _LOGGER.debug(
-                    "[add_lock] %s: Appears to be a reload, updating lock",
-                    kmlock.lock_name,
-                )
                 await self._update_lock(kmlock)
                 return
             _LOGGER.debug(
-                "[add_lock] %s: Not adding, lock already exists", kmlock.lock_name
+                "[add_lock] %s: Lock already exists, not adding", kmlock.lock_name
             )
             return
+        _LOGGER.debug("[add_lock] %s", kmlock.lock_name)
         self.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_state()
@@ -1116,7 +1122,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     new_dow.time_start = old_dow.time_start
                     new_dow.time_end = old_dow.time_end
         self.kmlocks[new.keymaster_config_entry_id] = new
-        # TODO: If less code slots, delete entities
         _LOGGER.debug("[update_lock] Code slot entities to delete: %s", del_code_slots)
         for x in del_code_slots:
             await delete_code_slot_entities(
@@ -1551,7 +1556,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._initial_setup_done_event.wait()
         # _LOGGER.debug(f"[Coordinator] self.kmlocks: {self.kmlocks}")
         self._sync_status_counter += 1
-        for kmlock in self.kmlocks.values():
+        for keymaster_config_entry_id in self.kmlocks:
+            kmlock: KeymasterLock = self.kmlocks[keymaster_config_entry_id]
             await self._connect_and_update_lock(kmlock)
             if not kmlock.connected:
                 _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
@@ -1657,7 +1663,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     continue
 
                 slot.active = new_active
-                if not slot.active or slot.pin is None:
+                if not slot.active or not slot.pin:
                     await self.clear_pin_from_lock(
                         config_entry_id=kmlock.keymaster_config_entry_id,
                         code_slot=num,
@@ -1674,7 +1680,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     )
 
         # Propogate parent kmlock settings to child kmlocks
-        for kmlock in self.kmlocks.values():
+        for keymaster_config_entry_id in self.kmlocks:
+            kmlock: KeymasterLock = self.kmlocks[keymaster_config_entry_id]
 
             if not kmlock.connected:
                 _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)

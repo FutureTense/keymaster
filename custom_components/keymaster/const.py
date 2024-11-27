@@ -56,14 +56,12 @@ CONF_LOCK_ENTITY_ID = "lock_entity_id"
 CONF_LOCK_NAME = "lockname"
 CONF_PARENT = "parent"
 CONF_PARENT_ENTRY_ID = "parent_entry_id"
-CONF_PATH = "packages_path"
 CONF_SENSOR_NAME = "sensorname"
 CONF_SLOTS = "slots"
 CONF_START = "start_from"
 
 # Defaults
 DEFAULT_CODE_SLOTS = 10
-DEFAULT_PACKAGES_PATH = "packages/keymaster/"
 DEFAULT_START = 1
 DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
 DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"

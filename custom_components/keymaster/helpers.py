@@ -204,11 +204,6 @@ def async_using_zwave_js(
     )
 
 
-# def get_code_slots_list(data: Mapping[str, int]) -> list[int]:
-#     """Get list of code slots"""
-#     return list(range(data[CONF_START], data[CONF_START] + data[CONF_SLOTS]))
-
-
 # def output_to_file_from_template(
 #     input_path: str,
 #     input_filename: str,
@@ -227,88 +222,6 @@ def async_using_zwave_js(
 #                 line = line.replace(src, target)
 #             outfile.write(line)
 #     _LOGGER.debug("Completed generation of %s from %s", output_filename, input_filename)
-
-
-# def delete_lock_and_base_folder(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-#     """Delete packages folder for lock and base keymaster folder if empty"""
-#     base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
-#     kmlock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-
-#     delete_folder(base_path, lock.lock_name)
-#     if not os.listdir(base_path):
-#         os.rmdir(base_path)
-
-
-# def delete_folder(absolute_path: str, *relative_paths: str) -> None:
-#     """Recursively delete folder and all children files and folders (depth first)"""
-#     path = os.path.join(absolute_path, *relative_paths)
-#     if os.path.isfile(path):
-#         os.remove(path)
-#     else:
-#         for file_or_dir in os.listdir(path):
-#             delete_folder(path, file_or_dir)
-#         os.rmdir(path)
-
-
-# def reset_code_slot_if_pin_unknown(
-#     hass, lock_name: str, code_slots: int, start_from: int
-# ) -> None:
-#     """
-#     Reset a code slot if the PIN is unknown.
-
-#     Used when a code slot is first generated so we can give all input helpers
-#     an initial state.
-#     """
-#     return asyncio.run_coroutine_threadsafe(
-#         async_reset_code_slot_if_pin_unknown(hass, lock_name, code_slots, start_from),
-#         hass.loop,
-#     ).result()
-
-
-# async def async_reset_code_slot_if_pin_unknown(
-#     hass, lock_name: str, code_slots: int, start_from: int
-# ) -> None:
-#     """
-#     Reset a code slot if the PIN is unknown.
-
-#     Used when a code slot is first generated so we can give all input helpers
-#     an initial state.
-#     """
-#     for x in range(start_from, start_from + code_slots):
-#         pin_state = hass.states.get(f"input_text.{lock_name}_pin_{x}")
-#         if pin_state and pin_state.state == STATE_UNKNOWN:
-#             await hass.services.async_call(
-#                 "script",
-#                 f"keymaster_{lock_name}_reset_codeslot",
-#                 {ATTR_CODE_SLOT: x},
-#                 blocking=True,
-#             )
-
-
-# def reload_package_platforms(hass: HomeAssistant) -> bool:
-#     """Reload package platforms to pick up any changes to package files"""
-#     return asyncio.run_coroutine_threadsafe(
-#         async_reload_package_platforms(hass), hass.loop
-#     ).result()
-
-
-# async def async_reload_package_platforms(hass: HomeAssistant) -> bool:
-#     """Reload package platforms to pick up any changes to package files"""
-#     for domain in [
-#         AUTO_DOMAIN,
-#         IN_BOOL_DOMAIN,
-#         IN_DT_DOMAIN,
-#         IN_NUM_DOMAIN,
-#         IN_TXT_DOMAIN,
-#         SCRIPT_DOMAIN,
-#         TEMPLATE_DOMAIN,
-#         TIMER_DOMAIN,
-#     ]:
-#         try:
-#             await hass.services.async_call(domain, SERVICE_RELOAD, blocking=True)
-#         except ServiceNotFound:
-#             return False
-#     return True
 
 
 async def delete_code_slot_entities(
@@ -420,8 +333,8 @@ async def call_hass_service(
             "Error calling %s.%s service call. %s: %s",
             domain,
             service,
-            str(e.__class__.__qualname__),
-            str(e),
+            e.__class__.__qualname__,
+            e,
         )
 
 
