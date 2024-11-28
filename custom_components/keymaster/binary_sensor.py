@@ -50,6 +50,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     entity_description=KeymasterBinarySensorEntityDescription(
                         key=f"binary_sensor.code_slots:{x}.active",
                         name=f"Code Slot {x}: Active",
+                        icon="mdi:run",
                         entity_registry_enabled_default=True,
                         hass=hass,
                         config_entry=config_entry,

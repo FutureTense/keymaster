@@ -35,6 +35,7 @@ async def async_setup_entry(
             entity_description=KeymasterNumberEntityDescription(
                 key="number.autolock_min_day",
                 name="Day Auto Lock",
+                icon="mdi:timer-lock-outline",
                 mode=NumberMode.BOX,
                 native_min_value=1,
                 native_step=1,
@@ -52,6 +53,7 @@ async def async_setup_entry(
             entity_description=KeymasterNumberEntityDescription(
                 key="number.autolock_min_night",
                 name="Night Auto Lock",
+                icon="mdi:timer-lock",
                 mode=NumberMode.BOX,
                 native_min_value=1,
                 native_step=1,
@@ -74,6 +76,7 @@ async def async_setup_entry(
                 entity_description=KeymasterNumberEntityDescription(
                     key=f"number.code_slots:{x}.accesslimit_count",
                     name=f"Code Slot {x}: Uses Remaining",
+                    icon="mdi:counter",
                     mode=NumberMode.BOX,
                     native_min_value=0,
                     native_max_value=100,

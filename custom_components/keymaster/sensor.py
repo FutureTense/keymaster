@@ -31,6 +31,7 @@ async def async_setup_entry(
             entity_description=KeymasterSensorEntityDescription(
                 key="sensor.lock_name",
                 name="Lock Name",
+                icon="mdi:account-lock",
                 entity_registry_enabled_default=True,
                 hass=hass,
                 config_entry=config_entry,
@@ -45,6 +46,7 @@ async def async_setup_entry(
                 entity_description=KeymasterSensorEntityDescription(
                     key="sensor.parent_name",
                     name="Parent Lock",
+                    icon="mdi:human-male-boy",
                     entity_registry_enabled_default=True,
                     hass=hass,
                     config_entry=config_entry,
@@ -62,6 +64,7 @@ async def async_setup_entry(
                 entity_description=KeymasterSensorEntityDescription(
                     key=f"sensor.code_slots:{x}.synced",
                     name=f"Code Slot {x}: Sync Status",
+                    icon="mdi:sync-circle",
                     entity_registry_enabled_default=True,
                     hass=hass,
                     config_entry=config_entry,

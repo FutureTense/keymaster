@@ -40,16 +40,25 @@ async def async_setup_entry(
                 "Sunday",
             ]
         ):
-            dow_switch_entities: Mapping[str, str] = {
-                f"time.code_slots:{x}.accesslimit_day_of_week:{i}.time_start": f"Code Slot {x}: {dow} - Start Time",
-                f"time.code_slots:{x}.accesslimit_day_of_week:{i}.time_end": f"Code Slot {x}: {dow} - End Time",
-            }
-            for key, name in dow_switch_entities.items():
+            dow_time_entities: list[Mapping[str, str]] = [
+                {
+                    "prop": f"time.code_slots:{x}.accesslimit_day_of_week:{i}.time_start",
+                    "name": f"Code Slot {x}: {dow} - Start Time",
+                    "icon": "mdi:clock-start",
+                },
+                {
+                    "prop": f"time.code_slots:{x}.accesslimit_day_of_week:{i}.time_end",
+                    "name": f"Code Slot {x}: {dow} - End Time",
+                    "icon": "mdi:clock-end",
+                },
+            ]
+            for ent in dow_time_entities:
                 entities.append(
                     KeymasterTime(
                         entity_description=KeymasterTimeEntityDescription(
-                            key=key,
-                            name=name,
+                            key=ent["prop"],
+                            name=ent["name"],
+                            icon=ent["icon"],
                             entity_registry_enabled_default=True,
                             hass=hass,
                             config_entry=config_entry,

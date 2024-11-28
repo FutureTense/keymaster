@@ -33,6 +33,7 @@ async def async_setup_entry(
                 entity_description=KeymasterTextEntityDescription(
                     key=f"text.code_slots:{x}.name",
                     name=f"Code Slot {x}: Name",
+                    icon="mdi:form-textbox-lock",
                     entity_registry_enabled_default=True,
                     hass=hass,
                     config_entry=config_entry,
@@ -45,6 +46,7 @@ async def async_setup_entry(
                 entity_description=KeymasterTextEntityDescription(
                     key=f"text.code_slots:{x}.pin",
                     name=f"Code Slot {x}: PIN",
+                    icon="mdi:lock-smart",
                     mode=(
                         TextMode.PASSWORD
                         if config_entry.data.get(CONF_HIDE_PINS)

@@ -33,6 +33,7 @@ async def async_setup_entry(
                 entity_description=KeymasterDateTimeEntityDescription(
                     key=f"datetime.code_slots:{x}.accesslimit_date_range_start",
                     name=f"Code Slot {x}: Date Range Start",
+                    icon="mdi:calendar-start",
                     entity_registry_enabled_default=True,
                     hass=hass,
                     config_entry=config_entry,
@@ -45,6 +46,7 @@ async def async_setup_entry(
                 entity_description=KeymasterDateTimeEntityDescription(
                     key=f"datetime.code_slots:{x}.accesslimit_date_range_end",
                     name=f"Code Slot {x}: Date Range End",
+                    icon="mdi:calendar-end",
                     entity_registry_enabled_default=True,
                     hass=hass,
                     config_entry=config_entry,
