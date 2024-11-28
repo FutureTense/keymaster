@@ -2,7 +2,6 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
 import logging
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
@@ -213,30 +212,24 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             return
 
         _LOGGER.debug(
-            "[Switch async_turn_on] %s: config_entry_id: %s",
+            "[Switch async_turn_on] %s: True",
             self.name,
-            self._config_entry.entry_id,
         )
 
         if self._set_property_value(True):
             self._attr_is_on = True
             if self._property.endswith(".enabled"):
-                self._kmlock.code_slots[self._code_slot].last_enabled = (
-                    datetime.now().astimezone()
-                )
                 await self.coordinator.update_slot_active_state(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot=self._code_slot,
                 )
                 pin: str | None = self._kmlock.code_slots[self._code_slot].pin
-                if not pin or not pin.isdigit():
-                    pin = "0000"
-                await self.coordinator.set_pin_on_lock(
-                    config_entry_id=self._config_entry.entry_id,
-                    code_slot=self._code_slot,
-                    pin=pin,
-                    update_after=False,
-                )
+                if pin and pin.isdigit() and len(pin) >= 4:
+                    await self.coordinator.set_pin_on_lock(
+                        config_entry_id=self._config_entry.entry_id,
+                        code_slot=self._code_slot,
+                        pin=pin,
+                    )
             await self.coordinator.async_refresh()
 
     async def async_turn_off(self, **_) -> None:
@@ -246,9 +239,8 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             return
 
         _LOGGER.debug(
-            "[Switch async_turn_off] %s: config_entry_id: %s",
+            "[Switch async_turn_off] %s: False",
             self.name,
-            self._config_entry.entry_id,
         )
 
         if self._set_property_value(False):
@@ -261,6 +253,5 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                 await self.coordinator.clear_pin_from_lock(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot=self._code_slot,
-                    update_after=False,
                 )
             await self.coordinator.async_refresh()

@@ -135,9 +135,8 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
 
     async def async_set_value(self, value: dt_time) -> None:
         _LOGGER.debug(
-            "[Time async_set_value] %s: config_entry_id: %s, value: %s",
+            "[Time async_set_value] %s: value: %s",
             self.name,
-            self._config_entry.entry_id,
             value,
         )
         if (

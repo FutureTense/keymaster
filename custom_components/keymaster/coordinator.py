@@ -509,7 +509,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if changed_entity != kmlock.lock_entity_id:
             return
 
-        new_state = event.data["new_state"].state
+        old_state = None
+        if event.data.get("old_state"):
+            old_state: str = event.data.get("old_state").state
+        new_state = None
+        if event.data.get("new_state"):
+            new_state: str = event.data.get("new_state").state
 
         # Determine action type to set appropriate action text using ACTION_MAP
         action_type: str = ""
@@ -576,8 +581,17 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if alarm_type_value is not None
             else None
         )
-
-        if new_state == LockState.UNLOCKED:
+        _LOGGER.debug(
+            "[handle_lock_state_change] %s: old_state: %s, new_state: %s",
+            kmlock.lock_name,
+            old_state,
+            new_state,
+        )
+        if old_state not in [LockState.LOCKED, LockState.UNLOCKED]:
+            _LOGGER.debug(
+                "[handle_lock_state_change] %s: Ignoring state change", kmlock.lock_name
+            )
+        elif new_state == LockState.UNLOCKED:
             await self._lock_unlocked(
                 kmlock=kmlock,
                 code_slot=alarm_level_value,  # TODO: Test this out more, not sure this is correct
@@ -617,8 +631,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if changed_entity != kmlock.door_sensor_entity_id:
             return
 
-        old_state: str = event.data["old_state"].state
-        new_state: str = event.data["new_state"].state
+        old_state = None
+        if event.data.get("old_state"):
+            old_state: str = event.data.get("old_state").state
+        new_state = None
+        if event.data.get("new_state"):
+            new_state: str = event.data.get("new_state").state
         _LOGGER.debug(
             "[handle_door_state_change] %s: old_state: %s, new_state: %s",
             kmlock.lock_name,
@@ -1199,7 +1217,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         config_entry_id: str,
         code_slot: int,
         pin: str,
-        update_after: bool = True,
         override: bool = False,
     ) -> bool:
         """Set a user code"""
@@ -1282,8 +1299,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 code_slot,
                 pin,
             )
-            if update_after:
-                await self.async_refresh()
             return True
         raise ZWaveIntegrationNotConfiguredError
 
@@ -1291,7 +1306,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self,
         config_entry_id: str,
         code_slot: int,
-        update_after: bool = True,
         override: bool = False,
     ) -> bool:
         """Clear the usercode from a code slot"""
@@ -1351,8 +1365,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock.lock_name,
                 code_slot,
             )
-            if update_after:
-                await self.async_refresh()
             return True
         raise ZWaveIntegrationNotConfiguredError
 
@@ -1588,7 +1600,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     await self.clear_pin_from_lock(
                         config_entry_id=kmlock.keymaster_config_entry_id,
                         code_slot=num,
-                        update_after=False,
                         override=True,
                     )
                 else:
@@ -1596,7 +1607,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         config_entry_id=kmlock.keymaster_config_entry_id,
                         code_slot=num,
                         pin=slot.pin,
-                        update_after=False,
                         override=True,
                     )
 
@@ -1622,16 +1632,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         kmlock.code_slots[code_slot].synced = Synced.DISCONNECTED
                     elif not kmlock.code_slots[code_slot].pin:
                         kmlock.code_slots[code_slot].synced = Synced.SYNCED
-                    # elif (
-                    #     datetime.now().astimezone()
-                    #     - kmlock.code_slots[code_slot].last_enabled
-                    # ).total_seconds() / 60 > 2:
                     else:
                         await self.set_pin_on_lock(
                             config_entry_id=kmlock.keymaster_config_entry_id,
                             code_slot=code_slot,
                             pin=kmlock.code_slots[code_slot].pin,
-                            update_after=False,
                             override=True,
                         )
                 elif (
@@ -1641,7 +1646,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     await self.clear_pin_from_lock(
                         config_entry_id=kmlock.keymaster_config_entry_id,
                         code_slot=code_slot,
-                        update_after=False,
                         override=True,
                     )
                 else:
@@ -1718,7 +1722,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
                     for attr in [
                         "enabled",
-                        "last_enabled",
                         "name",
                         "active",
                         "accesslimit",
@@ -1774,7 +1777,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                             await self.clear_pin_from_lock(
                                 config_entry_id=child_kmlock.keymaster_config_entry_id,
                                 code_slot=num,
-                                update_after=False,
                                 override=True,
                             )
                         else:
@@ -1782,7 +1784,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                                 config_entry_id=child_kmlock.keymaster_config_entry_id,
                                 code_slot=num,
                                 pin=slot.pin,
-                                update_after=False,
                                 override=True,
                             )
                         child_kmlock.code_slots[num].pin = slot.pin

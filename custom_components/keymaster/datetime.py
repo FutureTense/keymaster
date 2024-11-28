@@ -117,9 +117,8 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
 
     async def async_set_value(self, value: datetime) -> None:
         _LOGGER.debug(
-            "[DateTime async_set_value] %s: config_entry_id: %s, value: %s",
+            "[DateTime async_set_value] %s: value: %s",
             self.name,
-            self._config_entry.entry_id,
             value,
         )
 

@@ -156,9 +156,8 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         _LOGGER.debug(
-            "[Number async_set_value] %s: config_entry_id: %s, value: %s",
+            "[Number async_set_value] %s: value: %s",
             self.name,
-            self._config_entry.entry_id,
             value,
         )
         if (

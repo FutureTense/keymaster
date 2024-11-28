@@ -115,7 +115,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
             value,
         )
         if self._property.endswith(".pin"):
-            if value.isdigit() and len(value) >= 4:
+            if value and value.isdigit() and len(value) >= 4:
                 await self.coordinator.set_pin_on_lock(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot=self._code_slot,
