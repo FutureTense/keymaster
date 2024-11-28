@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, time as dt_time
 from typing import TYPE_CHECKING, Any
@@ -77,7 +77,7 @@ class KeymasterLock:
     parent_name: str | None = None
     parent_config_entry_id: str | None = None
     child_config_entry_ids: list = field(default_factory=list)
-    listeners: list = field(default_factory=list)
+    listeners: list[Callable] = field(default_factory=list)
     pending_delete: bool = False
 
 
