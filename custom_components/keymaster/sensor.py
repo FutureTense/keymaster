@@ -113,5 +113,12 @@ class KeymasterSensor(KeymasterEntity, SensorEntity):
             return
 
         self._attr_available = True
-        self._attr_native_value = self._get_property_value()
+        if self._property.endswith(".lock_name") or self._property.endswith(
+            ".parent_name"
+        ):
+            self._attr_native_value = (
+                self._get_property_value().replace("_", " ").title()
+            )
+        else:
+            self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()
