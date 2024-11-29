@@ -204,26 +204,6 @@ def async_using_zwave_js(
     )
 
 
-# def output_to_file_from_template(
-#     input_path: str,
-#     input_filename: str,
-#     output_path: str,
-#     output_filename: str,
-#     replacements_dict: Mapping[str, str],
-#     write_mode: str,
-# ) -> None:
-#     """Generate file output from input templates while replacing string references"""
-#     _LOGGER.debug("Starting generation of %s from %s", output_filename, input_filename)
-#     with open(os.path.join(input_path, input_filename), "r") as infile, open(
-#         os.path.join(output_path, output_filename), write_mode
-#     ) as outfile:
-#         for line in infile:
-#             for src, target in replacements_dict.items():
-#                 line = line.replace(src, target)
-#             outfile.write(line)
-#     _LOGGER.debug("Completed generation of %s from %s", output_filename, input_filename)
-
-
 async def delete_code_slot_entities(
     hass: HomeAssistant, keymaster_config_entry_id: str, code_slot: int
 ) -> None:

@@ -1224,6 +1224,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         code_slot: int,
         pin: str,
         override: bool = False,
+        set_in_kmlock: bool = False,
     ) -> bool:
         """Set a user code"""
         await self._initial_setup_done_event.wait()
@@ -1247,6 +1248,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return False
 
+        if not pin or not pin.isdigit() or len(pin) < 4:
+            _LOGGER.debug(
+                "[set_pin_on_lock] %s: Code Slot %s: PIN not valid: %s. Must be 4 or more digits",
+                kmlock.lock_name,
+                code_slot,
+                pin,
+            )
+            return False
+
+        if set_in_kmlock:
+            kmlock.code_slots[code_slot].pin = pin
+
         if (
             not override
             and kmlock.parent_name is not None
@@ -1266,15 +1279,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 "[set_pin_on_lock] %s: Code Slot %s: Not Active",
                 kmlock.lock_name,
                 code_slot,
-            )
-            return False
-
-        if not pin or not pin.isdigit() or len(pin) < 4:
-            _LOGGER.debug(
-                "[set_pin_on_lock] %s: Code Slot %s: PIN not valid: %s. Must be 4 or more digits",
-                kmlock.lock_name,
-                code_slot,
-                pin,
             )
             return False
 
@@ -1314,6 +1318,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         config_entry_id: str,
         code_slot: int,
         override: bool = False,
+        clear_from_kmlock: bool = False,
     ) -> bool:
         """Clear the usercode from a code slot"""
         await self._initial_setup_done_event.wait()
@@ -1334,6 +1339,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 code_slot,
             )
             return False
+
+        if clear_from_kmlock:
+            kmlock.code_slots[code_slot].pin = ""
 
         if (
             not override
