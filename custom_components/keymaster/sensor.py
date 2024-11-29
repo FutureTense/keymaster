@@ -8,7 +8,7 @@ from homeassistant.components.sensor import SensorEntity, SensorEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
-from .const import COORDINATOR, DOMAIN
+from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .lock import KeymasterLock
@@ -53,6 +53,23 @@ async def async_setup_entry(
             )
         )
 
+    for x in range(
+        config_entry.data[CONF_START],
+        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+    ):
+        entities.append(
+            KeymasterSensor(
+                entity_description=KeymasterSensorEntityDescription(
+                    key=f"sensor.code_slots:{x}.synced",
+                    name=f"Code Slot {x}: Sync Status",
+                    entity_registry_enabled_default=True,
+                    hass=hass,
+                    config_entry=config_entry,
+                    coordinator=coordinator,
+                ),
+            )
+        )
+
     async_add_entities(entities, True)
     return True
 
@@ -84,9 +101,9 @@ class KeymasterSensor(KeymasterEntity, SensorEntity):
             self.async_write_ha_state()
             return
 
-        if ".code_slots" in self._property and (
-            self._code_slot not in self._kmlock.code_slots
-            or not self._kmlock.code_slots[self._code_slot].enabled
+        if (
+            ".code_slots" in self._property
+            and self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()

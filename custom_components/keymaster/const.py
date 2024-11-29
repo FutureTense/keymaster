@@ -1,5 +1,7 @@
 """Constants for keymaster"""
 
+from enum import StrEnum
+
 from homeassistant.components.lock.const import LockState
 from homeassistant.const import Platform
 
@@ -136,3 +138,13 @@ LOCK_STATE_MAP = {
 SERVICE_ADD_CODE = "add_code"
 SERVICE_CLEAR_CODE = "clear_code"
 SERVICE_REFRESH_CODES = "refresh_codes"
+
+
+class Synced(StrEnum):
+    """Code Slot sync states."""
+
+    ADDING = "Adding"
+    DELETING = "Deleting"
+    DISCONNECTED = "Disconnected"
+    OUT_OF_SYNC = "Out of Sync"
+    SYNCED = "Synced"

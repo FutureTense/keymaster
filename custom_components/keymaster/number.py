@@ -126,9 +126,9 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             self.async_write_ha_state()
             return
 
-        if ".code_slots" in self._property and (
-            self._code_slot not in self._kmlock.code_slots
-            or not self._kmlock.code_slots[self._code_slot].enabled
+        if (
+            ".code_slots" in self._property
+            and self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -156,9 +156,8 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         _LOGGER.debug(
-            "[Number async_set_value] %s: config_entry_id: %s, value: %s",
+            "[Number async_set_value] %s: value: %s",
             self.name,
-            self._config_entry.entry_id,
             value,
         )
         if (

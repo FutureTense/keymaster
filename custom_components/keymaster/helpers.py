@@ -47,7 +47,7 @@ class Throttle:
 class KeymasterTimer:
     def __init__(self) -> None:
         self.hass: HomeAssistant | None = None
-        self._unsub_events: list = []
+        self._unsub_events: list[Callable] = []
         self._kmlock: KeymasterLock | None = None
         self._call_action: Callable | None = None
         self._end_time: datetime | None = None

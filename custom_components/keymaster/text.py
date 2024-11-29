@@ -96,9 +96,9 @@ class KeymasterText(KeymasterEntity, TextEntity):
             self.async_write_ha_state()
             return
 
-        if ".code_slots" in self._property and (
-            self._code_slot not in self._kmlock.code_slots
-            or not self._kmlock.code_slots[self._code_slot].enabled
+        if (
+            ".code_slots" in self._property
+            and self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -110,20 +110,25 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
     async def async_set_value(self, value: str) -> None:
         _LOGGER.debug(
-            "[Text async_set_value] %s: config_entry_id: %s, value: %s",
+            "[Text async_set_value] %s: value: %s",
             self.name,
-            self._config_entry.entry_id,
             value,
         )
-        if self._property.endswith(".pin") and not (
-            await self.coordinator.set_pin_on_lock(
-                config_entry_id=self._config_entry.entry_id,
-                code_slot=self._code_slot,
-                pin=value,
-            )
-        ):
-            return
-        if (
+        if self._property.endswith(".pin"):
+            if value and value.isdigit() and len(value) >= 4:
+                await self.coordinator.set_pin_on_lock(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot=self._code_slot,
+                    pin=value,
+                )
+            elif not value:
+                await self.coordinator.clear_pin_from_lock(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot=self._code_slot,
+                )
+            else:
+                return
+        elif (
             self._property.endswith(".name")
             and self._kmlock.parent_name is not None
             and not self._kmlock.code_slots[self._code_slot].override_parent

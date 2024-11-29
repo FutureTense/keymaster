@@ -93,9 +93,9 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
             self.async_write_ha_state()
             return
 
-        if ".code_slots" in self._property and (
-            self._code_slot not in self._kmlock.code_slots
-            or not self._kmlock.code_slots[self._code_slot].enabled
+        if (
+            ".code_slots" in self._property
+            and self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -117,9 +117,8 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
 
     async def async_set_value(self, value: datetime) -> None:
         _LOGGER.debug(
-            "[DateTime async_set_value] %s: config_entry_id: %s, value: %s",
+            "[DateTime async_set_value] %s: value: %s",
             self.name,
-            self._config_entry.entry_id,
             value,
         )
 

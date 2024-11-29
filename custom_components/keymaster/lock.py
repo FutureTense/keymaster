@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, time as dt_time
 from typing import TYPE_CHECKING, Any
@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 from zwave_js_server.model.node import Node as ZwaveJSNode
 
 from homeassistant.helpers.device_registry import DeviceEntry
+
+from .const import Synced
 
 if TYPE_CHECKING:
     from .helpers import KeymasterTimer
@@ -30,10 +32,10 @@ class KeymasterCodeSlotDayOfWeek:
 class KeymasterCodeSlot:
     number: int
     enabled: bool = True
-    last_enabled: datetime = datetime.now().astimezone()
     name: str | None = None
     pin: str | None = None
     active: bool = True
+    synced: Synced = Synced.DISCONNECTED
     override_parent: bool = False
     notifications: bool = False
     accesslimit_count_enabled: bool = False
@@ -75,7 +77,7 @@ class KeymasterLock:
     parent_name: str | None = None
     parent_config_entry_id: str | None = None
     child_config_entry_ids: list = field(default_factory=list)
-    listeners: list = field(default_factory=list)
+    listeners: list[Callable] = field(default_factory=list)
     pending_delete: bool = False
 
 
@@ -117,10 +119,10 @@ keymasterlock_type_lookup: Mapping[str, Any] = {
     "time_end": dt_time,
     "number": int,
     "enabled": bool,
-    "last_enabled": datetime,
     "name": str,
     "pin": str,
     "active": bool,
+    "synced": str,
     "override_parent": bool,
     "notifications": bool,
     "accesslimit_count_enabled": bool,
