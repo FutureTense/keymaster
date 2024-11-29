@@ -8,7 +8,14 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 
-from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from .const import (
+    CONF_SENSOR_NAME,
+    CONF_SLOTS,
+    CONF_START,
+    COORDINATOR,
+    DEFAULT_DOOR_SENSOR,
+    DOMAIN,
+)
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .helpers import async_using_zwave_js
@@ -24,19 +31,42 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         config_entry.entry_id
     )
     entities: list = []
+
     if async_using_zwave_js(hass=hass, kmlock=kmlock):
-        lock_switch_entities: Mapping[str, str] = {
-            "switch.autolock_enabled": "Auto Lock",
-            "switch.lock_notifications": "Lock Notifications",
-            "switch.door_notifications": "Door Notifications",
-            "switch.retry_lock": "Retry Lock",
-        }
-        for key, name in lock_switch_entities.items():
+        lock_switch_entities: list[Mapping[str, str]] = [
+            {
+                "prop": "switch.autolock_enabled",
+                "name": "Auto Lock",
+                "icon": "mdi:lock-clock",
+            },
+            {
+                "prop": "switch.lock_notifications",
+                "name": "Lock Notifications",
+                "icon": "mdi:lock-alert",
+            },
+        ]
+        if config_entry.data.get(CONF_SENSOR_NAME) not in (None, DEFAULT_DOOR_SENSOR):
+            lock_switch_entities.extend(
+                [
+                    {
+                        "prop": "switch.door_notifications",
+                        "name": "Door Notifications",
+                        "icon": "mdi:door-closed-lock",
+                    },
+                    {
+                        "prop": "switch.retry_lock",
+                        "name": "Retry Lock",
+                        "icon": "mdi:arrow-u-right-top-bold",
+                    },
+                ]
+            )
+        for ent in lock_switch_entities:
             entities.append(
                 KeymasterSwitch(
                     entity_description=KeymasterSwitchEntityDescription(
-                        key=key,
-                        name=name,
+                        key=ent["prop"],
+                        name=ent["name"],
+                        icon=ent["icon"],
                         entity_registry_enabled_default=True,
                         hass=hass,
                         config_entry=config_entry,
@@ -55,6 +85,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         entity_description=KeymasterSwitchEntityDescription(
                             key=f"switch.code_slots:{x}.override_parent",
                             name=f"Code Slot {x}: Override Parent",
+                            icon="mdi:call-split",
                             entity_registry_enabled_default=True,
                             hass=hass,
                             config_entry=config_entry,
@@ -62,19 +93,40 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         )
                     )
                 )
-            code_slot_switch_entities: Mapping[str, str] = {
-                f"switch.code_slots:{x}.enabled": f"Code Slot {x}: Enabled",
-                f"switch.code_slots:{x}.notifications": f"Code Slot {x}: Notifications",
-                f"switch.code_slots:{x}.accesslimit_date_range_enabled": f"Code Slot {x}: Use Date Range Limits",
-                f"switch.code_slots:{x}.accesslimit_count_enabled": f"Code Slot {x}: Limit by Number of Uses",
-                f"switch.code_slots:{x}.accesslimit_day_of_week_enabled": f"Code Slot {x}: Use Day of Week Limits",
-            }
-            for key, name in code_slot_switch_entities.items():
+            code_slot_switch_entities: list[Mapping[str, str]] = [
+                {
+                    "prop": f"switch.code_slots:{x}.enabled",
+                    "name": f"Code Slot {x}: Enabled",
+                    "icon": "mdi:folder-pound",
+                },
+                {
+                    "prop": f"switch.code_slots:{x}.notifications",
+                    "name": f"Code Slot {x}: Notifications",
+                    "icon": "mdi:message-lock",
+                },
+                {
+                    "prop": f"switch.code_slots:{x}.accesslimit_date_range_enabled",
+                    "name": f"Code Slot {x}: Use Date Range Limits",
+                    "icon": "mdi:calendar-lock",
+                },
+                {
+                    "prop": f"switch.code_slots:{x}.accesslimit_count_enabled",
+                    "name": f"Code Slot {x}: Limit by Number of Uses",
+                    "icon": "mdi:numeric",
+                },
+                {
+                    "prop": f"switch.code_slots:{x}.accesslimit_day_of_week_enabled",
+                    "name": f"Code Slot {x}: Use Day of Week Limits",
+                    "icon": "mdi:calendar-week",
+                },
+            ]
+            for ent in code_slot_switch_entities:
                 entities.append(
                     KeymasterSwitch(
                         entity_description=KeymasterSwitchEntityDescription(
-                            key=key,
-                            name=name,
+                            key=ent["prop"],
+                            name=ent["name"],
+                            icon=ent["icon"],
                             entity_registry_enabled_default=True,
                             hass=hass,
                             config_entry=config_entry,
@@ -93,17 +145,30 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     "Sunday",
                 ]
             ):
-                dow_switch_entities: Mapping[str, str] = {
-                    f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.dow_enabled": f"Code Slot {x}: {dow}",
-                    f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.include_exclude": f"Code Slot {x}: {dow} - Include (On)/Exclude (Off) Time",
-                    f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.limit_by_time": f"Code Slot {x}: {dow} - Limit by Time of Day",
-                }
-                for key, name in dow_switch_entities.items():
+                dow_switch_entities: list[Mapping[str, str]] = [
+                    {
+                        "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.dow_enabled",
+                        "name": f"Code Slot {x}: {dow}",
+                        "icon": "mdi:calendar-today",
+                    },
+                    {
+                        "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.include_exclude",
+                        "name": f"Code Slot {x}: {dow} - Include (On)/Exclude (Off) Time",
+                        "icon": "mdi:plus-minus",
+                    },
+                    {
+                        "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.limit_by_time",
+                        "name": f"Code Slot {x}: {dow} - Limit by Time of Day",
+                        "icon": "mdi:timer-lock",
+                    },
+                ]
+                for ent in dow_switch_entities:
                     entities.append(
                         KeymasterSwitch(
                             entity_description=KeymasterSwitchEntityDescription(
-                                key=key,
-                                name=name,
+                                key=ent["prop"],
+                                name=ent["name"],
+                                icon=ent["icon"],
                                 entity_registry_enabled_default=True,
                                 hass=hass,
                                 config_entry=config_entry,

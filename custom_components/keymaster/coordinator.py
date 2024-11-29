@@ -1730,10 +1730,24 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     )
                     continue
                 for num, slot in kmlock.code_slots.items():
-                    if (
-                        num not in child_kmlock.code_slots
-                        or child_kmlock.code_slots[num].override_parent
-                    ):
+                    if num not in child_kmlock.code_slots:
+                        continue
+                    if child_kmlock.code_slots[num].override_parent:
+                        _LOGGER.debug(
+                            "[async_update_data] %s/%s Code Slot %s: Override Parent: True, "
+                            "pin: %s/%s, enabled: %s/%s, active: %s/%s, synced: %s/%s",
+                            kmlock.lock_name,
+                            child_kmlock.lock_name,
+                            num,
+                            slot.pin,
+                            child_kmlock.code_slots[num].pin,
+                            slot.enabled,
+                            child_kmlock.code_slots[num].enabled,
+                            slot.active,
+                            child_kmlock.code_slots[num].active,
+                            slot.synced,
+                            child_kmlock.code_slots[num].synced,
+                        )
                         continue
                     prev_enabled: bool = child_kmlock.code_slots[num].enabled
                     prev_active: bool = child_kmlock.code_slots[num].active
