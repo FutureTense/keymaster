@@ -1389,6 +1389,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not isinstance(slot, KeymasterCodeSlot) or not slot.enabled:
             return False
 
+        if not slot.pin:
+            return False
+
         if slot.accesslimit_count_enabled and (
             not isinstance(slot.accesslimit_count, float) or slot.accesslimit_count <= 0
         ):
@@ -1651,10 +1654,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     if (
                         not kmlock.code_slots[code_slot].enabled
                         or not kmlock.code_slots[code_slot].active
+                        or not kmlock.code_slots[code_slot].pin
                     ):
                         kmlock.code_slots[code_slot].synced = Synced.DISCONNECTED
-                    elif not kmlock.code_slots[code_slot].pin:
-                        kmlock.code_slots[code_slot].synced = Synced.SYNCED
                     else:
                         await self.set_pin_on_lock(
                             config_entry_id=kmlock.keymaster_config_entry_id,
