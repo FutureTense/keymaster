@@ -40,9 +40,11 @@ ATTR_CODE_SLOT_NAME = "code_slot_name"
 ATTR_NOTIFICATION_SOURCE = "notification_source"
 
 # Attributes
+ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_CODE_SLOT = "code_slot"
 ATTR_NAME = "lockname"
 ATTR_NODE_ID = "node_id"
+ATTR_PIN = "pin"
 ATTR_USER_CODE = "usercode"
 
 # Configuration Properties
@@ -135,9 +137,9 @@ LOCK_STATE_MAP = {
     },
 }
 
-SERVICE_ADD_CODE = "add_code"
-SERVICE_CLEAR_CODE = "clear_code"
-SERVICE_REFRESH_CODES = "refresh_codes"
+SERVICE_UPDATE_PIN = "update_pin"
+SERVICE_CLEAR_PIN = "clear_pin"
+SERVICE_REGENERATE_LOVELACE = "regenerate_lovelace"
 
 
 class Synced(StrEnum):
