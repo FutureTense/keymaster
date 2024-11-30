@@ -1384,6 +1384,75 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return True
         raise ZWaveIntegrationNotConfiguredError
 
+    async def reset_lock(self, config_entry_id: str) -> None:
+        kmlock: KeymasterLock | None = self.kmlocks.get(config_entry_id)
+        if not isinstance(kmlock, KeymasterLock):
+            _LOGGER.error(
+                "[Coordinator] Can't find lock with config_entry_id: %s",
+                config_entry_id,
+            )
+            return
+        _LOGGER.debug("[reset_lock] %s: Resetting Lock", kmlock.lock_name)
+        kmlock.lock_notifications = False
+        kmlock.door_notifications = False
+        kmlock.autolock_enabled = False
+        kmlock.autolock_min_day = None
+        kmlock.autolock_min_night = None
+        kmlock.retry_lock = False
+        for x in kmlock.code_slots:
+            await self.reset_code_slot(
+                config_entry_id=kmlock.keymaster_config_entry_id, code_slot=x
+            )
+        await self.async_refresh()
+
+    async def reset_code_slot(self, config_entry_id: str, code_slot: int) -> None:
+        kmlock: KeymasterLock | None = self.kmlocks.get(config_entry_id)
+        if not isinstance(kmlock, KeymasterLock):
+            _LOGGER.error(
+                "[Coordinator] Can't find lock with config_entry_id: %s",
+                config_entry_id,
+            )
+            return
+
+        if code_slot not in kmlock.code_slots:
+            _LOGGER.error(
+                "[Coordinator] %s: Code Slot %s: Code slot doesn't exist",
+                kmlock.lock_name,
+                code_slot,
+            )
+            return
+        _LOGGER.debug(
+            "[reset_code_slot] %s: Resetting Code Slot %s",
+            kmlock.lock_name,
+            code_slot,
+        )
+        await self.clear_pin_from_lock(
+            config_entry_id=config_entry_id,
+            code_slot=code_slot,
+            override=True,
+        )
+
+        dow_slots: Mapping[int, KeymasterCodeSlotDayOfWeek] = {}
+        for i, dow in enumerate(
+            [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+            ]
+        ):
+            dow_slots[i] = KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i, day_of_week_name=dow
+            )
+        new_code_slot = KeymasterCodeSlot(
+            number=code_slot, enabled=False, accesslimit_day_of_week=dow_slots
+        )
+        kmlock.code_slots[code_slot] = new_code_slot
+        await self.async_refresh()
+
     async def _is_slot_active(self, slot: KeymasterCodeSlot) -> bool:
         # _LOGGER.debug(f"[is_slot_active] slot: {slot} ({type(slot)})")
         if not isinstance(slot, KeymasterCodeSlot) or not slot.enabled:

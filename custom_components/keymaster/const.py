@@ -10,6 +10,7 @@ VERSION = "v0.0.0"  # this will be automatically updated as part of the release 
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
 PLATFORMS: list = [
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.DATETIME,
     Platform.NUMBER,
     Platform.SENSOR,
