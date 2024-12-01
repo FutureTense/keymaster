@@ -23,6 +23,7 @@ from .const import (
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
     CONF_PARENT_ENTRY_ID,
     CONF_SENSOR_NAME,
@@ -49,9 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     updated_config = config_entry.data.copy()
 
-    if "parent" not in config_entry.data.keys():
-        updated_config[CONF_PARENT] = None
-    elif config_entry.data[CONF_PARENT] == "(none)":
+    if config_entry.data.get(CONF_PARENT) in (None, "(none)"):
         updated_config[CONF_PARENT] = None
 
     if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
@@ -64,6 +63,22 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             if updated_config.get(CONF_PARENT) == entry.data.get(CONF_LOCK_NAME):
                 updated_config[CONF_PARENT_ENTRY_ID] = entry.entry_id
                 break
+
+    if not updated_config.get(CONF_NOTIFY_SCRIPT_NAME):
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = (
+            f"keymaster_{updated_config.get(CONF_LOCK_NAME)}_manual_notify"
+        )
+    elif isinstance(
+        updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str
+    ) and updated_config.get(CONF_NOTIFY_SCRIPT_NAME).startswith("script."):
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config.get(
+            CONF_NOTIFY_SCRIPT_NAME
+        ).split(".", maxsplit=1)[1]
+
+    _LOGGER.debug(
+        "[init async_setup_entry] notify_sctipt_name: %s",
+        updated_config.get(CONF_NOTIFY_SCRIPT_NAME),
+    )
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
@@ -140,6 +155,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         code_slots=code_slots,
         parent_name=config_entry.data.get(CONF_PARENT),
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+        notify_script_name=config_entry.data.get(CONF_NOTIFY_SCRIPT_NAME),
     )
 
     try:

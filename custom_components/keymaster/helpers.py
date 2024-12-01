@@ -320,21 +320,21 @@ async def call_hass_service(
 
 async def send_manual_notification(
     hass: HomeAssistant,
-    service_name: str,
+    script_name: str,
     message: str,
     title: str = None,
 ) -> None:
     _LOGGER.debug(
-        "[send_manual_notification] service: %s.%s, title: %s, message: %s",
+        "[send_manual_notification] script: %s.%s, title: %s, message: %s",
         SCRIPT_DOMAIN,
-        service_name,
+        script_name,
         title,
         message,
     )
     await call_hass_service(
         hass=hass,
         domain=SCRIPT_DOMAIN,
-        service=service_name,
+        service=script_name,
         service_data={"title": title, "message": message},
     )
 

@@ -9,8 +9,10 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSORS_DOMAIN
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import selector
 from homeassistant.util import slugify
 
 from .const import (
@@ -19,6 +21,7 @@ from .const import (
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
     CONF_SENSOR_NAME,
     CONF_SLOTS,
@@ -210,6 +213,21 @@ def _get_schema(
                     SENSORS_DOMAIN,
                     search=["alarm_type", "access_control", "alarmtype"],
                     extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
+                )
+            ),
+            vol.Optional(
+                CONF_NOTIFY_SCRIPT_NAME,
+                default=_get_default(CONF_NOTIFY_SCRIPT_NAME),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=_get_entities(
+                        hass,
+                        SCRIPT_DOMAIN,
+                    ),
+                    multiple=False,
+                    custom_value=True,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    sort=True,
                 )
             ),
             vol.Required(

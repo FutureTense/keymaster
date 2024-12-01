@@ -63,6 +63,7 @@ CONF_PARENT_ENTRY_ID = "parent_entry_id"
 CONF_SENSOR_NAME = "sensorname"
 CONF_SLOTS = "slots"
 CONF_START = "start_from"
+CONF_NOTIFY_SCRIPT_NAME = "notify_script"
 
 # Defaults
 DEFAULT_CODE_SLOTS = 10

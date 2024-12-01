@@ -1,9 +1,7 @@
 {
   "config": {
     "error": {
-      "invalid_path": "Vennligst oppbevar bildene i en annen katalog.",
-      "same_name": "Name already in use",
-      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
+      "same_name": "Name already in use"
     },
     "step": {
       "user": {
@@ -15,11 +13,13 @@
           "start_from": "Start fra kodespor #",
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
-          "packages_path": "Sti til pakkekatalog",
-          "child_locks_file": "Path to child locks file",
-          "parent": "Select parent lock",          
+          "parent": "Select parent lock", 
+          "notify_script": "Notification Script",       
           "hide_pins": "Hide PINs in UI?"
         },
+        "data_description": {
+          "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
+        },                  
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "keymaster"
       }
@@ -27,9 +27,7 @@
   },
   "options": {
     "error": {
-      "invalid_path": "Vennligst oppbevar bildene i en annen katalog.",
-      "same_name": "Name already in use",
-      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
+      "same_name": "Name already in use"
     },
     "step": {
       "init": {
@@ -41,11 +39,13 @@
           "start_from": "Start fra kodespor #",
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
-          "packages_path": "Sti til pakkekatalog",
-          "child_locks_file": "Path to child locks file",
-          "parent": "Select parent lock",          
+          "parent": "Select parent lock",  
+          "notify_script": "Notification Script",         
           "hide_pins": "Hide PINs in UI?"
         },
+        "data_description": {
+          "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
+        },                  
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "keymaster"
       }

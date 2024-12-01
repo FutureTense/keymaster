@@ -1,9 +1,7 @@
 {
   "config": {
     "error": {
-      "invalid_path": "Path must be a relative path, not absolute",
-      "same_name": "Name already in use",
-      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
+      "same_name": "Name already in use"
     },
     "step": {
       "user": {
@@ -15,28 +13,21 @@
           "start_from": "Start from code slot #",
           "sensorname": "Door Sensor",
           "lockname": "Lock Name (ie: frontdoor)",
-          "packages_path": "Path to packages directory",
-          "child_locks_file": "Path to child locks file",
-          "parent": "Select parent lock",          
+          "parent": "Select parent lock",
+          "notify_script": "Notification Script",          
           "hide_pins": "Hide PINs in UI?"
         },
-        "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
+        "data_description": {
+          "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
+        },        
+        "description": "Select the lock to setup and code slots to create.\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
         "title": "keymaster"
-      },
-      "config_2": {
-        "data": {
-          "generate_package": "Generate package after you press submit?"
-        },
-        "description": "If checked this will generate the files once you click submit.\nWARNING: This will remove any customization you've done to the yaml files.",
-        "title": "Confirm"
       }
     }
   },
   "options": {
     "error": {
-      "invalid_path": "Path must be a relative path, not absolute",
-      "same_name": "Name already in use",
-      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
+      "same_name": "Name already in use"
     },
     "step": {
       "init": {
@@ -48,20 +39,15 @@
           "start_from": "Start from code slot #",
           "sensorname": "Door Sensor",
           "lockname": "Lock Name (ie: frontdoor)",
-          "packages_path": "Path to packages directory",
-          "child_locks_file": "Path to child locks file",
-          "parent": "Select parent lock",          
+          "parent": "Select parent lock",
+          "notify_script": "Notification Script",                 
           "hide_pins": "Hide PINs in UI?"
         },
-        "description": "Select the lock to setup and code slots to create.\n\nPaths are relative to your Home Assistant config folder (e.g. `/config/packages/keymaster` should be entered as `packages/keymaster`)\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
+        "data_description": {
+          "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
+        },          
+        "description": "Select the lock to setup and code slots to create.\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
         "title": "keymaster"
-      },
-      "options_2": {
-        "data": {
-          "generate_package": "Generate package after you press submit?"
-        },
-        "description": "If checked this will generate the files once you click submit.\nWARNING: This will remove any customization you've done to the yaml files.",
-        "title": "Confirm"
       }
     }
   },
