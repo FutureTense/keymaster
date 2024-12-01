@@ -89,6 +89,7 @@ from .lock import (
     KeymasterLock,
     keymasterlock_type_lookup,
 )
+from .lovelace import delete_lovelace
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -1173,6 +1174,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return
         _LOGGER.debug("[delete_lock] %s: Deleting", kmlock.lock_name)
+        await self.hass.async_add_executor_job(
+            delete_lovelace, self.hass, kmlock.lock_name
+        )
         if kmlock.autolock_timer:
             await kmlock.autolock_timer.cancel()
         await self._unsubscribe_listeners(

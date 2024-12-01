@@ -82,6 +82,32 @@ async def generate_lovelace(
     await hass.async_add_executor_job(_write_lovelace_yaml, folder, filename, lovelace)
 
 
+def delete_lovelace(hass: HomeAssistant, kmlock_name: str) -> None:
+    folder: str = hass.config.path("custom_components", DOMAIN, "lovelace")
+    filename: str = f"{kmlock_name}.yaml"
+    file = os.path.join(folder, filename)
+
+    try:
+        os.remove(file)
+    except (FileNotFoundError, PermissionError) as e:
+        _LOGGER.debug(
+            "Unable to delete lovelace YAML (%s). %s: %s",
+            filename,
+            e.__class__.__qualname__,
+            e,
+        )
+    except Exception as e:
+        _LOGGER.debug(
+            "Exception deleting lovelace YAML (%s). %s: %s",
+            filename,
+            e.__class__.__qualname__,
+            e,
+        )
+        return
+    _LOGGER.debug("Lovelace YAML File deleted: %s", filename)
+    return
+
+
 def _create_lovelace_folder(folder) -> None:
     _LOGGER.debug("Lovelace Location: %s", folder)
 
