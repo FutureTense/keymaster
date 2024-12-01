@@ -47,7 +47,7 @@ from homeassistant.core import CoreState, Event, EventStateChangedData, HomeAssi
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.util import dt as dt_util
+from homeassistant.util import dt as dt_util, slugify
 
 from .const import (
     ACCESS_CONTROL,
@@ -943,13 +943,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if kmlock.retry_lock and kmlock.pending_retry_lock:
             await self._lock_lock(kmlock=kmlock)
             await dismiss_persistent_notification(
-                hass=self.hass, notification_id=f"{kmlock.lock_name}_autolock_door_open"
+                hass=self.hass,
+                notification_id=f"{slugify(kmlock.lock_name).lower()}_autolock_door_open",
             )
             await send_persistent_notification(
                 hass=self.hass,
                 title=f"{kmlock.lock_name} is closed",
                 message=f"The {kmlock.lock_name} sensor indicates the door has been closed, re-attempting to lock.",
-                notification_id=f"{kmlock.lock_name}_autolock_door_closed",
+                notification_id=f"{slugify(kmlock.lock_name).lower()}_autolock_door_closed",
             )
 
         if kmlock.door_notifications:
@@ -998,7 +999,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 hass=self.hass,
                 title=f"Unable to lock {kmlock.lock_name}",
                 message=f"Unable to lock {kmlock.lock_name} as the sensor indicates the door is currently opened.  The operation will be automatically retried when the door is closed.",
-                notification_id=f"{kmlock.lock_name}_autolock_door_open",
+                notification_id=f"{slugify(kmlock.lock_name).lower()}_autolock_door_open",
             )
         else:
             await self._lock_lock(kmlock=kmlock)

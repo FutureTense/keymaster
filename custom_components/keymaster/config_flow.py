@@ -60,7 +60,7 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Check if name is unique, returning dictionary error if so"""
         # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
-            user_input[CONF_LOCK_NAME], raise_on_progress=True
+            slugify(user_input[CONF_LOCK_NAME]).lower(), raise_on_progress=True
         )
         if existing_entry:
             return {CONF_LOCK_NAME: "same_name"}
@@ -95,9 +95,9 @@ class KeymasterOptionsFlow(config_entries.OptionsFlow):
         """Check if name is unique, returning dictionary error if so"""
         # If lock name has changed, make sure new name isn't already being used
         # otherwise show an error
-        if self.config_entry.unique_id != user_input[CONF_LOCK_NAME]:
+        if self.config_entry.unique_id != slugify(user_input[CONF_LOCK_NAME]).lower():
             for entry in self.hass.config_entries.async_entries(DOMAIN):
-                if entry.unique_id == user_input[CONF_LOCK_NAME]:
+                if entry.unique_id == slugify(user_input[CONF_LOCK_NAME]).lower():
                     return {CONF_LOCK_NAME: "same_name"}
         return {}
 
@@ -296,7 +296,6 @@ async def _start_config_flow(
     description_placeholders = {}
 
     if user_input is not None:
-        user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME].lower())
         user_input[CONF_SLOTS] = int(user_input.get(CONF_SLOTS))
         user_input[CONF_START] = int(user_input.get(CONF_START))
 
