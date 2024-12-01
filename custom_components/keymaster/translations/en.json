@@ -1,52 +1,52 @@
 {
   "config": {
     "error": {
-      "same_name": "Name already in use"
+      "same_name": "keymaster Lock Name already in use"
     },
     "step": {
       "user": {
         "data": {
           "alarm_level_or_user_code_entity_id": "Alarm Level/User Code Sensor (from lock)",
           "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
-          "lock_entity_id": "Select your lock",
+          "lock_entity_id": "Physical Lock",
           "slots": "Code Slots",
-          "start_from": "Start from code slot #",
+          "start_from": "Starting Code Slot #",
           "sensorname": "Door Sensor",
-          "lockname": "Lock Name (ie: frontdoor)",
-          "parent": "Select parent lock",
-          "notify_script": "Notification Script",          
-          "hide_pins": "Hide PINs in UI?"
+          "lockname": "keymaster Lock Name (ie: frontdoor)",
+          "parent": "keymaster Parent Lock (optional)",
+          "notify_script": "Notification Script",                 
+          "hide_pins": "Hide PINs in UI"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
         },        
-        "description": "Select the lock to setup and code slots to create.\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
+        "description": "Select the lock to setup and code slots to create. There may or may be have alarm level and alarm type entities.",
         "title": "keymaster"
       }
     }
   },
   "options": {
     "error": {
-      "same_name": "Name already in use"
+      "same_name": "keymaster Lock Name already in use"
     },
     "step": {
       "init": {
         "data": {
           "alarm_level_or_user_code_entity_id": "Alarm Level/User Code Sensor (from lock)",
           "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
-          "lock_entity_id": "Select your lock",
+          "lock_entity_id": "Physical Lock",
           "slots": "Code Slots",
-          "start_from": "Start from code slot #",
+          "start_from": "Start from Code Slot #",
           "sensorname": "Door Sensor",
-          "lockname": "Lock Name (ie: frontdoor)",
-          "parent": "Select parent lock",
+          "lockname": "keymaster Lock Name (ie: frontdoor)",
+          "parent": "keymaster Parent Lock (optional)",
           "notify_script": "Notification Script",                 
-          "hide_pins": "Hide PINs in UI?"
+          "hide_pins": "Hide PINs in UI"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
         },          
-        "description": "Select the lock to setup and code slots to create.\n\nIf you are using Z-Wave JS you may or may not have alarm level and alarm type entities. If you do, select them on this form, otherwise you can use the `sensor.fake` values as placeholders.",
+        "description": "Select the lock to setup and code slots to create. There may or may be have alarm level and alarm type entities.",
         "title": "keymaster"
       }
     }

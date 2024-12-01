@@ -26,11 +26,11 @@ from homeassistant.helpers import entity_registry as er
 from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_DOOR_SENSOR_ENTITY_ID,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PARENT,
     CONF_PARENT_ENTRY_ID,
-    CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
@@ -171,7 +171,7 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
         alarm_type_or_access_control_entity_id=config_entry.data.get(
             CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
         ),
-        door_sensor_entity_id=config_entry.data.get(CONF_SENSOR_NAME),
+        door_sensor_entity_id=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
         number_of_code_slots=config_entry.data.get(CONF_SLOTS),
         starting_code_slot=config_entry.data.get(CONF_START),
         code_slots=code_slots,

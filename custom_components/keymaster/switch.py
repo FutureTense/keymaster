@@ -9,7 +9,7 @@ from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 
 from .const import (
-    CONF_SENSOR_NAME,
+    CONF_DOOR_SENSOR_ENTITY_ID,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
@@ -45,7 +45,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 "icon": "mdi:lock-alert",
             },
         ]
-        if config_entry.data.get(CONF_SENSOR_NAME) not in (None, DEFAULT_DOOR_SENSOR):
+        if config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID) not in (
+            None,
+            DEFAULT_DOOR_SENSOR,
+        ):
             lock_switch_entities.extend(
                 [
                     {
