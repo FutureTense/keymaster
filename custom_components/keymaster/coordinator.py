@@ -373,6 +373,28 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return result
         return instance
 
+    def delete_json(self) -> None:
+        file = os.path.join(self._json_folder, self._json_filename)
+
+        try:
+            os.remove(file)
+        except (FileNotFoundError, PermissionError) as e:
+            _LOGGER.debug(
+                "Unable to delete JSON config (%s). %s: %s",
+                self._json_filename,
+                e.__class__.__qualname__,
+                e,
+            )
+        except Exception as e:
+            _LOGGER.debug(
+                "Exception deleting JSON config (%s). %s: %s",
+                self._json_filename,
+                e.__class__.__qualname__,
+                e,
+            )
+            return
+        _LOGGER.debug("JSON config file deleted: %s", self._json_filename)
+
     def _write_config_to_json(self) -> bool:
         config: Mapping = {
             id: self._kmlocks_to_dict(kmlock) for id, kmlock in self.kmlocks.items()
@@ -1184,6 +1206,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
         await self._rebuild_lock_relationships()
+        await self.hass.async_add_executor_job(self._write_config_to_json)
         await self.async_refresh()
         return
 
@@ -1207,7 +1230,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 action=functools.partial(self._delete_lock, kmlock),
             )
         )
-        return
 
     async def get_lock_by_config_entry_id(
         self, config_entry_id: str
