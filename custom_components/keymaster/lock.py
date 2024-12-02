@@ -98,6 +98,7 @@ keymasterlock_type_lookup: Mapping[str, Any] = {
     "code_slots": Mapping[int, KeymasterCodeSlot],
     "lock_notifications": bool,
     "door_notifications": bool,
+    "notify_script_name": str,
     "lock_state": str,
     "door_state": str,
     "autolock_enabled": bool,
