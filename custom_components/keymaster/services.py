@@ -13,10 +13,10 @@ from .const import (
     ATTR_CODE_SLOT,
     ATTR_CONFIG_ENTRY_ID,
     ATTR_PIN,
+    CONF_DOOR_SENSOR_ENTITY_ID,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PARENT_ENTRY_ID,
-    CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
@@ -84,7 +84,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 code_slot_start=config_entry.data.get(CONF_START),
                 code_slots=config_entry.data.get(CONF_SLOTS),
                 lock_entity=config_entry.data.get(CONF_LOCK_ENTITY_ID),
-                door_sensor=config_entry.data.get(CONF_SENSOR_NAME),
+                door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
             )
 
     hass.services.async_register(

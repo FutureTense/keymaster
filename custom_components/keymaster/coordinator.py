@@ -809,7 +809,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 message = message + f" ({code_slot})"
             await send_manual_notification(
                 hass=self.hass,
-                service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                script_name=kmlock.notify_script_name,
                 title=kmlock.lock_name,
                 message=message,
             )
@@ -848,7 +848,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             ):
                 await send_manual_notification(
                     hass=self.hass,
-                    service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                    script_name=kmlock.notify_script_name,
                     title=kmlock.lock_name,
                     message=f"{event_label} ({code_slot})",
                 )
@@ -893,7 +893,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if kmlock.lock_notifications:
             await send_manual_notification(
                 hass=self.hass,
-                service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                script_name=kmlock.notify_script_name,
                 title=kmlock.lock_name,
                 message=event_label,
             )
@@ -924,7 +924,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if kmlock.door_notifications:
             await send_manual_notification(
                 hass=self.hass,
-                service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                script_name=kmlock.notify_script_name,
                 title=kmlock.lock_name,
                 message="Door Opened",
             )
@@ -954,7 +954,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if kmlock.door_notifications:
             await send_manual_notification(
                 hass=self.hass,
-                service_name=f"keymaster_{kmlock.lock_name}_manual_notify",
+                script_name=kmlock.notify_script_name,
                 title=kmlock.lock_name,
                 message="Door Closed",
             )

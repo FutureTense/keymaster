@@ -61,9 +61,10 @@ CONF_LOCK_ENTITY_ID = "lock_entity_id"
 CONF_LOCK_NAME = "lockname"
 CONF_PARENT = "parent"
 CONF_PARENT_ENTRY_ID = "parent_entry_id"
-CONF_SENSOR_NAME = "sensorname"
+CONF_DOOR_SENSOR_ENTITY_ID = "sensorname"
 CONF_SLOTS = "slots"
 CONF_START = "start_from"
+CONF_NOTIFY_SCRIPT_NAME = "notify_script"
 
 # Defaults
 DEFAULT_CODE_SLOTS = 10

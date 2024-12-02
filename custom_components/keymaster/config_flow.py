@@ -1,28 +1,33 @@
 """Config flow for keymaster"""
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
-from homeassistant.components.sensor import DOMAIN as SENSORS_DOMAIN
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 
 from .const import (
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_DOOR_SENSOR_ENTITY_ID,
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
-    CONF_SENSOR_NAME,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
     DEFAULT_ALARM_LEVEL_SENSOR,
     DEFAULT_ALARM_TYPE_SENSOR,
     DEFAULT_CODE_SLOTS,
@@ -31,6 +36,9 @@ from .const import (
     DEFAULT_START,
     DOMAIN,
 )
+
+if TYPE_CHECKING:
+    from .coordinator import KeymasterCoordinator
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -42,7 +50,9 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     DEFAULTS: Mapping[str, Any] = {
         CONF_SLOTS: DEFAULT_CODE_SLOTS,
         CONF_START: DEFAULT_START,
-        CONF_SENSOR_NAME: DEFAULT_DOOR_SENSOR,
+        CONF_DOOR_SENSOR_ENTITY_ID: DEFAULT_DOOR_SENSOR,
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: DEFAULT_ALARM_LEVEL_SENSOR,
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: DEFAULT_ALARM_TYPE_SENSOR,
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
@@ -60,8 +70,6 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: Mapping[str, Any] = None
     ) -> Mapping[str, Any]:
         """Handle a flow initialized by the user"""
-        # TODO: Only allow once instance per physical lock
-        # TODO: Store lock config_entry_id
         return await _start_config_flow(
             cls=self,
             step_id="user",
@@ -127,8 +135,10 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
 def _get_entities(
     hass: HomeAssistant,
     domain: str,
-    search: list[str] = None,
-    extra_entities: list[str] = None,
+    search: list[str] | None = None,
+    extra_entities: list[str] | None = None,
+    exclude_entities: list[str] | None = None,
+    sort: bool = True,
 ) -> list[str]:
     data: list[str] = []
     if domain not in hass.data:
@@ -142,6 +152,31 @@ def _get_entities(
     if extra_entities:
         data.extend(extra_entities)
 
+    if exclude_entities:
+        for ent in exclude_entities:
+            try:
+                data.remove(ent)
+            except ValueError:
+                pass
+
+    if sort:
+        data.sort()
+
+    return data
+
+
+def _get_locks_in_use(hass: HomeAssistant, exclude: str | None = None) -> list[str]:
+    if COORDINATOR not in hass.data[DOMAIN]:
+        return []
+    data: list[str] = []
+    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    for kmlock in coordinator.data.values():
+        data.append(kmlock.lock_entity_id)
+    if exclude:
+        try:
+            data.remove(exclude)
+        except ValueError:
+            pass
     return data
 
 
@@ -160,30 +195,50 @@ def _get_schema(
         check_dict.pop(CONF_PARENT, None)
         default_dict = check_dict
 
-    def _get_default(key: str, fallback_default: Any = None) -> None:
+    def _get_default(key: str, fallback_default: Any = None) -> Any:
         """Gets default value for key"""
-        return user_input.get(key, default_dict.get(key, fallback_default))
+        default = user_input.get(key)
+        if default is None:
+            default = default_dict.get(key, fallback_default)
+        if default is None:
+            default = fallback_default
+        return default
 
+    script_default: str | None = _get_default(CONF_NOTIFY_SCRIPT_NAME)
+    if isinstance(script_default, str) and not script_default.startswith("script."):
+        script_default = f"script.{script_default}"
     return vol.Schema(
         {
+            vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
+            vol.Required(
+                CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
+            ): vol.In(
+                _get_entities(
+                    hass=hass,
+                    domain=LOCK_DOMAIN,
+                    exclude_entities=_get_locks_in_use(
+                        hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)
+                    ),
+                )
+            ),
             vol.Optional(
                 CONF_PARENT, default=_get_default(CONF_PARENT, "(none)")
             ): vol.In(_available_parent_locks(hass, entry_id)),
-            vol.Required(
-                CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
-            ): vol.In(_get_entities(hass, LOCK_DOMAIN)),
             vol.Required(
                 CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)
             ): vol.All(vol.Coerce(int), vol.Range(min=1)),
             vol.Required(
                 CONF_START, default=_get_default(CONF_START, DEFAULT_START)
             ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-            vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
             vol.Optional(
-                CONF_SENSOR_NAME,
-                default=_get_default(CONF_SENSOR_NAME, DEFAULT_DOOR_SENSOR),
+                CONF_DOOR_SENSOR_ENTITY_ID,
+                default=_get_default(CONF_DOOR_SENSOR_ENTITY_ID, DEFAULT_DOOR_SENSOR),
             ): vol.In(
-                _get_entities(hass, BINARY_DOMAIN, extra_entities=[DEFAULT_DOOR_SENSOR])
+                _get_entities(
+                    hass=hass,
+                    domain=BINARY_DOMAIN,
+                    extra_entities=[DEFAULT_DOOR_SENSOR],
+                )
             ),
             vol.Optional(
                 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
@@ -192,8 +247,8 @@ def _get_schema(
                 ),
             ): vol.In(
                 _get_entities(
-                    hass,
-                    SENSORS_DOMAIN,
+                    hass=hass,
+                    domain=SENSOR_DOMAIN,
                     search=["alarm_level", "user_code", "alarmlevel"],
                     extra_entities=[DEFAULT_ALARM_LEVEL_SENSOR],
                 )
@@ -206,10 +261,19 @@ def _get_schema(
                 ),
             ): vol.In(
                 _get_entities(
-                    hass,
-                    SENSORS_DOMAIN,
+                    hass=hass,
+                    domain=SENSOR_DOMAIN,
                     search=["alarm_type", "access_control", "alarmtype"],
                     extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
+                )
+            ),
+            vol.Optional(
+                CONF_NOTIFY_SCRIPT_NAME,
+                default=script_default,
+            ): vol.In(
+                _get_entities(
+                    hass=hass,
+                    domain=SCRIPT_DOMAIN,
                 )
             ),
             vol.Required(
@@ -233,6 +297,8 @@ async def _start_config_flow(
 
     if user_input is not None:
         user_input[CONF_LOCK_NAME] = slugify(user_input[CONF_LOCK_NAME].lower())
+        user_input[CONF_SLOTS] = int(user_input.get(CONF_SLOTS))
+        user_input[CONF_START] = int(user_input.get(CONF_START))
 
         # Convert (none) to None
         if user_input[CONF_PARENT] == "(none)":
