@@ -112,6 +112,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=60),
+            config_entry=None,
         )
         self._json_folder: str = self.hass.config.path(
             "custom_components", DOMAIN, "json_kmlocks"
