@@ -166,7 +166,7 @@ def _get_entities(
 
 
 def _get_locks_in_use(hass: HomeAssistant, exclude: str | None = None) -> list[str]:
-    if COORDINATOR not in hass.data[DOMAIN]:
+    if DOMAIN not in hass.data or COORDINATOR not in hass.data[DOMAIN]:
         return []
     data: list[str] = []
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
