@@ -20,7 +20,7 @@ from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import SERVICE_RELOAD
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceNotFound
+from homeassistant.exceptions import ConfigEntryNotReady, ServiceNotFound
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
@@ -75,7 +75,10 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     if COORDINATOR not in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
         hass.data[DOMAIN][COORDINATOR] = coordinator
-        await coordinator.async_config_entry_first_refresh()
+        await coordinator.initial_setup()
+        await coordinator.async_refresh()
+        if not coordinator.last_update_success:
+            raise ConfigEntryNotReady from coordinator.last_exception
     else:
         coordinator = hass.data[DOMAIN][COORDINATOR]
 

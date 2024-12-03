@@ -120,6 +120,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         self._json_filename: str = f"{DOMAIN}_kmlocks.json"
 
+    async def initial_setup(self) -> bool:
+        await self._async_setup()
+
     async def _async_setup(self) -> None:
         _LOGGER.info(
             "Keymaster %s is starting, if you have any issues please report them here: %s",

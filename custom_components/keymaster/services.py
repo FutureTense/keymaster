@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import selector
 
 from .const import (
@@ -38,7 +38,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     if COORDINATOR not in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
         hass.data[DOMAIN][COORDINATOR] = coordinator
-        await coordinator.async_config_entry_first_refresh()
+        await coordinator.initial_setup()
+        await coordinator.async_refresh()
+        if not coordinator.last_update_success:
+            raise ConfigEntryNotReady from coordinator.last_exception
     else:
         coordinator = hass.data[DOMAIN][COORDINATOR]
 

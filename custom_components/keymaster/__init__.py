@@ -10,6 +10,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.event import async_call_later
 
@@ -104,7 +105,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     if COORDINATOR not in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
         hass.data[DOMAIN][COORDINATOR] = coordinator
-        await coordinator.async_config_entry_first_refresh()
+        await coordinator.initial_setup()
+        await coordinator.async_refresh()
+        if not coordinator.last_update_success:
+            raise ConfigEntryNotReady from coordinator.last_exception
     else:
         coordinator = hass.data[DOMAIN][COORDINATOR]
 
