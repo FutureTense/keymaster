@@ -73,7 +73,7 @@ async def generate_lovelace(
         {
             "type": "sections",
             "max_columns": 4,
-            "title": f"{kmlock_name.replace('_',' ').title()}",
+            "title": f"{kmlock_name}",
             "path": f"keymaster_{kmlock_name}",
             "badges": mapped_badges_list,
             "sections": lovelace_list,
