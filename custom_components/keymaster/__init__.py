@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 import functools
 import logging
 
@@ -218,14 +218,15 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
         await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id)
 
-        if len(coordinator.data) <= 1:
+        if coordinator.count_locks_not_pending_delete == 0:
             _LOGGER.debug(
                 "[async_unload_entry] Possibly empty coordinator. "
-                "Will evaluate for removal in 30 seconds"
+                "Will evaluate for removal at %s",
+                datetime.now().astimezone() + timedelta(seconds=20),
             )
             async_call_later(
                 hass=hass,
-                delay=30,
+                delay=20,
                 action=functools.partial(delete_coordinator, hass),
             )
     return unload_ok
