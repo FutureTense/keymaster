@@ -1225,7 +1225,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         _LOGGER.debug(
             "[delete_lock_by_config_entry_id] %s: Scheduled to delete at %s",
             kmlock.lock_name,
-            datetime.now().astimezone() + timedelta(seconds=15),
+            datetime.now().astimezone() + timedelta(seconds=10),
         )
         kmlock.listeners.append(
             async_call_later(
@@ -1234,6 +1234,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 action=functools.partial(self._delete_lock, kmlock),
             )
         )
+
+    @property
+    def count_locks_not_pending_delete(self):
+        count = 0
+        for kmlock in self.kmlocks.values():
+            if not kmlock.pending_delete:
+                count += 1
+        return count
 
     async def get_lock_by_config_entry_id(
         self, config_entry_id: str
