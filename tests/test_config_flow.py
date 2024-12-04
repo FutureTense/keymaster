@@ -7,11 +7,11 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.config_flow import (
-    KeyMasterFlowHandler,
+    KeymasterFlowHandler,
     _get_entities,
     _get_schema,
 )
-from custom_components.keymaster.const import CONF_PATH, DOMAIN
+from custom_components.keymaster.const import DOMAIN
 from homeassistant import config_entries, setup
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 
@@ -32,7 +32,6 @@ pytestmark = pytest.mark.asyncio
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
-                "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
@@ -44,8 +43,6 @@ pytestmark = pytest.mark.asyncio
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
-                "generate_package": True,
-                "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
@@ -59,7 +56,6 @@ pytestmark = pytest.mark.asyncio
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
-                "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
@@ -71,8 +67,6 @@ pytestmark = pytest.mark.asyncio
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
-                "generate_package": True,
-                "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
@@ -125,7 +119,6 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
-                "packages_path": "/packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
@@ -137,8 +130,6 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "frontdoor",
-                "generate_package": True,
-                "packages_path": "/packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 6,
                 "start_from": 1,
@@ -184,7 +175,6 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "sidedoor",
-                "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
@@ -196,7 +186,6 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "sidedoor",
-                "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
@@ -208,11 +197,11 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
 )
 async def test_options_flow(input_1, title, data, hass, mock_get_entities):
     """Test config flow options."""
-    _LOGGER.error(_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS))
+    _LOGGER.error(_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS))
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="frontdoor",
-        data=_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS)(CONFIG_DATA),
+        data=_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS)(CONFIG_DATA),
         version=2,
     )
 
@@ -252,7 +241,6 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "sidedoor",
-                "packages_path": "packages/keymaster_test",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
@@ -264,7 +252,6 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "sidedoor",
-                "packages_path": "packages/keymaster_test",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
@@ -276,11 +263,11 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
 )
 async def test_options_flow_path_change(input_1, title, data, hass, mock_get_entities):
     """Test config flow options."""
-    _LOGGER.error(_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS))
+    _LOGGER.error(_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS))
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="frontdoor",
-        data=_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS)(CONFIG_DATA),
+        data=_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS)(CONFIG_DATA),
         version=2,
     )
 
@@ -320,7 +307,6 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "sidedoor",
-                "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
@@ -332,7 +318,6 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
                 "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
                 "lockname": "sidedoor",
-                "packages_path": "packages/keymaster",
                 "sensorname": "binary_sensor.frontdoor",
                 "slots": 4,
                 "start_from": 1,
@@ -351,11 +336,11 @@ async def test_options_flow_with_zwavejs(
     node = lock_kwikset_910
     state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
 
-    _LOGGER.error(_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS))
+    _LOGGER.error(_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS))
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="frontdoor",
-        data=_get_schema(hass, CONFIG_DATA, KeyMasterFlowHandler.DEFAULTS)(CONFIG_DATA),
+        data=_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS)(CONFIG_DATA),
         version=2,
     )
 
