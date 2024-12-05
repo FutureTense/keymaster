@@ -742,7 +742,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             await self._create_listeners(kmlock=kmlock)
         else:
             _LOGGER.debug(
-                "[update_listeners] %s: " "Setting create_listeners to run when HA starts",
+                "[update_listeners] %s: Setting create_listeners to run when HA starts",
                 kmlock.lock_name,
             )
             self.hass.bus.async_listen_once(
@@ -783,7 +783,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if kmlock.lock_notifications:
             message: str = event_label
             if code_slot > 0:
-                message = f"{message} ({code_slot})"
+                if kmlock.code_slots.get(code_slot) and kmlock.code_slots[code_slot].name:
+                    message = f"{message} by {kmlock.code_slots[code_slot].name} [{code_slot}]"
+                else:
+                    message = f"{message} by Code Slot {code_slot}"
             await send_manual_notification(
                 hass=self.hass,
                 script_name=kmlock.notify_script_name,
@@ -818,11 +821,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock.code_slots[code_slot].accesslimit_count -= 1
 
             if kmlock.code_slots[code_slot].notifications and not kmlock.lock_notifications:
+                if kmlock.code_slots[code_slot].name:
+                    message = f"{message} by {kmlock.code_slots[code_slot].name} [{code_slot}]"
+                else:
+                    message = f"{message} by Code Slot {code_slot}"
                 await send_manual_notification(
                     hass=self.hass,
                     script_name=kmlock.notify_script_name,
                     title=kmlock.lock_name,
-                    message=f"{event_label} ({code_slot})",
+                    message=message,
                 )
 
         # Fire state change event
@@ -1432,17 +1439,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
-        for i, dow in enumerate(
-            [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ]
-        ):
+        for i, dow in enumerate([
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ]):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         new_code_slot = KeymasterCodeSlot(
             number=code_slot, enabled=False, accesslimit_day_of_week=dow_slots
@@ -1523,7 +1528,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if not kmlock.code_slots or code_slot not in kmlock.code_slots:
             _LOGGER.debug(
-                "[update_slot_active_state] %s: " "Keymaster code slot %s doesn't exist.",
+                "[update_slot_active_state] %s: Keymaster code slot %s doesn't exist.",
                 kmlock.lock_name,
                 code_slot,
             )
@@ -1589,7 +1594,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return True
 
         _LOGGER.debug(
-            "[connect_and_update_lock] %s: " "Lock connected, updating Device and Nodes",
+            "[connect_and_update_lock] %s: Lock connected, updating Device and Nodes",
             kmlock.lock_name,
         )
 
