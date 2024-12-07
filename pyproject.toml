@@ -1,59 +1,92 @@
 [tool.black]
-target-version = ["py38"]
+target-version = ["py311", "py312", "py313"]
 exclude = 'generated'
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
+
+[tool.flake8]
+exclude = [
+    ".venv",
+    ".git",
+    ".tox",
+    "docs",
+    "venv",
+    "bin",
+    "lib",
+    "deps",
+    "build",
+]
+max-line-length = 88
+ignore = [
+    "E501", # line too long
+    "W503", # Line break occurred before a binary operator
+    "E203", # Whitespace before ':'
+    "D202", # No blank lines allowed after function docstring
+    "W504", # Line break after binary operator
+]
 
 [tool.isort]
 # https://github.com/PyCQA/isort/wiki/isort-Settings
 profile = "black"
+combine-as-imports = true
+forced_separate = [
+    "tests",
+]
 # will group `import x` and `from x import` of the same module.
 force_sort_within_sections = true
 known_first_party = [
     "homeassistant",
     "tests",
 ]
-forced_separate = [
-    "tests",
-]
-combine_as_imports = true
+line_length = 88
+split-on-trailing-comma = false
+use_parentheses = true
 
-[tool.pylint.MASTER]
-ignore = [
-    "tests",
-]
-# Use a conservative default here; 2 should speed up most setups and not hurt
-# any too bad. Override on command line as appropriate.
-# Disabled for now: https://github.com/PyCQA/pylint/issues/3584
-#jobs = 2
-load-plugins = [
-    "pylint_strict_informational",
-]
+[tool.mypy]
+python_version = "3.13"
+show_error_codes = true
+ignore_errors = true
+follow_imports = "silent"
+ignore_missing_imports = true
+warn_incomplete_stub = true
+warn_redundant_casts = true
+warn_unused_configs = true
+
+[tool.pylint]
+ignore = ["tests"]
+jobs = 2
 persistent = false
+# load-plugins = [
+#     "pylint_strict_informational",
+# ]
 extension-pkg-whitelist = [
     "ciso8601",
     "cv2",
 ]
 
-[tool.pylint.BASIC]
-good-names = [
-    "_",
-    "ev",
-    "ex",
-    "fp",
-    "i",
-    "id",
-    "j",
-    "k",
-    "Run",
-    "T",
+[tool.pylint.basic]
+max-attributes = 15
+argument-naming-style = "snake_case"
+attr-naming-style = "snake_case"
+
+[tool.pylint.exceptions]
+overgeneral-exceptions = [
+    "builtins.BaseException", 
+    "builtins.Exception",
+    # "homeassistant.exceptions.HomeAssistantError",
 ]
 
-[tool.pylint."MESSAGES CONTROL"]
+[tool.pylint.format]
+expected-line-ending-format = "LF"
+
+[tool.pylint."messages control"]
 # Reasons disabled:
 # format - handled by black
 # locally-disabled - it spams too much
 # duplicate-code - unavoidable
 # cyclic-import - doesn't test if both import on load
-# abstract-class-little-used - prevents from setting right foundation
 # unused-argument - generic callbacks and setup methods create a lot of warnings
 # too-many-* - are not enforced for the sake of readability
 # too-few-* - same as too-many-*
@@ -61,26 +94,36 @@ good-names = [
 # inconsistent-return-statements - doesn't handle raise
 # too-many-ancestors - it's too strict.
 # wrong-import-order - isort guards this
+# possibly-used-before-assignment - too many errors / not necessarily issues
+# consider-using-namedtuple-or-dataclass - too opinionated
+# consider-using-assignment-expr - decision to use := better left to devs
 disable = [
-    "format",
-    "abstract-class-little-used",
     "abstract-method",
+    "broad-except",
+    "consider-using-assignment-expr",
+    "consider-using-namedtuple-or-dataclass",
     "cyclic-import",
     "duplicate-code",
+    "fixme",
+    "format",
+    "import-outside-toplevel",
     "inconsistent-return-statements",
     "locally-disabled",
     "not-context-manager",
+    "possibly-used-before-assignment",    
     "too-few-public-methods",
     "too-many-ancestors",
     "too-many-arguments",
+    "too-many-boolean-expressions",
     "too-many-branches",
     "too-many-instance-attributes",
     "too-many-lines",
     "too-many-locals",
+    "too-many-positional-arguments",
     "too-many-public-methods",
     "too-many-return-statements",
     "too-many-statements",
-    "too-many-boolean-expressions",
+    "unexpected-keyword-arg",
     "unused-argument",
     "wrong-import-order",
 ]
@@ -89,23 +132,14 @@ enable = [
     "use-symbolic-message-instead",
 ]
 
-[tool.pylint.REPORTS]
+[tool.pylint.refactoring]
+max-nested-blocks = 8
+
+[tool.pylint.reports]
 score = false
 
-[tool.pylint.TYPECHECK]
-ignored-classes = [
-    "_CountingAttr",  # for attrs
-]
-
-[tool.pylint.FORMAT]
-expected-line-ending-format = "LF"
-
-[tool.pylint.EXCEPTIONS]
-overgeneral-exceptions = [
-    "BaseException",
-    "Exception",
-    "HomeAssistantError",
-]
+[tool.pylint.typecheck]
+ignored-classes = ["_CountingAttr"]
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -115,3 +149,46 @@ norecursedirs = [
     ".git",
     "testing_config",
 ]
+log_format = "%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(name)s:%(filename)s:%(lineno)s %(message)s"
+log_date_format = "%Y-%m-%d %H:%M:%S"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+timeout = 30
+addopts = "--cov=custom_components/keymaster --cov-report=xml"
+
+[tool.tox.gh-actions]
+python = """
+    3.11: py311
+    3.12: py312
+    3.13: py313, lint, mypy
+"""
+
+[tool.tox]
+skipsdist = true
+requires = ["tox>=4.19"]
+env_list = ["py311", "py312", "py313", "lint", "mypy"]
+skip_missing_interpreters = true
+
+[tool.tox.env_run_base]
+description = "Run pytest under {base_python}"
+commands = [[ "pytest", "tests", { replace = "posargs", extend = true} ]]
+deps = ["-rrequirements_test.txt"]
+ignore_errors = true
+
+[tool.tox.env.lint]
+description = "Lint code using black, flake8, pylint, and pydocstyle under {base_python}"
+ignore_errors = true
+commands = [
+    ["black", "--check", "custom_components{/}"],
+    ["black", "--check", "tests{/}"],
+    ["flake8", "custom_components{/}keymaster"],
+    ["pylint", "custom_components{/}keymaster"],
+    ["pydocstyle", "custom_components{/}keymaster", "tests"]
+]
+deps = ["-rrequirements_test.txt"]
+
+[tool.tox.env.mypy]
+description = "Run mypy for type-checking under {base_python}"
+ignore_errors = true
+commands = [["mypy", "custom_components{/}keymaster"]]
+deps = ["-rrequirements_test.txt"]
