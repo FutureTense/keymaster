@@ -78,16 +78,21 @@ pytestmark = pytest.mark.asyncio
 )
 async def test_form(input_1, title, data, hass, mock_get_entities):
     """Test we get the form."""
-    with patch(
-        "custom_components.keymaster.config_flow.os.path.exists", return_value=True
-    ), patch(
-        "custom_components.keymaster.config_flow.os.path.isfile", return_value=True
-    ), patch(
-        "custom_components.keymaster.async_setup", return_value=True
-    ) as mock_setup, patch(
-        "custom_components.keymaster.async_setup_entry",
-        return_value=True,
-    ) as mock_setup_entry:
+    with (
+        patch(
+            "custom_components.keymaster.config_flow.os.path.exists", return_value=True
+        ),
+        patch(
+            "custom_components.keymaster.config_flow.os.path.isfile", return_value=True
+        ),
+        patch(
+            "custom_components.keymaster.async_setup", return_value=True
+        ) as mock_setup,
+        patch(
+            "custom_components.keymaster.async_setup_entry",
+            return_value=True,
+        ) as mock_setup_entry,
+    ):
 
         await setup.async_setup_component(hass, "persistent_notification", {})
         result = await hass.config_entries.flow.async_init(
@@ -149,15 +154,19 @@ async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
     assert result["errors"] == {}
     assert result["step_id"] == "user"
 
-    with patch(
-        "custom_components.keymaster.config_flow._get_entities",
-        return_value="['lock.kwikset_touchpad_electronic_deadbolt_frontdoor']",
-    ), patch(
-        "custom_components.keymaster.async_setup", return_value=True
-    ) as mock_setup, patch(
-        "custom_components.keymaster.async_setup_entry",
-        return_value=True,
-    ) as mock_setup_entry:
+    with (
+        patch(
+            "custom_components.keymaster.config_flow._get_entities",
+            return_value="['lock.kwikset_touchpad_electronic_deadbolt_frontdoor']",
+        ),
+        patch(
+            "custom_components.keymaster.async_setup", return_value=True
+        ) as mock_setup,
+        patch(
+            "custom_components.keymaster.async_setup_entry",
+            return_value=True,
+        ) as mock_setup_entry,
+    ):
 
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"], input_1
@@ -202,7 +211,7 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
         domain=DOMAIN,
         title="frontdoor",
         data=_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS)(CONFIG_DATA),
-        version=2,
+        version=3,
     )
 
     entry.add_to_hass(hass)
@@ -216,12 +225,15 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
     assert result["step_id"] == "init"
     assert result["errors"] == {}
 
-    with patch(
-        "custom_components.keymaster.async_setup", return_value=True
-    ) as mock_setup, patch(
-        "custom_components.keymaster.async_setup_entry",
-        return_value=True,
-    ) as mock_setup_entry:
+    with (
+        patch(
+            "custom_components.keymaster.async_setup", return_value=True
+        ) as mock_setup,
+        patch(
+            "custom_components.keymaster.async_setup_entry",
+            return_value=True,
+        ) as mock_setup_entry,
+    ):
 
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"], input_1
@@ -268,7 +280,7 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
         domain=DOMAIN,
         title="frontdoor",
         data=_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS)(CONFIG_DATA),
-        version=2,
+        version=3,
     )
 
     entry.add_to_hass(hass)
@@ -282,12 +294,15 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
     assert result["step_id"] == "init"
     assert result["errors"] == {}
 
-    with patch(
-        "custom_components.keymaster.async_setup", return_value=True
-    ) as mock_setup, patch(
-        "custom_components.keymaster.async_setup_entry",
-        return_value=True,
-    ) as mock_setup_entry:
+    with (
+        patch(
+            "custom_components.keymaster.async_setup", return_value=True
+        ) as mock_setup,
+        patch(
+            "custom_components.keymaster.async_setup_entry",
+            return_value=True,
+        ) as mock_setup_entry,
+    ):
 
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"], input_1
@@ -341,7 +356,7 @@ async def test_options_flow_with_zwavejs(
         domain=DOMAIN,
         title="frontdoor",
         data=_get_schema(hass, CONFIG_DATA, KeymasterFlowHandler.DEFAULTS)(CONFIG_DATA),
-        version=2,
+        version=3,
     )
 
     entry.add_to_hass(hass)
@@ -355,12 +370,15 @@ async def test_options_flow_with_zwavejs(
     assert result["step_id"] == "init"
     assert result["errors"] == {}
 
-    with patch(
-        "custom_components.keymaster.async_setup", return_value=True
-    ) as mock_setup, patch(
-        "custom_components.keymaster.async_setup_entry",
-        return_value=True,
-    ) as mock_setup_entry:
+    with (
+        patch(
+            "custom_components.keymaster.async_setup", return_value=True
+        ) as mock_setup,
+        patch(
+            "custom_components.keymaster.async_setup_entry",
+            return_value=True,
+        ) as mock_setup_entry,
+    ):
 
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"], input_1

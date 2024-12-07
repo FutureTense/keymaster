@@ -76,7 +76,7 @@ async def test_handle_state_change_zwave_js(
 
     # Load the integration
     config_entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=3
     )
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)

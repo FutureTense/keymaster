@@ -27,7 +27,7 @@ async def test_setup_entry(hass, mock_generate_package_files):
 
     await setup.async_setup_component(hass, "persistent_notification", {})
     entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=3
     )
 
     entry.add_to_hass(hass)
@@ -44,7 +44,7 @@ async def test_setup_entry_core_state(hass, mock_generate_package_files):
     with patch.object(hass, "state", return_value="STARTING"):
         await setup.async_setup_component(hass, "persistent_notification", {})
         entry = MockConfigEntry(
-            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=2
+            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=3
         )
 
         entry.add_to_hass(hass)
@@ -65,7 +65,7 @@ async def test_unload_entry(
 
     await setup.async_setup_component(hass, "persistent_notification", {})
     entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
     )
 
     entry.add_to_hass(hass)
@@ -124,7 +124,7 @@ async def test_setup_entry_alt_slots(
 
     await setup.async_setup_component(hass, "persistent_notification", {})
     entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_ALT_SLOTS, version=2
+        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_ALT_SLOTS, version=3
     )
 
     entry.add_to_hass(hass)
