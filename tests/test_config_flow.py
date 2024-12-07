@@ -12,7 +12,7 @@ from custom_components.keymaster.config_flow import (
     _get_schema,
 )
 from custom_components.keymaster.const import DOMAIN
-from homeassistant import config_entries, setup
+from homeassistant import config_entries
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 
 from .const import CONFIG_DATA
@@ -93,8 +93,6 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
             return_value=True,
         ) as mock_setup_entry,
     ):
-
-        await setup.async_setup_component(hass, "persistent_notification", {})
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
@@ -146,7 +144,6 @@ async def test_form(input_1, title, data, hass, mock_get_entities):
 )
 async def test_form_invalid_path(input_1, title, data, mock_get_entities, hass):
     """Test we get the form."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -218,7 +215,6 @@ async def test_options_flow(input_1, title, data, hass, mock_get_entities):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    await setup.async_setup_component(hass, "persistent_notification", {})
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert result["type"] == "form"
@@ -287,7 +283,6 @@ async def test_options_flow_path_change(input_1, title, data, hass, mock_get_ent
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    await setup.async_setup_component(hass, "persistent_notification", {})
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert result["type"] == "form"
@@ -363,7 +358,6 @@ async def test_options_flow_with_zwavejs(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    await setup.async_setup_component(hass, "persistent_notification", {})
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert result["type"] == "form"

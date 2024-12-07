@@ -24,17 +24,10 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 @pytest.fixture(name="skip_notifications", autouse=True)
 def skip_notifications_fixture():
     """Skip notification calls."""
-    with patch("homeassistant.components.persistent_notification.async_create"), patch(
-        "homeassistant.components.persistent_notification.async_dismiss"
+    with (
+        patch("homeassistant.components.persistent_notification.async_create"),
+        patch("homeassistant.components.persistent_notification.async_dismiss"),
     ):
-        yield
-
-
-@pytest.fixture(autouse=True)
-async def mock_init_child_locks():
-    with patch(
-        "custom_components.keymaster.services.init_child_locks", return_value=True
-    ), patch("custom_components.keymaster.init_child_locks"):
         yield
 
 
@@ -96,27 +89,6 @@ def mock_osrmdir():
 def mock_osmakedir():
     """Fixture to mock makedirs."""
     with patch("os.makedirs", return_value=True):
-        yield
-
-
-@pytest.fixture
-def mock_generate_package_files():
-    """Fixture to mock generate package files."""
-    with patch("custom_components.keymaster.generate_package_files", return_value=None):
-        yield
-
-
-@pytest.fixture
-def mock_delete_folder():
-    """Fixture to mock delete_folder helper function."""
-    with patch("custom_components.keymaster.delete_folder"):
-        yield
-
-
-@pytest.fixture
-def mock_delete_lock_and_base_folder():
-    """Fixture to mock delete_lock_and_base_folder helper function."""
-    with patch("custom_components.keymaster.delete_lock_and_base_folder"):
         yield
 
 
@@ -238,16 +210,16 @@ async def mock_zwavejs_get_usercodes():
         {"code_slot": 14, "usercode": "", "in_use": False},
     ]
     with patch(
-        "custom_components.keymaster.get_usercodes", return_value=slot_data
+        "zwave_js_server.util.lock.get_usercodes", return_value=slot_data
     ) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_using_zwavejs():
-    """Fixture to mock using_ozw in helpers"""
+    """Fixture to mock using_zwavejs in helpers"""
     with patch(
-        "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+        "custom_components.keymaster.helpers.async_using_zwave_js",
         return_value=True,
     ) as mock_using_zwavejs_helpers:
         yield mock_using_zwavejs_helpers

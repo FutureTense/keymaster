@@ -7,7 +7,6 @@ from unittest.mock import patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
-from homeassistant import setup
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_LOCKED
 import homeassistant.util.dt as dt_util
@@ -22,10 +21,9 @@ KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 _LOGGER = logging.getLogger(__name__)
 
 
-async def test_setup_entry(hass, mock_generate_package_files):
+async def test_setup_entry(hass):
     """Test setting up entities."""
 
-    await setup.async_setup_component(hass, "persistent_notification", {})
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=3
     )
@@ -39,10 +37,9 @@ async def test_setup_entry(hass, mock_generate_package_files):
     assert len(entries) == 1
 
 
-async def test_setup_entry_core_state(hass, mock_generate_package_files):
+async def test_setup_entry_core_state(hass):
     """Test setting up entities."""
     with patch.object(hass, "state", return_value="STARTING"):
-        await setup.async_setup_component(hass, "persistent_notification", {})
         entry = MockConfigEntry(
             domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_REAL, version=3
         )
@@ -58,12 +55,9 @@ async def test_setup_entry_core_state(hass, mock_generate_package_files):
 
 async def test_unload_entry(
     hass,
-    mock_delete_folder,
-    mock_delete_lock_and_base_folder,
 ):
     """Test unloading entities."""
 
-    await setup.async_setup_component(hass, "persistent_notification", {})
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
     )
@@ -86,7 +80,7 @@ async def test_unload_entry(
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 0
 
 
-async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
+async def test_setup_migration_with_old_path(hass):
     """Test setting up entities with old path"""
     with patch.object(hass.config, "path", return_value="/config"):
         entry = MockConfigEntry(
@@ -104,7 +98,6 @@ async def test_setup_migration_with_old_path(hass, mock_generate_package_files):
 
 async def test_setup_entry_alt_slots(
     hass,
-    mock_generate_package_files,
     client,
     lock_kwikset_910,
     integration,
@@ -122,7 +115,6 @@ async def test_setup_entry_alt_slots(
     assert state
     assert state.state == STATE_LOCKED
 
-    await setup.async_setup_component(hass, "persistent_notification", {})
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_ALT_SLOTS, version=3
     )
