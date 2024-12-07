@@ -102,6 +102,8 @@ async def test_setup_entry_alt_slots(
     lock_kwikset_910,
     integration,
     mock_zwavejs_get_usercodes,
+    mock_zwavejs_clear_usercode,
+    mock_zwavejs_set_usercode,
     mock_using_zwavejs,
     caplog,
 ):

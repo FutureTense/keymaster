@@ -216,6 +216,24 @@ async def mock_zwavejs_get_usercodes():
 
 
 @pytest.fixture
+async def mock_zwavejs_clear_usercode():
+    """Fixture to mock clear_usercode."""
+    with patch(
+        "zwave_js_server.util.lock.clear_usercode", return_value=None
+    ) as mock_usercodes:
+        yield mock_usercodes
+
+
+@pytest.fixture
+async def mock_zwavejs_set_usercode():
+    """Fixture to mock set_usercode."""
+    with patch(
+        "zwave_js_server.util.lock.set_usercode", return_value=None
+    ) as mock_usercodes:
+        yield mock_usercodes
+
+
+@pytest.fixture
 async def mock_using_zwavejs():
     """Fixture to mock using_zwavejs in helpers"""
     with patch(
