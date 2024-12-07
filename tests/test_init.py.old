@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.keymaster.const import DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_LOCKED
+from homeassistant.setup import async_setup_component
 import homeassistant.util.dt as dt_util
 
 from .common import async_fire_time_changed
@@ -21,7 +22,12 @@ KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 _LOGGER = logging.getLogger(__name__)
 
 
-async def test_setup_entry(hass):
+async def test_setup_entry(
+    hass,
+    mock_zwavejs_get_usercodes,
+    mock_zwavejs_clear_usercode,
+    mock_zwavejs_set_usercode,
+):
     """Test setting up entities."""
 
     entry = MockConfigEntry(
@@ -37,7 +43,12 @@ async def test_setup_entry(hass):
     assert len(entries) == 1
 
 
-async def test_setup_entry_core_state(hass):
+async def test_setup_entry_core_state(
+    hass,
+    mock_zwavejs_get_usercodes,
+    mock_zwavejs_clear_usercode,
+    mock_zwavejs_set_usercode,
+):
     """Test setting up entities."""
     with patch.object(hass, "state", return_value="STARTING"):
         entry = MockConfigEntry(
@@ -55,9 +66,10 @@ async def test_setup_entry_core_state(hass):
 
 async def test_unload_entry(
     hass,
+    mock_async_call_later,
 ):
     """Test unloading entities."""
-
+    now = dt_util.now()
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
     )
@@ -105,6 +117,7 @@ async def test_setup_entry_alt_slots(
     mock_zwavejs_clear_usercode,
     mock_zwavejs_set_usercode,
     mock_using_zwavejs,
+    mock_async_call_later,
     caplog,
 ):
     """Test setting up entities with alternate slot setting."""
@@ -120,10 +133,16 @@ async def test_setup_entry_alt_slots(
     entry = MockConfigEntry(
         domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_ALT_SLOTS, version=3
     )
-
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
+    await async_setup_component(
+        hass=hass,
+        domain=DOMAIN,
+        config=CONFIG_DATA_ALT_SLOTS,
+    )
     await hass.async_block_till_done()
+
+    # entry.add_to_hass(hass)
+    # assert await hass.config_entries.async_setup(entry.entry_id)
+    # await hass.async_block_till_done()
 
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 7
     entries = hass.config_entries.async_entries(DOMAIN)
@@ -150,3 +169,7 @@ async def test_setup_entry_alt_slots(
     assert hass.states.get(SENSOR_CHECK_2).state == "1234"
 
     assert "DEBUG: Code slot 12 not enabled" in caplog.text
+
+    assert await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 0
