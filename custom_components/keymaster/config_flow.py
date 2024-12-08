@@ -117,16 +117,15 @@ class KeymasterOptionsFlow(config_entries.OptionsFlow):
 
 def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
     """Find other keymaster configurations and list them as posible
-    parent locks if they are not a child lock already"""
+    parent locks if they are not a child lock already
+    """
 
     data: list[str] = ["(none)"]
     if DOMAIN not in hass.data:
         return data
 
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if CONF_PARENT not in entry.data and entry.entry_id != entry_id:
-            data.append(entry.title)
-        elif entry.data[CONF_PARENT] is None and entry.entry_id != entry_id:
+        if CONF_PARENT not in entry.data and entry.entry_id != entry_id or entry.data[CONF_PARENT] is None and entry.entry_id != entry_id:
             data.append(entry.title)
 
     return data
@@ -207,7 +206,8 @@ def _get_schema(
     script_default: str | None = _get_default(CONF_NOTIFY_SCRIPT_NAME)
     if isinstance(script_default, str) and not script_default.startswith("script."):
         script_default = f"script.{script_default}"
-    return vol.Schema(
+    _LOGGER.debug("[get_schema] script_default: %s (%s)", script_default, type(script_default))
+    schema = vol.Schema(
         {
             vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
             vol.Required(
@@ -267,15 +267,32 @@ def _get_schema(
                     extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
                 )
             ),
-            vol.Optional(
-                CONF_NOTIFY_SCRIPT_NAME,
-                default=script_default,
-            ): vol.In(
-                _get_entities(
-                    hass=hass,
-                    domain=SCRIPT_DOMAIN,
-                )
-            ),
+        }
+    )
+    if script_default:
+        schema = schema.extend({
+                vol.Optional(
+                    CONF_NOTIFY_SCRIPT_NAME,
+                    default=script_default,
+                ): vol.In(
+                    _get_entities(
+                        hass=hass,
+                        domain=SCRIPT_DOMAIN,
+                    )
+                ),
+        })
+    else:
+        schema = schema.extend({
+                vol.Optional(
+                    CONF_NOTIFY_SCRIPT_NAME
+                ): vol.In(
+                    _get_entities(
+                        hass=hass,
+                        domain=SCRIPT_DOMAIN,
+                    )
+                ),
+        })
+    return schema.extend({
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
@@ -292,10 +309,12 @@ async def _start_config_flow(
     entry_id: str = None,
 ):
     """Start a config flow"""
+    _LOGGER.debug("[start_config_flow] step_id: %s, defaults: %s", step_id, defaults)
     errors = {}
     description_placeholders = {}
 
     if user_input is not None:
+        _LOGGER.debug("[start_config_flow] step_id: %s, initial user_input: %s, errors: %s", step_id, user_input, errors)
         user_input[CONF_SLOTS] = int(user_input.get(CONF_SLOTS))
         user_input[CONF_START] = int(user_input.get(CONF_START))
 
@@ -307,6 +326,7 @@ async def _start_config_flow(
 
         # Update options if no errors
         if not errors:
+            _LOGGER.debug("[start_config_flow] step_id: %s, final user_input: %s", step_id, user_input)
             if step_id == "user":
                 return cls.async_create_entry(title=title, data=user_input)
             cls.hass.config_entries.async_update_entry(
