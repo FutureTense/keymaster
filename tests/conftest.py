@@ -1,4 +1,4 @@
-""" Fixtures for keymaster tests. """
+"""Fixtures for keymaster tests."""
 
 import asyncio
 import copy
@@ -18,7 +18,8 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
-    yield
+    """Enable custom integrations defined in the test dir."""
+    return
 
 
 @pytest.fixture(name="skip_notifications", autouse=True)
@@ -31,7 +32,7 @@ def skip_notifications_fixture():
         yield
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_get_entities():
     """Mock email data update class values."""
     with patch(
@@ -95,7 +96,7 @@ def mock_osmakedir():
 
 @pytest.fixture
 def mock_os_path_join():
-    """Fixture to mock splitext"""
+    """Fixture to mock path join."""
     with patch("os.path.join"):
         yield
 
@@ -144,7 +145,7 @@ def mock_client_fixture(controller_state, version_state, log_config_state):
         async def listen(driver_ready: asyncio.Event) -> None:
             driver_ready.set()
             await asyncio.sleep(30)
-            assert False, "Listen wasn't canceled!"
+            pytest.fail("Listen wasn't canceled!")
 
         async def disconnect():
             client.connected = False
@@ -236,7 +237,7 @@ async def mock_zwavejs_set_usercode():
 
 @pytest.fixture
 async def mock_using_zwavejs():
-    """Fixture to mock using_zwavejs in helpers"""
+    """Fixture to mock using_zwavejs in helpers."""
     with patch(
         "custom_components.keymaster.helpers.async_using_zwave_js",
         return_value=True,
@@ -255,8 +256,3 @@ def mock_async_call_later():
 
         mock.side_effect = immediate_call
         yield mock
-
-
-def pytest_runtest_protocol(item, nextitem):
-    print(f"Starting test: {item.nodeid}")
-    return None

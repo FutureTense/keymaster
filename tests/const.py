@@ -1,4 +1,4 @@
-""" Constants for tests. """
+"""Constants for tests."""
 
 CONFIG_DATA = {
     "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
