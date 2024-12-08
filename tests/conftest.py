@@ -43,6 +43,7 @@ def mock_get_entities():
             "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
             "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
             "binary_sensor.frontdoor",
+            "script.keymaster_frontdoor_manual_notify",
         ]
         yield mock_get_entities
 
@@ -241,3 +242,21 @@ async def mock_using_zwavejs():
         return_value=True,
     ) as mock_using_zwavejs_helpers:
         yield mock_using_zwavejs_helpers
+
+
+@pytest.fixture
+def mock_async_call_later():
+    """Fixture to mock async_call_later to call the callback immediately."""
+    with patch("homeassistant.helpers.event.async_call_later") as mock:
+
+        def immediate_call(hass, delay, callback):
+            # Immediately call the callback with a mock `hass` object
+            return callback(None)
+
+        mock.side_effect = immediate_call
+        yield mock
+
+
+def pytest_runtest_protocol(item, nextitem):
+    print(f"Starting test: {item.nodeid}")
+    return None
