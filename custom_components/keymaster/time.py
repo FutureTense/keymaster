@@ -1,4 +1,4 @@
-"""Support for keymaster Time"""
+"""Support for keymaster Time."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -22,6 +22,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Create keymaster Time entities."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     entities: list = []
 
@@ -73,16 +74,17 @@ async def async_setup_entry(
 
 @dataclass(kw_only=True)
 class KeymasterTimeEntityDescription(KeymasterEntityDescription, TimeEntityDescription):
-    pass
+    """Entity Description for keymaster Time entities."""
 
 
 class KeymasterTime(KeymasterEntity, TimeEntity):
+    """Class for keymaster Time entities."""
 
     def __init__(
         self,
         entity_description: KeymasterTimeEntityDescription,
     ) -> None:
-        """Initialize Time"""
+        """Initialize Time."""
         super().__init__(
             entity_description=entity_description,
         )
@@ -143,6 +145,7 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
         self.async_write_ha_state()
 
     async def async_set_value(self, value: dt_time) -> None:
+        """Update value for a time entity."""
         _LOGGER.debug(
             "[Time async_set_value] %s: value: %s",
             self.name,

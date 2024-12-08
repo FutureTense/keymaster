@@ -1,4 +1,4 @@
-"""Create the lovelace file for a keymaster lock"""
+"""Create the lovelace file for a keymaster lock."""
 
 from __future__ import annotations
 
@@ -26,17 +26,17 @@ async def generate_lovelace(
     code_slot_start: int,
     code_slots: int,
     lock_entity: str,
-    door_sensor: str = None,
-    parent_config_entry_id: str = None,
+    door_sensor: str | None = None,
+    parent_config_entry_id: str | None = None,
 ) -> None:
-    """Create the lovelace file for the keymaster lock"""
+    """Create the lovelace file for the keymaster lock."""
     folder: str = hass.config.path("custom_components", DOMAIN, "lovelace")
     filename: str = f"{kmlock_name}.yaml"
     await hass.async_add_executor_job(_create_lovelace_folder, folder)
 
     badges_list: list[Mapping[str, Any]] = await _generate_lock_badges(
         child=bool(parent_config_entry_id),
-        door=bool(door_sensor not in (None, DEFAULT_DOOR_SENSOR)),
+        door=bool(door_sensor not in {None, DEFAULT_DOOR_SENSOR}),
     )
     mapped_badges_list: list[Mapping[str, Any]] = await _map_property_to_entity_id(
         hass=hass,
@@ -83,6 +83,7 @@ async def generate_lovelace(
 
 
 def delete_lovelace(hass: HomeAssistant, kmlock_name: str) -> None:
+    """Delete the lovelace YAML file."""
     folder: str = hass.config.path("custom_components", DOMAIN, "lovelace")
     filename: str = f"{kmlock_name}.yaml"
     file = os.path.join(folder, filename)
@@ -164,7 +165,7 @@ def _write_lovelace_yaml(folder: str, filename: str, lovelace: Any) -> None:
             e,
         )
         return
-    _LOGGER.debug("Lovelave YAML File Written: %s", filename)
+    _LOGGER.debug("Lovelace YAML File Written: %s", filename)
     return
 
 
@@ -172,9 +173,9 @@ async def _map_property_to_entity_id(
     hass: HomeAssistant,
     lovelace_entities: list[Mapping[str, Any]] | Mapping[str, Any],
     keymaster_config_entry_id: str,
-    parent_config_entry_id: str = None,
+    parent_config_entry_id: str | None = None,
 ) -> Mapping[str, Any] | list[Mapping[str, Any]]:
-    """Update all the entities with the entity_id for the keymaster lock"""
+    """Update all the entities with the entity_id for the keymaster lock."""
     # _LOGGER.debug(
     #     f"[map_property_to_entity_id] keymaster_config_entry_id: {keymaster_config_entry_id}, "
     #     f"parent_config_entry_id: {parent_config_entry_id}"
@@ -224,7 +225,7 @@ async def _get_entity_id(
     parent_config_entry_id: str,
     prop: str,
 ) -> str:
-    """Lookup the entity_id from the property"""
+    """Lookup the entity_id from the property."""
     if not prop:
         return None
     if prop.split(".", maxsplit=1)[0] == "parent":
@@ -248,7 +249,7 @@ async def _get_entity_id(
 
 
 async def _generate_code_slot_dict(code_slot, child=False) -> Mapping[str, Any]:
-    """Build the dict for the code slot"""
+    """Build the dict for the code slot."""
     code_slot_dict: Mapping[str, Any] = {
         "type": "grid",
         "cards": [
@@ -593,7 +594,7 @@ async def _generate_lock_badges(
 
 
 async def _generate_dow_entities(code_slot) -> list[Mapping[str, Any]]:
-    """Build the day of week entities for the code slot"""
+    """Build the day of week entities for the code slot."""
     dow_list: list[Mapping[str, Any]] = []
     for dow_num, dow in enumerate(
         [
@@ -727,7 +728,7 @@ async def _generate_dow_entities(code_slot) -> list[Mapping[str, Any]]:
 
 
 async def _generate_child_code_slot_dict(code_slot) -> Mapping[str, Any]:
-    """Build the dict for the code slot of a child keymaster lock"""
+    """Build the dict for the code slot of a child keymaster lock."""
 
     normal_code_slot_dict: Mapping[str, Any] = await _generate_code_slot_dict(
         code_slot=code_slot, child=True
@@ -922,7 +923,7 @@ async def _generate_child_code_slot_dict(code_slot) -> Mapping[str, Any]:
 
 
 async def _generate_child_dow_entities(code_slot) -> list[Mapping[str, Any]]:
-    """Build the day of week entities for a child code slot"""
+    """Build the day of week entities for a child code slot."""
     dow_list: list[Mapping[str, Any]] = []
     for dow_num, dow in enumerate(
         [

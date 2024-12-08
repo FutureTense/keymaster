@@ -1,4 +1,4 @@
-""" keymaster migrate from helper entites to coordinator"""
+"""keymaster migrate from helper entites to coordinator."""
 
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ CONF_PATH = "packages_path"
 
 
 async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate from config_entry version 2 to 3."""
     _LOGGER.info("[migrate_2to3] Starting Migration from Config 2 to 3")
     _LOGGER.debug("[migrate_2to3] config_entry: %s", config_entry)
     _LOGGER.debug("[migrate_2to3] config_entry.data: %s", config_entry.data)
@@ -164,7 +165,7 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
             )
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
-    kmlock = KeymasterLock(
+    return KeymasterLock(
         lock_name=config_entry.data.get(CONF_LOCK_NAME),
         lock_entity_id=config_entry.data.get(CONF_LOCK_ENTITY_ID),
         keymaster_config_entry_id=config_entry.entry_id,
@@ -181,7 +182,6 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
         parent_name=config_entry.data.get(CONF_PARENT),
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
     )
-    return kmlock
 
 
 async def _migrate_2to3_set_property_value(
@@ -225,12 +225,12 @@ async def _migrate_2to3_validate_and_convert_property(prop, attr, value) -> Any:
     if isinstance(value, keymasterlock_type_lookup.get(attr)):
         # return value
         pass
-    elif keymasterlock_type_lookup.get(attr) == bool and isinstance(value, str):
+    elif keymasterlock_type_lookup.get(attr) is bool and isinstance(value, str):
         if value == "on":
             value = True
         else:
             value = False
-    elif keymasterlock_type_lookup.get(attr) == int and isinstance(value, str):
+    elif keymasterlock_type_lookup.get(attr) is int and isinstance(value, str):
         try:
             value = float(value)
         except ValueError:
@@ -341,7 +341,7 @@ async def _migrate_2to3_reload_package_platforms(hass: HomeAssistant) -> bool:
 
 
 async def _migrate_2to3_build_delete_list(
-    lock_name: str, starting_slot: int, num_slots: int, parent_lock_name: str = None
+    lock_name: str, starting_slot: int, num_slots: int, parent_lock_name: str | None = None
 ) -> list[str]:
     del_list: list[str] = [
         f"automation.keymaster_{lock_name}_changed_code",

@@ -1,4 +1,4 @@
-"""Support for keymaster DateTime"""
+"""Support for keymaster DateTime."""
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -21,6 +21,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Create the keymaster DateTime Entities."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     entities: list = []
 
@@ -63,16 +64,17 @@ async def async_setup_entry(
 class KeymasterDateTimeEntityDescription(
     KeymasterEntityDescription, DateTimeEntityDescription
 ):
-    pass
+    """Entity Description for keymaster DateTime."""
 
 
 class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
+    """Keymaster DateTime Class."""
 
     def __init__(
         self,
         entity_description: KeymasterDateTimeEntityDescription,
     ) -> None:
-        """Initialize DateTime"""
+        """Initialize DateTime."""
         super().__init__(
             entity_description=entity_description,
         )

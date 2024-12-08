@@ -1,4 +1,4 @@
-"""Sensor for keymaster"""
+"""Sensor for keymaster."""
 
 from dataclasses import dataclass
 import logging
@@ -19,6 +19,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities
 ):
+    """Create keymaster Sensor entities."""
 
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
@@ -81,16 +82,17 @@ async def async_setup_entry(
 class KeymasterSensorEntityDescription(
     KeymasterEntityDescription, SensorEntityDescription
 ):
-    pass
+    """Entity Description for keymaster Sensors."""
 
 
 class KeymasterSensor(KeymasterEntity, SensorEntity):
+    """Class for keymaster Sensors."""
 
     def __init__(
         self,
         entity_description: KeymasterSensorEntityDescription,
     ) -> None:
-        """Initialize sensor"""
+        """Initialize sensor."""
         super().__init__(
             entity_description=entity_description,
         )
