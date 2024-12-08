@@ -1,4 +1,4 @@
-"""keymaster Integration"""
+"""keymaster Integration."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Set up is called when Home Assistant is loading our component"""
+    """Set up is called when Home Assistant is loading our component."""
     hass.data.setdefault(DOMAIN, {})
 
     updated_config = config_entry.data.copy()
@@ -57,7 +57,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     updated_config[CONF_SLOTS] = int(updated_config.get(CONF_SLOTS))
     updated_config[CONF_START] = int(updated_config.get(CONF_START))
 
-    if config_entry.data.get(CONF_PARENT) in (None, "(none)"):
+    if config_entry.data.get(CONF_PARENT) in {None, "(none)"}:
         updated_config[CONF_PARENT] = None
 
     if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
@@ -206,7 +206,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Handle removal of an entry"""
+    """Handle removal of an entry."""
     lockname: str = config_entry.data.get(CONF_LOCK_NAME)
     _LOGGER.info("Unloading %s", lockname)
     unload_ok: bool = all(
@@ -237,6 +237,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
 
 async def delete_coordinator(hass: HomeAssistant, _: datetime):
+    """Delete the coordinator if no more kmlock entities exist."""
     _LOGGER.debug("[delete_coordinator] Triggered")
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     if len(coordinator.data) == 0:
@@ -247,7 +248,7 @@ async def delete_coordinator(hass: HomeAssistant, _: datetime):
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Migrate an old config entry"""
+    """Migrate an old config entry."""
     version = config_entry.version
 
     # 2 -> 3: Migrate to integrated functions

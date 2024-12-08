@@ -1,4 +1,4 @@
-"""Switch for keymaster"""
+"""Switch for keymaster."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -25,7 +25,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Setup keymaster switches"""
+    """Create keymaster Switches."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
         config_entry.entry_id
@@ -45,10 +45,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 "icon": "mdi:lock-alert",
             },
         ]
-        if config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID) not in (
+        if config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID) not in {
             None,
             DEFAULT_DOOR_SENSOR,
-        ):
+        }:
             lock_switch_entities.extend(
                 [
                     {
@@ -191,16 +191,17 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 class KeymasterSwitchEntityDescription(
     KeymasterEntityDescription, SwitchEntityDescription
 ):
-    pass
+    """Entitiy Description for keymaster Switches."""
 
 
 class KeymasterSwitch(KeymasterEntity, SwitchEntity):
+    """Class for keymaster Switches."""
 
     def __init__(
         self,
         entity_description: KeymasterSwitchEntityDescription,
     ) -> None:
-        """Initialize Switch"""
+        """Initialize Switch."""
         super().__init__(
             entity_description=entity_description,
         )
@@ -274,7 +275,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         self.async_write_ha_state()
 
     async def async_turn_on(self, **_) -> None:
-        """Turn the entity on"""
+        """Turn the entity on."""
 
         if self.is_on:
             return
@@ -301,7 +302,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             await self.coordinator.async_refresh()
 
     async def async_turn_off(self, **_) -> None:
-        """Turn the entity off"""
+        """Turn the entity off."""
 
         if not self.is_on:
             return

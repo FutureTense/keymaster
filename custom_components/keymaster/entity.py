@@ -1,3 +1,5 @@
+"""Base entity for keymaster."""
+
 from collections.abc import Mapping
 from dataclasses import dataclass
 import logging
@@ -22,9 +24,10 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
-    """Base entity for Keymaster"""
+    """Base entity for Keymaster."""
 
     def __init__(self, entity_description: EntityDescription) -> None:
+        """Initialize base keymaster entity."""
         self.hass: HomeAssistant = entity_description.hass
         self.coordinator: KeymasterCoordinator = entity_description.coordinator
         self._config_entry: ConfigEntry = entity_description.config_entry
@@ -57,6 +60,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
 
     @property
     def available(self) -> bool:
+        """Return whether entity is available."""
         return self._attr_available
 
     def _get_property_value(self) -> Any:
@@ -133,6 +137,8 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
 
 @dataclass(kw_only=True)
 class KeymasterEntityDescription(EntityDescription):
+    """Base keymaster Entitity Description."""
+
     hass: HomeAssistant
     config_entry: ConfigEntry
     coordinator: KeymasterCoordinator

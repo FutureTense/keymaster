@@ -1,4 +1,4 @@
-"""KeymasterLock class"""
+"""KeymasterLock Class."""
 
 from __future__ import annotations
 
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class KeymasterCodeSlotDayOfWeek:
+    """Separate instance for each day of the week."""
+
     day_of_week_num: int
     day_of_week_name: str
     dow_enabled: bool = True
@@ -30,6 +32,8 @@ class KeymasterCodeSlotDayOfWeek:
 
 @dataclass
 class KeymasterCodeSlot:
+    """Separate instance for each code slot in a keymaster lock."""
+
     number: int
     enabled: bool = True
     name: str | None = None
@@ -49,7 +53,7 @@ class KeymasterCodeSlot:
 
 @dataclass
 class KeymasterLock:
-    """Class to represent a keymaster lock"""
+    """Class to represent a keymaster lock."""
 
     lock_name: str
     lock_entity_id: str

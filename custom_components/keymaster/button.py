@@ -61,7 +61,7 @@ async def async_setup_entry(
 class KeymasterButtonEntityDescription(
     KeymasterEntityDescription, ButtonEntityDescription
 ):
-    pass
+    """Entity Description for Keymaster Buttons."""
 
 
 class KeymasterButton(KeymasterEntity, ButtonEntity):
@@ -71,7 +71,7 @@ class KeymasterButton(KeymasterEntity, ButtonEntity):
         self,
         entity_description: KeymasterButtonEntityDescription,
     ) -> None:
-        """Initialize button"""
+        """Initialize button."""
         super().__init__(
             entity_description=entity_description,
         )
@@ -96,6 +96,7 @@ class KeymasterButton(KeymasterEntity, ButtonEntity):
         self.async_write_ha_state()
 
     async def async_press(self) -> None:
+        """Take action when button is pressed."""
         if self._property.endswith(".reset_lock"):
             await self.coordinator.reset_lock(
                 config_entry_id=self._config_entry.entry_id,

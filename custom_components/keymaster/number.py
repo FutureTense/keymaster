@@ -1,4 +1,4 @@
-"""Support for keymaster Number"""
+"""Support for keymaster Number."""
 
 from dataclasses import dataclass
 import logging
@@ -26,6 +26,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Create keymaster Number entities."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
 
     entities: list = []
@@ -97,16 +98,17 @@ async def async_setup_entry(
 class KeymasterNumberEntityDescription(
     KeymasterEntityDescription, NumberEntityDescription
 ):
-    pass
+    """Entity Description for keymaster Number entities."""
 
 
 class KeymasterNumber(KeymasterEntity, NumberEntity):
+    """Class for keymaster Number."""
 
     def __init__(
         self,
         entity_description: KeymasterNumberEntityDescription,
     ) -> None:
-        """Initialize Number"""
+        """Initialize Number."""
         super().__init__(
             entity_description=entity_description,
         )
@@ -158,6 +160,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
         self.async_write_ha_state()
 
     async def async_set_native_value(self, value: float) -> None:
+        """Update the value of the entity."""
         _LOGGER.debug(
             "[Number async_set_value] %s: value: %s",
             self.name,

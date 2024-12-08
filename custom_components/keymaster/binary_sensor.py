@@ -1,4 +1,4 @@
-"""Sensor for keymaster"""
+"""Sensor for keymaster."""
 
 from dataclasses import dataclass
 import logging
@@ -27,7 +27,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ):
-    """Setup config entry"""
+    """Create the keymaster Binary Sensors."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
         config_entry.entry_id
@@ -76,16 +76,17 @@ async def async_setup_entry(
 class KeymasterBinarySensorEntityDescription(
     KeymasterEntityDescription, BinarySensorEntityDescription
 ):
-    pass
+    """Entity Description for keymaster Binary Sensors."""
 
 
 class KeymasterBinarySensor(KeymasterEntity, BinarySensorEntity):
+    """Keymaster Binary Sensor Class."""
 
     def __init__(
         self,
         entity_description: KeymasterBinarySensorEntityDescription,
     ) -> None:
-        """Initialize binary sensor"""
+        """Initialize binary sensor."""
         super().__init__(
             entity_description=entity_description,
         )

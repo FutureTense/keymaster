@@ -1,4 +1,4 @@
-"""Config flow for keymaster"""
+"""Config flow for keymaster."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for keymaster"""
+    """Config flow for keymaster."""
 
     VERSION = 3
     DEFAULTS: Mapping[str, Any] = {
@@ -57,7 +57,7 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     }
 
     async def get_unique_name_error(self, user_input) -> Mapping[str, str]:
-        """Check if name is unique, returning dictionary error if so"""
+        """Check if name is unique, returning dictionary error if so."""
         # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
             slugify(user_input[CONF_LOCK_NAME]).lower(), raise_on_progress=True
@@ -67,9 +67,9 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return {}
 
     async def async_step_user(
-        self, user_input: Mapping[str, Any] = None
+        self, user_input: Mapping[str, Any] | None = None
     ) -> Mapping[str, Any]:
-        """Handle a flow initialized by the user"""
+        """Handle a flow initialized by the user."""
         return await _start_config_flow(
             cls=self,
             step_id="user",
@@ -80,19 +80,20 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> KeymasterOptionsFlow:
+        """Get the options flow for this handler."""
         return KeymasterOptionsFlow(config_entry)
 
 
 class KeymasterOptionsFlow(config_entries.OptionsFlow):
-    """Options flow for keymaster"""
+    """Options flow for keymaster."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize"""
+        """Initialize."""
         self.config_entry = config_entry
 
     async def get_unique_name_error(self, user_input) -> Mapping[str, str]:
-        """Check if name is unique, returning dictionary error if so"""
+        """Check if name is unique, returning dictionary error if so."""
         # If lock name has changed, make sure new name isn't already being used
         # otherwise show an error
         if self.config_entry.unique_id != slugify(user_input[CONF_LOCK_NAME]).lower():
@@ -102,9 +103,9 @@ class KeymasterOptionsFlow(config_entries.OptionsFlow):
         return {}
 
     async def async_step_init(
-        self, user_input: Mapping[str, Any] = None
+        self, user_input: Mapping[str, Any] | None = None
     ) -> Mapping[str, Any]:
-        """Handle a flow initialized by the user"""
+        """Handle a flow initialized by the user."""
         return await _start_config_flow(
             cls=self,
             step_id="init",
@@ -115,18 +116,15 @@ class KeymasterOptionsFlow(config_entries.OptionsFlow):
         )
 
 
-def _available_parent_locks(hass: HomeAssistant, entry_id: str = None) -> list:
-    """Find other keymaster configurations and list them as posible
-    parent locks if they are not a child lock already"""
+def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) -> list:
+    """Return other keymaster locks if they are not already a child lock."""
 
     data: list[str] = ["(none)"]
     if DOMAIN not in hass.data:
         return data
 
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if CONF_PARENT not in entry.data and entry.entry_id != entry_id:
-            data.append(entry.title)
-        elif entry.data[CONF_PARENT] is None and entry.entry_id != entry_id:
+        if CONF_PARENT not in entry.data and entry.entry_id != entry_id or entry.data[CONF_PARENT] is None and entry.entry_id != entry_id:
             data.append(entry.title)
 
     return data
@@ -184,19 +182,19 @@ def _get_schema(
     hass: HomeAssistant,
     user_input: Mapping[str, Any] | None,
     default_dict: Mapping[str, Any],
-    entry_id: str = None,
+    entry_id: str | None = None,
 ) -> vol.Schema:
-    """Gets a schema using the default_dict as a backup"""
+    """Get a schema using the default_dict as a backup."""
     if user_input is None:
         user_input = {}
 
-    if CONF_PARENT in default_dict.keys() and default_dict[CONF_PARENT] is None:
+    if CONF_PARENT in default_dict and default_dict[CONF_PARENT] is None:
         check_dict: Mapping[str, Any] = default_dict.copy()
         check_dict.pop(CONF_PARENT, None)
         default_dict = check_dict
 
     def _get_default(key: str, fallback_default: Any = None) -> Any:
-        """Gets default value for key"""
+        """Get default value for key."""
         default = user_input.get(key)
         if default is None:
             default = default_dict.get(key, fallback_default)
@@ -288,10 +286,10 @@ async def _start_config_flow(
     step_id: str,
     title: str,
     user_input: Mapping[str, Any],
-    defaults: Mapping[str, Any] = None,
-    entry_id: str = None,
+    defaults: Mapping[str, Any] | None = None,
+    entry_id: str | None = None,
 ):
-    """Start a config flow"""
+    """Start a config flow."""
     errors = {}
     description_placeholders = {}
 

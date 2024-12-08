@@ -1,4 +1,4 @@
-"""Services for keymaster"""
+"""Services for keymaster."""
 
 import logging
 from typing import TYPE_CHECKING
@@ -35,6 +35,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
+    """Create and setup keymaster Services."""
     if COORDINATOR not in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
         hass.data[DOMAIN][COORDINATOR] = coordinator
@@ -46,7 +47,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coordinator = hass.data[DOMAIN][COORDINATOR]
 
     async def service_update_pin(service: ServiceCall) -> None:
-        """Update a PIN in a Code Slot"""
+        """Update a PIN in a Code Slot."""
         _LOGGER.debug("[service_update_pin] service.data: %s", service.data)
         code_slot: int = service.data.get(ATTR_CODE_SLOT)
         pin: str = service.data.get(ATTR_PIN)
@@ -67,7 +68,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def service_clear_pin(service: ServiceCall) -> None:
-        """Clear a PIN from a Code Slot"""
+        """Clear a PIN from a Code Slot."""
         _LOGGER.debug("[service_clear_pin] service.data: %s", service.data)
         code_slot: int = service.data.get(ATTR_CODE_SLOT)
         await coordinator.clear_pin_from_lock(
