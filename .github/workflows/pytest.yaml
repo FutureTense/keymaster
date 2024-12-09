@@ -18,10 +18,10 @@ jobs:
     steps:
       - name: 📥 Checkout the repository
         uses: actions/checkout@v4
-      - name: 🛠️ Set up Python
-        uses: actions/setup-python@v5
         with:
-          fetch-depth: 2      
+          fetch-depth: 2        
+      - name: 🛠️ Set up Python
+        uses: actions/setup-python@v5    
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
