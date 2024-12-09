@@ -344,7 +344,7 @@ log_level = "DEBUG"  # Set the logging level to DEBUG
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 timeout = 30
-addopts = "-vv --cov=custom_components/keymaster --cov-report=xml"
+addopts = "-rA --cov=custom_components/keymaster --cov-report=xml"
 
 [tool.ruff]
 required-version = ">=0.8.0"
