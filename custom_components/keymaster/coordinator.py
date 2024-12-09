@@ -4,32 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import Callable, Mapping
-from dataclasses import fields, is_dataclass
-from datetime import datetime, time as dt_time, timedelta
 import functools
 import json
 import logging
 import os
+from collections.abc import Callable, Mapping
+from dataclasses import fields, is_dataclass
+from datetime import datetime
+from datetime import time as dt_time
+from datetime import timedelta
 from typing import Any, Type, Union, get_args, get_origin
 
-from zwave_js_server.const.command_class.lock import ATTR_IN_USE, ATTR_USERCODE
-from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
-from zwave_js_server.model.node import Node as ZwaveJSNode
-from zwave_js_server.util.lock import (
-    clear_usercode,
-    get_usercode_from_node,
-    get_usercodes,
-    set_usercode,
-)
-
-from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
+from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN
+from homeassistant.components.lock.const import LockState
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
-from homeassistant.components.zwave_js.const import (
-    ATTR_PARAMETERS,
-    DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
-    DOMAIN as ZWAVE_JS_DOMAIN,
-)
+from homeassistant.components.zwave_js.const import ATTR_PARAMETERS
+from homeassistant.components.zwave_js.const import DATA_CLIENT as ZWAVE_JS_DATA_CLIENT
+from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.const import (
     ATTR_DEVICE_ID,
     ATTR_ENTITY_ID,
@@ -44,10 +35,21 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import CoreState, Event, EventStateChangedData, HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.util import dt as dt_util, slugify
+from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
+from zwave_js_server.const.command_class.lock import ATTR_IN_USE, ATTR_USERCODE
+from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
+from zwave_js_server.model.node import Node as ZwaveJSNode
+from zwave_js_server.util.lock import (
+    clear_usercode,
+    get_usercode_from_node,
+    get_usercodes,
+    set_usercode,
+)
 
 from .const import (
     ACCESS_CONTROL,
@@ -1054,6 +1056,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 isinstance(kmlock.door_sensor_entity_id, str)
                 and kmlock.door_sensor_entity_id
                 and kmlock.door_sensor_entity_id != DEFAULT_DOOR_SENSOR
+                and self.hass.states.get(kmlock.door_sensor_entity_id)
             ):
                 door_state: str = self.hass.states.get(
                     kmlock.door_sensor_entity_id
