@@ -218,7 +218,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         )
     )
 
-    if unload_ok:
+    if unload_ok and DOMAIN in hass.data and COORDINATOR in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
         await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id)
 

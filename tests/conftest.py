@@ -1,4 +1,4 @@
-""" Fixtures for keymaster tests. """
+"""Fixtures for keymaster tests."""
 
 import asyncio
 import copy
@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from sqlalchemy import false
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
@@ -19,27 +18,21 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
-    yield
+    """Enable custom integrations defined in the test dir."""
+    return
 
 
 @pytest.fixture(name="skip_notifications", autouse=True)
 def skip_notifications_fixture():
     """Skip notification calls."""
-    with patch("homeassistant.components.persistent_notification.async_create"), patch(
-        "homeassistant.components.persistent_notification.async_dismiss"
+    with (
+        patch("homeassistant.components.persistent_notification.async_create"),
+        patch("homeassistant.components.persistent_notification.async_dismiss"),
     ):
         yield
 
 
-@pytest.fixture(autouse=True)
-async def mock_init_child_locks():
-    with patch(
-        "custom_components.keymaster.services.init_child_locks", return_value=True
-    ), patch("custom_components.keymaster.init_child_locks"):
-        yield
-
-
-@pytest.fixture()
+@pytest.fixture
 def mock_get_entities():
     """Mock email data update class values."""
     with patch(
@@ -51,6 +44,7 @@ def mock_get_entities():
             "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
             "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
             "binary_sensor.frontdoor",
+            "script.keymaster_frontdoor_manual_notify",
         ]
         yield mock_get_entities
 
@@ -101,29 +95,8 @@ def mock_osmakedir():
 
 
 @pytest.fixture
-def mock_generate_package_files():
-    """Fixture to mock generate package files."""
-    with patch("custom_components.keymaster.generate_package_files", return_value=None):
-        yield
-
-
-@pytest.fixture
-def mock_delete_folder():
-    """Fixture to mock delete_folder helper function."""
-    with patch("custom_components.keymaster.delete_folder"):
-        yield
-
-
-@pytest.fixture
-def mock_delete_lock_and_base_folder():
-    """Fixture to mock delete_lock_and_base_folder helper function."""
-    with patch("custom_components.keymaster.delete_lock_and_base_folder"):
-        yield
-
-
-@pytest.fixture
 def mock_os_path_join():
-    """Fixture to mock splitext"""
+    """Fixture to mock path join."""
     with patch("os.path.join"):
         yield
 
@@ -172,7 +145,7 @@ def mock_client_fixture(controller_state, version_state, log_config_state):
         async def listen(driver_ready: asyncio.Event) -> None:
             driver_ready.set()
             await asyncio.sleep(30)
-            assert False, "Listen wasn't canceled!"
+            pytest.fail("Listen wasn't canceled!")
 
         async def disconnect():
             client.connected = False
@@ -239,16 +212,47 @@ async def mock_zwavejs_get_usercodes():
         {"code_slot": 14, "usercode": "", "in_use": False},
     ]
     with patch(
-        "custom_components.keymaster.get_usercodes", return_value=slot_data
+        "zwave_js_server.util.lock.get_usercodes", return_value=slot_data
+    ) as mock_usercodes:
+        yield mock_usercodes
+
+
+@pytest.fixture
+async def mock_zwavejs_clear_usercode():
+    """Fixture to mock clear_usercode."""
+    with patch(
+        "zwave_js_server.util.lock.clear_usercode", return_value=None
+    ) as mock_usercodes:
+        yield mock_usercodes
+
+
+@pytest.fixture
+async def mock_zwavejs_set_usercode():
+    """Fixture to mock set_usercode."""
+    with patch(
+        "zwave_js_server.util.lock.set_usercode", return_value=None
     ) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_using_zwavejs():
-    """Fixture to mock using_ozw in helpers"""
+    """Fixture to mock using_zwavejs in helpers."""
     with patch(
-        "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+        "custom_components.keymaster.helpers.async_using_zwave_js",
         return_value=True,
     ) as mock_using_zwavejs_helpers:
         yield mock_using_zwavejs_helpers
+
+
+@pytest.fixture
+def mock_async_call_later():
+    """Fixture to mock async_call_later to call the callback immediately."""
+    with patch("homeassistant.helpers.event.async_call_later") as mock:
+
+        def immediate_call(hass, delay, callback):
+            # Immediately call the callback with a mock `hass` object
+            return callback(None)
+
+        mock.side_effect = immediate_call
+        yield mock

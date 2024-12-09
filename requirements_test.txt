@@ -3,11 +3,9 @@ aiohttp_cors
 asyncio_mqtt
 pytest
 pytest-homeassistant-custom-component
-black
-isort
 pydispatcher
 zeroconf
 tox
 mypy
-flake8
 pylint
+ruff
