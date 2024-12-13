@@ -764,6 +764,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("[lock_unlocked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
 
+        if kmlock.lock_state == LockState.UNLOCKED:
+            return
+
         kmlock.lock_state = LockState.UNLOCKED
         _LOGGER.debug(
             "[lock_unlocked] %s: Running. code_slot: %s, source: %s, "
@@ -774,7 +777,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             event_label,
             action_code,
         )
-        if isinstance(code_slot, int):
+        if not isinstance(code_slot, int):
             code_slot = 0
 
         if kmlock.autolock_enabled:
@@ -853,6 +856,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             _LOGGER.debug("[lock_locked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
+
+        if kmlock.lock_state == LockState.LOCKED:
+            return
+
         kmlock.lock_state = LockState.LOCKED
         _LOGGER.debug(
             "[lock_locked] %s: Running. source: %s, event_label: %s, action_code: %s",
@@ -891,6 +898,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("[door_opened] %s: Throttled", kmlock.lock_name)
             return
 
+        if kmlock.door_state == STATE_OPEN:
+            return
+
         kmlock.door_state = STATE_OPEN
         _LOGGER.debug("[door_opened] %s: Running", kmlock.lock_name)
 
@@ -907,6 +917,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             "door_closed", kmlock.keymaster_config_entry_id, THROTTLE_SECONDS
         ):
             _LOGGER.debug("[door_closed] %s: Throttled", kmlock.lock_name)
+            return
+
+        if kmlock.door_state == STATE_CLOSED:
             return
 
         kmlock.door_state = STATE_CLOSED
