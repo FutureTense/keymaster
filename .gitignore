@@ -5,4 +5,4 @@ venv
 *.pyc
 .coverage
 coverage.xml
-.tox/py312/.tox-info.json
+.tox
