@@ -1,4 +1,4 @@
-"""Sensor for keymaster"""
+"""Sensor for keymaster."""
 
 from dataclasses import dataclass
 import logging
@@ -27,7 +27,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ):
-    """Setup config entry"""
+    """Create the keymaster Binary Sensors."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
         config_entry.entry_id
@@ -47,11 +47,8 @@ async def async_setup_entry(
                 ),
             )
         )
-        for x in range(
-            config_entry.data[CONF_START],
-            config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-        ):
-            entities.append(
+        entities.extend(
+            [
                 KeymasterBinarySensor(
                     entity_description=KeymasterBinarySensorEntityDescription(
                         key=f"binary_sensor.code_slots:{x}.active",
@@ -63,7 +60,12 @@ async def async_setup_entry(
                         coordinator=coordinator,
                     )
                 )
-            )
+                for x in range(
+                    config_entry.data[CONF_START],
+                    config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+                )
+            ]
+        )
     else:
         _LOGGER.error("Z-Wave integration not found")
         raise PlatformNotReady
@@ -76,16 +78,17 @@ async def async_setup_entry(
 class KeymasterBinarySensorEntityDescription(
     KeymasterEntityDescription, BinarySensorEntityDescription
 ):
-    pass
+    """Entity Description for keymaster Binary Sensors."""
 
 
 class KeymasterBinarySensor(KeymasterEntity, BinarySensorEntity):
+    """Keymaster Binary Sensor Class."""
 
     def __init__(
         self,
         entity_description: KeymasterBinarySensorEntityDescription,
     ) -> None:
-        """Initialize binary sensor"""
+        """Initialize binary sensor."""
         super().__init__(
             entity_description=entity_description,
         )

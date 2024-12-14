@@ -1,4 +1,4 @@
-"""Constants for keymaster"""
+"""Constants for keymaster."""
 
 from enum import StrEnum
 

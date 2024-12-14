@@ -3,7 +3,7 @@
 import asyncio
 from datetime import datetime
 import functools as ft
-import os
+from pathlib import Path
 import time
 from unittest.mock import patch
 
@@ -15,8 +15,8 @@ import homeassistant.util.dt as dt_util
 
 def load_fixture(filename):
     """Load a fixture."""
-    path = os.path.join(os.path.dirname(__file__), "json", filename)
-    with open(path, encoding="utf-8") as fptr:
+    path = Path(__file__).parent / "json" / filename
+    with path.open(encoding="utf-8") as fptr:
         return fptr.read()
 
 

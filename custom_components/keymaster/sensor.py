@@ -1,4 +1,4 @@
-"""Sensor for keymaster"""
+"""Sensor for keymaster."""
 
 from dataclasses import dataclass
 import logging
@@ -19,6 +19,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities
 ):
+    """Create keymaster Sensor entities."""
 
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
@@ -55,11 +56,8 @@ async def async_setup_entry(
             )
         )
 
-    for x in range(
-        config_entry.data[CONF_START],
-        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-    ):
-        entities.append(
+    entities.extend(
+        [
             KeymasterSensor(
                 entity_description=KeymasterSensorEntityDescription(
                     key=f"sensor.code_slots:{x}.synced",
@@ -71,7 +69,12 @@ async def async_setup_entry(
                     coordinator=coordinator,
                 ),
             )
-        )
+            for x in range(
+                config_entry.data[CONF_START],
+                config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+            )
+        ]
+    )
 
     async_add_entities(entities, True)
     return True
@@ -81,16 +84,17 @@ async def async_setup_entry(
 class KeymasterSensorEntityDescription(
     KeymasterEntityDescription, SensorEntityDescription
 ):
-    pass
+    """Entity Description for keymaster Sensors."""
 
 
 class KeymasterSensor(KeymasterEntity, SensorEntity):
+    """Class for keymaster Sensors."""
 
     def __init__(
         self,
         entity_description: KeymasterSensorEntityDescription,
     ) -> None:
-        """Initialize sensor"""
+        """Initialize sensor."""
         super().__init__(
             entity_description=entity_description,
         )

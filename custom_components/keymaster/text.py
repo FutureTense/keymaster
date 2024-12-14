@@ -1,4 +1,4 @@
-"""Support for keymaster Text"""
+"""Support for keymaster Text."""
 
 from dataclasses import dataclass
 import logging
@@ -20,6 +20,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Create keymaster Text entities."""
 
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     entities: list = []
@@ -66,16 +67,17 @@ async def async_setup_entry(
 
 @dataclass(kw_only=True)
 class KeymasterTextEntityDescription(KeymasterEntityDescription, TextEntityDescription):
-    pass
+    """Entity Description for keymaster Text entities."""
 
 
 class KeymasterText(KeymasterEntity, TextEntity):
+    """Class for keymaster Text entities."""
 
     def __init__(
         self,
         entity_description: KeymasterTextEntityDescription,
     ) -> None:
-        """Initialize Text"""
+        """Initialize Text."""
         super().__init__(
             entity_description=entity_description,
         )
@@ -111,6 +113,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
         self.async_write_ha_state()
 
     async def async_set_value(self, value: str) -> None:
+        """Set the value of a text entitiy."""
         _LOGGER.debug(
             "[Text async_set_value] %s: value: %s",
             self.name,

@@ -1,4 +1,4 @@
-"""Helpers for keymaster"""
+"""Helpers for keymaster."""
 
 from __future__ import annotations
 
@@ -27,12 +27,16 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 class Throttle:
+    """Class to prevent functions from being called multiple times."""
+
     def __init__(self) -> None:
+        """Initialize Throttle class."""
         self._cooldowns = (
             {}
         )  # Nested dictionary: {function_name: {key: last_called_time}}
 
     def is_allowed(self, func_name, key, cooldown_seconds) -> bool:
+        """Check if function is allowed to run or not."""
         current_time = time.time()
         if func_name not in self._cooldowns:
             self._cooldowns[func_name] = {}
@@ -45,7 +49,10 @@ class Throttle:
 
 
 class KeymasterTimer:
+    """Timer to use in keymaster."""
+
     def __init__(self) -> None:
+        """Initialize the keymaster Timer."""
         self.hass: HomeAssistant | None = None
         self._unsub_events: list[Callable] = []
         self._kmlock: KeymasterLock | None = None
@@ -55,11 +62,13 @@ class KeymasterTimer:
     async def setup(
         self, hass: HomeAssistant, kmlock: KeymasterLock, call_action: Callable
     ) -> None:
+        """Create fields for the keymaster Timer."""
         self.hass = hass
         self._kmlock = kmlock
         self._call_action = call_action
 
     async def start(self) -> bool:
+        """Start a timer."""
         if not self.hass or not self._kmlock or not self._call_action:
             _LOGGER.error("[KeymasterTimer] Cannot start timer as timer not setup")
             return False
@@ -74,16 +83,10 @@ class KeymasterTimer:
 
         if sun.is_up(self.hass):
             delay: int = (
-                self._kmlock.autolock_min_day
-                if self._kmlock.autolock_min_day
-                else DEFAULT_AUTOLOCK_MIN_DAY
+                self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY
             ) * 60
         else:
-            delay = (
-                self._kmlock.autolock_min_night
-                if self._kmlock.autolock_min_night
-                else DEFAULT_AUTOLOCK_MIN_NIGHT
-            ) * 60
+            delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
         self._end_time = datetime.now().astimezone() + timedelta(seconds=delay)
         _LOGGER.debug(
             "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
@@ -96,8 +99,10 @@ class KeymasterTimer:
         self._unsub_events.append(
             async_call_later(hass=self.hass, delay=delay, action=self.cancel)
         )
+        return True
 
-    async def cancel(self, timer_elapsed: datetime = None) -> bool:
+    async def cancel(self, timer_elapsed: datetime | None = None) -> bool:
+        """Cancel a timer."""
         if timer_elapsed:
             _LOGGER.debug("[KeymasterTimer] Timer elapsed")
         else:
@@ -110,6 +115,7 @@ class KeymasterTimer:
 
     @property
     def is_running(self) -> bool:
+        """Return if the timer is running."""
         if not self._end_time:
             return False
         if (
@@ -126,6 +132,7 @@ class KeymasterTimer:
 
     @property
     def is_setup(self) -> bool:
+        """Return if the timer has been initially setup."""
         if (
             isinstance(self._end_time, datetime)
             and self._end_time >= datetime.now().astimezone()
@@ -139,6 +146,7 @@ class KeymasterTimer:
 
     @property
     def end_time(self) -> datetime | None:
+        """Returns when the timer will end."""
         if not self._end_time:
             return None
         if (
@@ -155,6 +163,7 @@ class KeymasterTimer:
 
     @property
     def remaining_seconds(self) -> int | None:
+        """Return the seconds until the timer ends."""
         if not self._end_time:
             return None
         if (
@@ -177,7 +186,7 @@ def _async_using(
     kmlock: KeymasterLock | None,
     entity_id: str | None,
 ) -> bool:
-    """Base function for using_<zwave integration> logic"""
+    """Evaluate if device is using specified integration logic."""
     if not (kmlock or entity_id):
         raise TypeError("Missing arguments")
     ent_reg = er.async_get(hass)
@@ -195,7 +204,7 @@ def async_using_zwave_js(
     kmlock: KeymasterLock | None = None,
     entity_id: str | None = None,
 ) -> bool:
-    """Returns whether the zwave_js integration is configured"""
+    """Return whether the zwave_js integration is configured."""
     return ZWAVE_JS_SUPPORTED and _async_using(
         hass=hass,
         domain=ZWAVE_JS_DOMAIN,
@@ -207,6 +216,7 @@ def async_using_zwave_js(
 async def delete_code_slot_entities(
     hass: HomeAssistant, keymaster_config_entry_id: str, code_slot: int
 ) -> None:
+    """Delete no longer used code slots after update."""
     _LOGGER.debug(
         "[delete_code_slot_entities] Deleting code slot %s entities from config_entry_id: %s",
         code_slot,
@@ -253,7 +263,7 @@ async def delete_code_slot_entities(
         else:
             _LOGGER.debug("[delete_code_slot_entities] No entity_id found for %s", prop)
 
-    for dow in range(0, 7):
+    for dow in range(7):
         dow_prop: list = [
             f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.dow_enabled",
             f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.include_exclude",
@@ -290,10 +300,10 @@ async def call_hass_service(
     hass: HomeAssistant,
     domain: str,
     service: str,
-    service_data: Mapping[str, Any] = None,
-    target: Mapping[str, Any] = None,
+    service_data: Mapping[str, Any] | None = None,
+    target: Mapping[str, Any] | None = None,
 ) -> None:
-    """Call a hass service and log a failure on an error"""
+    """Call a hass service and log a failure on an error."""
     _LOGGER.debug(
         "[call_hass_service] service: %s.%s, target: %s, service_data: %s",
         domain,
@@ -308,22 +318,23 @@ async def call_hass_service(
         )
     except ServiceNotFound:
         _LOGGER.warning("Action Not Found: %s.%s", domain, service)
-    except Exception as e:
-        _LOGGER.error(
-            "Error calling %s.%s service call. %s: %s",
-            domain,
-            service,
-            e.__class__.__qualname__,
-            e,
-        )
+    # except Exception as e:
+    #     _LOGGER.error(
+    #         "Error calling %s.%s service call. %s: %s",
+    #         domain,
+    #         service,
+    #         e.__class__.__qualname__,
+    #         e,
+    #     )
 
 
 async def send_manual_notification(
     hass: HomeAssistant,
     script_name: str,
     message: str,
-    title: str = None,
+    title: str | None = None,
 ) -> None:
+    """Send a manual notification to notify script."""
     _LOGGER.debug(
         "[send_manual_notification] script: %s.%s, title: %s, message: %s",
         SCRIPT_DOMAIN,
@@ -340,8 +351,12 @@ async def send_manual_notification(
 
 
 async def send_persistent_notification(
-    hass: HomeAssistant, message: str, title: str = None, notification_id: str = None
+    hass: HomeAssistant,
+    message: str,
+    title: str | None = None,
+    notification_id: str | None = None,
 ) -> None:
+    """Send a persistent notification."""
     _LOGGER.debug(
         "[send_persistent_notification] title: %s, message: %s, notification_id: %s",
         title,
@@ -356,6 +371,7 @@ async def send_persistent_notification(
 async def dismiss_persistent_notification(
     hass: HomeAssistant, notification_id: str
 ) -> None:
+    """Clear or dismisss a persistent notification."""
     _LOGGER.debug(
         "[dismiss_persistent_notification] notification_id: %s", notification_id
     )
