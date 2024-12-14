@@ -53,8 +53,8 @@ async def async_setup_entry(
                     "icon": "mdi:clock-end",
                 },
             ]
-            for ent in dow_time_entities:
-                entities.append(
+            entities.extend(
+                [
                     KeymasterTime(
                         entity_description=KeymasterTimeEntityDescription(
                             key=ent["prop"],
@@ -66,7 +66,9 @@ async def async_setup_entry(
                             coordinator=coordinator,
                         ),
                     )
-                )
+                    for ent in dow_time_entities
+                ]
+            )
 
     async_add_entities(entities, True)
     return True

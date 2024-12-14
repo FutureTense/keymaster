@@ -63,8 +63,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     },
                 ]
             )
-        for ent in lock_switch_entities:
-            entities.append(
+        entities.extend(
+            [
                 KeymasterSwitch(
                     entity_description=KeymasterSwitchEntityDescription(
                         key=ent["prop"],
@@ -76,7 +76,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         coordinator=coordinator,
                     ),
                 )
-            )
+                for ent in lock_switch_entities
+            ]
+        )
 
         for x in range(
             config_entry.data[CONF_START],
@@ -123,8 +125,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     "icon": "mdi:calendar-week",
                 },
             ]
-            for ent in code_slot_switch_entities:
-                entities.append(
+            entities.extend(
+                [
                     KeymasterSwitch(
                         entity_description=KeymasterSwitchEntityDescription(
                             key=ent["prop"],
@@ -136,7 +138,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                             coordinator=coordinator,
                         ),
                     )
-                )
+                    for ent in code_slot_switch_entities
+                ]
+            )
             for i, dow in enumerate(
                 [
                     "Monday",
@@ -165,8 +169,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         "icon": "mdi:timer-lock",
                     },
                 ]
-                for ent in dow_switch_entities:
-                    entities.append(
+                entities.extend(
+                    [
                         KeymasterSwitch(
                             entity_description=KeymasterSwitchEntityDescription(
                                 key=ent["prop"],
@@ -178,7 +182,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                                 coordinator=coordinator,
                             ),
                         )
-                    )
+                        for ent in dow_switch_entities
+                    ]
+                )
+
     else:
         _LOGGER.error("Z-Wave integration not found")
         raise PlatformNotReady

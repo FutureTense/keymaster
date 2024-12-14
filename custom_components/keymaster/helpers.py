@@ -86,9 +86,7 @@ class KeymasterTimer:
                 self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY
             ) * 60
         else:
-            delay = (
-                self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT
-            ) * 60
+            delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
         self._end_time = datetime.now().astimezone() + timedelta(seconds=delay)
         _LOGGER.debug(
             "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
@@ -320,14 +318,14 @@ async def call_hass_service(
         )
     except ServiceNotFound:
         _LOGGER.warning("Action Not Found: %s.%s", domain, service)
-    except Exception as e:
-        _LOGGER.error(
-            "Error calling %s.%s service call. %s: %s",
-            domain,
-            service,
-            e.__class__.__qualname__,
-            e,
-        )
+    # except Exception as e:
+    #     _LOGGER.error(
+    #         "Error calling %s.%s service call. %s: %s",
+    #         domain,
+    #         service,
+    #         e.__class__.__qualname__,
+    #         e,
+    #     )
 
 
 async def send_manual_notification(
@@ -353,7 +351,10 @@ async def send_manual_notification(
 
 
 async def send_persistent_notification(
-    hass: HomeAssistant, message: str, title: str | None = None, notification_id: str | None = None
+    hass: HomeAssistant,
+    message: str,
+    title: str | None = None,
+    notification_id: str | None = None,
 ) -> None:
     """Send a persistent notification."""
     _LOGGER.debug(

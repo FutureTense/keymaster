@@ -120,6 +120,8 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         self.async_write_ha_state()
 
     async def async_set_value(self, value: datetime) -> None:
+        """Update the datetime entity value."""
+
         _LOGGER.debug(
             "[DateTime async_set_value] %s: value: %s",
             self.name,

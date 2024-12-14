@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 import functools
 import logging
-import os
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -86,10 +86,10 @@ def delete_lovelace(hass: HomeAssistant, kmlock_name: str) -> None:
     """Delete the lovelace YAML file."""
     folder: str = hass.config.path("custom_components", DOMAIN, "lovelace")
     filename: str = f"{kmlock_name}.yaml"
-    file = os.path.join(folder, filename)
+    file = Path(folder) / filename
 
     try:
-        os.remove(file)
+        file.unlink()
     except (FileNotFoundError, PermissionError) as e:
         _LOGGER.debug(
             "Unable to delete lovelace YAML (%s). %s: %s",
@@ -97,14 +97,15 @@ def delete_lovelace(hass: HomeAssistant, kmlock_name: str) -> None:
             e.__class__.__qualname__,
             e,
         )
-    except Exception as e:
-        _LOGGER.debug(
-            "Exception deleting lovelace YAML (%s). %s: %s",
-            filename,
-            e.__class__.__qualname__,
-            e,
-        )
         return
+    # except Exception as e:
+    #     _LOGGER.debug(
+    #         "Exception deleting lovelace YAML (%s). %s: %s",
+    #         filename,
+    #         e.__class__.__qualname__,
+    #         e,
+    #     )
+    #     return
     _LOGGER.debug("Lovelace YAML File deleted: %s", filename)
     return
 
@@ -113,19 +114,19 @@ def _create_lovelace_folder(folder) -> None:
     _LOGGER.debug("Lovelace Location: %s", folder)
 
     try:
-        os.makedirs(folder, exist_ok=True)
+        Path(folder).mkdir(parents=True, exist_ok=True)
     except OSError as e:
         _LOGGER.warning(
             "OSError creating folder for lovelace files. %s: %s",
             e.__class__.__qualname__,
             e,
         )
-    except Exception as e:
-        _LOGGER.warning(
-            "Exception creating folder for lovelace files. %s: %s",
-            e.__class__.__qualname__,
-            e,
-        )
+    # except Exception as e:
+    #     _LOGGER.warning(
+    #         "Exception creating folder for lovelace files. %s: %s",
+    #         e.__class__.__qualname__,
+    #         e,
+    #     )
 
 
 def _dump_with_indent(data: Any, indent: int = 2) -> str:
@@ -143,11 +144,8 @@ def _write_lovelace_yaml(folder: str, filename: str, lovelace: Any) -> None:
     indented_yaml: str = _dump_with_indent(lovelace, indent=2)
 
     try:
-        with open(
-            file=os.path.join(folder, filename),
-            mode="w",
-            encoding="utf-8",
-        ) as yamlfile:
+        file_path = Path(folder) / filename
+        with file_path.open(mode="w", encoding="utf-8") as yamlfile:
             yamlfile.write(indented_yaml)
     except OSError as e:
         _LOGGER.debug(
@@ -157,14 +155,14 @@ def _write_lovelace_yaml(folder: str, filename: str, lovelace: Any) -> None:
             e,
         )
         return
-    except Exception as e:
-        _LOGGER.debug(
-            "Exception writing lovelace YAML (%s). %s: %s",
-            filename,
-            e.__class__.__qualname__,
-            e,
-        )
-        return
+    # except Exception as e:
+    #     _LOGGER.debug(
+    #         "Exception writing lovelace YAML (%s). %s: %s",
+    #         filename,
+    #         e.__class__.__qualname__,
+    #         e,
+    #     )
+    #     return
     _LOGGER.debug("Lovelace YAML File Written: %s", filename)
     return
 

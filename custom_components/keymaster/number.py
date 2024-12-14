@@ -31,48 +31,44 @@ async def async_setup_entry(
 
     entities: list = []
 
-    entities.append(
-        KeymasterNumber(
-            entity_description=KeymasterNumberEntityDescription(
-                key="number.autolock_min_day",
-                name="Day Auto Lock",
-                icon="mdi:timer-lock-outline",
-                mode=NumberMode.BOX,
-                native_min_value=1,
-                native_step=1,
-                device_class=NumberDeviceClass.DURATION,
-                native_unit_of_measurement=UnitOfTime.MINUTES,
-                entity_registry_enabled_default=True,
-                hass=hass,
-                config_entry=config_entry,
-                coordinator=coordinator,
+    entities.extend(
+        [
+            KeymasterNumber(
+                entity_description=KeymasterNumberEntityDescription(
+                    key="number.autolock_min_day",
+                    name="Day Auto Lock",
+                    icon="mdi:timer-lock-outline",
+                    mode=NumberMode.BOX,
+                    native_min_value=1,
+                    native_step=1,
+                    device_class=NumberDeviceClass.DURATION,
+                    native_unit_of_measurement=UnitOfTime.MINUTES,
+                    entity_registry_enabled_default=True,
+                    hass=hass,
+                    config_entry=config_entry,
+                    coordinator=coordinator,
+                ),
             ),
-        )
-    )
-    entities.append(
-        KeymasterNumber(
-            entity_description=KeymasterNumberEntityDescription(
-                key="number.autolock_min_night",
-                name="Night Auto Lock",
-                icon="mdi:timer-lock",
-                mode=NumberMode.BOX,
-                native_min_value=1,
-                native_step=1,
-                device_class=NumberDeviceClass.DURATION,
-                native_unit_of_measurement=UnitOfTime.MINUTES,
-                entity_registry_enabled_default=True,
-                hass=hass,
-                config_entry=config_entry,
-                coordinator=coordinator,
+            KeymasterNumber(
+                entity_description=KeymasterNumberEntityDescription(
+                    key="number.autolock_min_night",
+                    name="Night Auto Lock",
+                    icon="mdi:timer-lock",
+                    mode=NumberMode.BOX,
+                    native_min_value=1,
+                    native_step=1,
+                    device_class=NumberDeviceClass.DURATION,
+                    native_unit_of_measurement=UnitOfTime.MINUTES,
+                    entity_registry_enabled_default=True,
+                    hass=hass,
+                    config_entry=config_entry,
+                    coordinator=coordinator,
+                ),
             ),
-        )
+        ]
     )
-
-    for x in range(
-        config_entry.data[CONF_START],
-        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-    ):
-        entities.append(
+    entities.extend(
+        [
             KeymasterNumber(
                 entity_description=KeymasterNumberEntityDescription(
                     key=f"number.code_slots:{x}.accesslimit_count",
@@ -88,7 +84,12 @@ async def async_setup_entry(
                     coordinator=coordinator,
                 ),
             )
-        )
+            for x in range(
+                config_entry.data[CONF_START],
+                config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+            )
+        ]
+    )
 
     async_add_entities(entities, True)
     return True

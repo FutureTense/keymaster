@@ -47,11 +47,8 @@ async def async_setup_entry(
                 ),
             )
         )
-        for x in range(
-            config_entry.data[CONF_START],
-            config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-        ):
-            entities.append(
+        entities.extend(
+            [
                 KeymasterBinarySensor(
                     entity_description=KeymasterBinarySensorEntityDescription(
                         key=f"binary_sensor.code_slots:{x}.active",
@@ -63,7 +60,12 @@ async def async_setup_entry(
                         coordinator=coordinator,
                     )
                 )
-            )
+                for x in range(
+                    config_entry.data[CONF_START],
+                    config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+                )
+            ]
+        )
     else:
         _LOGGER.error("Z-Wave integration not found")
         raise PlatformNotReady

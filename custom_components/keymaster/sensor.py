@@ -56,11 +56,8 @@ async def async_setup_entry(
             )
         )
 
-    for x in range(
-        config_entry.data[CONF_START],
-        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-    ):
-        entities.append(
+    entities.extend(
+        [
             KeymasterSensor(
                 entity_description=KeymasterSensorEntityDescription(
                     key=f"sensor.code_slots:{x}.synced",
@@ -72,7 +69,12 @@ async def async_setup_entry(
                     coordinator=coordinator,
                 ),
             )
-        )
+            for x in range(
+                config_entry.data[CONF_START],
+                config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+            )
+        ]
+    )
 
     async_add_entities(entities, True)
     return True

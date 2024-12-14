@@ -36,11 +36,8 @@ async def async_setup_entry(
             ),
         )
     )
-    for x in range(
-        config_entry.data[CONF_START],
-        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-    ):
-        entities.append(
+    entities.extend(
+        [
             KeymasterButton(
                 entity_description=KeymasterButtonEntityDescription(
                     key=f"button.code_slots:{x}.reset",
@@ -52,7 +49,12 @@ async def async_setup_entry(
                     coordinator=coordinator,
                 )
             )
-        )
+            for x in range(
+                config_entry.data[CONF_START],
+                config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+            )
+        ]
+    )
     async_add_entities(entities, True)
     return True
 

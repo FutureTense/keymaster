@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -125,15 +126,14 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) ->
     if DOMAIN not in hass.data:
         return data
 
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if (
-            CONF_PARENT not in entry.data
-            and entry.entry_id != entry_id
-            or entry.data[CONF_PARENT] is None
-            and entry.entry_id != entry_id
-        ):
-            data.append(entry.title)
-
+    data.extend(
+        [
+            entry.title
+            for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.entry_id != entry_id
+            and (CONF_PARENT not in entry.data or entry.data[CONF_PARENT] is None)
+        ]
+    )
     return data
 
 
@@ -158,12 +158,9 @@ def _get_entities(
         data.extend(extra_entities)
 
     if exclude_entities:
-        for ent in exclude_entities:
-            try:
+        with contextlib.suppress(ValueError):
+            for ent in exclude_entities:
                 data.remove(ent)
-            except ValueError:
-                pass
-
     if sort:
         data.sort()
 
@@ -175,13 +172,11 @@ def _get_locks_in_use(hass: HomeAssistant, exclude: str | None = None) -> list[s
         return []
     data: list[str] = []
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    for kmlock in coordinator.data.values():
-        data.append(kmlock.lock_entity_id)
+    data.extend([kmlock.lock_entity_id for kmlock in coordinator.data.values()])
     if exclude:
-        try:
+        with contextlib.suppress(ValueError):
             data.remove(exclude)
-        except ValueError:
-            pass
+
     return data
 
 

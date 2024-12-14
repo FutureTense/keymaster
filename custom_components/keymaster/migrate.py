@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Mapping
 from datetime import datetime, time as dt_time, timezone
 import logging
-import os
+from pathlib import Path
 from typing import Any
 
 from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
@@ -20,7 +20,7 @@ from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import SERVICE_RELOAD
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady, ServiceNotFound
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
@@ -121,16 +121,11 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
         parent_lock_name=config_entry.data.get(CONF_PARENT),
     )
     for entity in del_list:
-        try:
+        if entity in entity_registry.entities:
             entity_registry.async_remove(entity)
             _LOGGER.info("[migrate_2to3] Removed entity: %s", entity)
-        except (KeyError, ValueError) as e:
-            _LOGGER.info(
-                "[migrate_2to3] Error removing entity: %s. %s: %s",
-                entity,
-                e.__class__.__qualname__,
-                e,
-            )
+        else:
+            _LOGGER.info("[migrate_2to3] Entity not found: %s", entity)
 
     # Update config entry
     _LOGGER.info("[migrate_2to3] Updating config entry")
@@ -303,22 +298,23 @@ def _migrate_2to3_delete_lock_and_base_folder(
     hass: HomeAssistant, config_entry: ConfigEntry
 ) -> None:
     """Delete packages folder for lock and base keymaster folder if empty."""
-    base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
+    base_path = Path(hass.config.path()) / config_entry.data[CONF_PATH]
 
     _migrate_2to3_delete_folder(base_path, config_entry.data[CONF_LOCK_NAME])
-    if not os.listdir(base_path):
-        os.rmdir(base_path)
+    if not any(base_path.iterdir()):
+        base_path.rmdir()
 
 
 def _migrate_2to3_delete_folder(absolute_path: str, *relative_paths: str) -> None:
     """Recursively delete folder and all children files and folders (depth first)."""
-    path = os.path.join(absolute_path, *relative_paths)
-    if os.path.isfile(path):
-        os.remove(path)
+    path: Path = Path(absolute_path) / Path(*relative_paths)
+
+    if path.is_file():
+        path.unlink()
     else:
-        for file_or_dir in os.listdir(path):
-            _migrate_2to3_delete_folder(path, file_or_dir)
-        os.rmdir(path)
+        for file_or_dir in path.iterdir():
+            _migrate_2to3_delete_folder(path, file_or_dir.name)
+        path.rmdir()
 
 
 async def _migrate_2to3_reload_package_platforms(hass: HomeAssistant) -> bool:
@@ -333,15 +329,19 @@ async def _migrate_2to3_reload_package_platforms(hass: HomeAssistant) -> bool:
         TEMPLATE_DOMAIN,
         TIMER_DOMAIN,
     ]:
-        try:
+        if domain in hass.services:
             await hass.services.async_call(domain, SERVICE_RELOAD, blocking=True)
-        except ServiceNotFound:
+        else:
+            _LOGGER.warning("Service not found for domain: %s", domain)
             return False
     return True
 
 
 async def _migrate_2to3_build_delete_list(
-    lock_name: str, starting_slot: int, num_slots: int, parent_lock_name: str | None = None
+    lock_name: str,
+    starting_slot: int,
+    num_slots: int,
+    parent_lock_name: str | None = None,
 ) -> list[str]:
     del_list: list[str] = [
         f"automation.keymaster_{lock_name}_changed_code",
