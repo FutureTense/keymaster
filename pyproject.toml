@@ -452,7 +452,9 @@ ignore = [
     "PLR0912", # Too many branches ({branches} > {max_branches})
     "PLR0913", # Too many arguments to function call ({c_args} > {max_args})
     "PLR0915", # Too many statements ({statements} > {max_statements})
-    "PLR0917", # too-many-positional-arguments
+    "PLR0916", # Too many Boolean expressions
+    "PLR0917", # Too many positional arguments
+    "PLR1702", # Too many nested blocks
     "PLR2004", # Magic value used in comparison, consider replacing {value} with a constant variable
     "PLW2901", # Outer {outer_kind} variable {name} overwritten by inner {inner_kind} target
     "PT011", # pytest.raises({exception}) is too broad, set the `match` parameter or use a more specific exception
