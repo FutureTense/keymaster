@@ -9,3 +9,4 @@ tox
 mypy
 pylint
 ruff
+types-PyYAML

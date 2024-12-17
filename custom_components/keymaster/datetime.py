@@ -29,7 +29,7 @@ async def async_setup_entry(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        entities.append(
+        entities.extend([
             KeymasterDateTime(
                 entity_description=KeymasterDateTimeEntityDescription(
                     key=f"datetime.code_slots:{x}.accesslimit_date_range_start",
@@ -40,9 +40,7 @@ async def async_setup_entry(
                     config_entry=config_entry,
                     coordinator=coordinator,
                 ),
-            )
-        )
-        entities.append(
+            ),
             KeymasterDateTime(
                 entity_description=KeymasterDateTimeEntityDescription(
                     key=f"datetime.code_slots:{x}.accesslimit_date_range_end",
@@ -54,13 +52,12 @@ async def async_setup_entry(
                     coordinator=coordinator,
                 ),
             )
-        )
+        ])
 
     async_add_entities(entities, True)
-    return True
 
 
-@dataclass(kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class KeymasterDateTimeEntityDescription(
     KeymasterEntityDescription, DateTimeEntityDescription
 ):
@@ -69,6 +66,8 @@ class KeymasterDateTimeEntityDescription(
 
 class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
     """Keymaster DateTime Class."""
+
+    entity_description: KeymasterDateTimeEntityDescription
 
     def __init__(
         self,
@@ -83,7 +82,7 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         # _LOGGER.debug(f"[DateTime handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
-        if not self._kmlock.connected:
+        if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
             self.async_write_ha_state()
             return
@@ -91,7 +90,7 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         if (
             ".code_slots" in self._property
             and self._kmlock.parent_name is not None
-            and not self._kmlock.code_slots[self._code_slot].override_parent
+            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -99,7 +98,7 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
 
         if (
             ".code_slots" in self._property
-            and self._code_slot not in self._kmlock.code_slots
+            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -108,9 +107,9 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         if (
             self._property.endswith(".accesslimit_date_range_start")
             or self._property.endswith(".accesslimit_date_range_end")
-        ) and not self._kmlock.code_slots[
+        ) and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[
             self._code_slot
-        ].accesslimit_date_range_enabled:
+        ].accesslimit_date_range_enabled):
             self._attr_available = False
             self.async_write_ha_state()
             return
@@ -130,8 +129,8 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
 
         if (
             ".code_slots" in self._property
-            and self._kmlock.parent_name is not None
-            and not self._kmlock.code_slots[self._code_slot].override_parent
+            and self._kmlock and self._kmlock.parent_name
+            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
         ):
             _LOGGER.debug(
                 "[DateTime async_set_value] %s: "

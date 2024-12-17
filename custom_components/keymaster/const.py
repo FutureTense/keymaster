@@ -20,6 +20,7 @@ PLATFORMS: list = [
 ]
 THROTTLE_SECONDS: int = 5
 SYNC_STATUS_THRESHOLD: int = 15
+QUICK_REFRESH_SECONDS: int = 15
 
 # hass.data attributes
 CHILD_LOCKS = "child_locks"
@@ -128,7 +129,7 @@ ACTION_MAP = {
     },
 }
 
-LOCK_STATE_MAP = {
+LOCK_STATE_MAP: dict[str, dict[str, int]] = {
     ALARM_TYPE: {
         LockState.LOCKED: 24,
         LockState.UNLOCKED: 25,

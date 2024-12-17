@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import MutableMapping
 from datetime import datetime, timedelta
 import functools
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -54,8 +55,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     updated_config = config_entry.data.copy()
 
-    updated_config[CONF_SLOTS] = int(updated_config.get(CONF_SLOTS))
-    updated_config[CONF_START] = int(updated_config.get(CONF_START))
+    # updated_config[CONF_SLOTS] = int(updated_config[CONF_SLOTS])
+    # updated_config[CONF_START] = int(updated_config[CONF_START])
 
     if config_entry.data.get(CONF_PARENT) in {None, "(none)"}:
         updated_config[CONF_PARENT] = None
@@ -77,10 +78,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         )
     elif isinstance(
         updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str
-    ) and updated_config.get(CONF_NOTIFY_SCRIPT_NAME).startswith("script."):
-        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config.get(
+    ) and updated_config[CONF_NOTIFY_SCRIPT_NAME].startswith("script."):
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[
             CONF_NOTIFY_SCRIPT_NAME
-        ).split(".", maxsplit=1)[1]
+        ].split(".", maxsplit=1)[1]
 
     if updated_config.get(CONF_DOOR_SENSOR_ENTITY_ID) == DEFAULT_DOOR_SENSOR:
         updated_config[CONF_DOOR_SENSOR_ENTITY_ID] = None
@@ -114,7 +115,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     device_registry = dr.async_get(hass)
 
-    via_device: str | None = None
+    via_device: tuple[str, Any] | None = None
     if config_entry.data.get(CONF_PARENT_ENTRY_ID):
         via_device = (DOMAIN, config_entry.data.get(CONF_PARENT_ENTRY_ID))
 
@@ -135,12 +136,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     # _LOGGER.debug(f"[init async_setup_entry] device: {device}")
 
-    code_slots: Mapping[int, KeymasterCodeSlot] = {}
+    code_slots: MutableMapping[int, KeymasterCodeSlot] = {}
     for x in range(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        dow_slots: Mapping[int, KeymasterCodeSlotDayOfWeek] = {}
+        dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(
             [
                 "Monday",
@@ -158,8 +159,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     kmlock = KeymasterLock(
-        lock_name=config_entry.data.get(CONF_LOCK_NAME),
-        lock_entity_id=config_entry.data.get(CONF_LOCK_ENTITY_ID),
+        lock_name=config_entry.data[CONF_LOCK_NAME],
+        lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
         keymaster_config_entry_id=config_entry.entry_id,
         alarm_level_or_user_code_entity_id=config_entry.data.get(
             CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
@@ -168,8 +169,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
         ),
         door_sensor_entity_id=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
-        number_of_code_slots=config_entry.data.get(CONF_SLOTS),
-        starting_code_slot=config_entry.data.get(CONF_START),
+        number_of_code_slots=config_entry.data[CONF_SLOTS],
+        starting_code_slot=config_entry.data[CONF_START],
         code_slots=code_slots,
         parent_name=config_entry.data.get(CONF_PARENT),
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
@@ -184,12 +185,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
     await generate_lovelace(
         hass=hass,
-        kmlock_name=config_entry.data.get(CONF_LOCK_NAME),
+        kmlock_name=config_entry.data[CONF_LOCK_NAME],
         keymaster_config_entry_id=config_entry.entry_id,
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
-        code_slot_start=config_entry.data.get(CONF_START),
-        code_slots=config_entry.data.get(CONF_SLOTS),
-        lock_entity=config_entry.data.get(CONF_LOCK_ENTITY_ID),
+        code_slot_start=config_entry.data[CONF_START],
+        code_slots=config_entry.data[CONF_SLOTS],
+        lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
         door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
     )
 
@@ -207,7 +208,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
-    lockname: str = config_entry.data.get(CONF_LOCK_NAME)
+    lockname: str = config_entry.data[CONF_LOCK_NAME]
     _LOGGER.info("Unloading %s", lockname)
     unload_ok: bool = all(
         await asyncio.gather(

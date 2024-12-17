@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, MutableMapping
 import functools
 import logging
 from pathlib import Path
@@ -34,42 +34,43 @@ async def generate_lovelace(
     filename: str = f"{kmlock_name}.yaml"
     await hass.async_add_executor_job(_create_lovelace_folder, folder)
 
-    badges_list: list[Mapping[str, Any]] = await _generate_lock_badges(
+    badges_list: list[MutableMapping[str, Any]] = await _generate_lock_badges(
         child=bool(parent_config_entry_id),
         door=bool(door_sensor not in {None, DEFAULT_DOOR_SENSOR}),
     )
-    mapped_badges_list: list[Mapping[str, Any]] = await _map_property_to_entity_id(
+    mapped_badges_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = await _map_property_to_entity_id(
         hass=hass,
         lovelace_entities=badges_list,
         keymaster_config_entry_id=keymaster_config_entry_id,
         parent_config_entry_id=parent_config_entry_id,
     )
-    await _add_lock_and_door_to_badges(
-        badges_list=mapped_badges_list,
-        lock_entity=lock_entity,
-        door_sensor=door_sensor,
-    )
-    code_slot_list: list[Mapping[str, Any]] = []
+    if isinstance(mapped_badges_list, list):
+        await _add_lock_and_door_to_badges(
+            badges_list=mapped_badges_list,
+            lock_entity=lock_entity,
+            door_sensor=door_sensor,
+        )
+    code_slot_list: list[MutableMapping[str, Any]] = []
     for x in range(
         code_slot_start,
         code_slot_start + code_slots,
     ):
         if parent_config_entry_id:
-            code_slot_dict: Mapping[str, Any] = await _generate_child_code_slot_dict(
+            code_slot_dict: MutableMapping[str, Any] = await _generate_child_code_slot_dict(
                 code_slot=x
             )
         else:
-            code_slot_dict: Mapping[str, Any] = await _generate_code_slot_dict(
+            code_slot_dict = await _generate_code_slot_dict(
                 code_slot=x
             )
         code_slot_list.append(code_slot_dict)
-    lovelace_list: list[Mapping[str, Any]] = await _map_property_to_entity_id(
+    lovelace_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = await _map_property_to_entity_id(
         hass=hass,
         lovelace_entities=code_slot_list,
         keymaster_config_entry_id=keymaster_config_entry_id,
         parent_config_entry_id=parent_config_entry_id,
     )
-    lovelace: list[Mapping[str, Any]] = [
+    lovelace: list[MutableMapping[str, Any]] = [
         {
             "type": "sections",
             "max_columns": 4,
@@ -169,17 +170,17 @@ def _write_lovelace_yaml(folder: str, filename: str, lovelace: Any) -> None:
 
 async def _map_property_to_entity_id(
     hass: HomeAssistant,
-    lovelace_entities: list[Mapping[str, Any]] | Mapping[str, Any],
+    lovelace_entities: list[MutableMapping[str, Any]] | MutableMapping[str, Any],
     keymaster_config_entry_id: str,
     parent_config_entry_id: str | None = None,
-) -> Mapping[str, Any] | list[Mapping[str, Any]]:
+) -> MutableMapping[str, Any] | list[MutableMapping[str, Any]]:
     """Update all the entities with the entity_id for the keymaster lock."""
     # _LOGGER.debug(
     #     f"[map_property_to_entity_id] keymaster_config_entry_id: {keymaster_config_entry_id}, "
     #     f"parent_config_entry_id: {parent_config_entry_id}"
     # )
     entity_registry: er.EntityRegistry = er.async_get(hass)
-    lovelace_list: list[Mapping[str, Any]] | Mapping[str, Any] = (
+    lovelace_list: list[MutableMapping[str, Any]] | MutableMapping[str, Any] = (
         await _process_entities(
             lovelace_entities,
             "entity",
@@ -220,13 +221,15 @@ async def _process_entities(data: Any, key_to_find: str, process_func: Callable)
 async def _get_entity_id(
     entity_registry: er.EntityRegistry,
     keymaster_config_entry_id: str,
-    parent_config_entry_id: str,
+    parent_config_entry_id: str | None,
     prop: str,
-) -> str:
+) -> str | None:
     """Lookup the entity_id from the property."""
     if not prop:
         return None
     if prop.split(".", maxsplit=1)[0] == "parent":
+        if not parent_config_entry_id:
+            return None
         prop = prop.split(".", maxsplit=1)[1]
         # _LOGGER.debug(
         #     f"[get_entity_id] Looking up parent ({parent_config_entry_id}) property: {prop}"
@@ -238,7 +241,7 @@ async def _get_entity_id(
         )
     else:
         # _LOGGER.debug(f"[get_entity_id] Looking up property: {prop}")
-        entity_id: str | None = entity_registry.async_get_entity_id(
+        entity_id = entity_registry.async_get_entity_id(
             domain=prop.split(".", maxsplit=1)[0],
             platform=DOMAIN,
             unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
@@ -246,9 +249,9 @@ async def _get_entity_id(
     return entity_id
 
 
-async def _generate_code_slot_dict(code_slot, child=False) -> Mapping[str, Any]:
+async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str, Any]:
     """Build the dict for the code slot."""
-    code_slot_dict: Mapping[str, Any] = {
+    code_slot_dict: MutableMapping[str, Any] = {
         "type": "grid",
         "cards": [
             {
@@ -413,7 +416,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> Mapping[str, Any]:
         ]
     )
 
-    dow_list: list[Mapping[str, Any]] = await _generate_dow_entities(
+    dow_list: list[MutableMapping[str, Any]] = await _generate_dow_entities(
         code_slot=code_slot
     )
     code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
@@ -421,7 +424,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> Mapping[str, Any]:
 
 
 async def _add_lock_and_door_to_badges(
-    badges_list: list[Mapping[str, Any]],
+    badges_list: list[MutableMapping[str, Any]],
     lock_entity: str,
     door_sensor: str | None = None,
 ) -> None:
@@ -434,8 +437,8 @@ async def _add_lock_and_door_to_badges(
 
 async def _generate_lock_badges(
     child: bool = False, door: bool = False
-) -> list[Mapping[str, Any]]:
-    badges: list[Mapping[str, Any]] = [
+) -> list[MutableMapping[str, Any]]:
+    badges: list[MutableMapping[str, Any]] = [
         {
             "type": "entity",
             "show_name": False,
@@ -591,9 +594,9 @@ async def _generate_lock_badges(
     return badges
 
 
-async def _generate_dow_entities(code_slot) -> list[Mapping[str, Any]]:
+async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
     """Build the day of week entities for the code slot."""
-    dow_list: list[Mapping[str, Any]] = []
+    dow_list: list[MutableMapping[str, Any]] = []
     for dow_num, dow in enumerate(
         [
             "Monday",
@@ -725,15 +728,15 @@ async def _generate_dow_entities(code_slot) -> list[Mapping[str, Any]]:
     return dow_list
 
 
-async def _generate_child_code_slot_dict(code_slot) -> Mapping[str, Any]:
+async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
     """Build the dict for the code slot of a child keymaster lock."""
 
-    normal_code_slot_dict: Mapping[str, Any] = await _generate_code_slot_dict(
+    normal_code_slot_dict: MutableMapping[str, Any] = await _generate_code_slot_dict(
         code_slot=code_slot, child=True
     )
     override_code_slot_dict = normal_code_slot_dict["cards"][1]
 
-    code_slot_dict: Mapping[str, Any] = {
+    code_slot_dict: MutableMapping[str, Any] = {
         "type": "grid",
         "cards": [
             {
@@ -913,16 +916,16 @@ async def _generate_child_code_slot_dict(code_slot) -> Mapping[str, Any]:
         ],
     }
 
-    dow_list: list[Mapping[str, Any]] = await _generate_child_dow_entities(
+    dow_list: list[MutableMapping[str, Any]] = await _generate_child_dow_entities(
         code_slot=code_slot
     )
     code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
     return code_slot_dict
 
 
-async def _generate_child_dow_entities(code_slot) -> list[Mapping[str, Any]]:
+async def _generate_child_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
     """Build the day of week entities for a child code slot."""
-    dow_list: list[Mapping[str, Any]] = []
+    dow_list: list[MutableMapping[str, Any]] = []
     for dow_num, dow in enumerate(
         [
             "Monday",

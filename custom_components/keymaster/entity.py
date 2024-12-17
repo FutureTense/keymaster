@@ -1,19 +1,19 @@
 """Base entity for keymaster."""
+from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
 from .const import DOMAIN
 from .coordinator import KeymasterCoordinator
-from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -26,22 +26,24 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
     """Base entity for Keymaster."""
 
-    def __init__(self, entity_description: EntityDescription) -> None:
+    def __init__(self, entity_description: KeymasterEntityDescription) -> None:
         """Initialize base keymaster entity."""
         self.hass: HomeAssistant = entity_description.hass
         self.coordinator: KeymasterCoordinator = entity_description.coordinator
         self._config_entry: ConfigEntry = entity_description.config_entry
-        self.entity_description: EntityDescription = entity_description
+        self.entity_description: KeymasterEntityDescription = entity_description
         self._attr_available = False
         self._property: str = (
             entity_description.key
         )  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
-        self._kmlock: KeymasterLock = self.coordinator.sync_get_lock_by_config_entry_id(
+        self._kmlock = self.coordinator.sync_get_lock_by_config_entry_id(
             self._config_entry.entry_id
         )
-        self._attr_name: str = (
-            f"{self._kmlock.lock_name} {self.entity_description.name}"
-        )
+        self._attr_name: str | None = None
+        if self._attr_name:
+            self._attr_name = (
+                f"{self._kmlock.lock_name} {self.entity_description.name}"
+            )
         # _LOGGER.debug(f"[Entity init] entity_description.name: {self.entity_description.name}, name: {self.name}")
         self._attr_unique_id: str = (
             f"{self._config_entry.entry_id}_{slugify(self._property)}"
@@ -51,8 +53,8 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
             self._code_slot: None | int = self._get_code_slots_num()
         if "accesslimit_day_of_week" in self._property:
             self._day_of_week_num: None | int = self._get_day_of_week_num()
-        self._attr_extra_state_attributes: Mapping[str, Any] = {}
-        self._attr_device_info: Mapping[str, Any] = {
+        self._attr_extra_state_attributes: dict[str, Any] = {}
+        self._attr_device_info: DeviceInfo = {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
         }
         # _LOGGER.debug(f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}")
@@ -135,7 +137,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         return None
 
 
-@dataclass(kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class KeymasterEntityDescription(EntityDescription):
     """Base keymaster Entitity Description."""
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, MutableMapping
 from datetime import datetime, timedelta
 import logging
 import time
@@ -31,7 +31,7 @@ class Throttle:
 
     def __init__(self) -> None:
         """Initialize Throttle class."""
-        self._cooldowns = (
+        self._cooldowns: MutableMapping = (
             {}
         )  # Nested dictionary: {function_name: {key: last_called_time}}
 
@@ -101,7 +101,7 @@ class KeymasterTimer:
         )
         return True
 
-    async def cancel(self, timer_elapsed: datetime | None = None) -> bool:
+    async def cancel(self, timer_elapsed: datetime | None = None) -> None:
         """Cancel a timer."""
         if timer_elapsed:
             _LOGGER.debug("[KeymasterTimer] Timer elapsed")
@@ -142,7 +142,7 @@ class KeymasterTimer:
                     unsub()
                 self._unsub_events = []
             self._end_time = None
-        return self.hass and self._kmlock and self._call_action
+        return bool(self.hass and self._kmlock and self._call_action)
 
     @property
     def end_time(self) -> datetime | None:
@@ -176,7 +176,7 @@ class KeymasterTimer:
                 self._unsub_events = []
             self._end_time = None
             return None
-        return (datetime.now().astimezone() - self._end_time).total_seconds()
+        return round((datetime.now().astimezone() - self._end_time).total_seconds())
 
 
 @callback
@@ -190,12 +190,15 @@ def _async_using(
     if not (kmlock or entity_id):
         raise TypeError("Missing arguments")
     ent_reg = er.async_get(hass)
-    if kmlock:
+    if kmlock and kmlock.lock_entity_id:
         entity = ent_reg.async_get(kmlock.lock_entity_id)
-    else:
+    elif entity_id:
         entity = ent_reg.async_get(entity_id)
-
-    return entity and entity.platform == domain
+    else:
+        return False
+    if not entity:
+        return False
+    return bool(entity) and bool(entity.platform == domain)
 
 
 @callback
@@ -272,7 +275,7 @@ async def delete_code_slot_entities(
             f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.time_end",
         ]
         for prop in dow_prop:
-            entity_id: str | None = entity_registry.async_get_entity_id(
+            entity_id = entity_registry.async_get_entity_id(
                 domain=prop.split(".", maxsplit=1)[0],
                 platform=DOMAIN,
                 unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
@@ -300,8 +303,8 @@ async def call_hass_service(
     hass: HomeAssistant,
     domain: str,
     service: str,
-    service_data: Mapping[str, Any] | None = None,
-    target: Mapping[str, Any] | None = None,
+    service_data: dict[str, Any] | None = None,
+    target: dict[str, Any] | None = None,
 ) -> None:
     """Call a hass service and log a failure on an error."""
     _LOGGER.debug(

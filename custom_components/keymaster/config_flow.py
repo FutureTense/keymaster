@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import MutableMapping
 import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
@@ -14,6 +14,7 @@ from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 
@@ -44,11 +45,13 @@ if TYPE_CHECKING:
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+class KeymasterFlowHandler(config_entries.ConfigFlow):
     """Config flow for keymaster."""
 
-    VERSION = 3
-    DEFAULTS: Mapping[str, Any] = {
+    domain: str = DOMAIN
+
+    VERSION: int = 3
+    DEFAULTS: MutableMapping[str, Any] = {
         CONF_SLOTS: DEFAULT_CODE_SLOTS,
         CONF_START: DEFAULT_START,
         CONF_DOOR_SENSOR_ENTITY_ID: DEFAULT_DOOR_SENSOR,
@@ -57,7 +60,7 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
-    async def get_unique_name_error(self, user_input) -> Mapping[str, str]:
+    async def get_unique_name_error(self, user_input) -> MutableMapping[str, str]:
         """Check if name is unique, returning dictionary error if so."""
         # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
@@ -68,13 +71,13 @@ class KeymasterFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return {}
 
     async def async_step_user(
-        self, user_input: Mapping[str, Any] | None = None
-    ) -> Mapping[str, Any]:
+        self, user_input: MutableMapping[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
             cls=self,
             step_id="user",
-            title=user_input[CONF_LOCK_NAME] if user_input else None,
+            title=user_input[CONF_LOCK_NAME] if user_input else "",
             user_input=user_input,
             defaults=self.DEFAULTS,
         )
@@ -95,7 +98,7 @@ class KeymasterOptionsFlow(config_entries.OptionsFlow):
         """Initialize."""
         self.config_entry = config_entry
 
-    async def get_unique_name_error(self, user_input) -> Mapping[str, str]:
+    async def get_unique_name_error(self, user_input) -> MutableMapping[str, str]:
         """Check if name is unique, returning dictionary error if so."""
         # If lock name has changed, make sure new name isn't already being used
         # otherwise show an error
@@ -106,15 +109,15 @@ class KeymasterOptionsFlow(config_entries.OptionsFlow):
         return {}
 
     async def async_step_init(
-        self, user_input: Mapping[str, Any] | None = None
-    ) -> Mapping[str, Any]:
+        self, user_input: MutableMapping[str, Any] | None = None
+    ) -> MutableMapping[str, Any]:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
             cls=self,
             step_id="init",
             title="",
             user_input=user_input,
-            defaults=self.config_entry.data,
+            defaults=dict(self.config_entry.data),
             entry_id=self.config_entry.entry_id,
         )
 
@@ -182,8 +185,8 @@ def _get_locks_in_use(hass: HomeAssistant, exclude: str | None = None) -> list[s
 
 def _get_schema(
     hass: HomeAssistant,
-    user_input: Mapping[str, Any] | None,
-    default_dict: Mapping[str, Any],
+    user_input: MutableMapping[str, Any] | None,
+    default_dict: MutableMapping[str, Any],
     entry_id: str | None = None,
 ) -> vol.Schema:
     """Get a schema using the default_dict as a backup."""
@@ -191,7 +194,7 @@ def _get_schema(
         user_input = {}
 
     if CONF_PARENT in default_dict and default_dict[CONF_PARENT] is None:
-        check_dict: Mapping[str, Any] = default_dict.copy()
+        check_dict: MutableMapping[str, Any] = dict(default_dict).copy()
         check_dict.pop(CONF_PARENT, None)
         default_dict = check_dict
 
@@ -310,13 +313,14 @@ async def _start_config_flow(
     cls: KeymasterFlowHandler | KeymasterOptionsFlow,
     step_id: str,
     title: str,
-    user_input: Mapping[str, Any],
-    defaults: Mapping[str, Any] | None = None,
+    user_input: MutableMapping[str, Any] | None,
+    defaults: MutableMapping[str, Any] | None = None,
     entry_id: str | None = None,
 ):
     """Start a config flow."""
-    errors = {}
-    description_placeholders = {}
+    errors: dict[str, Any] = {}
+    description_placeholders: dict[str, Any] = {}
+    defaults = defaults or {}
 
     if user_input is not None:
         _LOGGER.debug(
@@ -325,8 +329,8 @@ async def _start_config_flow(
             user_input,
             errors,
         )
-        user_input[CONF_SLOTS] = int(user_input.get(CONF_SLOTS))
-        user_input[CONF_START] = int(user_input.get(CONF_START))
+        user_input[CONF_SLOTS] = int(user_input[CONF_SLOTS])
+        user_input[CONF_START] = int(user_input[CONF_START])
 
         # Convert (none) to None
         if user_input[CONF_PARENT] == "(none)":
@@ -341,8 +345,9 @@ async def _start_config_flow(
                 step_id,
                 user_input,
             )
-            if step_id == "user":
+            if step_id == "user" or not entry_id:
                 return cls.async_create_entry(title=title, data=user_input)
+            assert isinstance(cls, KeymasterOptionsFlow)
             cls.hass.config_entries.async_update_entry(
                 cls.config_entry, data=user_input
             )
@@ -351,7 +356,7 @@ async def _start_config_flow(
 
     return cls.async_show_form(
         step_id=step_id,
-        data_schema=_get_schema(cls.hass, user_input, defaults, entry_id),
+        data_schema=_get_schema(hass=cls.hass, user_input=user_input, default_dict=defaults, entry_id=entry_id),
         errors=errors,
         description_placeholders=description_placeholders,
     )

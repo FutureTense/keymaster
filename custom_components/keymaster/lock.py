@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
 from datetime import datetime, time as dt_time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from zwave_js_server.model.node import Node as ZwaveJSNode
 
@@ -48,7 +48,7 @@ class KeymasterCodeSlot:
     accesslimit_date_range_start: datetime | None = None
     accesslimit_date_range_end: datetime | None = None
     accesslimit_day_of_week_enabled: bool = False
-    accesslimit_day_of_week: Mapping[int, KeymasterCodeSlotDayOfWeek] | None = None
+    accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
 
 
 @dataclass
@@ -67,7 +67,7 @@ class KeymasterLock:
     zwave_js_lock_device: DeviceEntry | None = None
     number_of_code_slots: int | None = None
     starting_code_slot: int = 1
-    code_slots: Mapping[int, KeymasterCodeSlot] | None = None
+    code_slots: MutableMapping[int, KeymasterCodeSlot] | None = None
     lock_notifications: bool = False
     door_notifications: bool = False
     notify_script_name: str | None = None
@@ -86,7 +86,7 @@ class KeymasterLock:
     pending_delete: bool = False
 
 
-keymasterlock_type_lookup: Mapping[str, Any] = {
+keymasterlock_type_lookup: MutableMapping[str, type] = {
     "lock_name": str,
     "lock_entity_id": str,
     "keymaster_config_entry_id": str,
@@ -99,7 +99,7 @@ keymasterlock_type_lookup: Mapping[str, Any] = {
     # "zwave_js_lock_device": DeviceEntry,
     "number_of_code_slots": int,
     "starting_code_slot": int,
-    "code_slots": Mapping[int, KeymasterCodeSlot],
+    "code_slots": MutableMapping[int, KeymasterCodeSlot],
     "lock_notifications": bool,
     "door_notifications": bool,
     "notify_script_name": str,
@@ -137,5 +137,5 @@ keymasterlock_type_lookup: Mapping[str, Any] = {
     "accesslimit_date_range_start": datetime,
     "accesslimit_date_range_end": datetime,
     "accesslimit_day_of_week_enabled": bool,
-    "accesslimit_day_of_week": Mapping[int, KeymasterCodeSlotDayOfWeek],
+    "accesslimit_day_of_week": MutableMapping[int, KeymasterCodeSlotDayOfWeek],
 }

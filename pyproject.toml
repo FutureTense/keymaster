@@ -3,14 +3,29 @@ show_missing = true
 fail_under = 80
 
 [tool.mypy]
+platform = "linux"
 python_version = "3.13"
-show_error_codes = true
-ignore_errors = true
 follow_imports = "silent"
 ignore_missing_imports = true
+check_untyped_defs = true
+disable_error_code = ["annotation-unchecked", "import-not-found", "import-untyped", "call-arg"]
+disallow_incomplete_defs = false
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+enable_error_code = ["deprecated", "ignore-without-code", "redundant-self", "truthy-iterable"]
+extra_checks = false
+local_partial_types = true
+no_implicit_optional = true
+show_error_codes = true
+strict_equality = true
 warn_incomplete_stub = true
 warn_redundant_casts = true
+warn_return_any = false
+warn_unreachable = false
 warn_unused_configs = true
+warn_unused_ignores = true
 
 [tool.pylint]
 ignore = ["tests"]
