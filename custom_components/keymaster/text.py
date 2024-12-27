@@ -29,7 +29,7 @@ async def async_setup_entry(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        entities.append(
+        entities.extend([
             KeymasterText(
                 entity_description=KeymasterTextEntityDescription(
                     key=f"text.code_slots:{x}.name",
@@ -40,9 +40,7 @@ async def async_setup_entry(
                     config_entry=config_entry,
                     coordinator=coordinator,
                 ),
-            )
-        )
-        entities.append(
+            ),
             KeymasterText(
                 entity_description=KeymasterTextEntityDescription(
                     key=f"text.code_slots:{x}.pin",
@@ -59,19 +57,20 @@ async def async_setup_entry(
                     coordinator=coordinator,
                 ),
             )
-        )
+        ])
 
     async_add_entities(entities, True)
-    return True
 
 
-@dataclass(kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class KeymasterTextEntityDescription(KeymasterEntityDescription, TextEntityDescription):
     """Entity Description for keymaster Text entities."""
 
 
 class KeymasterText(KeymasterEntity, TextEntity):
     """Class for keymaster Text entities."""
+
+    entity_description: KeymasterTextEntityDescription
 
     def __init__(
         self,
@@ -81,12 +80,12 @@ class KeymasterText(KeymasterEntity, TextEntity):
         super().__init__(
             entity_description=entity_description,
         )
-        self._attr_native_value: str = None
+        self._attr_native_value: str | None = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
         # _LOGGER.debug(f"[Text handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
-        if not self._kmlock.connected:
+        if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
             self.async_write_ha_state()
             return
@@ -94,7 +93,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
         if (
             ".code_slots" in self._property
             and self._kmlock.parent_name is not None
-            and not self._kmlock.code_slots[self._code_slot].override_parent
+            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -102,7 +101,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
         if (
             ".code_slots" in self._property
-            and self._code_slot not in self._kmlock.code_slots
+            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -120,13 +119,13 @@ class KeymasterText(KeymasterEntity, TextEntity):
             value,
         )
         if self._property.endswith(".pin"):
-            if value and value.isdigit() and len(value) >= 4:
+            if value and value.isdigit() and len(value) >= 4 and self._code_slot:
                 await self.coordinator.set_pin_on_lock(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot=self._code_slot,
                     pin=value,
                 )
-            elif not value:
+            elif not value and self._code_slot:
                 await self.coordinator.clear_pin_from_lock(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot=self._code_slot,
@@ -135,8 +134,8 @@ class KeymasterText(KeymasterEntity, TextEntity):
                 return
         elif (
             self._property.endswith(".name")
-            and self._kmlock.parent_name is not None
-            and not self._kmlock.code_slots[self._code_slot].override_parent
+            and self._kmlock and self._kmlock.parent_name
+            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
         ):
             _LOGGER.debug(
                 "[Text async_set_value] %s: "

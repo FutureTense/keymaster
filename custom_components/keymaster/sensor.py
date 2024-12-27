@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant, callback
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ async def async_setup_entry(
     """Create keymaster Sensor entities."""
 
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
+    kmlock = await coordinator.get_lock_by_config_entry_id(
         config_entry.entry_id
     )
     entities: list = []
@@ -41,7 +40,7 @@ async def async_setup_entry(
         )
     )
 
-    if hasattr(kmlock, "parent_name") and kmlock.parent_name is not None:
+    if kmlock and hasattr(kmlock, "parent_name") and kmlock.parent_name is not None:
         entities.append(
             KeymasterSensor(
                 entity_description=KeymasterSensorEntityDescription(
@@ -80,7 +79,7 @@ async def async_setup_entry(
     return True
 
 
-@dataclass(kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class KeymasterSensorEntityDescription(
     KeymasterEntityDescription, SensorEntityDescription
 ):
@@ -89,6 +88,8 @@ class KeymasterSensorEntityDescription(
 
 class KeymasterSensor(KeymasterEntity, SensorEntity):
     """Class for keymaster Sensors."""
+
+    entity_description: KeymasterSensorEntityDescription
 
     def __init__(
         self,
@@ -103,14 +104,14 @@ class KeymasterSensor(KeymasterEntity, SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         # _LOGGER.debug(f"[Sensor handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
-        if not self._kmlock.connected:
+        if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
             self.async_write_ha_state()
             return
 
         if (
             ".code_slots" in self._property
-            and self._code_slot not in self._kmlock.code_slots
+            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
         ):
             self._attr_available = False
             self.async_write_ha_state()

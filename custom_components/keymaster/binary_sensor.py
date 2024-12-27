@@ -17,7 +17,6 @@ from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .helpers import async_using_zwave_js
-from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ async def async_setup_entry(
 ):
     """Create the keymaster Binary Sensors."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
+    kmlock = await coordinator.get_lock_by_config_entry_id(
         config_entry.entry_id
     )
     entities: list = []
@@ -74,7 +73,7 @@ async def async_setup_entry(
     return True
 
 
-@dataclass(kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class KeymasterBinarySensorEntityDescription(
     KeymasterEntityDescription, BinarySensorEntityDescription
 ):
@@ -83,6 +82,8 @@ class KeymasterBinarySensorEntityDescription(
 
 class KeymasterBinarySensor(KeymasterEntity, BinarySensorEntity):
     """Keymaster Binary Sensor Class."""
+
+    entity_description: KeymasterBinarySensorEntityDescription
 
     def __init__(
         self,

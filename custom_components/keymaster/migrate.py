@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
-from datetime import datetime, time as dt_time, timezone
+from collections.abc import MutableMapping
+from datetime import datetime, time as dt_time, timedelta, timezone
 import logging
 from pathlib import Path
 from typing import Any
@@ -54,18 +54,18 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     _LOGGER.info("[migrate_2to3] Starting Migration from Config 2 to 3")
     _LOGGER.debug("[migrate_2to3] config_entry: %s", config_entry)
     _LOGGER.debug("[migrate_2to3] config_entry.data: %s", config_entry.data)
-    entity_registry = er.async_get(hass)
+    entity_registry: er.EntityRegistry = er.async_get(hass)
 
     # Move states from helpers into kmlock
     _LOGGER.info("[migrate_2to3] Moving states from helpers into kmlock")
     kmlock: KeymasterLock = await _migrate_2to3_create_kmlock(config_entry=config_entry)
-    crosswalk_dict: Mapping[str, str] = await _migrate_2to3_build_crosswalk_dict(
+    crosswalk_dict: MutableMapping[str, str] = await _migrate_2to3_build_crosswalk_dict(
         lock_name=config_entry.data[CONF_LOCK_NAME],
         starting_slot=config_entry.data[CONF_START],
         num_slots=config_entry.data[CONF_SLOTS],
     )
-    for entity_id, prop in crosswalk_dict.items():
-        ent = hass.states.get(entity_id)
+    for ent_id, prop in crosswalk_dict.items():
+        ent = hass.states.get(ent_id)
         if not ent:
             continue
         await _migrate_2to3_set_property_value(
@@ -97,10 +97,10 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
 
     # Delete existing integration entities
     _LOGGER.info("[migrate_2to3] Deleting existing integration entities")
-    for ent in er.async_entries_for_config_entry(
-        entity_registry, config_entry.entry_id
+    for del_ent in er.async_entries_for_config_entry(
+        registry=entity_registry, config_entry_id=config_entry.entry_id
     ):
-        entity_id: str = ent.entity_id
+        entity_id: str = del_ent.entity_id
         try:
             entity_registry.async_remove(entity_id)
             _LOGGER.info("[migrate_2to3] Removed entity_id: %s", entity_id)
@@ -138,12 +138,12 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
 
 
 async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLock:
-    code_slots: Mapping[int, KeymasterCodeSlot] = {}
+    code_slots: MutableMapping[int, KeymasterCodeSlot] = {}
     for x in range(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        dow_slots: Mapping[int, KeymasterCodeSlotDayOfWeek] = {}
+        dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(
             [
                 "Monday",
@@ -161,8 +161,8 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     return KeymasterLock(
-        lock_name=config_entry.data.get(CONF_LOCK_NAME),
-        lock_entity_id=config_entry.data.get(CONF_LOCK_ENTITY_ID),
+        lock_name=config_entry.data[CONF_LOCK_NAME],
+        lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
         keymaster_config_entry_id=config_entry.entry_id,
         alarm_level_or_user_code_entity_id=config_entry.data.get(
             CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
@@ -171,8 +171,8 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
             CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
         ),
         door_sensor_entity_id=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
-        number_of_code_slots=config_entry.data.get(CONF_SLOTS),
-        starting_code_slot=config_entry.data.get(CONF_START),
+        number_of_code_slots=config_entry.data[CONF_SLOTS],
+        starting_code_slot=config_entry.data[CONF_START],
         code_slots=code_slots,
         parent_name=config_entry.data.get(CONF_PARENT),
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
@@ -216,15 +216,12 @@ async def _migrate_2to3_set_property_value(
     return True
 
 
-async def _migrate_2to3_validate_and_convert_property(prop, attr, value) -> Any:
-    if isinstance(value, keymasterlock_type_lookup.get(attr)):
+async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, value) -> Any:
+    if keymasterlock_type_lookup.get(attr) is not None and isinstance(value, keymasterlock_type_lookup.get(attr, object)):
         # return value
         pass
     elif keymasterlock_type_lookup.get(attr) is bool and isinstance(value, str):
-        if value == "on":
-            value = True
-        else:
-            value = False
+        value = bool(value == "on")
     elif keymasterlock_type_lookup.get(attr) is int and isinstance(value, str):
         try:
             value = float(value)
@@ -247,9 +244,9 @@ async def _migrate_2to3_validate_and_convert_property(prop, attr, value) -> Any:
         value = round(value)
     elif keymasterlock_type_lookup.get(attr) == datetime and isinstance(value, str):
         try:
-            value: datetime = datetime.fromisoformat(value)
-            value = value.replace(
-                tzinfo=timezone(datetime.now().astimezone().utcoffset())
+            value_notz: datetime = datetime.fromisoformat(value)
+            value = value_notz.replace(
+                tzinfo=timezone(datetime.now().astimezone().utcoffset() or timedelta())
             )
         except ValueError:
             _LOGGER.debug(
@@ -263,7 +260,7 @@ async def _migrate_2to3_validate_and_convert_property(prop, attr, value) -> Any:
             return None
     elif keymasterlock_type_lookup.get(attr) == dt_time and isinstance(value, str):
         try:
-            value: dt_time = dt_time.fromisoformat(value)
+            value = dt_time.fromisoformat(value)
         except ValueError:
             _LOGGER.debug(
                 "[migrate_2to3_set_property_value] Value Type Mismatch, cannot convert str to time. Property: %s, final_prop: %s, value: %s. Type: %s, Expected Type: %s",
@@ -305,7 +302,7 @@ def _migrate_2to3_delete_lock_and_base_folder(
         base_path.rmdir()
 
 
-def _migrate_2to3_delete_folder(absolute_path: str, *relative_paths: str) -> None:
+def _migrate_2to3_delete_folder(absolute_path: Path, *relative_paths: str) -> None:
     """Recursively delete folder and all children files and folders (depth first)."""
     path: Path = Path(absolute_path) / Path(*relative_paths)
 
@@ -329,10 +326,10 @@ async def _migrate_2to3_reload_package_platforms(hass: HomeAssistant) -> bool:
         TEMPLATE_DOMAIN,
         TIMER_DOMAIN,
     ]:
-        if domain in hass.services:
-            await hass.services.async_call(domain, SERVICE_RELOAD, blocking=True)
+        if hass.services.has_service(domain=domain, service=SERVICE_RELOAD):
+            await hass.services.async_call(domain=domain, service=SERVICE_RELOAD, blocking=True)
         else:
-            _LOGGER.warning("Service not found for domain: %s", domain)
+            _LOGGER.warning("Reload service not found for domain: %s", domain)
             return False
     return True
 
@@ -485,8 +482,8 @@ async def _migrate_2to3_build_delete_list(
 
 async def _migrate_2to3_build_crosswalk_dict(
     lock_name: str, starting_slot: int, num_slots: int
-) -> Mapping[str, str]:
-    crosswalk_dict: Mapping[str, str] = {
+) -> MutableMapping[str, str]:
+    crosswalk_dict: MutableMapping[str, str] = {
         f"input_boolean.keymaster_{lock_name}_autolock": "switch.autolock_enabled",
         f"input_boolean.keymaster_{lock_name}_retry": "switch.retry_lock",
         f"input_boolean.{lock_name}_dooraccess_notifications": "switch.door_notifications",

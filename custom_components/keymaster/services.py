@@ -49,8 +49,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def service_update_pin(service: ServiceCall) -> None:
         """Update a PIN in a Code Slot."""
         _LOGGER.debug("[service_update_pin] service.data: %s", service.data)
-        code_slot: int = service.data.get(ATTR_CODE_SLOT)
-        pin: str = service.data.get(ATTR_PIN)
+        code_slot: int = service.data[ATTR_CODE_SLOT]
+        pin: str = service.data[ATTR_PIN]
         if not pin or not pin.isdigit() or len(pin) < 4:
             _LOGGER.error(
                 "[service_update_pin] Code Slot %s: PIN not valid: %s. Must be 4 or more digits",
@@ -61,7 +61,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 f"Update PIN Error. PIN not valid: {pin}. Must be 4 or more digits"
             )
         await coordinator.set_pin_on_lock(
-            config_entry_id=service.data.get(ATTR_CONFIG_ENTRY_ID),
+            config_entry_id=service.data[ATTR_CONFIG_ENTRY_ID],
             code_slot=code_slot,
             pin=pin,
             set_in_kmlock=True,
@@ -70,9 +70,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def service_clear_pin(service: ServiceCall) -> None:
         """Clear a PIN from a Code Slot."""
         _LOGGER.debug("[service_clear_pin] service.data: %s", service.data)
-        code_slot: int = service.data.get(ATTR_CODE_SLOT)
+        code_slot: int = service.data[ATTR_CODE_SLOT]
         await coordinator.clear_pin_from_lock(
-            config_entry_id=service.data.get(ATTR_CONFIG_ENTRY_ID),
+            config_entry_id=service.data[ATTR_CONFIG_ENTRY_ID],
             code_slot=code_slot,
             clear_from_kmlock=True,
         )
@@ -82,12 +82,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         for config_entry in entries:
             await generate_lovelace(
                 hass=hass,
-                kmlock_name=config_entry.data.get(CONF_LOCK_NAME),
+                kmlock_name=config_entry.data[CONF_LOCK_NAME],
                 keymaster_config_entry_id=config_entry.entry_id,
                 parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
-                code_slot_start=config_entry.data.get(CONF_START),
-                code_slots=config_entry.data.get(CONF_SLOTS),
-                lock_entity=config_entry.data.get(CONF_LOCK_ENTITY_ID),
+                code_slot_start=config_entry.data[CONF_START],
+                code_slots=config_entry.data[CONF_SLOTS],
+                lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
                 door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
             )
 
