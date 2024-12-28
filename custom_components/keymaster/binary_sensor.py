@@ -28,9 +28,7 @@ async def async_setup_entry(
 ):
     """Create the keymaster Binary Sensors."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    kmlock = await coordinator.get_lock_by_config_entry_id(
-        config_entry.entry_id
-    )
+    kmlock = await coordinator.get_lock_by_config_entry_id(config_entry.entry_id)
     entities: list = []
     if async_using_zwave_js(hass=hass, kmlock=kmlock):
         entities.append(

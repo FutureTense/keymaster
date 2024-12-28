@@ -68,9 +68,7 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
         ent = hass.states.get(ent_id)
         if not ent:
             continue
-        await _migrate_2to3_set_property_value(
-            kmlock=kmlock, prop=prop, value=ent.state
-        )
+        await _migrate_2to3_set_property_value(kmlock=kmlock, prop=prop, value=ent.state)
     _LOGGER.debug("[migrate_2to3] kmlock: %s", kmlock)
     hass.data.setdefault(DOMAIN, {})
     if COORDINATOR not in hass.data[DOMAIN]:
@@ -90,9 +88,7 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
 
     # Delete Package files
     _LOGGER.info("[migrate_2to3] Deleting Package files")
-    await hass.async_add_executor_job(
-        _migrate_2to3_delete_lock_and_base_folder, hass, config_entry
-    )
+    await hass.async_add_executor_job(_migrate_2to3_delete_lock_and_base_folder, hass, config_entry)
     await _migrate_2to3_reload_package_platforms(hass=hass)
 
     # Delete existing integration entities
@@ -155,9 +151,7 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
                 "Sunday",
             ]
         ):
-            dow_slots[i] = KeymasterCodeSlotDayOfWeek(
-                day_of_week_num=i, day_of_week_name=dow
-            )
+            dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     return KeymasterLock(
@@ -179,9 +173,7 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
     )
 
 
-async def _migrate_2to3_set_property_value(
-    kmlock: KeymasterLock, prop: str, value: Any
-) -> bool:
+async def _migrate_2to3_set_property_value(kmlock: KeymasterLock, prop: str, value: Any) -> bool:
     if "." not in prop:
         return False
 
@@ -199,10 +191,8 @@ async def _migrate_2to3_set_property_value(
     final_prop: str = prop_list[-1]
     if ":" in final_prop:
         attr, num = final_prop.split(":")
-        getattr(obj, attr)[int(num)] = (
-            await _migrate_2to3_validate_and_convert_property(
-                prop=prop, attr=attr, value=value
-            )
+        getattr(obj, attr)[int(num)] = await _migrate_2to3_validate_and_convert_property(
+            prop=prop, attr=attr, value=value
         )
     else:
         setattr(
@@ -217,7 +207,9 @@ async def _migrate_2to3_set_property_value(
 
 
 async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, value) -> Any:
-    if keymasterlock_type_lookup.get(attr) is not None and isinstance(value, keymasterlock_type_lookup.get(attr, object)):
+    if keymasterlock_type_lookup.get(attr) is not None and isinstance(
+        value, keymasterlock_type_lookup.get(attr, object)
+    ):
         # return value
         pass
     elif keymasterlock_type_lookup.get(attr) is bool and isinstance(value, str):
@@ -228,9 +220,7 @@ async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, valu
         except ValueError:
             try:
                 time_obj: datetime = datetime.strptime(value, "%H:%M:%S")
-                value = round(
-                    time_obj.hour * 60 + time_obj.minute + round(time_obj.second)
-                )
+                value = round(time_obj.hour * 60 + time_obj.minute + round(time_obj.second))
             except ValueError:
                 _LOGGER.debug(
                     "[migrate_2to3_set_property_value] Value Type Mismatch, cannot convert str to int. Property: %s, final_prop: %s, value: %s. Type: %s, Expected Type: %s",

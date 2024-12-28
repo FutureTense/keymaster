@@ -13,12 +13,7 @@ from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.config_entries import (
-    ConfigEntry,
-    ConfigFlow,
-    ConfigFlowResult,
-    OptionsFlow,
-)
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 
@@ -212,15 +207,11 @@ def _get_schema(
     script_default: str | None = _get_default(CONF_NOTIFY_SCRIPT_NAME)
     if isinstance(script_default, str) and not script_default.startswith("script."):
         script_default = f"script.{script_default}"
-    _LOGGER.debug(
-        "[get_schema] script_default: %s (%s)", script_default, type(script_default)
-    )
+    _LOGGER.debug("[get_schema] script_default: %s (%s)", script_default, type(script_default))
     schema = vol.Schema(
         {
             vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
-            vol.Required(
-                CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
-            ): vol.In(
+            vol.Required(CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)): vol.In(
                 _get_entities(
                     hass=hass,
                     domain=LOCK_DOMAIN,
@@ -229,15 +220,15 @@ def _get_schema(
                     ),
                 )
             ),
-            vol.Optional(
-                CONF_PARENT, default=_get_default(CONF_PARENT, "(none)")
-            ): vol.In(_available_parent_locks(hass, entry_id)),
-            vol.Required(
-                CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)
-            ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-            vol.Required(
-                CONF_START, default=_get_default(CONF_START, DEFAULT_START)
-            ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+            vol.Optional(CONF_PARENT, default=_get_default(CONF_PARENT, "(none)")): vol.In(
+                _available_parent_locks(hass, entry_id)
+            ),
+            vol.Required(CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)): vol.All(
+                vol.Coerce(int), vol.Range(min=1)
+            ),
+            vol.Required(CONF_START, default=_get_default(CONF_START, DEFAULT_START)): vol.All(
+                vol.Coerce(int), vol.Range(min=1)
+            ),
             vol.Optional(
                 CONF_DOOR_SENSOR_ENTITY_ID,
                 default=_get_default(CONF_DOOR_SENSOR_ENTITY_ID, DEFAULT_DOOR_SENSOR),
@@ -349,15 +340,15 @@ async def _start_config_flow(
             )
             if isinstance(cls, KeymasterConfigFlow) or step_id == "user" or not entry_id:
                 return cls.async_create_entry(title=title, data=user_input)
-            cls.hass.config_entries.async_update_entry(
-                cls.config_entry, data=user_input
-            )
+            cls.hass.config_entries.async_update_entry(cls.config_entry, data=user_input)
             await cls.hass.config_entries.async_reload(entry_id)
             return cls.async_create_entry(title="", data={})
 
     return cls.async_show_form(
         step_id=step_id,
-        data_schema=_get_schema(hass=cls.hass, user_input=user_input, default_dict=defaults, entry_id=entry_id),
+        data_schema=_get_schema(
+            hass=cls.hass, user_input=user_input, default_dict=defaults, entry_id=entry_id
+        ),
         errors=errors,
         description_placeholders=description_placeholders,
     )

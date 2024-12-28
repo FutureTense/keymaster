@@ -29,35 +29,37 @@ async def async_setup_entry(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        entities.extend([
-            KeymasterText(
-                entity_description=KeymasterTextEntityDescription(
-                    key=f"text.code_slots:{x}.name",
-                    name=f"Code Slot {x}: Name",
-                    icon="mdi:form-textbox-lock",
-                    entity_registry_enabled_default=True,
-                    hass=hass,
-                    config_entry=config_entry,
-                    coordinator=coordinator,
-                ),
-            ),
-            KeymasterText(
-                entity_description=KeymasterTextEntityDescription(
-                    key=f"text.code_slots:{x}.pin",
-                    name=f"Code Slot {x}: PIN",
-                    icon="mdi:lock-smart",
-                    mode=(
-                        TextMode.PASSWORD
-                        if config_entry.data.get(CONF_HIDE_PINS)
-                        else TextMode.TEXT
+        entities.extend(
+            [
+                KeymasterText(
+                    entity_description=KeymasterTextEntityDescription(
+                        key=f"text.code_slots:{x}.name",
+                        name=f"Code Slot {x}: Name",
+                        icon="mdi:form-textbox-lock",
+                        entity_registry_enabled_default=True,
+                        hass=hass,
+                        config_entry=config_entry,
+                        coordinator=coordinator,
                     ),
-                    entity_registry_enabled_default=True,
-                    hass=hass,
-                    config_entry=config_entry,
-                    coordinator=coordinator,
                 ),
-            )
-        ])
+                KeymasterText(
+                    entity_description=KeymasterTextEntityDescription(
+                        key=f"text.code_slots:{x}.pin",
+                        name=f"Code Slot {x}: PIN",
+                        icon="mdi:lock-smart",
+                        mode=(
+                            TextMode.PASSWORD
+                            if config_entry.data.get(CONF_HIDE_PINS)
+                            else TextMode.TEXT
+                        ),
+                        entity_registry_enabled_default=True,
+                        hass=hass,
+                        config_entry=config_entry,
+                        coordinator=coordinator,
+                    ),
+                ),
+            ]
+        )
 
     async_add_entities(entities, True)
 
@@ -93,15 +95,18 @@ class KeymasterText(KeymasterEntity, TextEntity):
         if (
             ".code_slots" in self._property
             and self._kmlock.parent_name is not None
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
+            )
         ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        if (
-            ".code_slots" in self._property
-            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
+        if ".code_slots" in self._property and (
+            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -134,8 +139,13 @@ class KeymasterText(KeymasterEntity, TextEntity):
                 return
         elif (
             self._property.endswith(".name")
-            and self._kmlock and self._kmlock.parent_name
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
+            and self._kmlock
+            and self._kmlock.parent_name
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
+            )
         ):
             _LOGGER.debug(
                 "[Text async_set_value] %s: "

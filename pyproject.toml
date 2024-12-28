@@ -362,7 +362,20 @@ timeout = 30
 addopts = "-vv --cov=custom_components/keymaster --cov-report=xml"
 
 [tool.ruff]
+line-length = 100
+indent-width = 4
+fix = true
+force-exclude = true
+target-version = "py313"
 required-version = ">=0.8.0"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint]
 select = [
@@ -608,6 +621,8 @@ ignore_errors = true
 description = "Lint code using ruff under {base_python}"
 ignore_errors = true
 commands = [
+    ["ruff", "format", "custom_components{/}"],
+    ["ruff", "format", "tests{/}"],
     ["ruff", "check", "custom_components{/}"],
     ["ruff", "check", "tests{/}"],
 ]

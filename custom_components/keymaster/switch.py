@@ -195,9 +195,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterSwitchEntityDescription(
-    KeymasterEntityDescription, SwitchEntityDescription
-):
+class KeymasterSwitchEntityDescription(KeymasterEntityDescription, SwitchEntityDescription):
     """Entitiy Description for keymaster Switches."""
 
 
@@ -231,7 +229,11 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                 or self._property.endswith(".notifications")
             )
             and self._kmlock.parent_name is not None
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
+            )
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -249,9 +251,11 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         if (
             ".accesslimit_day_of_week" in self._property
             and not self._property.endswith(".accesslimit_day_of_week_enabled")
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[
-                self._code_slot
-            ].accesslimit_day_of_week_enabled)
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].accesslimit_day_of_week_enabled
+            )
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -262,16 +266,13 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         if self._code_slot is not None and code_slots and self._code_slot in code_slots:
             accesslimit_dow = code_slots[self._code_slot].accesslimit_day_of_week
 
-        if (
-            self._property.endswith(".limit_by_time")
-            and (
-                not code_slots
-                or self._code_slot is None
-                or not accesslimit_dow
-                or self._day_of_week_num is None
-                or self._day_of_week_num not in accesslimit_dow
-                or not accesslimit_dow[self._day_of_week_num].dow_enabled
-            )
+        if self._property.endswith(".limit_by_time") and (
+            not code_slots
+            or self._code_slot is None
+            or not accesslimit_dow
+            or self._day_of_week_num is None
+            or self._day_of_week_num not in accesslimit_dow
+            or not accesslimit_dow[self._day_of_week_num].dow_enabled
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -289,17 +290,14 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         #     self.async_write_ha_state()
         #     return
 
-        if (
-            self._property.endswith(".include_exclude")
-            and (
-                not code_slots
-                or self._code_slot is None
-                or not accesslimit_dow
-                or self._day_of_week_num is None
-                or self._day_of_week_num not in accesslimit_dow
-                or not accesslimit_dow[self._day_of_week_num].dow_enabled
-                or not accesslimit_dow[self._day_of_week_num].limit_by_time
-            )
+        if self._property.endswith(".include_exclude") and (
+            not code_slots
+            or self._code_slot is None
+            or not accesslimit_dow
+            or self._day_of_week_num is None
+            or self._day_of_week_num not in accesslimit_dow
+            or not accesslimit_dow[self._day_of_week_num].dow_enabled
+            or not accesslimit_dow[self._day_of_week_num].limit_by_time
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -322,7 +320,12 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
 
         if self._set_property_value(True):
             self._attr_is_on = True
-            if self._property.endswith(".enabled") and self._kmlock and self._code_slot and self._kmlock.code_slots:
+            if (
+                self._property.endswith(".enabled")
+                and self._kmlock
+                and self._code_slot
+                and self._kmlock.code_slots
+            ):
                 await self.coordinator.update_slot_active_state(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot=self._code_slot,

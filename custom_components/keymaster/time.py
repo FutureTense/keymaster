@@ -105,51 +105,55 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
         if (
             ".code_slots" in self._property
             and self._kmlock.parent_name is not None
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
+            )
         ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        if (
-            ".code_slots" in self._property
-            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
+        if ".code_slots" in self._property and (
+            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        if (
-            ".accesslimit_day_of_week" in self._property
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[
-                self._code_slot
-            ].accesslimit_day_of_week_enabled
-        )):
+        if ".accesslimit_day_of_week" in self._property and (
+            not self._kmlock.code_slots
+            or not self._code_slot
+            or not self._kmlock.code_slots[self._code_slot].accesslimit_day_of_week_enabled
+        ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        if (
-            self._property.endswith(".time_start")
-            or self._property.endswith(".time_end")
-        ):
+        if self._property.endswith(".time_start") or self._property.endswith(".time_end"):
             code_slots: MutableMapping[int, KeymasterCodeSlot] | None = self._kmlock.code_slots
             if self._code_slot is None or code_slots is None or self._code_slot not in code_slots:
                 self._attr_available = False
                 self.async_write_ha_state()
                 return
 
-            accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = code_slots[self._code_slot].accesslimit_day_of_week
-            if self._day_of_week_num is None or accesslimit_day_of_week is None or self._day_of_week_num not in accesslimit_day_of_week:
+            accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = (
+                code_slots[self._code_slot].accesslimit_day_of_week
+            )
+            if (
+                self._day_of_week_num is None
+                or accesslimit_day_of_week is None
+                or self._day_of_week_num not in accesslimit_day_of_week
+            ):
                 self._attr_available = False
                 self.async_write_ha_state()
                 return
 
-            day_of_week: KeymasterCodeSlotDayOfWeek | None = accesslimit_day_of_week[self._day_of_week_num]
-            if (
-                day_of_week is None or not day_of_week.dow_enabled
-                or not day_of_week.limit_by_time
-            ):
+            day_of_week: KeymasterCodeSlotDayOfWeek | None = accesslimit_day_of_week[
+                self._day_of_week_num
+            ]
+            if day_of_week is None or not day_of_week.dow_enabled or not day_of_week.limit_by_time:
                 self._attr_available = False
                 self.async_write_ha_state()
                 return
@@ -181,12 +185,14 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             value,
         )
         if (
-            (
-                self._property.endswith(".time_start")
-                or self._property.endswith(".time_end")
+            (self._property.endswith(".time_start") or self._property.endswith(".time_end"))
+            and self._kmlock
+            and self._kmlock.parent_name
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
             )
-            and self._kmlock and self._kmlock.parent_name
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
         ):
             _LOGGER.debug(
                 "[Time async_set_value] %s: Child lock and code slot %s not set to override parent. Ignoring change",

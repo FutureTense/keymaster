@@ -1,4 +1,5 @@
 """Base entity for keymaster."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,21 +34,15 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self._config_entry: ConfigEntry = entity_description.config_entry
         self.entity_description: KeymasterEntityDescription = entity_description
         self._attr_available = False
-        self._property: str = (
-            entity_description.key
-        )  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
+        self._property: str = entity_description.key  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
         self._kmlock = self.coordinator.sync_get_lock_by_config_entry_id(
             self._config_entry.entry_id
         )
         self._attr_name: str | None = None
         if self._attr_name:
-            self._attr_name = (
-                f"{self._kmlock.lock_name} {self.entity_description.name}"
-            )
+            self._attr_name = f"{self._kmlock.lock_name} {self.entity_description.name}"
         # _LOGGER.debug(f"[Entity init] entity_description.name: {self.entity_description.name}, name: {self.name}")
-        self._attr_unique_id: str = (
-            f"{self._config_entry.entry_id}_{slugify(self._property)}"
-        )
+        self._attr_unique_id: str = f"{self._config_entry.entry_id}_{slugify(self._property)}"
         # _LOGGER.debug(f"[Entity init] self._property: {self._property}, unique_id: {self.unique_id}")
         self._code_slot: None | int = None
         if ".code_slots" in self._property:
