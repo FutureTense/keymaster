@@ -49,10 +49,12 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
             f"{self._config_entry.entry_id}_{slugify(self._property)}"
         )
         # _LOGGER.debug(f"[Entity init] self._property: {self._property}, unique_id: {self.unique_id}")
+        self._code_slot: None | int = None
         if ".code_slots" in self._property:
-            self._code_slot: None | int = self._get_code_slots_num()
+            self._code_slot = self._get_code_slots_num()
+        self._day_of_week_num: None | int = None
         if "accesslimit_day_of_week" in self._property:
-            self._day_of_week_num: None | int = self._get_day_of_week_num()
+            self._day_of_week_num = self._get_day_of_week_num()
         self._attr_extra_state_attributes: dict[str, Any] = {}
         self._attr_device_info: DeviceInfo = {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
