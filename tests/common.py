@@ -43,9 +43,7 @@ def threadsafe_callback_factory(func):
     def threadsafe(*args, **kwargs):
         """Call func threadsafe."""
         hass = args[0]
-        return run_callback_threadsafe(
-            hass.loop, ft.partial(func, *args, **kwargs)
-        ).result()
+        return run_callback_threadsafe(hass.loop, ft.partial(func, *args, **kwargs)).result()
 
     return threadsafe
 

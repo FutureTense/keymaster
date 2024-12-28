@@ -43,9 +43,9 @@ pytestmark = pytest.mark.asyncio
                 "start_from": 1,
                 "hide_pins": False,
                 "parent": None,
-            }
+            },
         )
-    ]
+    ],
 )
 async def test_form(test_user_input, title, final_config_flow_data, hass, mock_get_entities):
     """Test we get the form."""
@@ -63,9 +63,7 @@ async def test_form(test_user_input, title, final_config_flow_data, hass, mock_g
         "custom_components.keymaster.async_setup_entry", return_value=True
     ) as mock_setup_entry:
         _LOGGER.warning("[test_form] result2 Starting")
-        result2 = await hass.config_entries.flow.async_configure(
-            result["flow_id"], test_user_input
-        )
+        result2 = await hass.config_entries.flow.async_configure(result["flow_id"], test_user_input)
         _LOGGER.warning("[test_form] result2: %s", result2)
         assert result2["type"] is FlowResultType.CREATE_ENTRY
         assert result2["title"] == title

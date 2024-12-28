@@ -60,9 +60,7 @@ async def async_setup_entry(
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterButtonEntityDescription(
-    KeymasterEntityDescription, ButtonEntityDescription
-):
+class KeymasterButtonEntityDescription(KeymasterEntityDescription, ButtonEntityDescription):
     """Entity Description for Keymaster Buttons."""
 
 
@@ -89,7 +87,8 @@ class KeymasterButton(KeymasterEntity, ButtonEntity):
             return
 
         if (
-            ".code_slots" in self._property and isinstance(self._kmlock.code_slots, MutableMapping)
+            ".code_slots" in self._property
+            and isinstance(self._kmlock.code_slots, MutableMapping)
             and self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False

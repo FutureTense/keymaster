@@ -76,24 +76,18 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         updated_config[CONF_NOTIFY_SCRIPT_NAME] = (
             f"keymaster_{updated_config.get(CONF_LOCK_NAME)}_manual_notify"
         )
-    elif isinstance(
-        updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str
-    ) and updated_config[CONF_NOTIFY_SCRIPT_NAME].startswith("script."):
-        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[
-            CONF_NOTIFY_SCRIPT_NAME
-        ].split(".", maxsplit=1)[1]
+    elif isinstance(updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str) and updated_config[
+        CONF_NOTIFY_SCRIPT_NAME
+    ].startswith("script."):
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[CONF_NOTIFY_SCRIPT_NAME].split(
+            ".", maxsplit=1
+        )[1]
 
     if updated_config.get(CONF_DOOR_SENSOR_ENTITY_ID) == DEFAULT_DOOR_SENSOR:
         updated_config[CONF_DOOR_SENSOR_ENTITY_ID] = None
-    if (
-        updated_config.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID)
-        == DEFAULT_ALARM_LEVEL_SENSOR
-    ):
+    if updated_config.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID) == DEFAULT_ALARM_LEVEL_SENSOR:
         updated_config[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = None
-    if (
-        updated_config.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID)
-        == DEFAULT_ALARM_TYPE_SENSOR
-    ):
+    if updated_config.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID) == DEFAULT_ALARM_TYPE_SENSOR:
         updated_config[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = None
 
     if updated_config != config_entry.data:
@@ -153,9 +147,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 "Sunday",
             ]
         ):
-            dow_slots[i] = KeymasterCodeSlotDayOfWeek(
-                day_of_week_num=i, day_of_week_name=dow
-            )
+            dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     kmlock = KeymasterLock(
@@ -225,8 +217,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
         if coordinator.count_locks_not_pending_delete == 0:
             _LOGGER.debug(
-                "[async_unload_entry] Possibly empty coordinator. "
-                "Will evaluate for removal at %s",
+                "[async_unload_entry] Possibly empty coordinator. Will evaluate for removal at %s",
                 datetime.now().astimezone() + timedelta(seconds=20),
             )
             async_call_later(
@@ -265,9 +256,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         data = config_entry.data.copy()
 
         data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL, None)
-        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(
-            CONF_ALARM_TYPE, None
-        )
+        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(CONF_ALARM_TYPE, None)
         data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_ENTITY_ID)
         if CONF_HIDE_PINS not in data:
             data[CONF_HIDE_PINS] = DEFAULT_HIDE_PINS

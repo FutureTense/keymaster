@@ -29,38 +29,38 @@ async def async_setup_entry(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        entities.extend([
-            KeymasterDateTime(
-                entity_description=KeymasterDateTimeEntityDescription(
-                    key=f"datetime.code_slots:{x}.accesslimit_date_range_start",
-                    name=f"Code Slot {x}: Date Range Start",
-                    icon="mdi:calendar-start",
-                    entity_registry_enabled_default=True,
-                    hass=hass,
-                    config_entry=config_entry,
-                    coordinator=coordinator,
+        entities.extend(
+            [
+                KeymasterDateTime(
+                    entity_description=KeymasterDateTimeEntityDescription(
+                        key=f"datetime.code_slots:{x}.accesslimit_date_range_start",
+                        name=f"Code Slot {x}: Date Range Start",
+                        icon="mdi:calendar-start",
+                        entity_registry_enabled_default=True,
+                        hass=hass,
+                        config_entry=config_entry,
+                        coordinator=coordinator,
+                    ),
                 ),
-            ),
-            KeymasterDateTime(
-                entity_description=KeymasterDateTimeEntityDescription(
-                    key=f"datetime.code_slots:{x}.accesslimit_date_range_end",
-                    name=f"Code Slot {x}: Date Range End",
-                    icon="mdi:calendar-end",
-                    entity_registry_enabled_default=True,
-                    hass=hass,
-                    config_entry=config_entry,
-                    coordinator=coordinator,
+                KeymasterDateTime(
+                    entity_description=KeymasterDateTimeEntityDescription(
+                        key=f"datetime.code_slots:{x}.accesslimit_date_range_end",
+                        name=f"Code Slot {x}: Date Range End",
+                        icon="mdi:calendar-end",
+                        entity_registry_enabled_default=True,
+                        hass=hass,
+                        config_entry=config_entry,
+                        coordinator=coordinator,
+                    ),
                 ),
-            )
-        ])
+            ]
+        )
 
     async_add_entities(entities, True)
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterDateTimeEntityDescription(
-    KeymasterEntityDescription, DateTimeEntityDescription
-):
+class KeymasterDateTimeEntityDescription(KeymasterEntityDescription, DateTimeEntityDescription):
     """Entity Description for keymaster DateTime."""
 
 
@@ -90,15 +90,18 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         if (
             ".code_slots" in self._property
             and self._kmlock.parent_name is not None
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
+            )
         ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        if (
-            ".code_slots" in self._property
-            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
+        if ".code_slots" in self._property and (
+            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -107,9 +110,11 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         if (
             self._property.endswith(".accesslimit_date_range_start")
             or self._property.endswith(".accesslimit_date_range_end")
-        ) and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[
-            self._code_slot
-        ].accesslimit_date_range_enabled):
+        ) and (
+            not self._kmlock.code_slots
+            or not self._code_slot
+            or not self._kmlock.code_slots[self._code_slot].accesslimit_date_range_enabled
+        ):
             self._attr_available = False
             self.async_write_ha_state()
             return
@@ -129,8 +134,13 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
 
         if (
             ".code_slots" in self._property
-            and self._kmlock and self._kmlock.parent_name
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
+            and self._kmlock
+            and self._kmlock.parent_name
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
+            )
         ):
             _LOGGER.debug(
                 "[DateTime async_set_value] %s: "

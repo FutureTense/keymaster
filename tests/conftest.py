@@ -38,7 +38,6 @@ def mock_get_entities():
     with patch(
         "custom_components.keymaster.config_flow._get_entities", autospec=True
     ) as mock_get_entities:
-
         mock_get_entities.return_value = [
             "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
             "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -133,9 +132,7 @@ def lock_kwikset_910_fixture(client, lock_kwikset_910_state):
 def mock_client_fixture(controller_state, version_state, log_config_state):
     """Mock a client."""
 
-    with patch(
-        "homeassistant.components.zwave_js.ZwaveClient", autospec=True
-    ) as client_class:
+    with patch("homeassistant.components.zwave_js.ZwaveClient", autospec=True) as client_class:
         client = client_class.return_value
 
         async def connect():
@@ -211,27 +208,21 @@ async def mock_zwavejs_get_usercodes():
         {"code_slot": 13, "usercode": "", "in_use": False},
         {"code_slot": 14, "usercode": "", "in_use": False},
     ]
-    with patch(
-        "zwave_js_server.util.lock.get_usercodes", return_value=slot_data
-    ) as mock_usercodes:
+    with patch("zwave_js_server.util.lock.get_usercodes", return_value=slot_data) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_zwavejs_clear_usercode():
     """Fixture to mock clear_usercode."""
-    with patch(
-        "zwave_js_server.util.lock.clear_usercode", return_value=None
-    ) as mock_usercodes:
+    with patch("zwave_js_server.util.lock.clear_usercode", return_value=None) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_zwavejs_set_usercode():
     """Fixture to mock set_usercode."""
-    with patch(
-        "zwave_js_server.util.lock.set_usercode", return_value=None
-    ) as mock_usercodes:
+    with patch("zwave_js_server.util.lock.set_usercode", return_value=None) as mock_usercodes:
         yield mock_usercodes
 
 

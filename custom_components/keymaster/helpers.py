@@ -31,9 +31,7 @@ class Throttle:
 
     def __init__(self) -> None:
         """Initialize Throttle class."""
-        self._cooldowns: MutableMapping = (
-            {}
-        )  # Nested dictionary: {function_name: {key: last_called_time}}
+        self._cooldowns: MutableMapping = {}  # Nested dictionary: {function_name: {key: last_called_time}}
 
     def is_allowed(self, func_name, key, cooldown_seconds) -> bool:
         """Check if function is allowed to run or not."""
@@ -73,18 +71,14 @@ class KeymasterTimer:
             _LOGGER.error("[KeymasterTimer] Cannot start timer as timer not setup")
             return False
 
-        if isinstance(self._end_time, datetime) and isinstance(
-            self._unsub_events, list
-        ):
+        if isinstance(self._end_time, datetime) and isinstance(self._unsub_events, list):
             # Already running so reset and restart timer
             for unsub in self._unsub_events:
                 unsub()
             self._unsub_events = []
 
         if sun.is_up(self.hass):
-            delay: int = (
-                self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY
-            ) * 60
+            delay: int = (self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY) * 60
         else:
             delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
         self._end_time = datetime.now().astimezone() + timedelta(seconds=delay)
@@ -96,9 +90,7 @@ class KeymasterTimer:
         self._unsub_events.append(
             async_call_later(hass=self.hass, delay=delay, action=self._call_action)
         )
-        self._unsub_events.append(
-            async_call_later(hass=self.hass, delay=delay, action=self.cancel)
-        )
+        self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=self.cancel))
         return True
 
     async def cancel(self, timer_elapsed: datetime | None = None) -> None:
@@ -118,10 +110,7 @@ class KeymasterTimer:
         """Return if the timer is running."""
         if not self._end_time:
             return False
-        if (
-            isinstance(self._end_time, datetime)
-            and self._end_time >= datetime.now().astimezone()
-        ):
+        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -133,10 +122,7 @@ class KeymasterTimer:
     @property
     def is_setup(self) -> bool:
         """Return if the timer has been initially setup."""
-        if (
-            isinstance(self._end_time, datetime)
-            and self._end_time >= datetime.now().astimezone()
-        ):
+        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -149,10 +135,7 @@ class KeymasterTimer:
         """Returns when the timer will end."""
         if not self._end_time:
             return None
-        if (
-            isinstance(self._end_time, datetime)
-            and self._end_time >= datetime.now().astimezone()
-        ):
+        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -166,10 +149,7 @@ class KeymasterTimer:
         """Return the seconds until the timer ends."""
         if not self._end_time:
             return None
-        if (
-            isinstance(self._end_time, datetime)
-            and self._end_time >= datetime.now().astimezone()
-        ):
+        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -253,9 +233,7 @@ async def delete_code_slot_entities(
         if entity_id:
             try:
                 entity_registry.async_remove(entity_id)
-                _LOGGER.debug(
-                    "[delete_code_slot_entities] Removed entity: %s", entity_id
-                )
+                _LOGGER.debug("[delete_code_slot_entities] Removed entity: %s", entity_id)
             except (KeyError, ValueError) as e:
                 _LOGGER.warning(
                     "Error removing entity: %s. %s: %s",
@@ -283,9 +261,7 @@ async def delete_code_slot_entities(
             if entity_id:
                 try:
                     entity_registry.async_remove(entity_id)
-                    _LOGGER.debug(
-                        "[delete_code_slot_entities] Removed entity: %s", entity_id
-                    )
+                    _LOGGER.debug("[delete_code_slot_entities] Removed entity: %s", entity_id)
                 except (KeyError, ValueError) as e:
                     _LOGGER.warning(
                         "Error removing entity: %s. %s: %s",
@@ -294,9 +270,7 @@ async def delete_code_slot_entities(
                         e,
                     )
             else:
-                _LOGGER.debug(
-                    "[delete_code_slot_entities] No entity_id found for %s", prop
-                )
+                _LOGGER.debug("[delete_code_slot_entities] No entity_id found for %s", prop)
 
 
 async def call_hass_service(
@@ -316,9 +290,7 @@ async def call_hass_service(
     )
 
     try:
-        await hass.services.async_call(
-            domain, service, service_data=service_data, target=target
-        )
+        await hass.services.async_call(domain, service, service_data=service_data, target=target)
     except ServiceNotFound:
         _LOGGER.warning("Action Not Found: %s.%s", domain, service)
     # except Exception as e:
@@ -371,11 +343,7 @@ async def send_persistent_notification(
     )
 
 
-async def dismiss_persistent_notification(
-    hass: HomeAssistant, notification_id: str
-) -> None:
+async def dismiss_persistent_notification(hass: HomeAssistant, notification_id: str) -> None:
     """Clear or dismisss a persistent notification."""
-    _LOGGER.debug(
-        "[dismiss_persistent_notification] notification_id: %s", notification_id
-    )
+    _LOGGER.debug("[dismiss_persistent_notification] notification_id: %s", notification_id)
     persistent_notification.async_dismiss(hass=hass, notification_id=notification_id)

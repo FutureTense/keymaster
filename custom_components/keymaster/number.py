@@ -95,9 +95,7 @@ async def async_setup_entry(
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterNumberEntityDescription(
-    KeymasterEntityDescription, NumberEntityDescription
-):
+class KeymasterNumberEntityDescription(KeymasterEntityDescription, NumberEntityDescription):
     """Entity Description for keymaster Number entities."""
 
 
@@ -126,24 +124,29 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
 
         if (
             ".code_slots" in self._property
-            and self._kmlock and self._kmlock.parent_name
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
+            and self._kmlock
+            and self._kmlock.parent_name
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
+            )
         ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        if (
-            ".code_slots" in self._property
-            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
+        if ".code_slots" in self._property and (
+            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        if (
-            self._property.endswith(".accesslimit_count")
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].accesslimit_count_enabled)
+        if self._property.endswith(".accesslimit_count") and (
+            not self._kmlock.code_slots
+            or not self._code_slot
+            or not self._kmlock.code_slots[self._code_slot].accesslimit_count_enabled
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -170,8 +173,13 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
         )
         if (
             self._property.endswith(".accesslimit_count")
-            and self._kmlock and self._kmlock.parent_name
-            and (not self._kmlock.code_slots or not self._code_slot or not self._kmlock.code_slots[self._code_slot].override_parent)
+            and self._kmlock
+            and self._kmlock.parent_name
+            and (
+                not self._kmlock.code_slots
+                or not self._code_slot
+                or not self._kmlock.code_slots[self._code_slot].override_parent
+            )
         ):
             _LOGGER.debug(
                 "[Number async_set_value] %s: Child lock and code slot %s not set to override parent. Ignoring change",

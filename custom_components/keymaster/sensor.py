@@ -15,15 +15,11 @@ from .entity import KeymasterEntity, KeymasterEntityDescription
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities
-):
+async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities):
     """Create keymaster Sensor entities."""
 
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    kmlock = await coordinator.get_lock_by_config_entry_id(
-        config_entry.entry_id
-    )
+    kmlock = await coordinator.get_lock_by_config_entry_id(config_entry.entry_id)
     entities: list = []
 
     entities.append(
@@ -80,9 +76,7 @@ async def async_setup_entry(
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterSensorEntityDescription(
-    KeymasterEntityDescription, SensorEntityDescription
-):
+class KeymasterSensorEntityDescription(KeymasterEntityDescription, SensorEntityDescription):
     """Entity Description for keymaster Sensors."""
 
 
@@ -109,9 +103,8 @@ class KeymasterSensor(KeymasterEntity, SensorEntity):
             self.async_write_ha_state()
             return
 
-        if (
-            ".code_slots" in self._property
-            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
+        if ".code_slots" in self._property and (
+            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()

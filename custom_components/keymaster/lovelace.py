@@ -38,7 +38,9 @@ async def generate_lovelace(
         child=bool(parent_config_entry_id),
         door=bool(door_sensor not in {None, DEFAULT_DOOR_SENSOR}),
     )
-    mapped_badges_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = await _map_property_to_entity_id(
+    mapped_badges_list: (
+        MutableMapping[str, Any] | list[MutableMapping[str, Any]]
+    ) = await _map_property_to_entity_id(
         hass=hass,
         lovelace_entities=badges_list,
         keymaster_config_entry_id=keymaster_config_entry_id,
@@ -60,11 +62,11 @@ async def generate_lovelace(
                 code_slot=x
             )
         else:
-            code_slot_dict = await _generate_code_slot_dict(
-                code_slot=x
-            )
+            code_slot_dict = await _generate_code_slot_dict(code_slot=x)
         code_slot_list.append(code_slot_dict)
-    lovelace_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = await _map_property_to_entity_id(
+    lovelace_list: (
+        MutableMapping[str, Any] | list[MutableMapping[str, Any]]
+    ) = await _map_property_to_entity_id(
         hass=hass,
         lovelace_entities=code_slot_list,
         keymaster_config_entry_id=keymaster_config_entry_id,
@@ -133,14 +135,11 @@ def _create_lovelace_folder(folder) -> None:
 def _dump_with_indent(data: Any, indent: int = 2) -> str:
     """Convert dict to YAML and indent each line by a given number of spaces."""
     yaml_string: str = yaml.dump(data, default_flow_style=False, sort_keys=False)
-    indented_yaml: str = "\n".join(
-        " " * indent + line for line in yaml_string.splitlines()
-    )
+    indented_yaml: str = "\n".join(" " * indent + line for line in yaml_string.splitlines())
     return indented_yaml
 
 
 def _write_lovelace_yaml(folder: str, filename: str, lovelace: Any) -> None:
-
     # Indent YAML to make copy/paste easier
     indented_yaml: str = _dump_with_indent(lovelace, indent=2)
 
@@ -180,17 +179,17 @@ async def _map_property_to_entity_id(
     #     f"parent_config_entry_id: {parent_config_entry_id}"
     # )
     entity_registry: er.EntityRegistry = er.async_get(hass)
-    lovelace_list: list[MutableMapping[str, Any]] | MutableMapping[str, Any] = (
-        await _process_entities(
-            lovelace_entities,
-            "entity",
-            functools.partial(
-                _get_entity_id,
-                entity_registry,
-                keymaster_config_entry_id,
-                parent_config_entry_id,
-            ),
-        )
+    lovelace_list: (
+        list[MutableMapping[str, Any]] | MutableMapping[str, Any]
+    ) = await _process_entities(
+        lovelace_entities,
+        "entity",
+        functools.partial(
+            _get_entity_id,
+            entity_registry,
+            keymaster_config_entry_id,
+            parent_config_entry_id,
+        ),
     )
     return lovelace_list
 
@@ -205,15 +204,11 @@ async def _process_entities(data: Any, key_to_find: str, process_func: Callable)
                 updated_dict[key] = await process_func(value)
             else:
                 # Recursively process the value
-                updated_dict[key] = await _process_entities(
-                    value, key_to_find, process_func
-                )
+                updated_dict[key] = await _process_entities(value, key_to_find, process_func)
         return updated_dict
     if isinstance(data, list):
         # Recursively process each item in the list
-        return [
-            await _process_entities(item, key_to_find, process_func) for item in data
-        ]
+        return [await _process_entities(item, key_to_find, process_func) for item in data]
     # If not a dict or list, return the data as-is
     return data
 
@@ -416,9 +411,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
         ]
     )
 
-    dow_list: list[MutableMapping[str, Any]] = await _generate_dow_entities(
-        code_slot=code_slot
-    )
+    dow_list: list[MutableMapping[str, Any]] = await _generate_dow_entities(code_slot=code_slot)
     code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
     return code_slot_dict
 
