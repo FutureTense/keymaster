@@ -230,8 +230,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
             for field in fields(cls):
                 field_name: str = field.name
-                assert isinstance(field.type, type)
-                field_type: type = keymasterlock_type_lookup.get(field_name, field.type)
+                field_type: type | None = keymasterlock_type_lookup.get(field_name)
+                if not field_type and isinstance(field.type, type):
+                    field_type = field.type
 
                 field_value: Any = data.get(field_name)
 
@@ -1618,7 +1619,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 return False
 
             kmlock.lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-        assert kmlock.lock_config_entry_id is not None
+        if kmlock.lock_config_entry_id is None:
+            return False
         try:
             zwave_entry = self.hass.config_entries.async_get_entry(
                 kmlock.lock_config_entry_id
