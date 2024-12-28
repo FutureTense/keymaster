@@ -9,12 +9,16 @@ from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 
-from homeassistant import config_entries
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 
@@ -45,10 +49,8 @@ if TYPE_CHECKING:
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-class KeymasterFlowHandler(config_entries.ConfigFlow):
+class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for keymaster."""
-
-    domain: str = DOMAIN
 
     VERSION: int = 3
     DEFAULTS: MutableMapping[str, Any] = {
@@ -85,16 +87,16 @@ class KeymasterFlowHandler(config_entries.ConfigFlow):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        config_entry: ConfigEntry,
     ) -> KeymasterOptionsFlow:
         """Get the options flow for this handler."""
         return KeymasterOptionsFlow(config_entry)
 
 
-class KeymasterOptionsFlow(config_entries.OptionsFlow):
+class KeymasterOptionsFlow(OptionsFlow):
     """Options flow for keymaster."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize."""
         self.config_entry = config_entry
 
@@ -310,7 +312,7 @@ def _get_schema(
 
 
 async def _start_config_flow(
-    cls: KeymasterFlowHandler | KeymasterOptionsFlow,
+    cls: KeymasterConfigFlow | KeymasterOptionsFlow,
     step_id: str,
     title: str,
     user_input: MutableMapping[str, Any] | None,
@@ -345,9 +347,8 @@ async def _start_config_flow(
                 step_id,
                 user_input,
             )
-            if step_id == "user" or not entry_id:
+            if isinstance(cls, KeymasterConfigFlow) or step_id == "user" or not entry_id:
                 return cls.async_create_entry(title=title, data=user_input)
-            assert isinstance(cls, KeymasterOptionsFlow)
             cls.hass.config_entries.async_update_entry(
                 cls.config_entry, data=user_input
             )
