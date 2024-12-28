@@ -1,6 +1,8 @@
 """Constants for keymaster."""
 
+from collections.abc import MutableMapping
 from enum import StrEnum
+from typing import Any
 
 from homeassistant.components.lock.const import LockState
 from homeassistant.const import Platform
@@ -77,59 +79,259 @@ DEFAULT_HIDE_PINS = False
 DEFAULT_AUTOLOCK_MIN_DAY: int = 120
 DEFAULT_AUTOLOCK_MIN_NIGHT: int = 5
 
-# Action maps
-# FE599 locks only send alarmType 16 for all lock/unlock commands
-# see issue #281
-ACTION_MAP = {
-    ALARM_TYPE: {
-        999: "Kwikset",
-        0: "No Status Reported",
-        9: "Lock Jammed",
-        17: "Keypad Lock Jammed",
-        21: "Manual Lock",
-        22: "Manual Unlock",
-        23: "RF Lock Jammed",
-        24: "RF Lock",
-        25: "RF Unlock",
-        26: "Auto Lock Jammed",
-        27: "Auto Lock",
-        32: "All Codes Deleted",
-        161: "Bad Code Entered",
-        167: "Battery Low",
-        168: "Battery Critical",
-        169: "Battery Too Low To Operate Lock",
-        16: "Keypad Unlock",
-        18: "Keypad Lock",
-        19: "Keypad Unlock",
-        162: "Lock Code Attempt Outside of Schedule",
-        33: "Code Deleted",
-        112: "Code Changed",
-        113: "Duplicate Code",
-    },
-    ACCESS_CONTROL: {
-        999: "Schlage",
-        1: "Manual Lock",
-        2: "Manual Unlock",
-        3: "RF Lock",
-        4: "RF Unlock",
-        7: "Manual not fully locked",
-        8: "RF not fully locked",
-        9: "Auto Lock locked",
-        10: "Auto Lock not fully locked",
-        11: "Lock Jammed",
-        16: "Keypad temporary disabled",
-        17: "Keypad busy",
-        5: "Keypad Lock",
-        6: "Keypad Unlock",
-        12: "All User Codes Deleted",
-        13: "Single Code Deleted",
-        14: "New User Code Added",
-        18: "New Program Code Entered",
-        15: "Duplicate Code",
-    },
-}
+UNKNOWN = "unknown"
 
-LOCK_STATE_MAP: dict[str, dict[str, int]] = {
+SERVICE_UPDATE_PIN = "update_pin"
+SERVICE_CLEAR_PIN = "clear_pin"
+SERVICE_REGENERATE_LOVELACE = "regenerate_lovelace"
+
+
+class LockMethod(StrEnum):
+    """Lock change method options."""
+
+    MANUAL = "manual"
+    KEYPAD = "keypad"
+    RF = "rf"
+    AUTO = "auto"
+
+
+LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
+    {
+        "name": "Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": UNKNOWN,
+        "alarm_type": 9,    # Kwikset
+        "access_control": 11,   # Schlage
+        "zwavejs_event": 11    # Command Class: 113, Type: 6
+    },
+    {
+        "name": "Keypad Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 17,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "Manual Lock",
+        "action": LockState.LOCKED,
+        "method": LockMethod.MANUAL,
+        "alarm_type": 21,
+        "access_control": 1,
+        "zwavejs_event": 1
+    },
+    {
+        "name": "Manual Unlock",
+        "action": LockState.UNLOCKED,
+        "method": LockMethod.MANUAL,
+        "alarm_type": 22,
+        "access_control": 2,
+        "zwavejs_event": 2
+    },
+    {
+        "name": "RF Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": LockMethod.RF,
+        "alarm_type": 23,
+        "access_control": 8,
+        "zwavejs_event": 8
+    },
+    {
+        "name": "RF Lock",
+        "action": LockState.LOCKED,
+        "method": LockMethod.RF,
+        "alarm_type": 24,
+        "access_control": 3,
+        "zwavejs_event": 3
+    },
+    {
+        "name": "RF Unlock",
+        "action": LockState.UNLOCKED,
+        "method": LockMethod.RF,
+        "alarm_type": 25,
+        "access_control": 4,
+        "zwavejs_event": 4
+    },
+    {
+        "name": "Auto Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": LockMethod.AUTO,
+        "alarm_type": 26,
+        "access_control": 10,
+        "zwavejs_event": 10
+    },
+    {
+        "name": "Auto Lock",
+        "action": LockState.LOCKED,
+        "method": LockMethod.AUTO,
+        "alarm_type": 27,
+        "access_control": 9,
+        "zwavejs_event": 9
+    },
+    {
+        "name": "All User Codes Deleted",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 32,
+        "access_control": 12,
+        "zwavejs_event": 12
+    },
+    {
+        "name": "Bad Code Entered",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 161,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "Battery Low",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 167,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "Battery Critical",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 168,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "Battery Too Low To Operate Lock",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 169,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "Keypad Action",  # FE599 locks only send alarm_type 16 for all lock/unlock commands. See issue #281
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 16,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "Keypad Lock",
+        "action": LockState.LOCKED,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 18,
+        "access_control": 5,
+        "zwavejs_event": 5
+    },
+    {
+        "name": "Keypad Unlock",
+        "action": LockState.UNLOCKED,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 19,
+        "access_control": 6,
+        "zwavejs_event": 6
+    },
+    {
+        "name": "User Code Attempt Outside of Schedule",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 162,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "User Code Deleted",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 33,
+        "access_control": 13,
+        "zwavejs_event": 13
+    },
+    {
+        "name": "User Code Changed",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 112,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "Duplicate User Code",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 113,
+        "access_control": 15,
+        "zwavejs_event": 15
+    },
+    {
+        "name": "No Status Reported",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 0,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN
+    },
+    {
+        "name": "Manual Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": LockMethod.MANUAL,
+        "alarm_type": UNKNOWN,
+        "access_control": 7,
+        "zwavejs_event": 7
+    },
+    {
+        "name": "Keypad Temporarily Disabled",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 16,
+        "zwavejs_event": 16
+    },
+    {
+        "name": "Keypad Busy",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 17,
+        "zwavejs_event": 17
+    },
+    {
+        "name": "New User Code Added",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 14,
+        "zwavejs_event": 14
+    },
+    {
+        "name": "New Program Code Entered",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 18,
+        "zwavejs_event": 18
+    },
+
+    {
+        "name": "New User Code Added",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 14,
+        "zwavejs_event": 14
+    },
+    {
+        "name": "New Program Code Entered",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 18,
+        "zwavejs_event": 18
+    },
+]
+
+LOCK_STATE_MAP: MutableMapping[str, MutableMapping[str, int]] = {
     ALARM_TYPE: {
         LockState.LOCKED: 24,
         LockState.UNLOCKED: 25,
@@ -139,10 +341,6 @@ LOCK_STATE_MAP: dict[str, dict[str, int]] = {
         LockState.UNLOCKED: 4,
     },
 }
-
-SERVICE_UPDATE_PIN = "update_pin"
-SERVICE_CLEAR_PIN = "clear_pin"
-SERVICE_REGENERATE_LOVELACE = "regenerate_lovelace"
 
 
 class Synced(StrEnum):
