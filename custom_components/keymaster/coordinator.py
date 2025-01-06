@@ -52,7 +52,6 @@ from homeassistant.util import dt as dt_util, slugify
 
 from .const import (
     ACCESS_CONTROL,
-    ACTION_MAP,
     ALARM_TYPE,
     ATTR_ACTION_CODE,
     ATTR_ACTION_TEXT,
@@ -67,11 +66,13 @@ from .const import (
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
+    LOCK_ACTIVITY_MAP,
     LOCK_STATE_MAP,
     QUICK_REFRESH_SECONDS,
     SYNC_STATUS_THRESHOLD,
     THROTTLE_SECONDS,
     VERSION,
+    LockMethod,
     Synced,
 )
 from .exceptions import ZWaveIntegrationNotConfiguredError
@@ -470,12 +471,31 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         # Get lock state to provide as part of event data
-        new_state = None
+        new_state: str | None = None
         if temp_new_state := self.hass.states.get(kmlock.lock_entity_id):
             new_state = temp_new_state.state
 
-        params = event.data.get(ATTR_PARAMETERS) or {}
-        code_slot = params.get("userId", 0)
+        params: MutableMapping[str, Any] = event.data.get(ATTR_PARAMETERS) or {}
+        code_slot: int = params.get("userId", 0)
+
+        if (
+            event.data.get("command_class") == 113
+            and event.data.get("type") == 6
+            and event.data.get("event")
+        ):
+            action: MutableMapping[str, Any] | None = None
+            for activity in LOCK_ACTIVITY_MAP:
+                if activity.get("zwavejs_event") == event.data.get("event"):
+                    action = activity
+                    break
+            if action:
+                event_label: str = action.get("name", "Unknown Lock Event")
+                if action.get("method") != LockMethod.KEYPAD:
+                    code_slot = 0
+            else:
+                event_label = event.data.get("event_label", "Unknown Lock Event")
+        else:
+            event_label = event.data.get("event_label", "Unknown Lock Event")
 
         _LOGGER.debug(
             "[handle_zwave_js_lock_event] %s: event: %s, new_state: %s, params: %s, code_slot: %s",
@@ -490,15 +510,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock=kmlock,
                 code_slot=code_slot,
                 source="event",
-                event_label=event.data.get("event_label", None),
-                action_code=None,
+                event_label=event_label,
+                action_code=event.data.get("event", None),
             )
         elif new_state == LockState.LOCKED:
             await self._lock_locked(
                 kmlock=kmlock,
                 source="event",
-                event_label=event.data.get("event_label", None),
-                action_code=None,
+                event_label=event_label,
+                action_code=event.data.get("event", None),
             )
         else:
             _LOGGER.debug(
@@ -537,9 +557,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             or ALARM_TYPE.replace("_", "") in kmlock.alarm_type_or_access_control_entity_id
         ):
             action_type = ALARM_TYPE
-        if (
-            kmlock.alarm_type_or_access_control_entity_id
-            and ACCESS_CONTROL in kmlock.alarm_type_or_access_control_entity_id
+        elif kmlock.alarm_type_or_access_control_entity_id and (
+            ACCESS_CONTROL in kmlock.alarm_type_or_access_control_entity_id
+            or ACCESS_CONTROL.replace("_", "") in kmlock.alarm_type_or_access_control_entity_id
         ):
             action_type = ACCESS_CONTROL
 
@@ -563,8 +583,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         _LOGGER.debug(
-            "[handle_lock_state_change] %s: alarm_level_value: %s, alarm_type_value: %s",
+            "[handle_lock_state_change] %s: action_type: %s, alarm_level_value: %s, alarm_type_value: %s",
             kmlock.lock_name,
+            action_type,
             alarm_level_value,
             alarm_type_value,
         )
@@ -586,12 +607,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             alarm_type_value = LOCK_STATE_MAP[action_type][new_state]
 
-        # Lookup action text based on alarm type value
-        action_text: str | None = (
-            ACTION_MAP.get(action_type, {}).get(alarm_type_value, "Unknown Alarm Type Value")
-            if alarm_type_value is not None
-            else None
-        )
+        action: MutableMapping[str, Any] | None = None
+        for activity in LOCK_ACTIVITY_MAP:
+            if activity.get(action_type) == alarm_type_value:
+                action = activity
+                break
+        if action:
+            event_label = action.get("name", "Unknown Lock Event")
+            if action.get("method") != LockMethod.KEYPAD:
+                alarm_level_value = 0
+        else:
+            event_label = "Unknown Lock Event"
+
         _LOGGER.debug(
             "[handle_lock_state_change] %s: old_state: %s, new_state: %s",
             kmlock.lock_name,
@@ -605,14 +632,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock=kmlock,
                 code_slot=alarm_level_value,  # TODO: Test this out more, not sure this is correct
                 source="entity_state",
-                event_label=action_text,
+                event_label=event_label,
                 action_code=alarm_type_value,
             )
         elif new_state == LockState.LOCKED:
             await self._lock_locked(
                 kmlock=kmlock,
                 source="entity_state",
-                event_label=action_text,
+                event_label=event_label,
                 action_code=alarm_type_value,
             )
         else:
@@ -742,7 +769,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             await self._create_listeners(kmlock=kmlock)
         else:
             _LOGGER.debug(
-                "[update_listeners] %s: " "Setting create_listeners to run when HA starts",
+                "[update_listeners] %s: Setting create_listeners to run when HA starts",
                 kmlock.lock_name,
             )
             self.hass.bus.async_listen_once(
@@ -764,6 +791,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("[lock_unlocked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
 
+        if kmlock.lock_state == LockState.UNLOCKED:
+            return
+
         kmlock.lock_state = LockState.UNLOCKED
         _LOGGER.debug(
             "[lock_unlocked] %s: Running. code_slot: %s, source: %s, "
@@ -774,7 +804,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             event_label,
             action_code,
         )
-        if isinstance(code_slot, int):
+        if not isinstance(code_slot, int):
             code_slot = 0
 
         if kmlock.autolock_enabled:
@@ -783,7 +813,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if kmlock.lock_notifications:
             message: str = event_label
             if code_slot > 0:
-                message = f"{message} ({code_slot})"
+                if kmlock.code_slots.get(code_slot) and kmlock.code_slots[code_slot].name:
+                    message = f"{message} by {kmlock.code_slots[code_slot].name} [{code_slot}]"
+                else:
+                    message = f"{message} by Code Slot {code_slot}"
             await send_manual_notification(
                 hass=self.hass,
                 script_name=kmlock.notify_script_name,
@@ -818,11 +851,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock.code_slots[code_slot].accesslimit_count -= 1
 
             if kmlock.code_slots[code_slot].notifications and not kmlock.lock_notifications:
+                if kmlock.code_slots[code_slot].name:
+                    message = f"{message} by {kmlock.code_slots[code_slot].name} [{code_slot}]"
+                else:
+                    message = f"{message} by Code Slot {code_slot}"
                 await send_manual_notification(
                     hass=self.hass,
                     script_name=kmlock.notify_script_name,
                     title=kmlock.lock_name,
-                    message=f"{event_label} ({code_slot})",
+                    message=message,
                 )
 
         # Fire state change event
@@ -846,6 +883,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             _LOGGER.debug("[lock_locked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
+
+        if kmlock.lock_state == LockState.LOCKED:
+            return
+
         kmlock.lock_state = LockState.LOCKED
         _LOGGER.debug(
             "[lock_locked] %s: Running. source: %s, event_label: %s, action_code: %s",
@@ -884,6 +925,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("[door_opened] %s: Throttled", kmlock.lock_name)
             return
 
+        if kmlock.door_state == STATE_OPEN:
+            return
+
         kmlock.door_state = STATE_OPEN
         _LOGGER.debug("[door_opened] %s: Running", kmlock.lock_name)
 
@@ -900,6 +944,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             "door_closed", kmlock.keymaster_config_entry_id, THROTTLE_SECONDS
         ):
             _LOGGER.debug("[door_closed] %s: Throttled", kmlock.lock_name)
+            return
+
+        if kmlock.door_state == STATE_CLOSED:
             return
 
         kmlock.door_state = STATE_CLOSED
@@ -1432,17 +1479,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
-        for i, dow in enumerate(
-            [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ]
-        ):
+        for i, dow in enumerate([
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ]):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         new_code_slot = KeymasterCodeSlot(
             number=code_slot, enabled=False, accesslimit_day_of_week=dow_slots
@@ -1523,7 +1568,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if not kmlock.code_slots or code_slot not in kmlock.code_slots:
             _LOGGER.debug(
-                "[update_slot_active_state] %s: " "Keymaster code slot %s doesn't exist.",
+                "[update_slot_active_state] %s: Keymaster code slot %s doesn't exist.",
                 kmlock.lock_name,
                 code_slot,
             )
@@ -1589,7 +1634,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return True
 
         _LOGGER.debug(
-            "[connect_and_update_lock] %s: " "Lock connected, updating Device and Nodes",
+            "[connect_and_update_lock] %s: Lock connected, updating Device and Nodes",
             kmlock.lock_name,
         )
 
