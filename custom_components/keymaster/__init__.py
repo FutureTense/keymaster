@@ -32,9 +32,6 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
-    DEFAULT_ALARM_LEVEL_SENSOR,
-    DEFAULT_ALARM_TYPE_SENSOR,
-    DEFAULT_DOOR_SENSOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
     NONE_TEXT,
@@ -56,14 +53,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     updated_config = config_entry.data.copy()
 
-    # updated_config[CONF_SLOTS] = int(updated_config[CONF_SLOTS])
-    # updated_config[CONF_START] = int(updated_config[CONF_START])
-
-    if config_entry.data.get(CONF_PARENT) == NONE_TEXT:
-        updated_config[CONF_PARENT] = None
-
-    if config_entry.data.get(CONF_NOTIFY_SCRIPT_NAME) == NONE_TEXT:
-        updated_config[CONF_NOTIFY_SCRIPT_NAME] = None
+    for prop in [
+        CONF_PARENT,
+        CONF_NOTIFY_SCRIPT_NAME,
+        CONF_DOOR_SENSOR_ENTITY_ID,
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    ]:
+        if config_entry.data.get(prop) in {NONE_TEXT, "sensor.fake", "binary_sensor.fake"}:
+            updated_config[prop] = None
 
     if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
         updated_config[CONF_PARENT_ENTRY_ID] = None
@@ -86,13 +84,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[CONF_NOTIFY_SCRIPT_NAME].split(
             ".", maxsplit=1
         )[1]
-
-    if updated_config.get(CONF_DOOR_SENSOR_ENTITY_ID) == DEFAULT_DOOR_SENSOR:
-        updated_config[CONF_DOOR_SENSOR_ENTITY_ID] = None
-    if updated_config.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID) == DEFAULT_ALARM_LEVEL_SENSOR:
-        updated_config[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = None
-    if updated_config.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID) == DEFAULT_ALARM_TYPE_SENSOR:
-        updated_config[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = None
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)

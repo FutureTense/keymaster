@@ -29,10 +29,7 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
-    DEFAULT_ALARM_LEVEL_SENSOR,
-    DEFAULT_ALARM_TYPE_SENSOR,
     DEFAULT_CODE_SLOTS,
-    DEFAULT_DOOR_SENSOR,
     DEFAULT_HIDE_PINS,
     DEFAULT_START,
     DOMAIN,
@@ -52,9 +49,9 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
     DEFAULTS: MutableMapping[str, Any] = {
         CONF_SLOTS: DEFAULT_CODE_SLOTS,
         CONF_START: DEFAULT_START,
-        CONF_DOOR_SENSOR_ENTITY_ID: DEFAULT_DOOR_SENSOR,
-        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: DEFAULT_ALARM_LEVEL_SENSOR,
-        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: DEFAULT_ALARM_TYPE_SENSOR,
+        CONF_DOOR_SENSOR_ENTITY_ID: NONE_TEXT,
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: NONE_TEXT,
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: NONE_TEXT,
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
         CONF_NOTIFY_SCRIPT_NAME: NONE_TEXT,
     }
@@ -89,15 +86,11 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
         config_entry: ConfigEntry,
     ) -> KeymasterOptionsFlow:
         """Get the options flow for this handler."""
-        return KeymasterOptionsFlow(config_entry)
+        return KeymasterOptionsFlow()
 
 
 class KeymasterOptionsFlow(OptionsFlow):
     """Options flow for keymaster."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize."""
-        self.config_entry: ConfigEntry = config_entry
 
     async def get_unique_name_error(
         self, user_input: MutableMapping[str, Any]
@@ -113,7 +106,7 @@ class KeymasterOptionsFlow(OptionsFlow):
 
     async def async_step_init(
         self, user_input: MutableMapping[str, Any] | None = None
-    ) -> MutableMapping[str, Any]:
+    ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
             cls=self,
@@ -132,12 +125,14 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) ->
     if DOMAIN not in hass.data:
         return data
 
-    data.extend([
-        entry.title
-        for entry in hass.config_entries.async_entries(DOMAIN)
-        if entry.entry_id != entry_id
-        and (CONF_PARENT not in entry.data or entry.data[CONF_PARENT] is None)
-    ])
+    data.extend(
+        [
+            entry.title
+            for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.entry_id != entry_id
+            and (CONF_PARENT not in entry.data or entry.data[CONF_PARENT] is None)
+        ]
+    )
     return data
 
 
@@ -237,39 +232,37 @@ def _get_schema(
             ),
             vol.Optional(
                 CONF_DOOR_SENSOR_ENTITY_ID,
-                default=_get_default(CONF_DOOR_SENSOR_ENTITY_ID, DEFAULT_DOOR_SENSOR),
+                default=_get_default(CONF_DOOR_SENSOR_ENTITY_ID, NONE_TEXT),
             ): vol.In(
                 _get_entities(
                     hass=hass,
                     domain=BINARY_DOMAIN,
-                    extra_entities=[DEFAULT_DOOR_SENSOR],
+                    extra_entities=[NONE_TEXT],
                 )
             ),
             vol.Optional(
                 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-                default=_get_default(
-                    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, DEFAULT_ALARM_LEVEL_SENSOR
-                ),
+                default=_get_default(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, NONE_TEXT),
             ): vol.In(
                 _get_entities(
                     hass=hass,
                     domain=SENSOR_DOMAIN,
                     search=["alarm_level", "user_code", "alarmlevel"],
-                    extra_entities=[DEFAULT_ALARM_LEVEL_SENSOR],
+                    extra_entities=[NONE_TEXT],
                 )
             ),
             vol.Optional(
                 CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
                 default=_get_default(
                     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-                    DEFAULT_ALARM_TYPE_SENSOR,
+                    NONE_TEXT,
                 ),
             ): vol.In(
                 _get_entities(
                     hass=hass,
                     domain=SENSOR_DOMAIN,
                     search=["alarm_type", "access_control", "alarmtype"],
-                    extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
+                    extra_entities=[NONE_TEXT],
                 )
             ),
             vol.Optional(

@@ -60,9 +60,6 @@ from .const import (
     ATTR_NAME,
     ATTR_NODE_ID,
     ATTR_NOTIFICATION_SOURCE,
-    DEFAULT_ALARM_LEVEL_SENSOR,
-    DEFAULT_ALARM_TYPE_SENSOR,
-    DEFAULT_DOOR_SENSOR,
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
@@ -710,10 +707,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 )
             )
 
-        if (
-            kmlock.door_sensor_entity_id is not None
-            and kmlock.door_sensor_entity_id != DEFAULT_DOOR_SENSOR
-        ):
+        if kmlock.door_sensor_entity_id is not None:
             _LOGGER.debug(
                 "[create_listeners] %s: Creating handle_door_state_change listener",
                 kmlock.lock_name,
@@ -728,13 +722,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # Check if we need to check alarm type/alarm level sensors, in which case
         # we need to listen for lock state changes
-        if kmlock.alarm_level_or_user_code_entity_id not in {
-            None,
-            DEFAULT_ALARM_LEVEL_SENSOR,
-        } and kmlock.alarm_type_or_access_control_entity_id not in {
-            None,
-            DEFAULT_ALARM_TYPE_SENSOR,
-        }:
+        if (
+            kmlock.alarm_level_or_user_code_entity_id is not None
+            and kmlock.alarm_type_or_access_control_entity_id is not None
+        ):
             # Listen to lock state changes so we can fire an event
             _LOGGER.debug(
                 "[create_listeners] %s: Creating handle_lock_state_change listener",
@@ -1057,11 +1048,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     else:
                         kmlock.lock_state = lock_state
 
-            if (
-                isinstance(kmlock.door_sensor_entity_id, str)
-                and kmlock.door_sensor_entity_id
-                and kmlock.door_sensor_entity_id != DEFAULT_DOOR_SENSOR
-            ):
+            if kmlock.door_sensor_entity_id:
                 if temp_door_state := self.hass.states.get(kmlock.door_sensor_entity_id):
                     door_state: str = temp_door_state.state
                     if door_state in {STATE_OPEN, STATE_CLOSED}:
@@ -1479,15 +1466,17 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
-        for i, dow in enumerate([
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-        ]):
+        for i, dow in enumerate(
+            [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+            ]
+        ):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         new_code_slot = KeymasterCodeSlot(
             number=code_slot, enabled=False, accesslimit_day_of_week=dow_slots

@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
-from .const import DEFAULT_DOOR_SENSOR, DOMAIN
+from .const import DOMAIN
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def generate_lovelace(
 
     badges_list: list[MutableMapping[str, Any]] = await _generate_lock_badges(
         child=bool(parent_config_entry_id),
-        door=bool(door_sensor not in {None, DEFAULT_DOOR_SENSOR}),
+        door=bool(door_sensor is not None),
     )
     mapped_badges_list: (
         MutableMapping[str, Any] | list[MutableMapping[str, Any]]
