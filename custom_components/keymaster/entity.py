@@ -82,7 +82,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
 
         return result
 
-    def _set_property_value(self, value) -> bool:
+    def _set_property_value(self, value: Any) -> bool:
         if "." not in self._property:
             return False
 

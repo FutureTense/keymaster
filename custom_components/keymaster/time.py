@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from .const import CONF_SLOTS, CONF_START, COORDINATOR, DAY_NAMES, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek
@@ -31,17 +31,7 @@ async def async_setup_entry(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
-        for i, dow in enumerate(
-            [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ]
-        ):
+        for i, dow in enumerate(DAY_NAMES):
             dow_time_entities: list[MutableMapping[str, str]] = [
                 {
                     "prop": f"time.code_slots:{x}.accesslimit_day_of_week:{i}.time_start",

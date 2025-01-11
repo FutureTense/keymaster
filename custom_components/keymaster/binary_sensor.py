@@ -25,7 +25,7 @@ async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-):
+) -> None:
     """Create the keymaster Binary Sensors."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock = await coordinator.get_lock_by_config_entry_id(config_entry.entry_id)
@@ -68,7 +68,6 @@ async def async_setup_entry(
         raise PlatformNotReady
 
     async_add_entities(entities, True)
-    return True
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
-from .const import DEFAULT_DOOR_SENSOR, DOMAIN
+from .const import DAY_NAMES, DEFAULT_DOOR_SENSOR, DOMAIN
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def delete_lovelace(hass: HomeAssistant, kmlock_name: str) -> None:
     return
 
 
-def _create_lovelace_folder(folder) -> None:
+def _create_lovelace_folder(folder: str) -> None:
     _LOGGER.debug("Lovelace Location: %s", folder)
 
     try:
@@ -244,7 +244,7 @@ async def _get_entity_id(
     return entity_id
 
 
-async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str, Any]:
+async def _generate_code_slot_dict(code_slot: int, child: bool = False) -> MutableMapping[str, Any]:
     """Build the dict for the code slot."""
     code_slot_dict: MutableMapping[str, Any] = {
         "type": "grid",
@@ -587,20 +587,10 @@ async def _generate_lock_badges(
     return badges
 
 
-async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
+async def _generate_dow_entities(code_slot: int) -> list[MutableMapping[str, Any]]:
     """Build the day of week entities for the code slot."""
     dow_list: list[MutableMapping[str, Any]] = []
-    for dow_num, dow in enumerate(
-        [
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-        ]
-    ):
+    for dow_num, dow in enumerate(DAY_NAMES):
         dow_list.extend(
             [
                 {
@@ -721,7 +711,7 @@ async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
     return dow_list
 
 
-async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
+async def _generate_child_code_slot_dict(code_slot: int) -> MutableMapping[str, Any]:
     """Build the dict for the code slot of a child keymaster lock."""
 
     normal_code_slot_dict: MutableMapping[str, Any] = await _generate_code_slot_dict(
@@ -916,20 +906,10 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
     return code_slot_dict
 
 
-async def _generate_child_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
+async def _generate_child_dow_entities(code_slot: int) -> list[MutableMapping[str, Any]]:
     """Build the day of week entities for a child code slot."""
     dow_list: list[MutableMapping[str, Any]] = []
-    for dow_num, dow in enumerate(
-        [
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-        ]
-    ):
+    for dow_num, dow in enumerate(DAY_NAMES):
         dow_list.extend(
             [
                 {
