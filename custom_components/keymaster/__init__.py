@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_DOOR_SENSOR,
     DEFAULT_HIDE_PINS,
     DOMAIN,
+    NONE_TEXT,
     PLATFORMS,
 )
 from .coordinator import KeymasterCoordinator
@@ -58,8 +59,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # updated_config[CONF_SLOTS] = int(updated_config[CONF_SLOTS])
     # updated_config[CONF_START] = int(updated_config[CONF_START])
 
-    if config_entry.data.get(CONF_PARENT) in {None, "(none)"}:
+    if config_entry.data.get(CONF_PARENT) == NONE_TEXT:
         updated_config[CONF_PARENT] = None
+
+    if config_entry.data.get(CONF_NOTIFY_SCRIPT_NAME) == NONE_TEXT:
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = None
 
     if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
         updated_config[CONF_PARENT_ENTRY_ID] = None
