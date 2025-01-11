@@ -19,7 +19,6 @@ from .const import (
     DAY_NAMES,
     DOMAIN,
 )
-
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .helpers import async_using_zwave_js

@@ -8,7 +8,7 @@ class ZWaveIntegrationNotConfiguredError(HomeAssistantError):
 
     def __str__(self) -> str:
         """Error string to show when zwave integration is not configured."""
-        return "A Z-Wave integration has not been configured for this " "Home Assistant instance"
+        return "A Z-Wave integration has not been configured for this Home Assistant instance"
 
 
 class NoNodeSpecifiedError(HomeAssistantError):
