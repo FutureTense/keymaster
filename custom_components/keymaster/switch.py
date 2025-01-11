@@ -3,12 +3,23 @@
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 import logging
+from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.core import callback
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import PlatformNotReady
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_DOOR_SENSOR_ENTITY_ID, CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from .const import (
+    CONF_DOOR_SENSOR_ENTITY_ID,
+    CONF_SLOTS,
+    CONF_START,
+    COORDINATOR,
+    DAY_NAMES,
+    DOMAIN,
+)
+
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .helpers import async_using_zwave_js
@@ -17,7 +28,9 @@ from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     """Create keymaster Switches."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock: KeymasterLock | None = await coordinator.get_lock_by_config_entry_id(
@@ -131,17 +144,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     for ent in code_slot_switch_entities
                 ]
             )
-            for i, dow in enumerate(
-                [
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday",
-                    "Saturday",
-                    "Sunday",
-                ]
-            ):
+            for i, dow in enumerate(DAY_NAMES):
                 dow_switch_entities: list[MutableMapping[str, str]] = [
                     {
                         "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.dow_enabled",
@@ -181,7 +184,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         raise PlatformNotReady
 
     async_add_entities(entities, True)
-    return True
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -297,7 +299,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         self._attr_is_on = self._get_property_value()
         self.async_write_ha_state()
 
-    async def async_turn_on(self, **_) -> None:
+    async def async_turn_on(self, **_: Any) -> None:
         """Turn the entity on."""
 
         if self.is_on:
@@ -329,7 +331,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                     )
             await self.coordinator.async_refresh()
 
-    async def async_turn_off(self, **_) -> None:
+    async def async_turn_off(self, **_: Any) -> None:
         """Turn the entity off."""
 
         if not self.is_on:

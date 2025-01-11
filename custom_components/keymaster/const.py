@@ -84,6 +84,16 @@ SERVICE_UPDATE_PIN = "update_pin"
 SERVICE_CLEAR_PIN = "clear_pin"
 SERVICE_REGENERATE_LOVELACE = "regenerate_lovelace"
 
+DAY_NAMES: list[str] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+]
+
 
 class LockMethod(StrEnum):
     """Lock change method options."""
