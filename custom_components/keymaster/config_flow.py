@@ -57,7 +57,9 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
     }
 
-    async def get_unique_name_error(self, user_input) -> MutableMapping[str, str]:
+    async def get_unique_name_error(
+        self, user_input: MutableMapping[str, Any]
+    ) -> MutableMapping[str, str]:
         """Check if name is unique, returning dictionary error if so."""
         # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
@@ -95,7 +97,9 @@ class KeymasterOptionsFlow(OptionsFlow):
         """Initialize."""
         self.config_entry = config_entry
 
-    async def get_unique_name_error(self, user_input) -> MutableMapping[str, str]:
+    async def get_unique_name_error(
+        self, user_input: MutableMapping[str, Any]
+    ) -> MutableMapping[str, str]:
         """Check if name is unique, returning dictionary error if so."""
         # If lock name has changed, make sure new name isn't already being used
         # otherwise show an error
@@ -107,7 +111,7 @@ class KeymasterOptionsFlow(OptionsFlow):
 
     async def async_step_init(
         self, user_input: MutableMapping[str, Any] | None = None
-    ) -> MutableMapping[str, Any]:
+    ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
             cls=self,
@@ -309,7 +313,7 @@ async def _start_config_flow(
     user_input: MutableMapping[str, Any] | None,
     defaults: MutableMapping[str, Any] | None = None,
     entry_id: str | None = None,
-):
+) -> ConfigFlowResult:
     """Start a config flow."""
     errors: dict[str, Any] = {}
     description_placeholders: dict[str, Any] = {}

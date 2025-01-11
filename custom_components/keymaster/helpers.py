@@ -33,7 +33,7 @@ class Throttle:
         """Initialize Throttle class."""
         self._cooldowns: MutableMapping = {}  # Nested dictionary: {function_name: {key: last_called_time}}
 
-    def is_allowed(self, func_name, key, cooldown_seconds) -> bool:
+    def is_allowed(self, func_name: str, key: str, cooldown_seconds: int) -> bool:
         """Check if function is allowed to run or not."""
         current_time = time.time()
         if func_name not in self._cooldowns:
@@ -305,8 +305,8 @@ async def call_hass_service(
 
 async def send_manual_notification(
     hass: HomeAssistant,
-    script_name: str,
-    message: str,
+    script_name: str | None,
+    message: str | None,
     title: str | None = None,
 ) -> None:
     """Send a manual notification to notify script."""
@@ -317,6 +317,8 @@ async def send_manual_notification(
         title,
         message,
     )
+    if not script_name:
+        return
     await call_hass_service(
         hass=hass,
         domain=SCRIPT_DOMAIN,

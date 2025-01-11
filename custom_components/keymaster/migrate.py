@@ -34,6 +34,7 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
+    DAY_NAMES,
     DOMAIN,
 )
 from .coordinator import KeymasterCoordinator
@@ -140,17 +141,7 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
-        for i, dow in enumerate(
-            [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ]
-        ):
+        for i, dow in enumerate(DAY_NAMES):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
@@ -206,7 +197,7 @@ async def _migrate_2to3_set_property_value(kmlock: KeymasterLock, prop: str, val
     return True
 
 
-async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, value) -> Any:
+async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, value: Any) -> Any:
     if keymasterlock_type_lookup.get(attr) is not None and isinstance(
         value, keymasterlock_type_lookup.get(attr, object)
     ):

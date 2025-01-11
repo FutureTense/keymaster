@@ -32,6 +32,7 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
+    DAY_NAMES,
     DEFAULT_ALARM_LEVEL_SENSOR,
     DEFAULT_ALARM_TYPE_SENSOR,
     DEFAULT_DOOR_SENSOR,
@@ -136,17 +137,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
-        for i, dow in enumerate(
-            [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ]
-        ):
+        for i, dow in enumerate(DAY_NAMES):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
@@ -186,16 +177,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
     )
 
-    # await system_health_check(hass, config_entry)
     return True
-
-
-# async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-#     """Update system health check data"""
-#     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-#     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
-#         config_entry.entry_id
-#     )
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -228,7 +210,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     return unload_ok
 
 
-async def delete_coordinator(hass: HomeAssistant, _: datetime):
+async def delete_coordinator(hass: HomeAssistant, _: datetime) -> None:
     """Delete the coordinator if no more kmlock entities exist."""
     _LOGGER.debug("[delete_coordinator] Triggered")
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]

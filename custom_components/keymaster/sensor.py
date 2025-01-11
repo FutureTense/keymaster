@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
@@ -15,7 +16,9 @@ from .entity import KeymasterEntity, KeymasterEntityDescription
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     """Create keymaster Sensor entities."""
 
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
@@ -72,7 +75,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, asyn
     )
 
     async_add_entities(entities, True)
-    return True
 
 
 @dataclass(frozen=True, kw_only=True)
