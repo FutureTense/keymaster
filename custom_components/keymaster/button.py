@@ -107,5 +107,5 @@ class KeymasterButton(KeymasterEntity, ButtonEntity):
         elif self._property.endswith(".reset") and self._code_slot:
             await self.coordinator.reset_code_slot(
                 config_entry_id=self._config_entry.entry_id,
-                code_slot=self._code_slot,
+                code_slot_num=self._code_slot,
             )

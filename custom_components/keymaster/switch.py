@@ -319,13 +319,13 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             ):
                 await self.coordinator.update_slot_active_state(
                     config_entry_id=self._config_entry.entry_id,
-                    code_slot=self._code_slot,
+                    code_slot_num=self._code_slot,
                 )
                 pin: str | None = self._kmlock.code_slots[self._code_slot].pin
                 if pin and pin.isdigit() and len(pin) >= 4:
                     await self.coordinator.set_pin_on_lock(
                         config_entry_id=self._config_entry.entry_id,
-                        code_slot=self._code_slot,
+                        code_slot_num=self._code_slot,
                         pin=pin,
                     )
             await self.coordinator.async_refresh()
@@ -346,10 +346,10 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             if self._property.endswith(".enabled") and self._code_slot:
                 await self.coordinator.update_slot_active_state(
                     config_entry_id=self._config_entry.entry_id,
-                    code_slot=self._code_slot,
+                    code_slot_num=self._code_slot,
                 )
                 await self.coordinator.clear_pin_from_lock(
                     config_entry_id=self._config_entry.entry_id,
-                    code_slot=self._code_slot,
+                    code_slot_num=self._code_slot,
                 )
             await self.coordinator.async_refresh()

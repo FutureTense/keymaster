@@ -197,12 +197,12 @@ def async_using_zwave_js(
 
 
 async def delete_code_slot_entities(
-    hass: HomeAssistant, keymaster_config_entry_id: str, code_slot: int
+    hass: HomeAssistant, keymaster_config_entry_id: str, code_slot_num: int
 ) -> None:
     """Delete no longer used code slots after update."""
     _LOGGER.debug(
         "[delete_code_slot_entities] Deleting code slot %s entities from config_entry_id: %s",
-        code_slot,
+        code_slot_num,
         keymaster_config_entry_id,
     )
     entity_registry = er.async_get(hass)
@@ -211,18 +211,18 @@ async def delete_code_slot_entities(
     # )
     # _LOGGER.debug(f"[delete_code_slot_entities] entities: {entities}")
     properties: list = [
-        f"binary_sensor.code_slots:{code_slot}.active",
-        f"datetime.code_slots:{code_slot}.accesslimit_date_range_start",
-        f"datetime.code_slots:{code_slot}.accesslimit_date_range_end",
-        f"number.code_slots:{code_slot}.accesslimit_count",
-        f"switch.code_slots:{code_slot}.override_parent",
-        f"switch.code_slots:{code_slot}.enabled",
-        f"switch.code_slots:{code_slot}.notifications",
-        f"switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
-        f"switch.code_slots:{code_slot}.accesslimit_count_enabled",
-        f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
-        f"text.code_slots:{code_slot}.name",
-        f"text.code_slots:{code_slot}.pin",
+        f"binary_sensor.code_slots:{code_slot_num}.active",
+        f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
+        f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
+        f"number.code_slots:{code_slot_num}.accesslimit_count",
+        f"switch.code_slots:{code_slot_num}.override_parent",
+        f"switch.code_slots:{code_slot_num}.enabled",
+        f"switch.code_slots:{code_slot_num}.notifications",
+        f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+        f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
+        f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
+        f"text.code_slots:{code_slot_num}.name",
+        f"text.code_slots:{code_slot_num}.pin",
     ]
     for prop in properties:
         entity_id: str | None = entity_registry.async_get_entity_id(
@@ -246,11 +246,11 @@ async def delete_code_slot_entities(
 
     for dow in range(7):
         dow_prop: list = [
-            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.dow_enabled",
-            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.include_exclude",
-            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.limit_by_time",
-            f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.time_start",
-            f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.time_end",
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.dow_enabled",
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.include_exclude",
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.limit_by_time",
+            f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.time_start",
+            f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.time_end",
         ]
         for prop in dow_prop:
             entity_id = entity_registry.async_get_entity_id(
@@ -293,14 +293,6 @@ async def call_hass_service(
         await hass.services.async_call(domain, service, service_data=service_data, target=target)
     except ServiceNotFound:
         _LOGGER.warning("Action Not Found: %s.%s", domain, service)
-    # except Exception as e:
-    #     _LOGGER.error(
-    #         "Error calling %s.%s service call. %s: %s",
-    #         domain,
-    #         service,
-    #         e.__class__.__qualname__,
-    #         e,
-    #     )
 
 
 async def send_manual_notification(

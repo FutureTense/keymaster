@@ -45,7 +45,7 @@ ATTR_NOTIFICATION_SOURCE = "notification_source"
 
 # Attributes
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
-ATTR_CODE_SLOT = "code_slot"
+ATTR_CODE_SLOT = "code_slot_num"
 ATTR_NAME = "lockname"
 ATTR_NODE_ID = "node_id"
 ATTR_PIN = "pin"

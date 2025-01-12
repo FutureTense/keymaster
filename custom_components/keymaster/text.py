@@ -127,13 +127,13 @@ class KeymasterText(KeymasterEntity, TextEntity):
             if value and value.isdigit() and len(value) >= 4 and self._code_slot:
                 await self.coordinator.set_pin_on_lock(
                     config_entry_id=self._config_entry.entry_id,
-                    code_slot=self._code_slot,
+                    code_slot_num=self._code_slot,
                     pin=value,
                 )
             elif not value and self._code_slot:
                 await self.coordinator.clear_pin_from_lock(
                     config_entry_id=self._config_entry.entry_id,
-                    code_slot=self._code_slot,
+                    code_slot_num=self._code_slot,
                 )
             else:
                 return
