@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import MutableMapping
-from datetime import datetime, timedelta
+from datetime import datetime as dt, timedelta
 import functools
 import logging
 from typing import Any
@@ -195,7 +195,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         if coordinator.count_locks_not_pending_delete == 0:
             _LOGGER.debug(
                 "[async_unload_entry] Possibly empty coordinator. Will evaluate for removal at %s",
-                datetime.now().astimezone() + timedelta(seconds=20),
+                dt.now().astimezone() + timedelta(seconds=20),
             )
             async_call_later(
                 hass=hass,
@@ -205,7 +205,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     return unload_ok
 
 
-async def delete_coordinator(hass: HomeAssistant, _: datetime) -> None:
+async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
     """Delete the coordinator if no more kmlock entities exist."""
     _LOGGER.debug("[delete_coordinator] Triggered")
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]

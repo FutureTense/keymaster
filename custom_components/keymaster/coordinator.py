@@ -7,7 +7,7 @@ import base64
 from collections.abc import Callable, MutableMapping
 import contextlib
 from dataclasses import fields, is_dataclass
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime as dt, time as dt_time, timedelta
 import functools
 import json
 import logging
@@ -245,10 +245,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         # )
 
                 # Convert datetime string to datetime object
-                if isinstance(field_value, str) and field_type == datetime:
+                if isinstance(field_value, str) and field_type == dt:
                     # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to datetime")
                     with contextlib.suppress(ValueError):
-                        field_value = datetime.fromisoformat(field_value)
+                        field_value = dt.fromisoformat(field_value)
 
                 # Convert time string to time object
                 elif isinstance(field_value, str) and field_type == dt_time:
@@ -333,7 +333,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 field_value: Any = getattr(instance, field_name)
 
                 # Convert datetime object to ISO string
-                if isinstance(field_value, datetime):
+                if isinstance(field_value, dt):
                     field_value = field_value.isoformat()
 
                 # Convert time object to ISO string
@@ -991,7 +991,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 call_action=functools.partial(self._timer_triggered, kmlock),
             )
 
-    async def _timer_triggered(self, kmlock: KeymasterLock, _: datetime) -> None:
+    async def _timer_triggered(self, kmlock: KeymasterLock, _: dt) -> None:
         _LOGGER.debug("[timer_triggered] %s", kmlock.lock_name)
         if kmlock.retry_lock and kmlock.door_state == STATE_OPEN:
             kmlock.pending_retry_lock = True
@@ -1180,7 +1180,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self.async_refresh()
         return True
 
-    async def _delete_lock(self, kmlock: KeymasterLock, _: datetime) -> None:
+    async def _delete_lock(self, kmlock: KeymasterLock, _: dt) -> None:
         await self._initial_setup_done_event.wait()
         _LOGGER.debug("[delete_lock] %s: Triggered", kmlock.lock_name)
         if kmlock.keymaster_config_entry_id not in self.kmlocks:
@@ -1216,7 +1216,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         _LOGGER.debug(
             "[delete_lock_by_config_entry_id] %s: Scheduled to delete at %s",
             kmlock.lock_name,
-            datetime.now().astimezone() + timedelta(seconds=10),
+            dt.now().astimezone() + timedelta(seconds=10),
         )
         kmlock.listeners.append(
             async_call_later(
@@ -1488,15 +1488,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
 
         if kmslot.accesslimit_date_range_enabled and (
-            not isinstance(kmslot.accesslimit_date_range_start, datetime)
-            or not isinstance(kmslot.accesslimit_date_range_end, datetime)
-            or datetime.now().astimezone() < kmslot.accesslimit_date_range_start
-            or datetime.now().astimezone() > kmslot.accesslimit_date_range_end
+            not isinstance(kmslot.accesslimit_date_range_start, dt)
+            or not isinstance(kmslot.accesslimit_date_range_end, dt)
+            or dt.now().astimezone() < kmslot.accesslimit_date_range_start
+            or dt.now().astimezone() > kmslot.accesslimit_date_range_end
         ):
             return False
 
         if kmslot.accesslimit_day_of_week_enabled and kmslot.accesslimit_day_of_week:
-            today_index: int = datetime.now().astimezone().weekday()
+            today_index: int = dt.now().astimezone().weekday()
             today: KeymasterCodeSlotDayOfWeek = kmslot.accesslimit_day_of_week[today_index]
             _LOGGER.debug("[is_slot_active] today_index: %s, today: %s", today_index, today)
             if not today.dow_enabled:
@@ -1508,8 +1508,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 and (
                     not isinstance(today.time_start, dt_time)
                     or not isinstance(today.time_end, dt_time)
-                    or datetime.now().time() < today.time_start
-                    or datetime.now().time() > today.time_end
+                    or dt.now().time() < today.time_start
+                    or dt.now().time() > today.time_end
                 )
             ):
                 return False
@@ -1520,17 +1520,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 and (
                     not isinstance(today.time_start, dt_time)
                     or not isinstance(today.time_end, dt_time)
-                    or (
-                        datetime.now().time() >= today.time_start
-                        and datetime.now().time() <= today.time_end
-                    )
+                    or (dt.now().time() >= today.time_start and dt.now().time() <= today.time_end)
                 )
             ):
                 return False
 
         return True
 
-    async def _trigger_quick_refresh(self, _: datetime) -> None:
+    async def _trigger_quick_refresh(self, _: dt) -> None:
         await self.async_request_refresh()
 
     async def update_slot_active_state(self, config_entry_id: str, code_slot_num: int) -> bool:

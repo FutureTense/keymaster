@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import MutableMapping
-from datetime import datetime, time as dt_time, timedelta, timezone
+from datetime import datetime as dt, time as dt_time, timedelta, timezone
 import logging
 from pathlib import Path
 from typing import Any
@@ -210,7 +210,7 @@ async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, valu
             value = float(value)
         except ValueError:
             try:
-                time_obj: datetime = datetime.strptime(value, "%H:%M:%S")
+                time_obj: dt = dt.strptime(value, "%H:%M:%S")
                 value = round(time_obj.hour * 60 + time_obj.minute + round(time_obj.second))
             except ValueError:
                 _LOGGER.debug(
@@ -223,11 +223,11 @@ async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, valu
                 )
                 return None
         value = round(value)
-    elif keymasterlock_type_lookup.get(attr) == datetime and isinstance(value, str):
+    elif keymasterlock_type_lookup.get(attr) == dt and isinstance(value, str):
         try:
-            value_notz: datetime = datetime.fromisoformat(value)
+            value_notz: dt = dt.fromisoformat(value)
             value = value_notz.replace(
-                tzinfo=timezone(datetime.now().astimezone().utcoffset() or timedelta())
+                tzinfo=timezone(dt.now().astimezone().utcoffset() or timedelta())
             )
         except ValueError:
             _LOGGER.debug(

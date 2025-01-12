@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
-from datetime import datetime, time as dt_time
+from datetime import datetime as dt, time as dt_time
 from typing import TYPE_CHECKING
 
 from zwave_js_server.model.node import Node as ZwaveJSNode
@@ -45,8 +45,8 @@ class KeymasterCodeSlot:
     accesslimit_count_enabled: bool = False
     accesslimit_count: int | None = None
     accesslimit_date_range_enabled: bool = False
-    accesslimit_date_range_start: datetime | None = None
-    accesslimit_date_range_end: datetime | None = None
+    accesslimit_date_range_start: dt | None = None
+    accesslimit_date_range_end: dt | None = None
     accesslimit_day_of_week_enabled: bool = False
     accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
 
@@ -134,8 +134,8 @@ keymasterlock_type_lookup: MutableMapping[str, type] = {
     "accesslimit_count_enabled": bool,
     "accesslimit_count": int,
     "accesslimit_date_range_enabled": bool,
-    "accesslimit_date_range_start": datetime,
-    "accesslimit_date_range_end": datetime,
+    "accesslimit_date_range_start": dt,
+    "accesslimit_date_range_end": dt,
     "accesslimit_day_of_week_enabled": bool,
     "accesslimit_day_of_week": MutableMapping[int, KeymasterCodeSlotDayOfWeek],
 }

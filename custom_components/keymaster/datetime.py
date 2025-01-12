@@ -1,7 +1,7 @@
 """Support for keymaster DateTime."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime as dt
 import logging
 
 from homeassistant.components.datetime import DateTimeEntity, DateTimeEntityDescription
@@ -77,7 +77,7 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         super().__init__(
             entity_description=entity_description,
         )
-        self._attr_native_value: datetime | None = None
+        self._attr_native_value: dt | None = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -123,7 +123,7 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()
 
-    async def async_set_value(self, value: datetime) -> None:
+    async def async_set_value(self, value: dt) -> None:
         """Update the datetime entity value."""
 
         _LOGGER.debug(

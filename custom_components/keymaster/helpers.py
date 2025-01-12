@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
-from datetime import datetime, timedelta
+from datetime import datetime as dt, timedelta
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -55,7 +55,7 @@ class KeymasterTimer:
         self._unsub_events: list[Callable] = []
         self._kmlock: KeymasterLock | None = None
         self._call_action: Callable | None = None
-        self._end_time: datetime | None = None
+        self._end_time: dt | None = None
 
     async def setup(
         self, hass: HomeAssistant, kmlock: KeymasterLock, call_action: Callable
@@ -71,7 +71,7 @@ class KeymasterTimer:
             _LOGGER.error("[KeymasterTimer] Cannot start timer as timer not setup")
             return False
 
-        if isinstance(self._end_time, datetime) and isinstance(self._unsub_events, list):
+        if isinstance(self._end_time, dt) and isinstance(self._unsub_events, list):
             # Already running so reset and restart timer
             for unsub in self._unsub_events:
                 unsub()
@@ -81,7 +81,7 @@ class KeymasterTimer:
             delay: int = (self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY) * 60
         else:
             delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
-        self._end_time = datetime.now().astimezone() + timedelta(seconds=delay)
+        self._end_time = dt.now().astimezone() + timedelta(seconds=delay)
         _LOGGER.debug(
             "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
             int(delay),
@@ -93,7 +93,7 @@ class KeymasterTimer:
         self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=self.cancel))
         return True
 
-    async def cancel(self, timer_elapsed: datetime | None = None) -> None:
+    async def cancel(self, timer_elapsed: dt | None = None) -> None:
         """Cancel a timer."""
         if timer_elapsed:
             _LOGGER.debug("[KeymasterTimer] Timer elapsed")
@@ -110,7 +110,7 @@ class KeymasterTimer:
         """Return if the timer is running."""
         if not self._end_time:
             return False
-        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -122,7 +122,7 @@ class KeymasterTimer:
     @property
     def is_setup(self) -> bool:
         """Return if the timer has been initially setup."""
-        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -131,11 +131,11 @@ class KeymasterTimer:
         return bool(self.hass and self._kmlock and self._call_action)
 
     @property
-    def end_time(self) -> datetime | None:
+    def end_time(self) -> dt | None:
         """Returns when the timer will end."""
         if not self._end_time:
             return None
-        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -149,14 +149,14 @@ class KeymasterTimer:
         """Return the seconds until the timer ends."""
         if not self._end_time:
             return None
-        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
                 self._unsub_events = []
             self._end_time = None
             return None
-        return round((datetime.now().astimezone() - self._end_time).total_seconds())
+        return round((dt.now().astimezone() - self._end_time).total_seconds())
 
 
 @callback
