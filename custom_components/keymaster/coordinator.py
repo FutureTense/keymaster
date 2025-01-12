@@ -1659,12 +1659,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._clear_pending_quick_refresh()
 
         # Update all keymaster locks
-        for kmlock in self.kmlocks.values():
-            await self._update_lock_data(kmlock)
+        for keymaster_config_entry_id in self.kmlocks:
+            await self._update_lock_data(keymaster_config_entry_id=keymaster_config_entry_id)
 
         # Propagate parent kmlock settings to child kmlocks
-        for kmlock in self.kmlocks.values():
-            await self._sync_child_locks(kmlock)
+        for keymaster_config_entry_id in self.kmlocks:
+            await self._sync_child_locks(keymaster_config_entry_id=keymaster_config_entry_id)
 
         # Handle sync status update if necessary
         if self._sync_status_counter > SYNC_STATUS_THRESHOLD:
@@ -1685,8 +1685,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._cancel_quick_refresh()
             self._cancel_quick_refresh = None
 
-    async def _update_lock_data(self, kmlock: KeymasterLock) -> None:
+    async def _update_lock_data(self, keymaster_config_entry_id: str) -> None:
         """Update a single keymaster lock."""
+        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(
+            keymaster_config_entry_id
+        )
+        if not isinstance(kmlock, KeymasterLock):
+            return
+
         await self._connect_and_update_lock(kmlock=kmlock)
 
         if not kmlock.connected:
@@ -1827,8 +1833,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             kmlock.code_slots[code_slot_num].synced = Synced.OUT_OF_SYNC
             self._quick_refresh = True
 
-    async def _sync_child_locks(self, kmlock: KeymasterLock) -> None:
+    async def _sync_child_locks(self, keymaster_config_entry_id: str) -> None:
         """Propagate parent lock settings to child locks."""
+        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(
+            keymaster_config_entry_id
+        )
+        if not isinstance(kmlock, KeymasterLock):
+            return
         if not kmlock.connected:
             _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
             return
