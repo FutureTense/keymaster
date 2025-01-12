@@ -1709,7 +1709,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         usercodes: list[ZwaveJSCodeSlot] = await KeymasterCoordinator._get_usercodes_from_node(
             node=node, kmlock=kmlock
         )
-        _LOGGER.debug("[update_lock_data] usercodes: %s, usercodes")
+        _LOGGER.debug(
+            "[update_lock_data] %s: usercodes: %s",
+            kmlock.lock_name,
+            usercodes[
+                (kmlock.starting_code_slot - 1) : (
+                    kmlock.starting_code_slot + (kmlock.number_of_code_slots or 1) - 1
+                )
+            ],
+        )
 
         await self._update_code_slots(kmlock=kmlock, usercodes=usercodes)
 
