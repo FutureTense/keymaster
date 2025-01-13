@@ -114,12 +114,12 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
         self._attr_available = True
         self._attr_native_value = self._get_property_value()
-        _LOGGER.debug(
-            "[Text handle_coordinator_update] %s: property: %s, value: %s",
-            self.name,
-            self._property,
-            self.native_value,
-        )
+        # _LOGGER.debug(
+        #     "[Text handle_coordinator_update] %s: property: %s, value: %s",
+        #     self.name,
+        #     self._property,
+        #     self.native_value,
+        # )
         self.async_write_ha_state()
 
     async def async_set_value(self, value: str) -> None:

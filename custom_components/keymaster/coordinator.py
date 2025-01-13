@@ -24,6 +24,7 @@ from zwave_js_server.model.node import Node as ZwaveJSNode
 from zwave_js_server.util.lock import (
     CodeSlot as ZwaveJSCodeSlot,
     clear_usercode,
+    get_usercode,
     get_usercode_from_node,
     get_usercodes,
     set_usercode,
@@ -1005,7 +1006,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             await self._lock_lock(kmlock=kmlock)
 
     async def _update_door_and_lock_state(self, trigger_actions_if_changed: bool = False) -> None:
-        _LOGGER.debug("[update_door_and_lock_state] Running")
+        # _LOGGER.debug("[update_door_and_lock_state] Running")
         for kmlock in self.kmlocks.values():
             if isinstance(kmlock.lock_entity_id, str) and kmlock.lock_entity_id:
                 lock_state = None
@@ -1398,18 +1399,42 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 await clear_usercode(kmlock.zwave_js_lock_node, code_slot_num)
             except BaseZwaveJSServerError as e:
                 _LOGGER.error(
-                    "[Coordinator] %s: Code Slot %s: Unable to clear PIN %s: %s",
+                    "[Coordinator] %s: Code Slot %s: Unable to clear PIN. %s: %s",
                     kmlock.lock_name,
                     code_slot_num,
                     e.__class__.__qualname__,
                     e,
                 )
                 return False
-            _LOGGER.debug(
-                "[clear_pin_from_lock] %s: Code Slot %s: PIN Cleared",
-                kmlock.lock_name,
-                code_slot_num,
-            )
+            else:
+                _LOGGER.debug(
+                    "[clear_pin_from_lock] %s: Code Slot %s: Clear command sent, confirming",
+                    kmlock.lock_name,
+                    code_slot_num,
+                )
+            try:
+                usercode: ZwaveJSCodeSlot = get_usercode(kmlock.zwave_js_lock_node, code_slot_num)
+            except BaseZwaveJSServerError as e:
+                _LOGGER.error(
+                    "[Coordinator] %s: Code Slot %s: Unable to confirm PIN is cleared. %s: %s",
+                    kmlock.lock_name,
+                    code_slot_num,
+                    e.__class__.__qualname__,
+                    e,
+                )
+                return False
+            if usercode[ZWAVEJS_ATTR_USERCODE] == "":
+                _LOGGER.debug(
+                    "[clear_pin_from_lock] %s: Code Slot %s: PIN Cleared",
+                    kmlock.lock_name,
+                    code_slot_num,
+                )
+            else:
+                _LOGGER.debug(
+                    "[clear_pin_from_lock] %s: Code Slot %s: PIN Not Cleared, will retry",
+                    kmlock.lock_name,
+                    code_slot_num,
+                )
             return True
         raise ZWaveIntegrationNotConfiguredError
 
