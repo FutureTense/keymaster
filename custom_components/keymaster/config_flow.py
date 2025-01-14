@@ -29,13 +29,11 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
-    DEFAULT_ALARM_LEVEL_SENSOR,
-    DEFAULT_ALARM_TYPE_SENSOR,
     DEFAULT_CODE_SLOTS,
-    DEFAULT_DOOR_SENSOR,
     DEFAULT_HIDE_PINS,
     DEFAULT_START,
     DOMAIN,
+    NONE_TEXT,
 )
 
 if TYPE_CHECKING:
@@ -51,13 +49,16 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
     DEFAULTS: MutableMapping[str, Any] = {
         CONF_SLOTS: DEFAULT_CODE_SLOTS,
         CONF_START: DEFAULT_START,
-        CONF_DOOR_SENSOR_ENTITY_ID: DEFAULT_DOOR_SENSOR,
-        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: DEFAULT_ALARM_LEVEL_SENSOR,
-        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: DEFAULT_ALARM_TYPE_SENSOR,
+        CONF_DOOR_SENSOR_ENTITY_ID: NONE_TEXT,
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: NONE_TEXT,
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: NONE_TEXT,
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
+        CONF_NOTIFY_SCRIPT_NAME: NONE_TEXT,
     }
 
-    async def get_unique_name_error(self, user_input) -> MutableMapping[str, str]:
+    async def get_unique_name_error(
+        self, user_input: MutableMapping[str, Any]
+    ) -> MutableMapping[str, str]:
         """Check if name is unique, returning dictionary error if so."""
         # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
@@ -85,17 +86,15 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
         config_entry: ConfigEntry,
     ) -> KeymasterOptionsFlow:
         """Get the options flow for this handler."""
-        return KeymasterOptionsFlow(config_entry)
+        return KeymasterOptionsFlow()
 
 
 class KeymasterOptionsFlow(OptionsFlow):
     """Options flow for keymaster."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize."""
-        self.config_entry = config_entry
-
-    async def get_unique_name_error(self, user_input) -> MutableMapping[str, str]:
+    async def get_unique_name_error(
+        self, user_input: MutableMapping[str, Any]
+    ) -> MutableMapping[str, str]:
         """Check if name is unique, returning dictionary error if so."""
         # If lock name has changed, make sure new name isn't already being used
         # otherwise show an error
@@ -107,7 +106,7 @@ class KeymasterOptionsFlow(OptionsFlow):
 
     async def async_step_init(
         self, user_input: MutableMapping[str, Any] | None = None
-    ) -> MutableMapping[str, Any]:
+    ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
         return await _start_config_flow(
             cls=self,
@@ -122,7 +121,7 @@ class KeymasterOptionsFlow(OptionsFlow):
 def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) -> list:
     """Return other keymaster locks if they are not already a child lock."""
 
-    data: list[str] = ["(none)"]
+    data: list[str] = [NONE_TEXT]
     if DOMAIN not in hass.data:
         return data
 
@@ -147,7 +146,7 @@ def _get_entities(
 ) -> list[str]:
     data: list[str] = []
     if domain not in hass.data:
-        return data
+        return extra_entities or []
 
     for entity in hass.data[domain].entities:
         if search is not None and not any(map(entity.entity_id.__contains__, search)):
@@ -195,20 +194,22 @@ def _get_schema(
         check_dict.pop(CONF_PARENT, None)
         default_dict = check_dict
 
-    def _get_default(key: str, fallback_default: Any = None) -> Any:
+    def _get_default(key: str, fallback_default: Any | None = None) -> Any | None:
         """Get default value for key."""
-        default = user_input.get(key)
+        default: Any | None = user_input.get(key)
         if default is None:
             default = default_dict.get(key, fallback_default)
         if default is None:
             default = fallback_default
         return default
 
-    script_default: str | None = _get_default(CONF_NOTIFY_SCRIPT_NAME)
-    if isinstance(script_default, str) and not script_default.startswith("script."):
+    script_default: str | None = _get_default(CONF_NOTIFY_SCRIPT_NAME, NONE_TEXT)
+    if script_default is None:
+        script_default = NONE_TEXT
+    elif script_default != NONE_TEXT and not script_default.startswith("script."):
         script_default = f"script.{script_default}"
     _LOGGER.debug("[get_schema] script_default: %s (%s)", script_default, type(script_default))
-    schema = vol.Schema(
+    return vol.Schema(
         {
             vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
             vol.Required(CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)): vol.In(
@@ -220,7 +221,7 @@ def _get_schema(
                     ),
                 )
             ),
-            vol.Optional(CONF_PARENT, default=_get_default(CONF_PARENT, "(none)")): vol.In(
+            vol.Optional(CONF_PARENT, default=_get_default(CONF_PARENT, NONE_TEXT)): vol.In(
                 _available_parent_locks(hass, entry_id)
             ),
             vol.Required(CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)): vol.All(
@@ -231,70 +232,49 @@ def _get_schema(
             ),
             vol.Optional(
                 CONF_DOOR_SENSOR_ENTITY_ID,
-                default=_get_default(CONF_DOOR_SENSOR_ENTITY_ID, DEFAULT_DOOR_SENSOR),
+                default=_get_default(CONF_DOOR_SENSOR_ENTITY_ID, NONE_TEXT),
             ): vol.In(
                 _get_entities(
                     hass=hass,
                     domain=BINARY_DOMAIN,
-                    extra_entities=[DEFAULT_DOOR_SENSOR],
+                    extra_entities=[NONE_TEXT],
                 )
             ),
             vol.Optional(
                 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-                default=_get_default(
-                    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, DEFAULT_ALARM_LEVEL_SENSOR
-                ),
+                default=_get_default(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, NONE_TEXT),
             ): vol.In(
                 _get_entities(
                     hass=hass,
                     domain=SENSOR_DOMAIN,
                     search=["alarm_level", "user_code", "alarmlevel"],
-                    extra_entities=[DEFAULT_ALARM_LEVEL_SENSOR],
+                    extra_entities=[NONE_TEXT],
                 )
             ),
             vol.Optional(
                 CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
                 default=_get_default(
                     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-                    DEFAULT_ALARM_TYPE_SENSOR,
+                    NONE_TEXT,
                 ),
             ): vol.In(
                 _get_entities(
                     hass=hass,
                     domain=SENSOR_DOMAIN,
                     search=["alarm_type", "access_control", "alarmtype"],
-                    extra_entities=[DEFAULT_ALARM_TYPE_SENSOR],
+                    extra_entities=[NONE_TEXT],
                 )
             ),
-        }
-    )
-    if script_default:
-        schema = schema.extend(
-            {
-                vol.Optional(
-                    CONF_NOTIFY_SCRIPT_NAME,
-                    default=script_default,
-                ): vol.In(
-                    _get_entities(
-                        hass=hass,
-                        domain=SCRIPT_DOMAIN,
-                    )
-                ),
-            }
-        )
-    else:
-        schema = schema.extend(
-            {
-                vol.Optional(CONF_NOTIFY_SCRIPT_NAME): vol.In(
-                    _get_entities(
-                        hass=hass,
-                        domain=SCRIPT_DOMAIN,
-                    )
-                ),
-            }
-        )
-    return schema.extend(
-        {
+            vol.Optional(
+                CONF_NOTIFY_SCRIPT_NAME,
+                default=script_default,
+            ): vol.In(
+                _get_entities(
+                    hass=hass,
+                    domain=SCRIPT_DOMAIN,
+                    extra_entities=[NONE_TEXT],
+                )
+            ),
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
@@ -309,7 +289,7 @@ async def _start_config_flow(
     user_input: MutableMapping[str, Any] | None,
     defaults: MutableMapping[str, Any] | None = None,
     entry_id: str | None = None,
-):
+) -> ConfigFlowResult:
     """Start a config flow."""
     errors: dict[str, Any] = {}
     description_placeholders: dict[str, Any] = {}
@@ -326,8 +306,10 @@ async def _start_config_flow(
         user_input[CONF_START] = int(user_input[CONF_START])
 
         # Convert (none) to None
-        if user_input[CONF_PARENT] == "(none)":
+        if user_input.get(CONF_PARENT) == NONE_TEXT:
             user_input[CONF_PARENT] = None
+        if user_input.get(CONF_NOTIFY_SCRIPT_NAME) == NONE_TEXT:
+            user_input[CONF_NOTIFY_SCRIPT_NAME] = None
 
         errors.update(await cls.get_unique_name_error(user_input))
 

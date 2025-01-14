@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
-from datetime import datetime, timedelta
+from datetime import datetime as dt, timedelta
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -33,7 +33,7 @@ class Throttle:
         """Initialize Throttle class."""
         self._cooldowns: MutableMapping = {}  # Nested dictionary: {function_name: {key: last_called_time}}
 
-    def is_allowed(self, func_name, key, cooldown_seconds) -> bool:
+    def is_allowed(self, func_name: str, key: str, cooldown_seconds: int) -> bool:
         """Check if function is allowed to run or not."""
         current_time = time.time()
         if func_name not in self._cooldowns:
@@ -55,7 +55,7 @@ class KeymasterTimer:
         self._unsub_events: list[Callable] = []
         self._kmlock: KeymasterLock | None = None
         self._call_action: Callable | None = None
-        self._end_time: datetime | None = None
+        self._end_time: dt | None = None
 
     async def setup(
         self, hass: HomeAssistant, kmlock: KeymasterLock, call_action: Callable
@@ -71,7 +71,7 @@ class KeymasterTimer:
             _LOGGER.error("[KeymasterTimer] Cannot start timer as timer not setup")
             return False
 
-        if isinstance(self._end_time, datetime) and isinstance(self._unsub_events, list):
+        if isinstance(self._end_time, dt) and isinstance(self._unsub_events, list):
             # Already running so reset and restart timer
             for unsub in self._unsub_events:
                 unsub()
@@ -81,7 +81,7 @@ class KeymasterTimer:
             delay: int = (self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY) * 60
         else:
             delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
-        self._end_time = datetime.now().astimezone() + timedelta(seconds=delay)
+        self._end_time = dt.now().astimezone() + timedelta(seconds=delay)
         _LOGGER.debug(
             "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
             int(delay),
@@ -93,7 +93,7 @@ class KeymasterTimer:
         self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=self.cancel))
         return True
 
-    async def cancel(self, timer_elapsed: datetime | None = None) -> None:
+    async def cancel(self, timer_elapsed: dt | None = None) -> None:
         """Cancel a timer."""
         if timer_elapsed:
             _LOGGER.debug("[KeymasterTimer] Timer elapsed")
@@ -110,7 +110,7 @@ class KeymasterTimer:
         """Return if the timer is running."""
         if not self._end_time:
             return False
-        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -122,7 +122,7 @@ class KeymasterTimer:
     @property
     def is_setup(self) -> bool:
         """Return if the timer has been initially setup."""
-        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -131,11 +131,11 @@ class KeymasterTimer:
         return bool(self.hass and self._kmlock and self._call_action)
 
     @property
-    def end_time(self) -> datetime | None:
+    def end_time(self) -> dt | None:
         """Returns when the timer will end."""
         if not self._end_time:
             return None
-        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -149,14 +149,14 @@ class KeymasterTimer:
         """Return the seconds until the timer ends."""
         if not self._end_time:
             return None
-        if isinstance(self._end_time, datetime) and self._end_time >= datetime.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
                 self._unsub_events = []
             self._end_time = None
             return None
-        return round((datetime.now().astimezone() - self._end_time).total_seconds())
+        return round((dt.now().astimezone() - self._end_time).total_seconds())
 
 
 @callback
@@ -197,12 +197,12 @@ def async_using_zwave_js(
 
 
 async def delete_code_slot_entities(
-    hass: HomeAssistant, keymaster_config_entry_id: str, code_slot: int
+    hass: HomeAssistant, keymaster_config_entry_id: str, code_slot_num: int
 ) -> None:
     """Delete no longer used code slots after update."""
     _LOGGER.debug(
         "[delete_code_slot_entities] Deleting code slot %s entities from config_entry_id: %s",
-        code_slot,
+        code_slot_num,
         keymaster_config_entry_id,
     )
     entity_registry = er.async_get(hass)
@@ -211,18 +211,18 @@ async def delete_code_slot_entities(
     # )
     # _LOGGER.debug(f"[delete_code_slot_entities] entities: {entities}")
     properties: list = [
-        f"binary_sensor.code_slots:{code_slot}.active",
-        f"datetime.code_slots:{code_slot}.accesslimit_date_range_start",
-        f"datetime.code_slots:{code_slot}.accesslimit_date_range_end",
-        f"number.code_slots:{code_slot}.accesslimit_count",
-        f"switch.code_slots:{code_slot}.override_parent",
-        f"switch.code_slots:{code_slot}.enabled",
-        f"switch.code_slots:{code_slot}.notifications",
-        f"switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
-        f"switch.code_slots:{code_slot}.accesslimit_count_enabled",
-        f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
-        f"text.code_slots:{code_slot}.name",
-        f"text.code_slots:{code_slot}.pin",
+        f"binary_sensor.code_slots:{code_slot_num}.active",
+        f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
+        f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
+        f"number.code_slots:{code_slot_num}.accesslimit_count",
+        f"switch.code_slots:{code_slot_num}.override_parent",
+        f"switch.code_slots:{code_slot_num}.enabled",
+        f"switch.code_slots:{code_slot_num}.notifications",
+        f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+        f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
+        f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
+        f"text.code_slots:{code_slot_num}.name",
+        f"text.code_slots:{code_slot_num}.pin",
     ]
     for prop in properties:
         entity_id: str | None = entity_registry.async_get_entity_id(
@@ -246,11 +246,11 @@ async def delete_code_slot_entities(
 
     for dow in range(7):
         dow_prop: list = [
-            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.dow_enabled",
-            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.include_exclude",
-            f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.limit_by_time",
-            f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.time_start",
-            f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow}.time_end",
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.dow_enabled",
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.include_exclude",
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.limit_by_time",
+            f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.time_start",
+            f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.time_end",
         ]
         for prop in dow_prop:
             entity_id = entity_registry.async_get_entity_id(
@@ -293,20 +293,12 @@ async def call_hass_service(
         await hass.services.async_call(domain, service, service_data=service_data, target=target)
     except ServiceNotFound:
         _LOGGER.warning("Action Not Found: %s.%s", domain, service)
-    # except Exception as e:
-    #     _LOGGER.error(
-    #         "Error calling %s.%s service call. %s: %s",
-    #         domain,
-    #         service,
-    #         e.__class__.__qualname__,
-    #         e,
-    #     )
 
 
 async def send_manual_notification(
     hass: HomeAssistant,
-    script_name: str,
-    message: str,
+    script_name: str | None,
+    message: str | None,
     title: str | None = None,
 ) -> None:
     """Send a manual notification to notify script."""
@@ -317,6 +309,8 @@ async def send_manual_notification(
         title,
         message,
     )
+    if not script_name:
+        return
     await call_hass_service(
         hass=hass,
         domain=SCRIPT_DOMAIN,

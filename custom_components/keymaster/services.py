@@ -49,12 +49,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def service_update_pin(service: ServiceCall) -> None:
         """Update a PIN in a Code Slot."""
         _LOGGER.debug("[service_update_pin] service.data: %s", service.data)
-        code_slot: int = service.data[ATTR_CODE_SLOT]
+        code_slot_num: int = service.data[ATTR_CODE_SLOT]
         pin: str = service.data[ATTR_PIN]
         if not pin or not pin.isdigit() or len(pin) < 4:
             _LOGGER.error(
                 "[service_update_pin] Code Slot %s: PIN not valid: %s. Must be 4 or more digits",
-                code_slot,
+                code_slot_num,
                 pin,
             )
             raise ServiceValidationError(
@@ -62,7 +62,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
         await coordinator.set_pin_on_lock(
             config_entry_id=service.data[ATTR_CONFIG_ENTRY_ID],
-            code_slot=code_slot,
+            code_slot_num=code_slot_num,
             pin=pin,
             set_in_kmlock=True,
         )
@@ -70,10 +70,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def service_clear_pin(service: ServiceCall) -> None:
         """Clear a PIN from a Code Slot."""
         _LOGGER.debug("[service_clear_pin] service.data: %s", service.data)
-        code_slot: int = service.data[ATTR_CODE_SLOT]
+        code_slot_num: int = service.data[ATTR_CODE_SLOT]
         await coordinator.clear_pin_from_lock(
             config_entry_id=service.data[ATTR_CONFIG_ENTRY_ID],
-            code_slot=code_slot,
+            code_slot_num=code_slot_num,
             clear_from_kmlock=True,
         )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import MutableMapping
-from datetime import datetime, timedelta
+from datetime import datetime as dt, timedelta
 import functools
 import logging
 from typing import Any
@@ -32,11 +32,10 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
-    DEFAULT_ALARM_LEVEL_SENSOR,
-    DEFAULT_ALARM_TYPE_SENSOR,
-    DEFAULT_DOOR_SENSOR,
+    DAY_NAMES,
     DEFAULT_HIDE_PINS,
     DOMAIN,
+    NONE_TEXT,
     PLATFORMS,
 )
 from .coordinator import KeymasterCoordinator
@@ -55,11 +54,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     updated_config = config_entry.data.copy()
 
-    # updated_config[CONF_SLOTS] = int(updated_config[CONF_SLOTS])
-    # updated_config[CONF_START] = int(updated_config[CONF_START])
-
-    if config_entry.data.get(CONF_PARENT) in {None, "(none)"}:
-        updated_config[CONF_PARENT] = None
+    for prop in [
+        CONF_PARENT,
+        CONF_NOTIFY_SCRIPT_NAME,
+        CONF_DOOR_SENSOR_ENTITY_ID,
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    ]:
+        if config_entry.data.get(prop) in {NONE_TEXT, "sensor.fake", "binary_sensor.fake"}:
+            updated_config[prop] = None
 
     if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
         updated_config[CONF_PARENT_ENTRY_ID] = None
@@ -82,13 +85,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[CONF_NOTIFY_SCRIPT_NAME].split(
             ".", maxsplit=1
         )[1]
-
-    if updated_config.get(CONF_DOOR_SENSOR_ENTITY_ID) == DEFAULT_DOOR_SENSOR:
-        updated_config[CONF_DOOR_SENSOR_ENTITY_ID] = None
-    if updated_config.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID) == DEFAULT_ALARM_LEVEL_SENSOR:
-        updated_config[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = None
-    if updated_config.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID) == DEFAULT_ALARM_TYPE_SENSOR:
-        updated_config[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = None
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
@@ -136,17 +132,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
-        for i, dow in enumerate(
-            [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ]
-        ):
+        for i, dow in enumerate(DAY_NAMES):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
@@ -186,16 +172,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
     )
 
-    # await system_health_check(hass, config_entry)
     return True
-
-
-# async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-#     """Update system health check data"""
-#     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-#     kmlock: KeymasterLock = await coordinator.get_lock_by_config_entry_id(
-#         config_entry.entry_id
-#     )
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -218,7 +195,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         if coordinator.count_locks_not_pending_delete == 0:
             _LOGGER.debug(
                 "[async_unload_entry] Possibly empty coordinator. Will evaluate for removal at %s",
-                datetime.now().astimezone() + timedelta(seconds=20),
+                dt.now().astimezone() + timedelta(seconds=20),
             )
             async_call_later(
                 hass=hass,
@@ -228,9 +205,9 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     return unload_ok
 
 
-async def delete_coordinator(hass: HomeAssistant, _: datetime):
+async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
     """Delete the coordinator if no more kmlock entities exist."""
-    _LOGGER.debug("[delete_coordinator] Triggered")
+    # _LOGGER.debug("[delete_coordinator] Triggered")
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     if len(coordinator.data) == 0:
         _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")

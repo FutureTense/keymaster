@@ -86,7 +86,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        # _LOGGER.debug(f"[Text handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
+        # _LOGGER.debug("[Text handle_coordinator_update] self.coordinator.data: %s", self.coordinator.data)
         if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
             self.async_write_ha_state()
@@ -114,6 +114,12 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
         self._attr_available = True
         self._attr_native_value = self._get_property_value()
+        # _LOGGER.debug(
+        #     "[Text handle_coordinator_update] %s: property: %s, value: %s",
+        #     self.name,
+        #     self._property,
+        #     self.native_value,
+        # )
         self.async_write_ha_state()
 
     async def async_set_value(self, value: str) -> None:
@@ -127,13 +133,13 @@ class KeymasterText(KeymasterEntity, TextEntity):
             if value and value.isdigit() and len(value) >= 4 and self._code_slot:
                 await self.coordinator.set_pin_on_lock(
                     config_entry_id=self._config_entry.entry_id,
-                    code_slot=self._code_slot,
+                    code_slot_num=self._code_slot,
                     pin=value,
                 )
             elif not value and self._code_slot:
                 await self.coordinator.clear_pin_from_lock(
                     config_entry_id=self._config_entry.entry_id,
-                    code_slot=self._code_slot,
+                    code_slot_num=self._code_slot,
                 )
             else:
                 return

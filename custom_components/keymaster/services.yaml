@@ -1,6 +1,6 @@
 regenerate_lovelace:
   name: Regenerate Lovelace files
-  description: Regenerates the Lovelace files for each keymaster lock. Lovelace files are already regenerated every time The keymaster Configuration or Options are changed and whenever Home Assistant restarts. In general, this action does not need to be manually run. Keymaster lovelace files are located in /custom_components/keymaster/lovelace 
+  description: Regenerates the Lovelace files for each keymaster lock. Lovelace files are already regenerated every time The keymaster Configuration or Options are changed and whenever Home Assistant restarts. In general, this action does not need to be manually run. Keymaster lovelace files are located in /custom_components/keymaster/lovelace
 
 update_pin:
   name: Update PIN in a Code Slot
@@ -12,8 +12,8 @@ update_pin:
       required: true
       selector:
         config_entry:
-          integration: keymaster  
-    code_slot:
+          integration: keymaster
+    code_slot_num:
       name: Code Slot
       description: The code slot to update the PIN in
       example: 2
@@ -31,7 +31,7 @@ update_pin:
       required: true
       selector:
         text:
-      
+
 clear_pin:
   name: Clear PIN from a Code Slot
   description: Clear PIN for a Code Slot in a keymaster lock
@@ -42,8 +42,8 @@ clear_pin:
       required: true
       selector:
         config_entry:
-          integration: keymaster  
-    code_slot:
+          integration: keymaster
+    code_slot_num:
       name: Code Slot
       description: The code slot to clear the PIN from
       required: true

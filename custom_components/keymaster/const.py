@@ -45,7 +45,7 @@ ATTR_NOTIFICATION_SOURCE = "notification_source"
 
 # Attributes
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
-ATTR_CODE_SLOT = "code_slot"
+ATTR_CODE_SLOT = "code_slot_num"
 ATTR_NAME = "lockname"
 ATTR_NODE_ID = "node_id"
 ATTR_PIN = "pin"
@@ -72,18 +72,27 @@ CONF_NOTIFY_SCRIPT_NAME = "notify_script"
 # Defaults
 DEFAULT_CODE_SLOTS = 10
 DEFAULT_START = 1
-DEFAULT_DOOR_SENSOR = "binary_sensor.fake"
-DEFAULT_ALARM_LEVEL_SENSOR = "sensor.fake"
-DEFAULT_ALARM_TYPE_SENSOR = "sensor.fake"
 DEFAULT_HIDE_PINS = False
 DEFAULT_AUTOLOCK_MIN_DAY: int = 120
 DEFAULT_AUTOLOCK_MIN_NIGHT: int = 5
+
+NONE_TEXT = "(none)"
 
 UNKNOWN = "unknown"
 
 SERVICE_UPDATE_PIN = "update_pin"
 SERVICE_CLEAR_PIN = "clear_pin"
 SERVICE_REGENERATE_LOVELACE = "regenerate_lovelace"
+
+DAY_NAMES: list[str] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+]
 
 
 class LockMethod(StrEnum):
@@ -100,9 +109,9 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "name": "Lock Jammed",
         "action": LockState.JAMMED,
         "method": UNKNOWN,
-        "alarm_type": 9,    # Kwikset
-        "access_control": 11,   # Schlage
-        "zwavejs_event": 11    # Command Class: 113, Type: 6
+        "alarm_type": 9,  # Kwikset
+        "access_control": 11,  # Schlage
+        "zwavejs_event": 11,  # Command Class: 113, Type: 6
     },
     {
         "name": "Keypad Lock Jammed",
@@ -110,7 +119,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 17,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "Manual Lock",
@@ -118,7 +127,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.MANUAL,
         "alarm_type": 21,
         "access_control": 1,
-        "zwavejs_event": 1
+        "zwavejs_event": 1,
     },
     {
         "name": "Manual Unlock",
@@ -126,7 +135,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.MANUAL,
         "alarm_type": 22,
         "access_control": 2,
-        "zwavejs_event": 2
+        "zwavejs_event": 2,
     },
     {
         "name": "RF Lock Jammed",
@@ -134,7 +143,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.RF,
         "alarm_type": 23,
         "access_control": 8,
-        "zwavejs_event": 8
+        "zwavejs_event": 8,
     },
     {
         "name": "RF Lock",
@@ -142,7 +151,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.RF,
         "alarm_type": 24,
         "access_control": 3,
-        "zwavejs_event": 3
+        "zwavejs_event": 3,
     },
     {
         "name": "RF Unlock",
@@ -150,7 +159,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.RF,
         "alarm_type": 25,
         "access_control": 4,
-        "zwavejs_event": 4
+        "zwavejs_event": 4,
     },
     {
         "name": "Auto Lock Jammed",
@@ -158,7 +167,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.AUTO,
         "alarm_type": 26,
         "access_control": 10,
-        "zwavejs_event": 10
+        "zwavejs_event": 10,
     },
     {
         "name": "Auto Lock",
@@ -166,7 +175,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.AUTO,
         "alarm_type": 27,
         "access_control": 9,
-        "zwavejs_event": 9
+        "zwavejs_event": 9,
     },
     {
         "name": "All User Codes Deleted",
@@ -174,7 +183,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": UNKNOWN,
         "alarm_type": 32,
         "access_control": 12,
-        "zwavejs_event": 12
+        "zwavejs_event": 12,
     },
     {
         "name": "Bad Code Entered",
@@ -182,7 +191,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 161,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "Battery Low",
@@ -190,7 +199,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": UNKNOWN,
         "alarm_type": 167,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "Battery Critical",
@@ -198,7 +207,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": UNKNOWN,
         "alarm_type": 168,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "Battery Too Low To Operate Lock",
@@ -206,7 +215,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": UNKNOWN,
         "alarm_type": 169,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "Keypad Action",  # FE599 locks only send alarm_type 16 for all lock/unlock commands. See issue #281
@@ -214,7 +223,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 16,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "Keypad Lock",
@@ -222,7 +231,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 18,
         "access_control": 5,
-        "zwavejs_event": 5
+        "zwavejs_event": 5,
     },
     {
         "name": "Keypad Unlock",
@@ -230,7 +239,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 19,
         "access_control": 6,
-        "zwavejs_event": 6
+        "zwavejs_event": 6,
     },
     {
         "name": "User Code Attempt Outside of Schedule",
@@ -238,7 +247,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 162,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "User Code Deleted",
@@ -246,7 +255,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 33,
         "access_control": 13,
-        "zwavejs_event": 13
+        "zwavejs_event": 13,
     },
     {
         "name": "User Code Changed",
@@ -254,7 +263,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 112,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "Duplicate User Code",
@@ -262,7 +271,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": 113,
         "access_control": 15,
-        "zwavejs_event": 15
+        "zwavejs_event": 15,
     },
     {
         "name": "No Status Reported",
@@ -270,7 +279,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": UNKNOWN,
         "alarm_type": 0,
         "access_control": UNKNOWN,
-        "zwavejs_event": UNKNOWN
+        "zwavejs_event": UNKNOWN,
     },
     {
         "name": "Manual Lock Jammed",
@@ -278,7 +287,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.MANUAL,
         "alarm_type": UNKNOWN,
         "access_control": 7,
-        "zwavejs_event": 7
+        "zwavejs_event": 7,
     },
     {
         "name": "Keypad Temporarily Disabled",
@@ -286,7 +295,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": UNKNOWN,
         "access_control": 16,
-        "zwavejs_event": 16
+        "zwavejs_event": 16,
     },
     {
         "name": "Keypad Busy",
@@ -294,7 +303,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": UNKNOWN,
         "access_control": 17,
-        "zwavejs_event": 17
+        "zwavejs_event": 17,
     },
     {
         "name": "New User Code Added",
@@ -302,7 +311,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": UNKNOWN,
         "access_control": 14,
-        "zwavejs_event": 14
+        "zwavejs_event": 14,
     },
     {
         "name": "New Program Code Entered",
@@ -310,16 +319,15 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": UNKNOWN,
         "access_control": 18,
-        "zwavejs_event": 18
+        "zwavejs_event": 18,
     },
-
     {
         "name": "New User Code Added",
         "action": UNKNOWN,
         "method": LockMethod.KEYPAD,
         "alarm_type": UNKNOWN,
         "access_control": 14,
-        "zwavejs_event": 14
+        "zwavejs_event": 14,
     },
     {
         "name": "New Program Code Entered",
@@ -327,7 +335,7 @@ LOCK_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
         "method": LockMethod.KEYPAD,
         "alarm_type": UNKNOWN,
         "access_control": 18,
-        "zwavejs_event": 18
+        "zwavejs_event": 18,
     },
 ]
 

@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
-from .const import DEFAULT_DOOR_SENSOR, DOMAIN
+from .const import DAY_NAMES, DOMAIN
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def generate_lovelace(
 
     badges_list: list[MutableMapping[str, Any]] = await _generate_lock_badges(
         child=bool(parent_config_entry_id),
-        door=bool(door_sensor not in {None, DEFAULT_DOOR_SENSOR}),
+        door=bool(door_sensor is not None),
     )
     mapped_badges_list: (
         MutableMapping[str, Any] | list[MutableMapping[str, Any]]
@@ -53,16 +53,16 @@ async def generate_lovelace(
             door_sensor=door_sensor,
         )
     code_slot_list: list[MutableMapping[str, Any]] = []
-    for x in range(
+    for code_slot_num in range(
         code_slot_start,
         code_slot_start + code_slots,
     ):
         if parent_config_entry_id:
             code_slot_dict: MutableMapping[str, Any] = await _generate_child_code_slot_dict(
-                code_slot=x
+                code_slot_num=code_slot_num
             )
         else:
-            code_slot_dict = await _generate_code_slot_dict(code_slot=x)
+            code_slot_dict = await _generate_code_slot_dict(code_slot_num=code_slot_num)
         code_slot_list.append(code_slot_dict)
     lovelace_list: (
         MutableMapping[str, Any] | list[MutableMapping[str, Any]]
@@ -101,19 +101,12 @@ def delete_lovelace(hass: HomeAssistant, kmlock_name: str) -> None:
             e,
         )
         return
-    # except Exception as e:
-    #     _LOGGER.debug(
-    #         "Exception deleting lovelace YAML (%s). %s: %s",
-    #         filename,
-    #         e.__class__.__qualname__,
-    #         e,
-    #     )
-    #     return
+
     _LOGGER.debug("Lovelace YAML File deleted: %s", filename)
     return
 
 
-def _create_lovelace_folder(folder) -> None:
+def _create_lovelace_folder(folder: str) -> None:
     _LOGGER.debug("Lovelace Location: %s", folder)
 
     try:
@@ -124,12 +117,6 @@ def _create_lovelace_folder(folder) -> None:
             e.__class__.__qualname__,
             e,
         )
-    # except Exception as e:
-    #     _LOGGER.warning(
-    #         "Exception creating folder for lovelace files. %s: %s",
-    #         e.__class__.__qualname__,
-    #         e,
-    #     )
 
 
 def _dump_with_indent(data: Any, indent: int = 2) -> str:
@@ -155,14 +142,6 @@ def _write_lovelace_yaml(folder: str, filename: str, lovelace: Any) -> None:
             e,
         )
         return
-    # except Exception as e:
-    #     _LOGGER.debug(
-    #         "Exception writing lovelace YAML (%s). %s: %s",
-    #         filename,
-    #         e.__class__.__qualname__,
-    #         e,
-    #     )
-    #     return
     _LOGGER.debug("Lovelace YAML File Written: %s", filename)
     return
 
@@ -244,14 +223,16 @@ async def _get_entity_id(
     return entity_id
 
 
-async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str, Any]:
+async def _generate_code_slot_dict(
+    code_slot_num: int, child: bool = False
+) -> MutableMapping[str, Any]:
     """Build the dict for the code slot."""
     code_slot_dict: MutableMapping[str, Any] = {
         "type": "grid",
         "cards": [
             {
                 "type": "heading",
-                "heading": f"Code Slot {code_slot}",
+                "heading": f"Code Slot {code_slot_num}",
                 "heading_style": "title",
                 "badges": [],
             },
@@ -264,7 +245,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
                     "state_color": True,
                     "entities": [
                         {
-                            "entity": f"text.code_slots:{code_slot}.name",
+                            "entity": f"text.code_slots:{code_slot_num}.name",
                             "name": "Name",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -272,7 +253,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
                             "double_tap_action": {"action": "none"},
                         },
                         {
-                            "entity": f"text.code_slots:{code_slot}.pin",
+                            "entity": f"text.code_slots:{code_slot_num}.pin",
                             "name": "PIN",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -281,7 +262,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
                         },
                         {"type": "divider"},
                         {
-                            "entity": f"switch.code_slots:{code_slot}.enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.enabled",
                             "name": "Enabled",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -289,7 +270,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
                             "double_tap_action": {"action": "none"},
                         },
                         {
-                            "entity": f"binary_sensor.code_slots:{code_slot}.active",
+                            "entity": f"binary_sensor.code_slots:{code_slot_num}.active",
                             "name": "Active",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -297,7 +278,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
                             "double_tap_action": {"action": "none"},
                         },
                         {
-                            "entity": f"sensor.code_slots:{code_slot}.synced",
+                            "entity": f"sensor.code_slots:{code_slot_num}.synced",
                             "name": "Sync Status",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -312,7 +293,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
     if child:
         code_slot_dict["cards"][1]["card"]["entities"].append(
             {
-                "entity": f"switch.code_slots:{code_slot}.override_parent",
+                "entity": f"switch.code_slots:{code_slot_num}.override_parent",
                 "name": "Override Parent",
                 "secondary_info": "none",
                 "tap_action": {"action": "none"},
@@ -323,7 +304,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
     code_slot_dict["cards"][1]["card"]["entities"].extend(
         [
             {
-                "entity": f"switch.code_slots:{code_slot}.notifications",
+                "entity": f"switch.code_slots:{code_slot_num}.notifications",
                 "name": "Notifications",
                 "secondary_info": "none",
                 "tap_action": {"action": "none"},
@@ -332,7 +313,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
             },
             {"type": "divider"},
             {
-                "entity": f"switch.code_slots:{code_slot}.accesslimit_count_enabled",
+                "entity": f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
                 "name": "Limit by Number of Uses",
                 "secondary_info": "none",
                 "tap_action": {"action": "none"},
@@ -343,12 +324,12 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
                 "type": "conditional",
                 "conditions": [
                     {
-                        "entity": f"switch.code_slots:{code_slot}.accesslimit_count_enabled",
+                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
                         "state": "on",
                     }
                 ],
                 "row": {
-                    "entity": f"number.code_slots:{code_slot}.accesslimit_count",
+                    "entity": f"number.code_slots:{code_slot_num}.accesslimit_count",
                     "name": "Uses Remaining",
                     "secondary_info": "none",
                     "tap_action": {"action": "none"},
@@ -358,7 +339,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
             },
             {"type": "divider"},
             {
-                "entity": f"switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
+                "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
                 "name": "Limit by Date Range",
                 "secondary_info": "none",
                 "tap_action": {"action": "none"},
@@ -369,12 +350,12 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
                 "type": "conditional",
                 "conditions": [
                     {
-                        "entity": f"switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
+                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
                         "state": "on",
                     }
                 ],
                 "row": {
-                    "entity": f"datetime.code_slots:{code_slot}.accesslimit_date_range_start",
+                    "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
                     "name": "Date Range Start",
                     "secondary_info": "none",
                     "tap_action": {"action": "none"},
@@ -386,12 +367,12 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
                 "type": "conditional",
                 "conditions": [
                     {
-                        "entity": f"switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
+                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
                         "state": "on",
                     }
                 ],
                 "row": {
-                    "entity": f"datetime.code_slots:{code_slot}.accesslimit_date_range_end",
+                    "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
                     "name": "Date Range End",
                     "secondary_info": "none",
                     "tap_action": {"action": "none"},
@@ -401,7 +382,7 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
             },
             {"type": "divider"},
             {
-                "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                 "name": "Limit by Day of Week",
                 "secondary_info": "none",
                 "tap_action": {"action": "none"},
@@ -411,7 +392,9 @@ async def _generate_code_slot_dict(code_slot, child=False) -> MutableMapping[str
         ]
     )
 
-    dow_list: list[MutableMapping[str, Any]] = await _generate_dow_entities(code_slot=code_slot)
+    dow_list: list[MutableMapping[str, Any]] = await _generate_dow_entities(
+        code_slot_num=code_slot_num
+    )
     code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
     return code_slot_dict
 
@@ -587,32 +570,22 @@ async def _generate_lock_badges(
     return badges
 
 
-async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
+async def _generate_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]:
     """Build the day of week entities for the code slot."""
     dow_list: list[MutableMapping[str, Any]] = []
-    for dow_num, dow in enumerate(
-        [
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-        ]
-    ):
+    for dow_num, dow in enumerate(DAY_NAMES):
         dow_list.extend(
             [
                 {
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         }
                     ],
                     "row": {
-                        "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                         "name": f"{dow}",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -624,16 +597,16 @@ async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                             "state": "on",
                         },
                     ],
                     "row": {
-                        "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.limit_by_time",
+                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                         "name": "Limit by Time of Day",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -645,20 +618,20 @@ async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.limit_by_time",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                             "state": "on",
                         },
                     ],
                     "row": {
-                        "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.include_exclude",
+                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.include_exclude",
                         "name": "Include (On)/Exclude (Off) Time",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -670,20 +643,20 @@ async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.limit_by_time",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                             "state": "on",
                         },
                     ],
                     "row": {
-                        "entity": f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.time_start",
+                        "entity": f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_start",
                         "name": "Start Time",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -695,20 +668,20 @@ async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.limit_by_time",
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                             "state": "on",
                         },
                     ],
                     "row": {
-                        "entity": f"time.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.time_end",
+                        "entity": f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_end",
                         "name": "End Time",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -721,11 +694,11 @@ async def _generate_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
     return dow_list
 
 
-async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
+async def _generate_child_code_slot_dict(code_slot_num: int) -> MutableMapping[str, Any]:
     """Build the dict for the code slot of a child keymaster lock."""
 
     normal_code_slot_dict: MutableMapping[str, Any] = await _generate_code_slot_dict(
-        code_slot=code_slot, child=True
+        code_slot_num=code_slot_num, child=True
     )
     override_code_slot_dict = normal_code_slot_dict["cards"][1]
 
@@ -734,7 +707,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
         "cards": [
             {
                 "type": "heading",
-                "heading": f"Code Slot {code_slot}",
+                "heading": f"Code Slot {code_slot_num}",
                 "heading_style": "title",
                 "badges": [],
             },
@@ -743,7 +716,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                 "conditions": [
                     {
                         "condition": "state",
-                        "entity": f"switch.code_slots:{code_slot}.override_parent",
+                        "entity": f"switch.code_slots:{code_slot_num}.override_parent",
                         "state": "off",
                     }
                 ],
@@ -755,7 +728,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                         {
                             "type": "simple-entity",
                             "name": "Name",
-                            "entity": f"parent.text.code_slots:{code_slot}.name",
+                            "entity": f"parent.text.code_slots:{code_slot_num}.name",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
                             "hold_action": {"action": "none"},
@@ -764,7 +737,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                         {
                             "type": "simple-entity",
                             "name": "PIN",
-                            "entity": f"parent.text.code_slots:{code_slot}.pin",
+                            "entity": f"parent.text.code_slots:{code_slot_num}.pin",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
                             "hold_action": {"action": "none"},
@@ -773,14 +746,14 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                         {
                             "type": "simple-entity",
                             "name": "Enabled",
-                            "entity": f"parent.switch.code_slots:{code_slot}.enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.enabled",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
                             "hold_action": {"action": "none"},
                             "double_tap_action": {"action": "none"},
                         },
                         {
-                            "entity": f"binary_sensor.code_slots:{code_slot}.active",
+                            "entity": f"binary_sensor.code_slots:{code_slot_num}.active",
                             "name": "Active",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -788,7 +761,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                             "double_tap_action": {"action": "none"},
                         },
                         {
-                            "entity": f"sensor.code_slots:{code_slot}.synced",
+                            "entity": f"sensor.code_slots:{code_slot_num}.synced",
                             "name": "Sync Status",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -796,7 +769,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                             "double_tap_action": {"action": "none"},
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.override_parent",
+                            "entity": f"switch.code_slots:{code_slot_num}.override_parent",
                             "name": "Override Parent",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -804,7 +777,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                             "double_tap_action": {"action": "none"},
                         },
                         {
-                            "entity": f"switch.code_slots:{code_slot}.notifications",
+                            "entity": f"switch.code_slots:{code_slot_num}.notifications",
                             "name": "Notifications",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -813,7 +786,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                         },
                         {
                             "type": "simple-entity",
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_count_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
                             "name": "Limit by Number of Uses",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -824,13 +797,13 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                             "type": "conditional",
                             "conditions": [
                                 {
-                                    "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_count_enabled",
+                                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
                                     "state": "on",
                                 }
                             ],
                             "row": {
                                 "type": "simple-entity",
-                                "entity": f"parent.number.code_slots:{code_slot}.accesslimit_count",
+                                "entity": f"parent.number.code_slots:{code_slot_num}.accesslimit_count",
                                 "name": "Uses Remaining",
                                 "secondary_info": "none",
                                 "tap_action": {"action": "none"},
@@ -840,7 +813,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                         },
                         {
                             "type": "simple-entity",
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
                             "name": "Limit by Date Range",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -851,13 +824,13 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                             "type": "conditional",
                             "conditions": [
                                 {
-                                    "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
+                                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
                                     "state": "on",
                                 }
                             ],
                             "row": {
                                 "type": "simple-entity",
-                                "entity": f"parent.datetime.code_slots:{code_slot}.accesslimit_date_range_start",
+                                "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
                                 "name": "Date Range Start",
                                 "secondary_info": "none",
                                 "tap_action": {"action": "none"},
@@ -869,13 +842,13 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                             "type": "conditional",
                             "conditions": [
                                 {
-                                    "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
+                                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
                                     "state": "on",
                                 }
                             ],
                             "row": {
                                 "type": "simple-entity",
-                                "entity": f"parent.datetime.code_slots:{code_slot}.accesslimit_date_range_end",
+                                "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
                                 "name": "Date Range End",
                                 "secondary_info": "none",
                                 "tap_action": {"action": "none"},
@@ -885,7 +858,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                         },
                         {
                             "type": "simple-entity",
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "name": "Limit by Day of Week",
                             "secondary_info": "none",
                             "tap_action": {"action": "none"},
@@ -900,7 +873,7 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
                 "conditions": [
                     {
                         "condition": "state",
-                        "entity": f"switch.code_slots:{code_slot}.override_parent",
+                        "entity": f"switch.code_slots:{code_slot_num}.override_parent",
                         "state": "on",
                     }
                 ],
@@ -910,39 +883,29 @@ async def _generate_child_code_slot_dict(code_slot) -> MutableMapping[str, Any]:
     }
 
     dow_list: list[MutableMapping[str, Any]] = await _generate_child_dow_entities(
-        code_slot=code_slot
+        code_slot_num=code_slot_num
     )
     code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
     return code_slot_dict
 
 
-async def _generate_child_dow_entities(code_slot) -> list[MutableMapping[str, Any]]:
+async def _generate_child_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]:
     """Build the day of week entities for a child code slot."""
     dow_list: list[MutableMapping[str, Any]] = []
-    for dow_num, dow in enumerate(
-        [
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-        ]
-    ):
+    for dow_num, dow in enumerate(DAY_NAMES):
         dow_list.extend(
             [
                 {
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         }
                     ],
                     "row": {
                         "type": "simple-entity",
-                        "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                        "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                         "name": f"{dow}",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -954,17 +917,17 @@ async def _generate_child_dow_entities(code_slot) -> list[MutableMapping[str, An
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                             "state": "on",
                         },
                     ],
                     "row": {
                         "type": "simple-entity",
-                        "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.limit_by_time",
+                        "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                         "name": "Limit by Time",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -976,21 +939,21 @@ async def _generate_child_dow_entities(code_slot) -> list[MutableMapping[str, An
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.limit_by_time",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                             "state": "on",
                         },
                     ],
                     "row": {
                         "type": "simple-entity",
-                        "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.include_exclude",
+                        "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.include_exclude",
                         "name": "Include (On)/Exclude (Off) Time",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -1002,21 +965,21 @@ async def _generate_child_dow_entities(code_slot) -> list[MutableMapping[str, An
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.limit_by_time",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                             "state": "on",
                         },
                     ],
                     "row": {
                         "type": "simple-entity",
-                        "entity": f"parent.time.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.time_start",
+                        "entity": f"parent.time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_start",
                         "name": "Start Time",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},
@@ -1028,21 +991,21 @@ async def _generate_child_dow_entities(code_slot) -> list[MutableMapping[str, An
                     "type": "conditional",
                     "conditions": [
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.dow_enabled",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                             "state": "on",
                         },
                         {
-                            "entity": f"parent.switch.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.limit_by_time",
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                             "state": "on",
                         },
                     ],
                     "row": {
                         "type": "simple-entity",
-                        "entity": f"parent.time.code_slots:{code_slot}.accesslimit_day_of_week:{dow_num}.time_end",
+                        "entity": f"parent.time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_end",
                         "name": "End Time",
                         "secondary_info": "none",
                         "tap_action": {"action": "none"},

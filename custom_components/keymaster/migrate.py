@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import MutableMapping
-from datetime import datetime, time as dt_time, timedelta, timezone
+from datetime import datetime as dt, time as dt_time, timedelta, timezone
 import logging
 from pathlib import Path
 from typing import Any
@@ -34,6 +34,7 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
+    DAY_NAMES,
     DOMAIN,
 )
 from .coordinator import KeymasterCoordinator
@@ -140,17 +141,7 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
-        for i, dow in enumerate(
-            [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ]
-        ):
+        for i, dow in enumerate(DAY_NAMES):
             dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
@@ -206,7 +197,7 @@ async def _migrate_2to3_set_property_value(kmlock: KeymasterLock, prop: str, val
     return True
 
 
-async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, value) -> Any:
+async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, value: Any) -> Any:
     if keymasterlock_type_lookup.get(attr) is not None and isinstance(
         value, keymasterlock_type_lookup.get(attr, object)
     ):
@@ -219,7 +210,7 @@ async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, valu
             value = float(value)
         except ValueError:
             try:
-                time_obj: datetime = datetime.strptime(value, "%H:%M:%S")
+                time_obj: dt = dt.strptime(value, "%H:%M:%S")
                 value = round(time_obj.hour * 60 + time_obj.minute + round(time_obj.second))
             except ValueError:
                 _LOGGER.debug(
@@ -232,11 +223,11 @@ async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, valu
                 )
                 return None
         value = round(value)
-    elif keymasterlock_type_lookup.get(attr) == datetime and isinstance(value, str):
+    elif keymasterlock_type_lookup.get(attr) == dt and isinstance(value, str):
         try:
-            value_notz: datetime = datetime.fromisoformat(value)
+            value_notz: dt = dt.fromisoformat(value)
             value = value_notz.replace(
-                tzinfo=timezone(datetime.now().astimezone().utcoffset() or timedelta())
+                tzinfo=timezone(dt.now().astimezone().utcoffset() or timedelta())
             )
         except ValueError:
             _LOGGER.debug(
@@ -369,101 +360,101 @@ async def _migrate_2to3_build_delete_list(
     if parent_lock_name:
         del_list.append(f"input_text.{lock_name}_{parent_lock_name}_parent")
 
-    for code_slot in range(
+    for code_slot_num in range(
         starting_slot,
         starting_slot + num_slots,
     ):
         del_list.extend(
             [
-                f"automation.keymaster_override_parent_{lock_name}_{code_slot}_state_change",
-                f"automation.keymaster_synchronize_codeslot_{lock_name}_{code_slot}",
-                f"automation.keymaster_turn_on_access_limit_{lock_name}_{code_slot}",
-                f"binary_sensor.active_{lock_name}_{code_slot}",
-                f"binary_sensor.pin_synched_{lock_name}_{code_slot}",
-                f"input_boolean.accesslimit_{lock_name}_{code_slot}",
-                f"input_boolean.daterange_{lock_name}_{code_slot}",
-                f"input_boolean.enabled_{lock_name}_{code_slot}",
-                f"input_boolean.fri_{lock_name}_{code_slot}",
-                f"input_boolean.fri_inc_{lock_name}_{code_slot}",
-                f"input_boolean.mon_{lock_name}_{code_slot}",
-                f"input_boolean.mon_inc_{lock_name}_{code_slot}",
-                f"input_boolean.notify_{lock_name}_{code_slot}",
-                f"input_boolean.override_parent_{lock_name}_{code_slot}",
-                f"input_boolean.reset_codeslot_{lock_name}_{code_slot}",
-                f"input_boolean.sat_{lock_name}_{code_slot}",
-                f"input_boolean.sat_inc_{lock_name}_{code_slot}",
-                f"input_boolean.sun_{lock_name}_{code_slot}",
-                f"input_boolean.sun_inc_{lock_name}_{code_slot}",
-                f"input_boolean.thu_{lock_name}_{code_slot}",
-                f"input_boolean.thu_inc_{lock_name}_{code_slot}",
-                f"input_boolean.tue_{lock_name}_{code_slot}",
-                f"input_boolean.tue_inc_{lock_name}_{code_slot}",
-                f"input_boolean.wed_{lock_name}_{code_slot}",
-                f"input_boolean.wed_inc_{lock_name}_{code_slot}",
-                f"input_datetime.end_date_{lock_name}_{code_slot}",
-                f"input_datetime.fri_end_date_{lock_name}_{code_slot}",
-                f"input_datetime.fri_start_date_{lock_name}_{code_slot}",
-                f"input_datetime.mon_end_date_{lock_name}_{code_slot}",
-                f"input_datetime.mon_start_date_{lock_name}_{code_slot}",
-                f"input_datetime.sat_end_date_{lock_name}_{code_slot}",
-                f"input_datetime.sat_start_date_{lock_name}_{code_slot}",
-                f"input_datetime.start_date_{lock_name}_{code_slot}",
-                f"input_datetime.sun_end_date_{lock_name}_{code_slot}",
-                f"input_datetime.sun_start_date_{lock_name}_{code_slot}",
-                f"input_datetime.thu_end_date_{lock_name}_{code_slot}",
-                f"input_datetime.thu_start_date_{lock_name}_{code_slot}",
-                f"input_datetime.tue_end_date_{lock_name}_{code_slot}",
-                f"input_datetime.tue_start_date_{lock_name}_{code_slot}",
-                f"input_datetime.wed_end_date_{lock_name}_{code_slot}",
-                f"input_datetime.wed_start_date_{lock_name}_{code_slot}",
-                f"input_number.accesscount_{lock_name}_{code_slot}",
-                f"input_text.{lock_name}_name_{code_slot}",
-                f"input_text.{lock_name}_pin_{code_slot}",
-                f"script.keymaster_{lock_name}_copy_from_parent_{code_slot}",
-                f"sensor.connected_{lock_name}_{code_slot}",
+                f"automation.keymaster_override_parent_{lock_name}_{code_slot_num}_state_change",
+                f"automation.keymaster_synchronize_codeslot_{lock_name}_{code_slot_num}",
+                f"automation.keymaster_turn_on_access_limit_{lock_name}_{code_slot_num}",
+                f"binary_sensor.active_{lock_name}_{code_slot_num}",
+                f"binary_sensor.pin_synched_{lock_name}_{code_slot_num}",
+                f"input_boolean.accesslimit_{lock_name}_{code_slot_num}",
+                f"input_boolean.daterange_{lock_name}_{code_slot_num}",
+                f"input_boolean.enabled_{lock_name}_{code_slot_num}",
+                f"input_boolean.fri_{lock_name}_{code_slot_num}",
+                f"input_boolean.fri_inc_{lock_name}_{code_slot_num}",
+                f"input_boolean.mon_{lock_name}_{code_slot_num}",
+                f"input_boolean.mon_inc_{lock_name}_{code_slot_num}",
+                f"input_boolean.notify_{lock_name}_{code_slot_num}",
+                f"input_boolean.override_parent_{lock_name}_{code_slot_num}",
+                f"input_boolean.reset_codeslot_{lock_name}_{code_slot_num}",
+                f"input_boolean.sat_{lock_name}_{code_slot_num}",
+                f"input_boolean.sat_inc_{lock_name}_{code_slot_num}",
+                f"input_boolean.sun_{lock_name}_{code_slot_num}",
+                f"input_boolean.sun_inc_{lock_name}_{code_slot_num}",
+                f"input_boolean.thu_{lock_name}_{code_slot_num}",
+                f"input_boolean.thu_inc_{lock_name}_{code_slot_num}",
+                f"input_boolean.tue_{lock_name}_{code_slot_num}",
+                f"input_boolean.tue_inc_{lock_name}_{code_slot_num}",
+                f"input_boolean.wed_{lock_name}_{code_slot_num}",
+                f"input_boolean.wed_inc_{lock_name}_{code_slot_num}",
+                f"input_datetime.end_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.fri_end_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.fri_start_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.mon_end_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.mon_start_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.sat_end_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.sat_start_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.start_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.sun_end_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.sun_start_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.thu_end_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.thu_start_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.tue_end_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.tue_start_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.wed_end_date_{lock_name}_{code_slot_num}",
+                f"input_datetime.wed_start_date_{lock_name}_{code_slot_num}",
+                f"input_number.accesscount_{lock_name}_{code_slot_num}",
+                f"input_text.{lock_name}_name_{code_slot_num}",
+                f"input_text.{lock_name}_pin_{code_slot_num}",
+                f"script.keymaster_{lock_name}_copy_from_parent_{code_slot_num}",
+                f"sensor.connected_{lock_name}_{code_slot_num}",
             ]
         )
         if parent_lock_name:
             del_list.extend(
                 [
-                    f"automation.keymaster_copy_{parent_lock_name}_accesscount_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_accesslimit_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_daterange_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_enabled_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_end_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_fri_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_fri_end_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_fri_inc_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_fri_start_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_mon_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_mon_end_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_mon_inc_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_mon_start_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_name_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_notify_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_pin_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_reset_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_sat_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_sat_end_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_sat_inc_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_sat_start_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_start_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_sun_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_sun_end_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_sun_inc_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_sun_start_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_thu_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_thu_end_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_thu_inc_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_thu_start_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_tue_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_tue_end_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_tue_inc_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_tue_start_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_wed_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_wed_end_date_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_wed_inc_{lock_name}_{code_slot}",
-                    f"automation.keymaster_copy_{parent_lock_name}_wed_start_date_{lock_name}_{code_slot}",
+                    f"automation.keymaster_copy_{parent_lock_name}_accesscount_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_accesslimit_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_daterange_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_enabled_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_end_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_fri_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_fri_end_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_fri_inc_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_fri_start_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_mon_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_mon_end_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_mon_inc_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_mon_start_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_name_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_notify_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_pin_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_reset_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_sat_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_sat_end_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_sat_inc_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_sat_start_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_start_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_sun_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_sun_end_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_sun_inc_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_sun_start_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_thu_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_thu_end_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_thu_inc_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_thu_start_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_tue_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_tue_end_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_tue_inc_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_tue_start_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_wed_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_wed_end_date_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_wed_inc_{lock_name}_{code_slot_num}",
+                    f"automation.keymaster_copy_{parent_lock_name}_wed_start_date_{lock_name}_{code_slot_num}",
                 ]
             )
     # _LOGGER.debug("[migrate_2to3_build_delete_list] del_list: %s", del_list)
@@ -481,22 +472,22 @@ async def _migrate_2to3_build_crosswalk_dict(
         f"input_text.keymaster_{lock_name}_autolock_door_time_day": "number.autolock_min_day",
         f"input_text.keymaster_{lock_name}_autolock_door_time_night": "number.autolock_min_night",
     }
-    for code_slot in range(
+    for code_slot_num in range(
         starting_slot,
         starting_slot + num_slots,
     ):
         crosswalk_dict.update(
             {
-                f"input_boolean.accesslimit_{lock_name}_{code_slot}": f"switch.code_slots:{code_slot}.accesslimit_count_enabled",
-                f"input_boolean.daterange_{lock_name}_{code_slot}": f"switch.code_slots:{code_slot}.accesslimit_date_range_enabled",
-                f"input_boolean.enabled_{lock_name}_{code_slot}": f"switch.code_slots:{code_slot}.enabled",
-                f"input_boolean.notify_{lock_name}_{code_slot}": f"switch.code_slots:{code_slot}.notifications",
-                f"input_boolean.override_parent_{lock_name}_{code_slot}": f"switch.code_slots:{code_slot}.override_parent",
-                f"input_datetime.end_date_{lock_name}_{code_slot}": f"datetime.code_slots:{code_slot}.accesslimit_date_range_end",
-                f"input_datetime.start_date_{lock_name}_{code_slot}": f"datetime.code_slots:{code_slot}.accesslimit_date_range_start",
-                f"input_number.accesscount_{lock_name}_{code_slot}": f"number.code_slots:{code_slot}.accesslimit_count",
-                f"input_text.{lock_name}_name_{code_slot}": f"text.code_slots:{code_slot}.name",
-                f"input_text.{lock_name}_pin_{code_slot}": f"text.code_slots:{code_slot}.pin",
+                f"input_boolean.accesslimit_{lock_name}_{code_slot_num}": f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
+                f"input_boolean.daterange_{lock_name}_{code_slot_num}": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+                f"input_boolean.enabled_{lock_name}_{code_slot_num}": f"switch.code_slots:{code_slot_num}.enabled",
+                f"input_boolean.notify_{lock_name}_{code_slot_num}": f"switch.code_slots:{code_slot_num}.notifications",
+                f"input_boolean.override_parent_{lock_name}_{code_slot_num}": f"switch.code_slots:{code_slot_num}.override_parent",
+                f"input_datetime.end_date_{lock_name}_{code_slot_num}": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
+                f"input_datetime.start_date_{lock_name}_{code_slot_num}": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
+                f"input_number.accesscount_{lock_name}_{code_slot_num}": f"number.code_slots:{code_slot_num}.accesslimit_count",
+                f"input_text.{lock_name}_name_{code_slot_num}": f"text.code_slots:{code_slot_num}.name",
+                f"input_text.{lock_name}_pin_{code_slot_num}": f"text.code_slots:{code_slot_num}.pin",
             }
         )
         for i, dow in enumerate(
@@ -512,10 +503,10 @@ async def _migrate_2to3_build_crosswalk_dict(
         ):
             crosswalk_dict.update(
                 {
-                    f"input_boolean.{dow}_inc_{lock_name}_{code_slot}": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{i}.include_exclude",
-                    f"input_boolean.{dow}_{lock_name}_{code_slot}": f"switch.code_slots:{code_slot}.accesslimit_day_of_week:{i}.dow_enabled",
-                    f"input_datetime.{dow}_end_date_{lock_name}_{code_slot}": f"time.code_slots:{code_slot}.accesslimit_day_of_week:{i}.time_end",
-                    f"input_datetime.{dow}_start_date_{lock_name}_{code_slot}": f"time.code_slots:{code_slot}.accesslimit_day_of_week:{i}.time_start",
+                    f"input_boolean.{dow}_inc_{lock_name}_{code_slot_num}": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{i}.include_exclude",
+                    f"input_boolean.{dow}_{lock_name}_{code_slot_num}": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{i}.dow_enabled",
+                    f"input_datetime.{dow}_end_date_{lock_name}_{code_slot_num}": f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{i}.time_end",
+                    f"input_datetime.{dow}_start_date_{lock_name}_{code_slot_num}": f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{i}.time_start",
                 }
             )
 
