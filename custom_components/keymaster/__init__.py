@@ -207,7 +207,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
 async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
     """Delete the coordinator if no more kmlock entities exist."""
-    _LOGGER.debug("[delete_coordinator] Triggered")
+    # _LOGGER.debug("[delete_coordinator] Triggered")
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     if len(coordinator.data) == 0:
         _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")

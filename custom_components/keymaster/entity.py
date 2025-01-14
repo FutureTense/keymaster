@@ -30,7 +30,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
 
     def __init__(self, entity_description: KeymasterEntityDescription) -> None:
         """Initialize base keymaster entity."""
-        _LOGGER.debug("[Entity init] entity_description: %s", entity_description)
+        # _LOGGER.debug("[Entity init] entity_description: %s", entity_description)
         self.hass: HomeAssistant = entity_description.hass
         self.coordinator: KeymasterCoordinator = entity_description.coordinator
         self._config_entry: ConfigEntry = entity_description.config_entry
@@ -48,12 +48,12 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         #     self.name,
         # )
         self._attr_unique_id: str = f"{self._config_entry.entry_id}_{slugify(self._property)}"
-        _LOGGER.debug(
-            "[Entity init] %s: property: %s, unique_id: %s",
-            self.name,
-            self._property,
-            self.unique_id,
-        )
+        # _LOGGER.debug(
+        #     "[Entity init] %s: property: %s, unique_id: %s",
+        #     self.name,
+        #     self._property,
+        #     self.unique_id,
+        # )
         self._code_slot: None | int = None
         if ".code_slots" in self._property:
             self._code_slot = self._get_code_slots_num()
