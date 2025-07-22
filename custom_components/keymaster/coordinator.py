@@ -831,6 +831,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
             if kmlock.code_slots[code_slot_num].notifications and not kmlock.lock_notifications:
                 if kmlock.code_slots[code_slot_num].name:
+                    message = event_label
                     message = (
                         f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
                     )
