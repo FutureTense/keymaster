@@ -36,7 +36,6 @@ from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 from homeassistant.components.zwave_js.const import (
     ATTR_PARAMETERS,
-    DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
     DOMAIN as ZWAVE_JS_DOMAIN,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -1605,7 +1604,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock.lock_config_entry_id
             )
             if zwave_entry:
-                client: ZwaveJSClient = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
+                client: ZwaveJSClient = zwave_entry.runtime_data.client
             else:
                 _LOGGER.error(
                     "[Coordinator] %s: Can't access the Z-Wave JS client.",
