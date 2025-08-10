@@ -5,12 +5,16 @@ from unittest.mock import patch
 
 import pytest
 
-from custom_components.keymaster.config_flow import _get_entities  # noqa: PLC2701
-from custom_components.keymaster.const import DOMAIN
+from custom_components.keymaster.config_flow import _get_entities
+from custom_components.keymaster.const import DOMAIN, CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID, CONF_LOCK_ENTITY_ID, CONF_LOCK_NAME, CONF_PARENT, CONF_SLOTS, CONF_START, CONF_NOTIFY_SCRIPT_NAME, CONF_DOOR_SENSOR_ENTITY_ID, CONF_HIDE_PINS, CONF_PARENT_ENTRY_ID
 from homeassistant import config_entries
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.lock.const import LockState
 from homeassistant.data_entry_flow import FlowResultType
+
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from tests.const import CONFIG_DATA
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -23,26 +27,28 @@ pytestmark = pytest.mark.asyncio
     [
         (
             {
-                "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-                "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
-                "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
-                "lockname": "frontdoor",
-                "sensorname": "binary_sensor.frontdoor",
-                "slots": 6,
-                "start_from": 1,
-                "parent": "(none)",
+                CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                CONF_LOCK_NAME: "frontdoor",
+                CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+                CONF_SLOTS: 6,
+                CONF_START: 1,
+                CONF_PARENT: "(none)",
+                CONF_NOTIFY_SCRIPT_NAME: "script.keymaster_frontdoor_manual_notify",
             },
             "frontdoor",
             {
-                "alarm_level_or_user_code_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-                "alarm_type_or_access_control_entity_id": "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
-                "lock_entity_id": "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
-                "lockname": "frontdoor",
-                "sensorname": "binary_sensor.frontdoor",
-                "slots": 6,
-                "start_from": 1,
-                "hide_pins": False,
-                "parent": None,
+                CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                CONF_LOCK_NAME: "frontdoor",
+                CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+                CONF_SLOTS: 6,
+                CONF_START: 1,
+                CONF_HIDE_PINS: False,
+                CONF_PARENT: None,
+                CONF_NOTIFY_SCRIPT_NAME: "script.keymaster_frontdoor_manual_notify",
             },
         )
     ],
@@ -71,6 +77,87 @@ async def test_form(test_user_input, title, final_config_flow_data, hass, mock_g
 
         await hass.async_block_till_done()
         assert len(mock_setup_entry.mock_calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("test_user_input", "title", "final_config_flow_data"),
+    [
+        (
+            {
+                CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                CONF_LOCK_NAME: "frontdoor",
+                CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+                CONF_SLOTS: 6,
+                CONF_START: 1,
+                CONF_PARENT: "(none)",
+                CONF_NOTIFY_SCRIPT_NAME: "script.keymaster_frontdoor_manual_notify",
+            },
+            "frontdoor",
+            {
+                CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                CONF_LOCK_NAME: "frontdoor",
+                CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+                CONF_SLOTS: 6,
+                CONF_START: 1,
+                CONF_HIDE_PINS: False,
+                CONF_NOTIFY_SCRIPT_NAME: "keymaster_frontdoor_manual_notify",
+                CONF_PARENT: None,
+                CONF_PARENT_ENTRY_ID: None,
+            },
+        )
+    ],
+)
+async def test_reconfiguration_form(test_user_input, title, final_config_flow_data, hass, mock_get_entities):
+    """Test we get the form."""
+
+    with patch(
+        "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock", return_value=True
+    ) as mock_connect_and_update_lock, patch(
+        "custom_components.keymaster.KeymasterCoordinator._update_lock_data", return_value=True
+    ) as mock__update_lock_data, patch(
+        "custom_components.keymaster.KeymasterCoordinator._sync_child_locks", return_value=True
+    ) as mock_sync_child_locks, patch(
+        "custom_components.keymaster.binary_sensor.async_using_zwave_js", return_value=True
+    ) as mock_async_using_zwave_js:
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="frontdoor",
+            data=CONFIG_DATA,
+            version=3,
+        )
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        reconfigure_result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": config_entries.SOURCE_RECONFIGURE,
+                "entry_id": entry.entry_id,
+            },
+        )
+        assert reconfigure_result["type"] is FlowResultType.FORM
+        assert reconfigure_result["step_id"] == "reconfigure"    
+
+        result = await hass.config_entries.flow.async_configure(
+            reconfigure_result["flow_id"],
+            test_user_input,
+        )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reconfigure_successful"
+        await hass.async_block_till_done()
+
+        _LOGGER.debug("Entries: %s", len(hass.config_entries.async_entries(DOMAIN)))
+        entry = hass.config_entries.async_entries(DOMAIN)[0]
+        assert entry.data.copy() == final_config_flow_data
+
+
 
 
 # @pytest.mark.parametrize(
