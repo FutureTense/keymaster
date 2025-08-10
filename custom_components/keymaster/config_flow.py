@@ -96,44 +96,6 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
 
-#     @staticmethod
-#     @callback
-#     def async_get_options_flow(
-#         config_entry: ConfigEntry,
-#     ) -> KeymasterOptionsFlow:
-#         """Get the options flow for this handler."""
-#         return KeymasterOptionsFlow()
-
-
-# class KeymasterOptionsFlow(OptionsFlow):
-#     """Options flow for keymaster."""
-
-#     async def get_unique_name_error(
-#         self, user_input: MutableMapping[str, Any]
-#     ) -> MutableMapping[str, str]:
-#         """Check if name is unique, returning dictionary error if so."""
-#         # If lock name has changed, make sure new name isn't already being used
-#         # otherwise show an error
-#         if self.config_entry.unique_id != slugify(user_input[CONF_LOCK_NAME]).lower():
-#             for entry in self.hass.config_entries.async_entries(DOMAIN):
-#                 if entry.unique_id == slugify(user_input[CONF_LOCK_NAME]).lower():
-#                     return {CONF_LOCK_NAME: "same_name"}
-#         return {}
-
-#     async def async_step_init(
-#         self, user_input: MutableMapping[str, Any] | None = None
-#     ) -> ConfigFlowResult:
-#         """Handle a flow initialized by the user."""
-#         return await _start_config_flow(
-#             cls=self,
-#             step_id="init",
-#             title="",
-#             user_input=user_input,
-#             defaults=dict(self.config_entry.data),
-#             entry_id=self.config_entry.entry_id,
-#         )
-
-
 def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) -> list:
     """Return other keymaster locks if they are not already a child lock."""
 
