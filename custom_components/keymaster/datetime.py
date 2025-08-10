@@ -107,18 +107,6 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
             self.async_write_ha_state()
             return
 
-        if (
-            self._property.endswith(".accesslimit_date_range_start")
-            or self._property.endswith(".accesslimit_date_range_end")
-        ) and (
-            not self._kmlock.code_slots
-            or not self._code_slot
-            or not self._kmlock.code_slots[self._code_slot].accesslimit_date_range_enabled
-        ):
-            self._attr_available = False
-            self.async_write_ha_state()
-            return
-
         self._attr_available = True
         self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()

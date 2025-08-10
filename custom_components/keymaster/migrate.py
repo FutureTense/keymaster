@@ -1,4 +1,4 @@
-"""keymaster migrate from helper entites to coordinator."""
+"""keymaster migrate from helper entities to coordinator."""
 
 from __future__ import annotations
 

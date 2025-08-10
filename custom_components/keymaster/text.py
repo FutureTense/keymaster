@@ -123,7 +123,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
         self.async_write_ha_state()
 
     async def async_set_value(self, value: str) -> None:
-        """Set the value of a text entitiy."""
+        """Set the value of a text entity."""
         _LOGGER.debug(
             "[Text async_set_value] %s: value: %s",
             self.name,

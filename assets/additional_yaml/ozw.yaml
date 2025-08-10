@@ -12,8 +12,10 @@ binary_sensor:
     - platform: mqtt
       name: ozw_network_status
       state_topic: OpenZWave/1/status/
+      # yamllint disable rule:line-length
       value_template: >
           {{ "ON" if value_json.Status in ["driverAwakeNodesQueried", "driverAllNodesQueriedSomeDead", "driverAllNodesQueried"] else "OFF" }}
+      # yamllint enable rule:line-length
       json_attributes_topic: OpenZWave/1/status/
       device_class: "connectivity"
 

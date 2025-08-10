@@ -1,12 +1,12 @@
 -r requirements_dev.txt
 aiohttp_cors
 asyncio_mqtt
+mypy
+pydispatcher
+pylint
 pytest
 pytest-homeassistant-custom-component
-pydispatcher
-zeroconf
-tox
-mypy
-pylint
 ruff
+tox
 types-PyYAML
+zeroconf

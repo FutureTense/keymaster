@@ -13,13 +13,13 @@
           "start_from": "Start fra kodespor #",
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
-          "parent": "Select parent lock", 
-          "notify_script": "Notification Script",       
+          "parent": "Select parent lock",
+          "notify_script": "Notification Script",
           "hide_pins": "Hide PINs in UI?"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
-        },                  
+        },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "keymaster"
       }
@@ -39,13 +39,13 @@
           "start_from": "Start fra kodespor #",
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
-          "parent": "Select parent lock",  
-          "notify_script": "Notification Script",         
+          "parent": "Select parent lock",
+          "notify_script": "Notification Script",
           "hide_pins": "Hide PINs in UI?"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
-        },                  
+        },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "keymaster"
       }
