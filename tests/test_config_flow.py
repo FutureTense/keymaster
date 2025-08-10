@@ -4,16 +4,27 @@ import logging
 from unittest.mock import patch
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.config_flow import _get_entities
-from custom_components.keymaster.const import DOMAIN, CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID, CONF_LOCK_ENTITY_ID, CONF_LOCK_NAME, CONF_PARENT, CONF_SLOTS, CONF_START, CONF_NOTIFY_SCRIPT_NAME, CONF_DOOR_SENSOR_ENTITY_ID, CONF_HIDE_PINS, CONF_PARENT_ENTRY_ID
+from custom_components.keymaster.const import (
+    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_DOOR_SENSOR_ENTITY_ID,
+    CONF_HIDE_PINS,
+    CONF_LOCK_ENTITY_ID,
+    CONF_LOCK_NAME,
+    CONF_NOTIFY_SCRIPT_NAME,
+    CONF_PARENT,
+    CONF_PARENT_ENTRY_ID,
+    CONF_SLOTS,
+    CONF_START,
+    DOMAIN,
+)
 from homeassistant import config_entries
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.lock.const import LockState
 from homeassistant.data_entry_flow import FlowResultType
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from tests.const import CONFIG_DATA
 
 KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
@@ -111,19 +122,24 @@ async def test_form(test_user_input, title, final_config_flow_data, hass, mock_g
         )
     ],
 )
-async def test_reconfiguration_form(test_user_input, title, final_config_flow_data, hass, mock_get_entities):
+async def test_reconfiguration_form(
+    test_user_input, title, final_config_flow_data, hass, mock_get_entities
+):
     """Test we get the form."""
 
-    with patch(
-        "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock", return_value=True
-    ) as mock_connect_and_update_lock, patch(
-        "custom_components.keymaster.KeymasterCoordinator._update_lock_data", return_value=True
-    ) as mock__update_lock_data, patch(
-        "custom_components.keymaster.KeymasterCoordinator._sync_child_locks", return_value=True
-    ) as mock_sync_child_locks, patch(
-        "custom_components.keymaster.binary_sensor.async_using_zwave_js", return_value=True
-    ) as mock_async_using_zwave_js:
-
+    with (
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._update_lock_data", return_value=True
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._sync_child_locks", return_value=True
+        ),
+        patch("custom_components.keymaster.binary_sensor.async_using_zwave_js", return_value=True),
+    ):
         entry = MockConfigEntry(
             domain=DOMAIN,
             title="frontdoor",
@@ -142,7 +158,7 @@ async def test_reconfiguration_form(test_user_input, title, final_config_flow_da
             },
         )
         assert reconfigure_result["type"] is FlowResultType.FORM
-        assert reconfigure_result["step_id"] == "reconfigure"    
+        assert reconfigure_result["step_id"] == "reconfigure"
 
         result = await hass.config_entries.flow.async_configure(
             reconfigure_result["flow_id"],
@@ -156,8 +172,6 @@ async def test_reconfiguration_form(test_user_input, title, final_config_flow_da
         _LOGGER.debug("Entries: %s", len(hass.config_entries.async_entries(DOMAIN)))
         entry = hass.config_entries.async_entries(DOMAIN)[0]
         assert entry.data.copy() == final_config_flow_data
-
-
 
 
 # @pytest.mark.parametrize(

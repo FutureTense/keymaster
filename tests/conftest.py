@@ -3,8 +3,8 @@
 import asyncio
 import copy
 import json
-from unittest.mock import AsyncMock, patch
 import logging
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -13,6 +13,7 @@ from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
 
 from .common import load_fixture
+
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -38,20 +39,23 @@ def skip_notifications_fixture():
 def mock_get_entities():
     """Mock available entities."""
     with patch(
-        "custom_components.keymaster.config_flow._get_entities", autospec=True,
+        "custom_components.keymaster.config_flow._get_entities",
+        autospec=True,
     ) as mock_get_entities:
         mock_get_entities.side_effect = side_effect_get_entities
         yield mock_get_entities
 
 
-def side_effect_get_entities(hass, domain, search = None, extra_entities = None, exclude_entities = None, sort = True):
+def side_effect_get_entities(
+    hass, domain, search=None, extra_entities=None, exclude_entities=None, sort=True
+):
     """Side effect for get_entities mock."""
     if domain == "lock":
         return [
             "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
             "lock.front_door",
             "lock.patio_door",
-            "lock.office_door",                
+            "lock.office_door",
         ]
     if domain == "binary_sensor":
         return [
@@ -60,12 +64,13 @@ def side_effect_get_entities(hass, domain, search = None, extra_entities = None,
     if domain == "sensor":
         return [
             "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
-            "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",                
+            "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
         ]
     if domain == "script":
         return [
             "script.keymaster_frontdoor_manual_notify",
-        ]    
+        ]
+    return []
 
 
 @pytest.fixture

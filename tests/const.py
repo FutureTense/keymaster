@@ -1,6 +1,16 @@
 """Constants for tests."""
 
-from custom_components.keymaster.const import CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID, CONF_LOCK_ENTITY_ID, CONF_LOCK_NAME, CONF_PARENT, CONF_SLOTS, CONF_START, CONF_NOTIFY_SCRIPT_NAME, CONF_DOOR_SENSOR_ENTITY_ID, CONF_HIDE_PINS
+from custom_components.keymaster.const import (
+    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    CONF_DOOR_SENSOR_ENTITY_ID,
+    CONF_HIDE_PINS,
+    CONF_LOCK_ENTITY_ID,
+    CONF_LOCK_NAME,
+    CONF_NOTIFY_SCRIPT_NAME,
+    CONF_SLOTS,
+    CONF_START,
+)
 
 CONFIG_DATA = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -12,7 +22,6 @@ CONFIG_DATA = {
     CONF_START: 1,
     CONF_NOTIFY_SCRIPT_NAME: "script.keymaster_frontdoor_manual_notify",
     CONF_HIDE_PINS: False,
-
 }
 
 CONFIG_DATA_REAL = {

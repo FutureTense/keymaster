@@ -13,8 +13,8 @@ from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
 
 from .const import (
@@ -79,7 +79,7 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
             user_input=user_input,
             defaults=self.DEFAULTS,
         )
-    
+
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
         """Add reconfigure step to allow to reconfigure a config entry."""
         self._entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
@@ -93,7 +93,8 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
             user_input=user_input,
             defaults=self._data,
             entry_id=self._entry.entry_id,
-        )        
+        )
+
 
 #     @staticmethod
 #     @callback
@@ -334,7 +335,7 @@ async def _start_config_flow(
             )
             if step_id == "user" or not entry_id:
                 return cls.async_create_entry(title=title, data=user_input)
-            cls.hass.config_entries.async_update_entry(cls._entry, data=user_input)
+            cls.hass.config_entries.async_update_entry(cls._entry, data=user_input)  # type: ignore[arg-type]
             await cls.hass.config_entries.async_reload(entry_id)
             return cls.async_abort(reason="reconfigure_successful")
 
