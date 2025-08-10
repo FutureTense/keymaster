@@ -272,3 +272,22 @@ def mock_async_call_later():
 
         mock.side_effect = immediate_call
         yield mock
+
+
+@pytest.fixture(name="keymaster_integration")
+async def mock_keymaster_integration():
+    """Fixture to bypass zwavejs checks."""
+    with (
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._update_lock_data", return_value=True
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._sync_child_locks", return_value=True
+        ),
+        patch("custom_components.keymaster.binary_sensor.async_using_zwave_js", return_value=True),
+    ):
+        yield    
