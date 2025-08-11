@@ -37,10 +37,10 @@ CONFIG_DATA_REAL = {
 CONFIG_DATA_910 = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.smart_code_with_home_connect_technology_alarmlevel",
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.smart_code_with_home_connect_technology_alarmtype",
-    CONF_LOCK_ENTITY_ID: "lock.smart_code_with_home_connect_technology",
+    CONF_LOCK_ENTITY_ID: "lock.garage_door",
     CONF_LOCK_NAME: "frontdoor",
     CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
-    CONF_SLOTS: 6,
+    CONF_SLOTS: 1,
     CONF_START: 1,
 }
 

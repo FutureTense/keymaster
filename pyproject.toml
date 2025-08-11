@@ -354,12 +354,12 @@ norecursedirs = [
 ]
 log_format = "%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(name)s:%(filename)s:%(lineno)s %(message)s"
 log_date_format = "%Y-%m-%d %H:%M:%S"
-log_cli = true  # Enable live logging to the console
+log_cli = false  # Enable live logging to the console
 log_level = "DEBUG"  # Set the logging level to DEBUG
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 timeout = 30
-addopts = "-vv --cov=custom_components/keymaster --cov-report=xml"
+addopts = "--cov=custom_components/keymaster --cov-report=xml"
 
 [tool.ruff]
 line-length = 100

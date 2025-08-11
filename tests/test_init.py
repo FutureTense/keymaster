@@ -1,6 +1,5 @@
-""" Test keymaster init """
+"""Test keymaster init."""
 
-from datetime import timedelta
 import logging
 from unittest.mock import patch
 
@@ -8,11 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_LOCKED
-from homeassistant.setup import async_setup_component
-import homeassistant.util.dt as dt_util
 
-from .common import async_fire_time_changed
 from .const import CONFIG_DATA
 
 NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
@@ -28,18 +23,17 @@ async def test_setup_entry(
     mock_zwavejs_get_usercodes,
     mock_zwavejs_clear_usercode,
     mock_zwavejs_set_usercode,
+    integration,
 ):
     """Test setting up entities."""
 
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
-    )
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 7
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
 
@@ -50,18 +44,17 @@ async def test_setup_entry_core_state(
     mock_zwavejs_get_usercodes,
     mock_zwavejs_clear_usercode,
     mock_zwavejs_set_usercode,
+    integration,
 ):
     """Test setting up entities."""
     with patch.object(hass, "state", return_value="STARTING"):
-        entry = MockConfigEntry(
-            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
-        )
+        entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
         entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 7
+        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
         entries = hass.config_entries.async_entries(DOMAIN)
         assert len(entries) == 1
 
@@ -70,26 +63,24 @@ async def test_unload_entry(
     hass,
     mock_async_call_later,
     keymaster_integration,
+    integration,
 ):
     """Test unloading entities."""
-    now = dt_util.now()
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
-    )
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 7
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 7
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
     assert len(hass.states.async_entity_ids(DOMAIN)) == 0
 
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 0
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 1
