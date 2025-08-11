@@ -1,5 +1,8 @@
 {
   "config": {
+    "abort": {
+        "reconfigure_successful": "Reconfigure Successful"
+    },        
     "error": {
       "same_name": "Name already in use"
     },

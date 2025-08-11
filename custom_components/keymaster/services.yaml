@@ -2,55 +2,55 @@ regenerate_lovelace:
   name: Regenerate Lovelace files
   description: Regenerates the Lovelace files for each keymaster lock. Lovelace files are already regenerated every time The keymaster Configuration or Options are changed and whenever Home Assistant restarts. In general, this action does not need to be manually run. Keymaster lovelace files are located in /custom_components/keymaster/lovelace
 
-update_pin:
-  name: Update PIN in a Code Slot
-  description: Update PIN for a Code Slot in a keymaster lock
-  fields:
-    config_entry_id:
-      name: Lock
-      description: The lock to Update the PIN in
-      required: true
-      selector:
-        config_entry:
-          integration: keymaster
-    code_slot_num:
-      name: Code Slot
-      description: The code slot to update the PIN in
-      example: 2
-      required: true
-      selector:
-        number:
-          min: 1
-          max: 100
-          step: 1
-          mode: box
-    pin:
-      name: PIN
-      description: The PIN to set (Must be 4 or more digits)
-      example: 1234
-      required: true
-      selector:
-        text:
+# update_pin:
+#   name: Update PIN in a Code Slot
+#   description: Update PIN for a Code Slot in a keymaster lock
+#   fields:
+#     config_entry_id:
+#       name: Lock
+#       description: The lock to Update the PIN in
+#       required: true
+#       selector:
+#         config_entry:
+#           integration: keymaster
+#     code_slot_num:
+#       name: Code Slot
+#       description: The code slot to update the PIN in
+#       example: 2
+#       required: true
+#       selector:
+#         number:
+#           min: 1
+#           max: 100
+#           step: 1
+#           mode: box
+#     pin:
+#       name: PIN
+#       description: The PIN to set (Must be 4 or more digits)
+#       example: 1234
+#       required: true
+#       selector:
+#         text:
 
-clear_pin:
-  name: Clear PIN from a Code Slot
-  description: Clear PIN for a Code Slot in a keymaster lock
-  fields:
-    config_entry_id:
-      name: Lock
-      description: The lock to clear the PIN from
-      required: true
-      selector:
-        config_entry:
-          integration: keymaster
-    code_slot_num:
-      name: Code Slot
-      description: The code slot to clear the PIN from
-      required: true
-      example: 2
-      selector:
-        number:
-          min: 1
-          max: 100
-          step: 1
-          mode: box
+# clear_pin:
+#   name: Clear PIN from a Code Slot
+#   description: Clear PIN for a Code Slot in a keymaster lock
+#   fields:
+#     config_entry_id:
+#       name: Lock
+#       description: The lock to clear the PIN from
+#       required: true
+#       selector:
+#         config_entry:
+#           integration: keymaster
+#     code_slot_num:
+#       name: Code Slot
+#       description: The code slot to clear the PIN from
+#       required: true
+#       example: 2
+#       selector:
+#         number:
+#           min: 1
+#           max: 100
+#           step: 1
+#           mode: box

@@ -13,8 +13,8 @@ from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
 
 from .const import (
@@ -80,41 +80,19 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
             defaults=self.DEFAULTS,
         )
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: ConfigEntry,
-    ) -> KeymasterOptionsFlow:
-        """Get the options flow for this handler."""
-        return KeymasterOptionsFlow()
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
+        """Add reconfigure step to allow to reconfigure a config entry."""
+        self._entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        assert self._entry
+        self._data = dict(self._entry.data)
 
-
-class KeymasterOptionsFlow(OptionsFlow):
-    """Options flow for keymaster."""
-
-    async def get_unique_name_error(
-        self, user_input: MutableMapping[str, Any]
-    ) -> MutableMapping[str, str]:
-        """Check if name is unique, returning dictionary error if so."""
-        # If lock name has changed, make sure new name isn't already being used
-        # otherwise show an error
-        if self.config_entry.unique_id != slugify(user_input[CONF_LOCK_NAME]).lower():
-            for entry in self.hass.config_entries.async_entries(DOMAIN):
-                if entry.unique_id == slugify(user_input[CONF_LOCK_NAME]).lower():
-                    return {CONF_LOCK_NAME: "same_name"}
-        return {}
-
-    async def async_step_init(
-        self, user_input: MutableMapping[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle a flow initialized by the user."""
         return await _start_config_flow(
             cls=self,
-            step_id="init",
-            title="",
+            step_id="reconfigure",
+            title=self._data[CONF_LOCK_NAME] if self._data else "",
             user_input=user_input,
-            defaults=dict(self.config_entry.data),
-            entry_id=self.config_entry.entry_id,
+            defaults=self._data,
+            entry_id=self._entry.entry_id,
         )
 
 
@@ -172,9 +150,8 @@ def _get_locks_in_use(hass: HomeAssistant, exclude: str | None = None) -> list[s
     data: list[str] = []
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     data.extend([kmlock.lock_entity_id for kmlock in coordinator.data.values()])
-    if exclude:
-        with contextlib.suppress(ValueError):
-            data.remove(exclude)
+    if exclude and exclude in data:
+        data.remove(exclude)
 
     return data
 
@@ -199,8 +176,6 @@ def _get_schema(
         default: Any | None = user_input.get(key)
         if default is None:
             default = default_dict.get(key, fallback_default)
-        if default is None:
-            default = fallback_default
         return default
 
     script_default: str | None = _get_default(CONF_NOTIFY_SCRIPT_NAME, NONE_TEXT)
@@ -283,7 +258,7 @@ def _get_schema(
 
 
 async def _start_config_flow(
-    cls: KeymasterConfigFlow | KeymasterOptionsFlow,
+    cls: KeymasterConfigFlow,
     step_id: str,
     title: str,
     user_input: MutableMapping[str, Any] | None,
@@ -320,11 +295,11 @@ async def _start_config_flow(
                 step_id,
                 user_input,
             )
-            if isinstance(cls, KeymasterConfigFlow) or step_id == "user" or not entry_id:
+            if step_id == "user" or not entry_id:
                 return cls.async_create_entry(title=title, data=user_input)
-            cls.hass.config_entries.async_update_entry(cls.config_entry, data=user_input)
+            cls.hass.config_entries.async_update_entry(cls._entry, data=user_input)  # type: ignore[arg-type]
             await cls.hass.config_entries.async_reload(entry_id)
-            return cls.async_create_entry(title="", data={})
+            return cls.async_abort(reason="reconfigure_successful")
 
     return cls.async_show_form(
         step_id=step_id,

@@ -34,10 +34,7 @@ from zwave_js_server.util.node import dump_node_state
 
 from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
-from homeassistant.components.zwave_js.const import (
-    ATTR_PARAMETERS,
-    DOMAIN as ZWAVE_JS_DOMAIN,
-)
+from homeassistant.components.zwave_js.const import ATTR_PARAMETERS, DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_DEVICE_ID,

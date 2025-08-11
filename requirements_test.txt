@@ -1,4 +1,5 @@
 -r requirements_dev.txt
+aiousbwatcher
 aiohttp_cors
 asyncio_mqtt
 pytest
