@@ -146,7 +146,7 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
 
 @dataclass(frozen=True, kw_only=True)
 class KeymasterEntityDescription(EntityDescription):
-    """Base keymaster Entitity Description."""
+    """Base keymaster Entity Description."""
 
     hass: HomeAssistant
     config_entry: ConfigEntry

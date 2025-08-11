@@ -3,16 +3,10 @@
 import logging
 from typing import TYPE_CHECKING
 
-import voluptuous as vol
-
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
-from homeassistant.helpers import selector
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
-    ATTR_CODE_SLOT,
-    ATTR_CONFIG_ENTRY_ID,
-    ATTR_PIN,
     CONF_DOOR_SENSOR_ENTITY_ID,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
@@ -21,9 +15,7 @@ from .const import (
     CONF_START,
     COORDINATOR,
     DOMAIN,
-    SERVICE_CLEAR_PIN,
     SERVICE_REGENERATE_LOVELACE,
-    SERVICE_UPDATE_PIN,
 )
 from .coordinator import KeymasterCoordinator
 from .lovelace import generate_lovelace

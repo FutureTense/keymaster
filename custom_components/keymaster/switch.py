@@ -187,7 +187,7 @@ async def async_setup_entry(
 
 @dataclass(frozen=True, kw_only=True)
 class KeymasterSwitchEntityDescription(KeymasterEntityDescription, SwitchEntityDescription):
-    """Entitiy Description for keymaster Switches."""
+    """Entity Description for keymaster Switches."""
 
 
 class KeymasterSwitch(KeymasterEntity, SwitchEntity):

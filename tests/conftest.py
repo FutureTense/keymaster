@@ -308,12 +308,16 @@ async def mock_zwavejs_set_usercode():
 @pytest.fixture
 async def mock_using_zwavejs():
     """Fixture to mock using_zwavejs in helpers."""
-    with patch(
-        "custom_components.keymaster.coordinator.async_using_zwave_js",
-        return_value=True,
-    ), patch ("custom_components.keymaster.helpers._async_using", return_value=True), patch(
-        "custom_components.keymaster.helpers.async_using_zwave_js",
-        return_value=True,
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.async_using_zwave_js",
+            return_value=True,
+        ),
+        patch("custom_components.keymaster.helpers._async_using", return_value=True),
+        patch(
+            "custom_components.keymaster.helpers.async_using_zwave_js",
+            return_value=True,
+        ),
     ):
         yield
 
@@ -340,7 +344,7 @@ async def mock_keymaster_integration(hass, client):
     # )
     # entry.add_to_hass(hass)
     # assert await hass.config_entries.async_setup(entry.entry_id)
-    # await hass.async_block_till_done()    
+    # await hass.async_block_till_done()
 
     with (
         patch(

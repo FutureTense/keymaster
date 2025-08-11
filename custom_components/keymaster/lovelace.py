@@ -174,7 +174,7 @@ async def _map_property_to_entity_id(
 
 
 async def _process_entities(data: Any, key_to_find: str, process_func: Callable) -> Any:
-    """Iterate through and replace the entity propery with the entity_id."""
+    """Iterate through and replace the entity property with the entity_id."""
     if isinstance(data, dict):
         updated_dict = {}
         for key, value in data.items():

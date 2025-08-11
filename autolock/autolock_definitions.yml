@@ -1,52 +1,53 @@
 timer:
-	garage_door:
-	  duration: '00:15:00'
-	frontdoor:
-	
-	# After 4 hours, auto lock will re-enable
-	auto_lock_disable:
-	  duration: '04:00:00'
+  garage_door:
+    duration: '00:15:00'
+  frontdoor:
+
+  # After 4 hours, auto lock will re-enable
+  auto_lock_disable:
+    duration: '04:00:00'
 
 
 input_boolean:
-
-	frontdoor_autolock:
-	  name: Auto Lock
-	  icon: mdi:key-remove
+  frontdoor_autolock:
+    name: Auto Lock
+    icon: mdi:key-remove
 
 
 script:
+  # starts the timer with 15 or 5 minutes, depending if it is before or after dusk
+  start_frontdoor_custom_timer:
+    sequence:
+      - condition: state
+        entity_id: input_boolean.frontdoor_autolock
+        state: 'on'
+      - condition: state
+        entity_id: lock.frontdoor_touchscreen_deadbolt_z_wave_plus
+        state: 'unlocked'
+      - service: timer.cancel
+        entity_id:  timer.frontdoor
+      - service: timer.start
+        # yamllint disable-line rule:line-length
+        data_template: # if next_dusk happens sooner than next_dawn, then (next_dusk - next_dawn) < 0
+          entity_id: timer.frontdoor
+          # yamllint disable rule:line-length
+          duration: >
+            {% if (((as_timestamp(states.sun.sun.attributes.next_dusk)) > (as_timestamp(states.sun.sun.attributes.next_dawn)))) %}
+                {{ 5 }}
+            {% else %}
+                {{ 15 }}
+            {% endif %}
+          # yamllint enable rule:line-length
 
-    # starts the timer with 15 or 5 minutes, depending if it is before or after dusk
-	start_frontdoor_custom_timer:
-	  sequence:
-		- condition: state
-		  entity_id: input_boolean.frontdoor_autolock
-		  state: 'on'
-		- condition: state
-		  entity_id: lock.frontdoor_touchscreen_deadbolt_z_wave_plus
-		  state: 'unlocked'
-		- service: timer.cancel
-		  entity_id:  timer.frontdoor
-		- service: timer.start
-		  data_template:    # if next_dusk happens sooner than next_dawn, then (next_dusk - next_dawn) < 0
-			 entity_id: timer.frontdoor
-			 duration: >
-			  {% if (((as_timestamp(states.sun.sun.attributes.next_dusk)) > (as_timestamp(states.sun.sun.attributes.next_dawn)))) %}
-				 {{ 5 }}
-			  {% else %}
-				 {{ 15 }}
-			  {% endif %}
-
-	start_garage_custom_timer:
-	  sequence:
-		- condition: state
-		  entity_id: input_boolean.frontdoor_autolock
-		  state: 'on'
-		- condition: state
-		  entity_id: cover.garagedoor_opener
-		  state: 'open'
-		- service: timer.cancel
-		  entity_id:  timer.garagedoor
-		- service: timer.start
-		  entity_id: timer.garagedoor
+  start_garage_custom_timer:
+    sequence:
+      - condition: state
+        entity_id: input_boolean.frontdoor_autolock
+        state: 'on'
+      - condition: state
+        entity_id: cover.garagedoor_opener
+        state: 'open'
+      - service: timer.cancel
+        entity_id:  timer.garagedoor
+      - service: timer.start
+        entity_id: timer.garagedoor
