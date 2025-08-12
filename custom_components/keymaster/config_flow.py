@@ -257,6 +257,14 @@ def _get_schema(
                 )
             ),
             vol.Required(
+                CONF_ADVANCED_DATE_RANGE,
+                default=_get_default(CONF_ADVANCED_DATE_RANGE, DEFAULT_ADVANCED_DATE_RANGE),
+            ): bool,
+            vol.Required(
+                CONF_ADVANCED_DAY_OF_WEEK,
+                default=_get_default(CONF_ADVANCED_DAY_OF_WEEK, DEFAULT_ADVANCED_DAY_OF_WEEK),
+            ): bool,
+            vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,
         },
