@@ -51,7 +51,7 @@ max-line-length-suggestions = 72
 
 [tool.pylint.exceptions]
 overgeneral-exceptions = [
-    "builtins.BaseException", 
+    "builtins.BaseException",
     "builtins.Exception",
     # "homeassistant.exceptions.HomeAssistantError",
 ]
@@ -84,7 +84,7 @@ disable = [
     "inconsistent-return-statements",
     "locally-disabled",
     "not-context-manager",
-    "possibly-used-before-assignment",    
+    "possibly-used-before-assignment",
     "too-few-public-methods",
     "too-many-ancestors",
     "too-many-arguments",
@@ -649,3 +649,6 @@ description = "Run mypy for type-checking under {base_python}"
 ignore_errors = true
 commands = [["mypy", "custom_components{/}keymaster"]]
 deps = ["-rrequirements_test.txt"]
+
+[tool.codespell]
+ignore-words-list = "hass"

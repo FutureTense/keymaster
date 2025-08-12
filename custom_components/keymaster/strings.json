@@ -2,7 +2,7 @@
   "config": {
     "abort": {
         "reconfigure_successful": "Reconfigure Successful"
-    },    
+    },
     "error": {
       "same_name": "keymaster Lock Name already in use"
     },
@@ -17,12 +17,12 @@
           "sensorname": "Door Sensor",
           "lockname": "keymaster Lock Name (ie: frontdoor)",
           "parent": "keymaster Parent Lock (optional)",
-          "notify_script": "Notification Script",                 
+          "notify_script": "Notification Script",
           "hide_pins": "Hide PINs in UI"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
-        },        
+        },
         "description": "Select the lock to setup and code slots to create. There may or may not be alarm level and alarm type entities.",
         "title": "keymaster"
       }
@@ -43,12 +43,12 @@
           "sensorname": "Door Sensor",
           "lockname": "keymaster Lock Name (ie: frontdoor)",
           "parent": "keymaster Parent Lock (optional)",
-          "notify_script": "Notification Script",                 
+          "notify_script": "Notification Script",
           "hide_pins": "Hide PINs in UI"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
-        },          
+        },
         "description": "Select the lock to setup and code slots to create. There may or may not be alarm level and alarm type entities.",
         "title": "keymaster"
       }

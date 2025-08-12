@@ -1,21 +1,16 @@
 """Test keymaster services."""
 
+from __future__ import annotations
+
 import logging
-from datetime import timedelta
+from typing import Any
+
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster.const import ATTR_CODE_SLOT, ATTR_CONFIG_ENTRY_ID, ATTR_PIN, DOMAIN
-from custom_components.keymaster.services import (
-    SERVICE_CLEAR_PIN,
-    SERVICE_REGENERATE_LOVELACE,
-    SERVICE_UPDATE_PIN,
-)
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from homeassistant.components.lock.const import LockState
-from homeassistant.util import dt as dt_util
+from custom_components.keymaster.const import DOMAIN
+from custom_components.keymaster.services import SERVICE_REGENERATE_LOVELACE
 
-from .const import CONFIG_DATA, CONFIG_DATA_910
-from .common import async_fire_time_changed
+from .const import CONFIG_DATA
 
 KWIKSET_910_LOCK_ENTITY = "lock.garage_door"
 _LOGGER = logging.getLogger(__name__)
@@ -29,7 +24,7 @@ async def test_service_regenerate_lovelace(hass, keymaster_integration, caplog):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    servicedata = {}
+    servicedata: dict[Any, Any] = {}
     await hass.services.async_call(DOMAIN, SERVICE_REGENERATE_LOVELACE, servicedata, blocking=True)
     await hass.async_block_till_done()
 
@@ -58,7 +53,7 @@ async def test_service_regenerate_lovelace(hass, keymaster_integration, caplog):
 
 #     # Reload zwave_js
 #     # assert await hass.config_entries.async_reload(integration.entry_id)
-#     # await hass.async_block_till_done()    
+#     # await hass.async_block_till_done()
 
 #     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=3)
 

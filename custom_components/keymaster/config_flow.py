@@ -297,9 +297,10 @@ async def _start_config_flow(
             )
             if step_id == "user" or not entry_id:
                 return cls.async_create_entry(title=title, data=user_input)
-            cls.hass.config_entries.async_update_entry(cls._entry, data=user_input)  # type: ignore[arg-type]
-            await cls.hass.config_entries.async_reload(entry_id)
-            return cls.async_abort(reason="reconfigure_successful")
+            if cls._entry is not None:
+                cls.hass.config_entries.async_update_entry(cls._entry, data=user_input)
+                await cls.hass.config_entries.async_reload(entry_id)
+                return cls.async_abort(reason="reconfigure_successful")
 
     return cls.async_show_form(
         step_id=step_id,

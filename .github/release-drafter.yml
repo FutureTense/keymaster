@@ -6,7 +6,7 @@ categories:
   - title: ":boom: Breaking Change :boom:"
     labels:
       - "breaking-change"
-  - title: ":zap: Enhancments :zap:"
+  - title: ":zap: Enhancements :zap:"
     labels:
       - "enhancement"
   - title: ":sparkles: New Features :sparkles:"
@@ -25,6 +25,7 @@ categories:
   - title: ":mortar_board: Code Quality :mortar_board:"
     labels:
       - "code-quality"
+# yamllint disable rule:line-length
 template: |
   [![Downloads for this release](https://img.shields.io/github/downloads/FutureTense/keymaster/v$RESOLVED_VERSION/total.svg)](https://github.com/FutureTense/keymaster/releases/v$RESOLVED_VERSION)
 
