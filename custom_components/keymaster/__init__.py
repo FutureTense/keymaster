@@ -16,6 +16,8 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.event import async_call_later
 
 from .const import (
+    CONF_ADVANCED_DATE_RANGE,
+    CONF_ADVANCED_DAY_OF_WEEK,
     CONF_ALARM_LEVEL,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE,
@@ -33,6 +35,8 @@ from .const import (
     CONF_START,
     COORDINATOR,
     DAY_NAMES,
+    DEFAULT_ADVANCED_DATE_RANGE,
+    DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_HIDE_PINS,
     DOMAIN,
     NONE_TEXT,
@@ -220,13 +224,6 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     """Migrate an old config entry."""
     version = config_entry.version
 
-    # 2 -> 3: Migrate to integrated functions
-    if version == 2:
-        _LOGGER.debug("Migrating from config version %s", version)
-        if not await migrate_2to3(hass=hass, config_entry=config_entry):
-            return False
-        _LOGGER.debug("Migration to version %s complete", config_entry.version)
-
     # 1 -> 2: Migrate to new keys
     if version == 1:
         _LOGGER.debug("Migrating from version %s", version)
@@ -241,6 +238,28 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
         hass.config_entries.async_update_entry(entry=config_entry, data=data)
         config_entry.version = 2
+        _LOGGER.debug("Migration to version %s complete", config_entry.version)
+
+    # 2 -> 3: Migrate to integrated functions
+    if version == 2:
+        _LOGGER.debug("Migrating from config version %s", version)
+        if not await migrate_2to3(hass=hass, config_entry=config_entry):
+            return False
+        _LOGGER.debug("Migration to version %s complete", config_entry.version)
+
+    # 3 -> 4: Advanced features are enabled by default
+    if version == 3:
+        _LOGGER.debug("Migrating from version %s", version)
+
+        data = config_entry.data.copy()
+
+        data[CONF_ADVANCED_DATE_RANGE] = data.get(
+            CONF_ADVANCED_DATE_RANGE, DEFAULT_ADVANCED_DATE_RANGE
+        )
+        data[CONF_ADVANCED_DAY_OF_WEEK] = data.get(
+            CONF_ADVANCED_DAY_OF_WEEK, DEFAULT_ADVANCED_DAY_OF_WEEK
+        )
+        hass.config_entries.async_update_entry(entry=config_entry, data=data, version=4)
         _LOGGER.debug("Migration to version %s complete", config_entry.version)
 
     return True

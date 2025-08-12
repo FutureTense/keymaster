@@ -9,6 +9,8 @@
     "step": {
       "user": {
         "data": {
+          "advanced_date_range": "Enable the advanced date range feature",
+          "advanced_day_of_week": "Enable the advanced day of week feature",
           "alarm_level_or_user_code_entity_id": "Alarm Level/User Code Sensor (from lock)",
           "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
           "lock_entity_id": "Physical Lock",
@@ -35,6 +37,8 @@
     "step": {
       "init": {
         "data": {
+          "advanced_date_range": "Enable the advanced date range feature",
+          "advanced_day_of_week": "Enable the advanced day of week feature",
           "alarm_level_or_user_code_entity_id": "Alarm Level/User Code Sensor (from lock)",
           "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
           "lock_entity_id": "Physical Lock",
