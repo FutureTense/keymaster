@@ -173,6 +173,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         code_slot_start=config_entry.data[CONF_START],
         code_slots=config_entry.data[CONF_SLOTS],
         lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
+        advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
+        advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
         door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
     )
 
