@@ -5,16 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
 from datetime import datetime as dt, time as dt_time
-from typing import TYPE_CHECKING
 
 from zwave_js_server.model.node import Node as ZwaveJSNode
 
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from .const import Synced
-
-if TYPE_CHECKING:
-    from .helpers import KeymasterTimer
+from .helpers import KeymasterTimer
 
 
 @dataclass
