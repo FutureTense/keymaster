@@ -1,5 +1,6 @@
 name: Release
 
+# yamllint disable rule:line-length
 # yamllint disable-line rule:truthy
 on:
   workflow_dispatch:
@@ -22,18 +23,14 @@ jobs:
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> "$GITHUB_ENV"
       - name: Set version number
         if: ${{ github.event_name == 'release' }}
-        # yamllint disable rule:line-length
         run: |
           sed -i '/VERSION = /c\VERSION = "${{ steps.get_version.outputs.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
           sed -i '/version/c\  \"version\": \"${{ steps.get_version.outputs.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
-        # yamllint enable rule:line-length
       - name: Set version number
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        # yamllint disable rule:line-length
         run: |
           sed -i '/VERSION = /c\VERSION = "${{inputs.tags}}"' ${{ github.workspace }}/custom_components/keymaster/const.py
           sed -i '/version/c\  \"version\": \"${{inputs.tags}}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
-        # yamllint enable rule:line-length0
       # Pack the keymaster dir as a zip and upload to the release
       - name: ZIP Keymaster Dir
         run: |
