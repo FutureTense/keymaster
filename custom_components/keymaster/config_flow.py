@@ -173,7 +173,7 @@ def _get_schema(
         check_dict.pop(CONF_PARENT, None)
         default_dict = check_dict
 
-    def _get_default(key: str, fallback_default: Any = None) -> None:
+    def _get_default(key: str, fallback_default: Any = None) -> Any:
         """Get default value for key."""
         return user_input.get(key, default_dict.get(key, fallback_default))
 
