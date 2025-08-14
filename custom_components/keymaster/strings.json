@@ -27,15 +27,8 @@
         },
         "description": "Select the lock to setup and code slots to create. There may or may not be alarm level and alarm type entities.",
         "title": "keymaster"
-      }
-    }
-  },
-  "options": {
-    "error": {
-      "same_name": "keymaster Lock Name already in use"
-    },
-    "step": {
-      "init": {
+      },
+      "reconfigure": {
         "data": {
           "advanced_date_range": "Enable the advanced date range feature",
           "advanced_day_of_week": "Enable the advanced day of week feature",
@@ -43,7 +36,7 @@
           "alarm_type_or_access_control_entity_id": "Alarm Type/Access Control Sensor (from lock)",
           "lock_entity_id": "Physical Lock",
           "slots": "Code Slots",
-          "start_from": "Start from Code Slot #",
+          "start_from": "Starting Code Slot #",
           "sensorname": "Door Sensor",
           "lockname": "keymaster Lock Name (ie: frontdoor)",
           "parent": "keymaster Parent Lock (optional)",
@@ -55,7 +48,7 @@
         },
         "description": "Select the lock to setup and code slots to create. There may or may not be alarm level and alarm type entities.",
         "title": "keymaster"
-      }
+      }      
     }
   }
 }

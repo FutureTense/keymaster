@@ -177,12 +177,9 @@ def _get_schema(
         check_dict.pop(CONF_PARENT, None)
         default_dict = check_dict
 
-    def _get_default(key: str, fallback_default: Any | None = None) -> Any | None:
+    def _get_default(key: str, fallback_default: Any = None) -> None:
         """Get default value for key."""
-        default: Any | None = user_input.get(key)
-        if default is None:
-            default = default_dict.get(key, fallback_default)
-        return default
+        return user_input.get(key, default_dict.get(key, fallback_default))
 
     script_default: str | None = _get_default(CONF_NOTIFY_SCRIPT_NAME, NONE_TEXT)
     if script_default is None:
