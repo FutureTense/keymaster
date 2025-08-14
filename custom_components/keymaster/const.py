@@ -52,6 +52,8 @@ ATTR_PIN = "pin"
 ATTR_USER_CODE = "usercode"
 
 # Configuration Properties
+CONF_ADVANCED_DATE_RANGE = "advanced_date_range"
+CONF_ADVANCED_DAY_OF_WEEK = "advanced_day_of_week"
 CONF_ALARM_LEVEL = "alarm_level"
 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID = "alarm_level_or_user_code_entity_id"
 CONF_ALARM_TYPE = "alarm_type"
@@ -73,6 +75,8 @@ CONF_NOTIFY_SCRIPT_NAME = "notify_script"
 DEFAULT_CODE_SLOTS = 10
 DEFAULT_START = 1
 DEFAULT_HIDE_PINS = False
+DEFAULT_ADVANCED_DATE_RANGE = True
+DEFAULT_ADVANCED_DAY_OF_WEEK = True
 DEFAULT_AUTOLOCK_MIN_DAY: int = 120
 DEFAULT_AUTOLOCK_MIN_NIGHT: int = 5
 

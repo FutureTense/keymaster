@@ -18,6 +18,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
 
 from .const import (
+    CONF_ADVANCED_DATE_RANGE,
+    CONF_ADVANCED_DAY_OF_WEEK,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_DOOR_SENSOR_ENTITY_ID,
@@ -29,6 +31,8 @@ from .const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
+    DEFAULT_ADVANCED_DATE_RANGE,
+    DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_CODE_SLOTS,
     DEFAULT_HIDE_PINS,
     DEFAULT_START,
@@ -45,11 +49,13 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for keymaster."""
 
-    VERSION: int = 3
+    VERSION: int = 4
     DEFAULTS: MutableMapping[str, Any] = {
         CONF_SLOTS: DEFAULT_CODE_SLOTS,
         CONF_START: DEFAULT_START,
         CONF_DOOR_SENSOR_ENTITY_ID: NONE_TEXT,
+        CONF_ADVANCED_DATE_RANGE: DEFAULT_ADVANCED_DATE_RANGE,
+        CONF_ADVANCED_DAY_OF_WEEK: DEFAULT_ADVANCED_DAY_OF_WEEK,
         CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: NONE_TEXT,
         CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: NONE_TEXT,
         CONF_HIDE_PINS: DEFAULT_HIDE_PINS,
@@ -250,6 +256,14 @@ def _get_schema(
                     extra_entities=[NONE_TEXT],
                 )
             ),
+            vol.Required(
+                CONF_ADVANCED_DATE_RANGE,
+                default=_get_default(CONF_ADVANCED_DATE_RANGE, DEFAULT_ADVANCED_DATE_RANGE),
+            ): bool,
+            vol.Required(
+                CONF_ADVANCED_DAY_OF_WEEK,
+                default=_get_default(CONF_ADVANCED_DAY_OF_WEEK, DEFAULT_ADVANCED_DAY_OF_WEEK),
+            ): bool,
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)
             ): bool,

@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_SLOTS, CONF_START, COORDINATOR, DAY_NAMES, DOMAIN
+from .const import CONF_ADVANCED_DAY_OF_WEEK, CONF_SLOTS, CONF_START, COORDINATOR, DAY_NAMES, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek
@@ -27,6 +27,12 @@ async def async_setup_entry(
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     entities: list = []
 
+    if not config_entry.data[CONF_ADVANCED_DAY_OF_WEEK]:
+        _LOGGER.debug(
+            "[Time] %s: Advanced Date of Week is not enabled. Skipping Time entities.",
+            config_entry.title,
+        )
+        return
     for x in range(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],

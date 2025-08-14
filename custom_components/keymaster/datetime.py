@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from .const import CONF_ADVANCED_DATE_RANGE, CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 
@@ -25,6 +25,12 @@ async def async_setup_entry(
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     entities: list = []
 
+    if not config_entry.data[CONF_ADVANCED_DATE_RANGE]:
+        _LOGGER.debug(
+            "[DateTime] %s: Advanced Date Range is not enabled. Skipping DateTime entities.",
+            config_entry.title,
+        )
+        return
     for x in range(
         config_entry.data[CONF_START],
         config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],

@@ -26,6 +26,8 @@ async def generate_lovelace(
     code_slot_start: int,
     code_slots: int,
     lock_entity: str,
+    advanced_date_range: bool,
+    advanced_day_of_week: bool,
     door_sensor: str | None = None,
     parent_config_entry_id: str | None = None,
 ) -> None:
@@ -59,10 +61,16 @@ async def generate_lovelace(
     ):
         if parent_config_entry_id:
             code_slot_dict: MutableMapping[str, Any] = await _generate_child_code_slot_dict(
-                code_slot_num=code_slot_num
+                code_slot_num=code_slot_num,
+                advanced_date_range=advanced_date_range,
+                advanced_day_of_week=advanced_day_of_week,
             )
         else:
-            code_slot_dict = await _generate_code_slot_dict(code_slot_num=code_slot_num)
+            code_slot_dict = await _generate_code_slot_dict(
+                code_slot_num=code_slot_num,
+                advanced_date_range=advanced_date_range,
+                advanced_day_of_week=advanced_day_of_week,
+            )
         code_slot_list.append(code_slot_dict)
     lovelace_list: (
         MutableMapping[str, Any] | list[MutableMapping[str, Any]]
@@ -224,7 +232,10 @@ async def _get_entity_id(
 
 
 async def _generate_code_slot_dict(
-    code_slot_num: int, child: bool = False
+    code_slot_num: int,
+    advanced_date_range: bool,
+    advanced_day_of_week: bool,
+    child: bool = False,
 ) -> MutableMapping[str, Any]:
     """Build the dict for the code slot."""
     code_slot_dict: MutableMapping[str, Any] = {
@@ -337,65 +348,75 @@ async def _generate_code_slot_dict(
                     "double_tap_action": {"action": "none"},
                 },
             },
-            {"type": "divider"},
-            {
-                "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                "name": "Limit by Date Range",
-                "secondary_info": "none",
-                "tap_action": {"action": "none"},
-                "hold_action": {"action": "none"},
-                "double_tap_action": {"action": "none"},
-            },
-            {
-                "type": "conditional",
-                "conditions": [
-                    {
-                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                        "state": "on",
-                    }
-                ],
-                "row": {
-                    "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
-                    "name": "Date Range Start",
-                    "secondary_info": "none",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
-                },
-            },
-            {
-                "type": "conditional",
-                "conditions": [
-                    {
-                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                        "state": "on",
-                    }
-                ],
-                "row": {
-                    "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
-                    "name": "Date Range End",
-                    "secondary_info": "none",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
-                },
-            },
-            {"type": "divider"},
-            {
-                "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                "name": "Limit by Day of Week",
-                "secondary_info": "none",
-                "tap_action": {"action": "none"},
-                "hold_action": {"action": "none"},
-                "double_tap_action": {"action": "none"},
-            },
         ]
     )
+    if advanced_date_range:
+        code_slot_dict["cards"][1]["card"]["entities"].extend(
+            [
+                {"type": "divider"},
+                {
+                    "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+                    "name": "Limit by Date Range",
+                    "secondary_info": "none",
+                    "tap_action": {"action": "none"},
+                    "hold_action": {"action": "none"},
+                    "double_tap_action": {"action": "none"},
+                },
+                {
+                    "type": "conditional",
+                    "conditions": [
+                        {
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+                            "state": "on",
+                        }
+                    ],
+                    "row": {
+                        "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
+                        "name": "Date Range Start",
+                        "secondary_info": "none",
+                        "tap_action": {"action": "none"},
+                        "hold_action": {"action": "none"},
+                        "double_tap_action": {"action": "none"},
+                    },
+                },
+                {
+                    "type": "conditional",
+                    "conditions": [
+                        {
+                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+                            "state": "on",
+                        }
+                    ],
+                    "row": {
+                        "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
+                        "name": "Date Range End",
+                        "secondary_info": "none",
+                        "tap_action": {"action": "none"},
+                        "hold_action": {"action": "none"},
+                        "double_tap_action": {"action": "none"},
+                    },
+                },
+            ]
+        )
+    if advanced_day_of_week:
+        code_slot_dict["cards"][1]["card"]["entities"].extend(
+            [
+                {"type": "divider"},
+                {
+                    "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
+                    "name": "Limit by Day of Week",
+                    "secondary_info": "none",
+                    "tap_action": {"action": "none"},
+                    "hold_action": {"action": "none"},
+                    "double_tap_action": {"action": "none"},
+                },
+            ]
+        )
+        dow_list: list[MutableMapping[str, Any]] = await _generate_dow_entities(
+            code_slot_num=code_slot_num
+        )
+        code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
 
-    dow_list: list[MutableMapping[str, Any]] = await _generate_dow_entities(
-        code_slot_num=code_slot_num
-    )
-    code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
     return code_slot_dict
 
 

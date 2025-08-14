@@ -8,6 +8,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.config_flow import _get_entities
 from custom_components.keymaster.const import (
+    CONF_ADVANCED_DATE_RANGE,
+    CONF_ADVANCED_DAY_OF_WEEK,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_DOOR_SENSOR_ENTITY_ID,
@@ -50,6 +52,8 @@ pytestmark = pytest.mark.asyncio
             },
             "frontdoor",
             {
+                CONF_ADVANCED_DATE_RANGE: True,
+                CONF_ADVANCED_DAY_OF_WEEK: True,
                 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
                 CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
@@ -95,6 +99,7 @@ async def test_form(test_user_input, title, final_config_flow_data, hass, mock_g
     [
         (
             {
+                CONF_ADVANCED_DAY_OF_WEEK: False,
                 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
                 CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
@@ -107,6 +112,8 @@ async def test_form(test_user_input, title, final_config_flow_data, hass, mock_g
             },
             "frontdoor",
             {
+                CONF_ADVANCED_DATE_RANGE: True,
+                CONF_ADVANCED_DAY_OF_WEEK: False,
                 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
                 CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
                 CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
