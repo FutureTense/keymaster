@@ -1,10 +1,12 @@
 name: Release
 
+# yamllint disable rule:line-length
+# yamllint disable-line rule:truthy
 on:
   workflow_dispatch:
-      inputs:
-        tags:      
-          description: 'Manually enter tag'
+    inputs:
+      tags:
+        description: 'Manually enter tag'
   release:
     types: [published]
 
@@ -18,7 +20,7 @@ jobs:
       - name: Get Version
         id: get_version
         if: ${{ github.event_name == 'release' }}
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> "$GITHUB_ENV"
       - name: Set version number
         if: ${{ github.event_name == 'release' }}
         run: |
