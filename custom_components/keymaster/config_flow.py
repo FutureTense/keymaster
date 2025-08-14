@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping
-import contextlib
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import voluptuous as vol
 
@@ -39,9 +38,7 @@ from .const import (
     DOMAIN,
     NONE_TEXT,
 )
-
-if TYPE_CHECKING:
-    from .coordinator import KeymasterCoordinator
+from .coordinator import KeymasterCoordinator
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -141,9 +138,8 @@ def _get_entities(
         data.extend(extra_entities)
 
     if exclude_entities:
-        with contextlib.suppress(ValueError):
-            for ent in exclude_entities:
-                data.remove(ent)
+        for ent in exclude_entities:
+            data.remove(ent)
     if sort:
         data.sort()
 
@@ -177,12 +173,9 @@ def _get_schema(
         check_dict.pop(CONF_PARENT, None)
         default_dict = check_dict
 
-    def _get_default(key: str, fallback_default: Any | None = None) -> Any | None:
+    def _get_default(key: str, fallback_default: Any = None) -> Any:
         """Get default value for key."""
-        default: Any | None = user_input.get(key)
-        if default is None:
-            default = default_dict.get(key, fallback_default)
-        return default
+        return user_input.get(key, default_dict.get(key, fallback_default))
 
     script_default: str | None = _get_default(CONF_NOTIFY_SCRIPT_NAME, NONE_TEXT)
     if script_default is None:

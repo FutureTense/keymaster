@@ -13,6 +13,7 @@ from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
 
+from custom_components.keymaster.const import NONE_TEXT
 from homeassistant.components.zwave_js import PLATFORMS
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -74,6 +75,7 @@ def side_effect_get_entities(
     if domain == "script":
         return [
             "script.keymaster_frontdoor_manual_notify",
+            NONE_TEXT,
         ]
     return []
 

@@ -1,8 +1,8 @@
 """Services for keymaster."""
 
 import logging
-from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady
 
@@ -21,9 +21,6 @@ from .const import (
 )
 from .coordinator import KeymasterCoordinator
 from .lovelace import generate_lovelace
-
-if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 

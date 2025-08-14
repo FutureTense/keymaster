@@ -22,10 +22,12 @@ from custom_components.keymaster.const import (
     CONF_SLOTS,
     CONF_START,
     DOMAIN,
+    NONE_TEXT,
 )
 from homeassistant import config_entries
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.lock.const import LockState
+from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.data_entry_flow import FlowResultType
 from tests.const import CONFIG_DATA
 
@@ -69,6 +71,67 @@ pytestmark = pytest.mark.asyncio
     ],
 )
 async def test_form(test_user_input, title, final_config_flow_data, hass, mock_get_entities):
+    """Test we get the form."""
+
+    _LOGGER.warning("[test_form] result Starting")
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    _LOGGER.warning("[test_form] result: %s", result)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"
+    assert result["errors"] == {}
+
+    with patch(
+        "custom_components.keymaster.async_setup_entry", return_value=True
+    ) as mock_setup_entry:
+        _LOGGER.warning("[test_form] result2 Starting")
+        result2 = await hass.config_entries.flow.async_configure(result["flow_id"], test_user_input)
+        _LOGGER.warning("[test_form] result2: %s", result2)
+        assert result2["type"] is FlowResultType.CREATE_ENTRY
+        assert result2["title"] == title
+        assert result2["data"] == final_config_flow_data
+
+        await hass.async_block_till_done()
+        assert len(mock_setup_entry.mock_calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("test_user_input", "title", "final_config_flow_data"),
+    [
+        (
+            {
+                CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                CONF_LOCK_NAME: "frontdoor",
+                CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+                CONF_SLOTS: 6,
+                CONF_START: 1,
+                CONF_PARENT: "(none)",
+                CONF_NOTIFY_SCRIPT_NAME: "(none)",
+            },
+            "frontdoor",
+            {
+                CONF_ADVANCED_DATE_RANGE: True,
+                CONF_ADVANCED_DAY_OF_WEEK: True,
+                CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+                CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+                CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                CONF_LOCK_NAME: "frontdoor",
+                CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+                CONF_SLOTS: 6,
+                CONF_START: 1,
+                CONF_HIDE_PINS: False,
+                CONF_PARENT: None,
+                CONF_NOTIFY_SCRIPT_NAME: None,
+            },
+        )
+    ],
+)
+async def test_form_no_script(
+    test_user_input, title, final_config_flow_data, hass, mock_get_entities
+):
     """Test we get the form."""
 
     _LOGGER.warning("[test_form] result Starting")
@@ -190,4 +253,7 @@ async def test_get_entities(hass, lock_kwikset_910, client, integration):
     assert state is not None
     assert state.state == LockState.UNLOCKED
 
-    assert KWIKSET_910_LOCK_ENTITY in _get_entities(hass, LOCK_DOMAIN)
+    assert KWIKSET_910_LOCK_ENTITY in _get_entities(
+        hass, LOCK_DOMAIN, extra_entities=["lock.fake"], exclude_entities=["lock.fake"]
+    )
+    assert "(none)" in _get_entities(hass, SCRIPT_DOMAIN, extra_entities=[NONE_TEXT])

@@ -27,15 +27,8 @@
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "keymaster"
-      }
-    }
-  },
-  "options": {
-    "error": {
-      "same_name": "Name already in use"
-    },
-    "step": {
-      "init": {
+      },
+      "reconfigure": {
         "data": {
           "advanced_date_range": "Aktiver avansert datointervall‑funksjon",
           "advanced_day_of_week": "Aktiver avansert ukedag‑funksjon",
@@ -55,7 +48,7 @@
         },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
         "title": "keymaster"
-      }
+      }      
     }
   }
 }
