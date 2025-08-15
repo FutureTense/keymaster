@@ -293,7 +293,9 @@ async def _start_config_flow(
         if user_input.get(CONF_NOTIFY_SCRIPT_NAME) == NONE_TEXT:
             user_input[CONF_NOTIFY_SCRIPT_NAME] = None
 
-        errors.update(await cls.get_unique_name_error(user_input))
+        # Only check for same name if first time config not reconfig
+        if step_id == "user" or not entry_id:
+            errors.update(await cls.get_unique_name_error(user_input))
 
         # Update options if no errors
         if not errors:
