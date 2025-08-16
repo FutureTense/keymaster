@@ -715,7 +715,9 @@ async def _generate_dow_entities(code_slot_num: int) -> list[MutableMapping[str,
     return dow_list
 
 
-async def _generate_child_code_slot_dict(code_slot_num: int) -> MutableMapping[str, Any]:
+async def _generate_child_code_slot_dict(
+    code_slot_num: int, advanced_date_range: bool, advanced_day_of_week: bool
+) -> MutableMapping[str, Any]:
     """Build the dict for the code slot of a child keymaster lock."""
 
     normal_code_slot_dict: MutableMapping[str, Any] = await _generate_code_slot_dict(
@@ -832,60 +834,6 @@ async def _generate_child_code_slot_dict(code_slot_num: int) -> MutableMapping[s
                                 "double_tap_action": {"action": "none"},
                             },
                         },
-                        {
-                            "type": "simple-entity",
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                            "name": "Limit by Date Range",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "type": "conditional",
-                            "conditions": [
-                                {
-                                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                                    "state": "on",
-                                }
-                            ],
-                            "row": {
-                                "type": "simple-entity",
-                                "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
-                                "name": "Date Range Start",
-                                "secondary_info": "none",
-                                "tap_action": {"action": "none"},
-                                "hold_action": {"action": "none"},
-                                "double_tap_action": {"action": "none"},
-                            },
-                        },
-                        {
-                            "type": "conditional",
-                            "conditions": [
-                                {
-                                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                                    "state": "on",
-                                }
-                            ],
-                            "row": {
-                                "type": "simple-entity",
-                                "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
-                                "name": "Date Range End",
-                                "secondary_info": "none",
-                                "tap_action": {"action": "none"},
-                                "hold_action": {"action": "none"},
-                                "double_tap_action": {"action": "none"},
-                            },
-                        },
-                        {
-                            "type": "simple-entity",
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "name": "Limit by Day of Week",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
                     ],
                 },
             },
@@ -903,10 +851,75 @@ async def _generate_child_code_slot_dict(code_slot_num: int) -> MutableMapping[s
         ],
     }
 
-    dow_list: list[MutableMapping[str, Any]] = await _generate_child_dow_entities(
-        code_slot_num=code_slot_num
-    )
-    code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
+    if advanced_date_range:
+        code_slot_dict["cards"][1]["card"]["entities"].extend(
+            [
+                {
+                    "type": "simple-entity",
+                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+                    "name": "Limit by Date Range",
+                    "secondary_info": "none",
+                    "tap_action": {"action": "none"},
+                    "hold_action": {"action": "none"},
+                    "double_tap_action": {"action": "none"},
+                },
+                {
+                    "type": "conditional",
+                    "conditions": [
+                        {
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+                            "state": "on",
+                        }
+                    ],
+                    "row": {
+                        "type": "simple-entity",
+                        "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
+                        "name": "Date Range Start",
+                        "secondary_info": "none",
+                        "tap_action": {"action": "none"},
+                        "hold_action": {"action": "none"},
+                        "double_tap_action": {"action": "none"},
+                    },
+                },
+                {
+                    "type": "conditional",
+                    "conditions": [
+                        {
+                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+                            "state": "on",
+                        }
+                    ],
+                    "row": {
+                        "type": "simple-entity",
+                        "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
+                        "name": "Date Range End",
+                        "secondary_info": "none",
+                        "tap_action": {"action": "none"},
+                        "hold_action": {"action": "none"},
+                        "double_tap_action": {"action": "none"},
+                    },
+                },
+            ]
+        )
+
+    if advanced_day_of_week:
+        code_slot_dict["cards"][1]["card"]["entities"].extend(
+            [
+                {
+                    "type": "simple-entity",
+                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
+                    "name": "Limit by Day of Week",
+                    "secondary_info": "none",
+                    "tap_action": {"action": "none"},
+                    "hold_action": {"action": "none"},
+                    "double_tap_action": {"action": "none"},
+                },
+            ]
+        )
+        dow_list: list[MutableMapping[str, Any]] = await _generate_child_dow_entities(
+            code_slot_num=code_slot_num
+        )
+        code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
     return code_slot_dict
 
 
