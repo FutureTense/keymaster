@@ -721,7 +721,10 @@ async def _generate_child_code_slot_dict(
     """Build the dict for the code slot of a child keymaster lock."""
 
     normal_code_slot_dict: MutableMapping[str, Any] = await _generate_code_slot_dict(
-        code_slot_num=code_slot_num, child=True
+        code_slot_num=code_slot_num,
+        advanced_date_range=advanced_date_range,
+        advanced_day_of_week=advanced_day_of_week,
+        child=True,
     )
     override_code_slot_dict = normal_code_slot_dict["cards"][1]
 
