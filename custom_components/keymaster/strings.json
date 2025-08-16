@@ -48,7 +48,7 @@
         },
         "description": "Select the lock to setup and code slots to create. There may or may not be alarm level and alarm type entities.",
         "title": "keymaster"
-      }      
+      }
     }
   }
 }
