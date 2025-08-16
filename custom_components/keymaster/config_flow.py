@@ -89,6 +89,33 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
         assert self._entry
         self._data = dict(self._entry.data)
 
+        _LOGGER.debug(
+            "[async_step_reconfigure] entry_id: %s, data: %s",
+            self._entry.entry_id,
+            self._data,
+        )
+
+        # Convert None to (none)
+        if self._data[CONF_DOOR_SENSOR_ENTITY_ID] is None:
+            self._data[CONF_DOOR_SENSOR_ENTITY_ID] = NONE_TEXT
+        if self._data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] is None:
+            self._data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = NONE_TEXT
+        if self._data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] is None:
+            self._data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = NONE_TEXT
+
+        notify_scripts = _get_entities(
+            hass=self.hass,
+            domain=SCRIPT_DOMAIN,
+            extra_entities=[NONE_TEXT],
+        )
+
+        if self._data[CONF_NOTIFY_SCRIPT_NAME] not in notify_scripts:
+            _LOGGER.debug(
+                "[async_step_reconfigure] notify script %s not found, setting to NONE_TEXT",
+                self._data[CONF_NOTIFY_SCRIPT_NAME],
+            )
+            self._data[CONF_NOTIFY_SCRIPT_NAME] = NONE_TEXT
+
         return await _start_config_flow(
             cls=self,
             step_id="reconfigure",
