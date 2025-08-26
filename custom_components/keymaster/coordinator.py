@@ -147,6 +147,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         for lock in self.kmlocks.values():
             await self._update_listeners(lock)
         self._initial_setup_done_event.set()
+        await self._verify_lock_configuration()
 
     def _create_json_folder(self) -> None:
         _LOGGER.debug("[create_json_folder] json_kmlocks Location: %s", self._json_folder)
@@ -194,6 +195,21 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         _LOGGER.debug("[get_dict_from_json_file] Imported kmlocks: %s", kmlocks)
         return kmlocks
+
+    async def _verify_lock_configuration(self) -> None:
+        """Verify lock configuration and update as needed."""
+        for lock in self.kmlocks:
+            _LOGGER.debug("================================")
+            _LOGGER.debug("[verify_lock_configuration] Verifying %s", lock)
+            config_entry_id: str = self.kmlocks[lock].keymaster_config_entry_id
+            config_entry: ConfigEntry | None = self.hass.config_entries.async_get_entry(
+                config_entry_id
+            )
+            if config_entry is None:
+                _LOGGER.debug("[verify_lock_configuration] %s: No config entry found", lock)
+                _LOGGER.debug("deleting %s from kmlocks", lock)
+                await self.delete_lock_by_config_entry_id(config_entry_id)
+            _LOGGER.debug("================================")
 
     @staticmethod
     def _encode_pin(pin: str, unique_id: str) -> str:
