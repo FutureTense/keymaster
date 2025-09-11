@@ -190,7 +190,8 @@ def _get_schema(
     user_input: MutableMapping[str, Any] | None,
     default_dict: MutableMapping[str, Any],
     entry_id: str | None = None,
-) -> vol.Schema:
+    flow: KeymasterConfigFlow | None = None,
+) -> vol.Schema | ConfigFlowResult:
     """Get a schema using the default_dict as a backup."""
     if user_input is None:
         user_input = {}
@@ -210,18 +211,23 @@ def _get_schema(
     elif script_default != NONE_TEXT and not script_default.startswith("script."):
         script_default = f"script.{script_default}"
     _LOGGER.debug("[get_schema] script_default: %s (%s)", script_default, type(script_default))
+    lock_entities = _get_entities(
+        hass=hass,
+        domain=LOCK_DOMAIN,
+        exclude_entities=_get_locks_in_use(
+            hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)
+        ),
+    )
+    if not lock_entities:
+        if flow is not None:
+            return flow.async_abort(reason="no_locks")
+        raise ValueError("No lock entities found")
     return vol.Schema(
         {
             vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
-            vol.Required(CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)): vol.In(
-                _get_entities(
-                    hass=hass,
-                    domain=LOCK_DOMAIN,
-                    exclude_entities=_get_locks_in_use(
-                        hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)
-                    ),
-                )
-            ),
+            vol.Required(
+                CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
+            ): vol.In(lock_entities),
             vol.Optional(CONF_PARENT, default=_get_default(CONF_PARENT, NONE_TEXT)): vol.In(
                 _available_parent_locks(hass, entry_id)
             ),
@@ -338,11 +344,18 @@ async def _start_config_flow(
                 await cls.hass.config_entries.async_reload(entry_id)
                 return cls.async_abort(reason="reconfigure_successful")
 
+    data_schema = _get_schema(
+        hass=cls.hass,
+        user_input=user_input,
+        default_dict=defaults,
+        entry_id=entry_id,
+        flow=cls,
+    )
+    if not isinstance(data_schema, vol.Schema):
+        return data_schema
     return cls.async_show_form(
         step_id=step_id,
-        data_schema=_get_schema(
-            hass=cls.hass, user_input=user_input, default_dict=defaults, entry_id=entry_id
-        ),
+        data_schema=data_schema,
         errors=errors,
         description_placeholders=description_placeholders,
     )
