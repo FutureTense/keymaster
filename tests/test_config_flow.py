@@ -1,12 +1,13 @@
 """Test keymaster config flow."""
 
+import asyncio
 import logging
 from unittest.mock import patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster.config_flow import _get_entities
+from custom_components.keymaster.config_flow import _get_entities, _get_locks_in_use
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
@@ -21,9 +22,12 @@ from custom_components.keymaster.const import (
     CONF_PARENT_ENTRY_ID,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
     DOMAIN,
     NONE_TEXT,
 )
+from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.lock import KeymasterLock
 from homeassistant import config_entries
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.lock.const import LockState
@@ -254,6 +258,100 @@ async def test_reconfiguration_form(
         assert entry.data.copy() == final_config_flow_data
 
 
+async def test_reconfigure_reload_failure(hass, mock_get_entities):
+    """Reload errors surface in the form."""
+    with (
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._update_lock_data",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._sync_child_locks",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+            return_value=True,
+        ),
+    ):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="frontdoor",
+            data=CONFIG_DATA,
+            version=3,
+        )
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        reconfigure_result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": config_entries.SOURCE_RECONFIGURE,
+                "entry_id": entry.entry_id,
+            },
+        )
+        with patch.object(
+            hass.config_entries,
+            "async_reload",
+            side_effect=Exception("boom"),
+        ):
+            result = await hass.config_entries.flow.async_configure(
+                reconfigure_result["flow_id"],
+                {
+                    CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                    CONF_LOCK_NAME: "frontdoor",
+                    CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+                    CONF_SLOTS: 6,
+                    CONF_START: 1,
+                    CONF_PARENT: NONE_TEXT,
+                    CONF_NOTIFY_SCRIPT_NAME: "script.keymaster_frontdoor_manual_notify",
+                },
+            )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"]["base"] == "add_lock_failed"
+        assert result["description_placeholders"]["error"] == "boom"
+
+
+async def test_reconfigure_cancelled_error(hass, lock_kwikset_910, client, integration):
+    """Config flow surfaces reload cancellation errors."""
+    entry = MockConfigEntry(domain=DOMAIN, data=CONFIG_DATA, version=3)
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    reconfigure_result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    with patch.object(
+        hass.config_entries,
+        "async_reload",
+        side_effect=asyncio.CancelledError(),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            reconfigure_result["flow_id"],
+            {
+                CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+                CONF_LOCK_NAME: "frontdoor",
+                CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+                CONF_SLOTS: 6,
+                CONF_START: 1,
+                CONF_PARENT: NONE_TEXT,
+                CONF_NOTIFY_SCRIPT_NAME: "script.keymaster_frontdoor_manual_notify",
+            },
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"]["base"] == "add_lock_failed"
+    assert result["description_placeholders"]["error"] == "timeout"
+
+
 async def test_get_entities(hass, lock_kwikset_910, client, integration):
     """Test function that returns entities by domain."""
     # Load ZwaveJS
@@ -267,3 +365,16 @@ async def test_get_entities(hass, lock_kwikset_910, client, integration):
         hass, LOCK_DOMAIN, extra_entities=["lock.fake"], exclude_entities=["lock.fake"]
     )
     assert "(none)" in _get_entities(hass, SCRIPT_DOMAIN, extra_entities=[NONE_TEXT])
+
+
+async def test_get_locks_in_use_handles_missing_data(hass):
+    """Handle missing coordinator data when listing locks."""
+    coordinator = KeymasterCoordinator(hass)
+    hass.data.setdefault(DOMAIN, {})[COORDINATOR] = coordinator
+    coordinator.data = None
+    coordinator.kmlocks = {
+        "1": KeymasterLock(
+            lock_name="Front", lock_entity_id="lock.front", keymaster_config_entry_id="1"
+        )
+    }
+    assert _get_locks_in_use(hass) == ["lock.front"]

@@ -9,14 +9,13 @@ from unittest.mock import DEFAULT, AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from zwave_js_server.model.driver import Driver
-from zwave_js_server.model.node import Node
-from zwave_js_server.version import VersionInfo
 
-from custom_components.keymaster.const import NONE_TEXT
-from homeassistant.components.zwave_js import PLATFORMS
+# Provide placeholder constants to avoid importing the integration at import time
+NONE_TEXT = "(none)"
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+
+PLATFORMS: list[Platform] = []
 
 from .common import load_fixture
 
@@ -235,7 +234,7 @@ async def integration_fixture(
         unique_id=str(client.driver.controller.home_id),
     )
     entry.add_to_hass(hass)
-    with patch("homeassistant.components.zwave_js.PLATFORMS", platforms):
+    with patch("homeassistant.components.zwave_js.PLATFORMS", platforms, create=True):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 

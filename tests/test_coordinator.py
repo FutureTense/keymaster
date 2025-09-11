@@ -1,13 +1,75 @@
 """Tests for the Coordinator."""
 
-from unittest.mock import AsyncMock, Mock, patch
+import asyncio
+import logging
+import sys
+from types import ModuleType, SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.lock import KeymasterLock
+# Stub zwave_js_server modules to avoid heavy dependencies
+zwave_module = ModuleType("zwave_js_server")
+sys.modules.setdefault("zwave_js_server", zwave_module)
+sys.modules.setdefault("zwave_js_server.client", ModuleType("client"))
+sys.modules["zwave_js_server.client"].Client = MagicMock
+const_mod = ModuleType("lock")
+const_mod.ATTR_CODE_SLOT = "code_slot"
+const_mod.ATTR_IN_USE = "in_use"
+const_mod.ATTR_USERCODE = "usercode"
+sys.modules["zwave_js_server.const.command_class.lock"] = const_mod
+main_const = ModuleType("const")
+class DummyCommandClass:
+    pass
+
+class DummyRemoveNodeReason:
+    pass
+
+main_const.CommandClass = DummyCommandClass
+main_const.RemoveNodeReason = DummyRemoveNodeReason
+class DummySecurityClass:
+    S0_Legacy = 1
+main_const.SecurityClass = DummySecurityClass
+sys.modules["zwave_js_server.const"] = main_const
+exc_mod = ModuleType("exceptions")
+exc_mod.BaseZwaveJSServerError = Exception
+exc_mod.FailedZWaveCommand = Exception
+exc_mod.InvalidServerVersion = Exception
+exc_mod.NotConnected = Exception
+sys.modules["zwave_js_server.exceptions"] = exc_mod
+node_mod = ModuleType("node")
+node_mod.Node = MagicMock
+sys.modules["zwave_js_server.model.node"] = node_mod
+lock_mod = ModuleType("lock")
+lock_mod.CodeSlot = dict
+lock_mod.clear_usercode = AsyncMock()
+lock_mod.get_usercode = MagicMock()
+lock_mod.get_usercode_from_node = AsyncMock()
+lock_mod.get_usercodes = MagicMock()
+lock_mod.set_usercode = AsyncMock()
+sys.modules["zwave_js_server.util.lock"] = lock_mod
+util_node_mod = ModuleType("node_util")
+util_node_mod.dump_node_state = MagicMock()
+sys.modules["zwave_js_server.util.node"] = util_node_mod
+
+ha_zwave_mod = ModuleType("homeassistant.components.zwave_js")
+ha_zwave_mod.ZWAVE_JS_NOTIFICATION_EVENT = "zwave_js_notification"
+sys.modules["homeassistant.components.zwave_js"] = ha_zwave_mod
+ha_zwave_const = ModuleType("homeassistant.components.zwave_js.const")
+ha_zwave_const.ATTR_PARAMETERS = "parameters"
+ha_zwave_const.DOMAIN = "zwave_js"
+sys.modules["homeassistant.components.zwave_js.const"] = ha_zwave_const
+
+from custom_components.keymaster.coordinator import (
+    ZWAVE_MAX_PARALLEL,
+    ZWAVE_TX_INTERVAL,
+    TIMEOUT_FACTOR,
+    KeymasterCoordinator,
+)
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 
 @pytest.fixture
@@ -175,3 +237,160 @@ class TestVerifyLockConfiguration:
         assert mock_coordinator.delete_lock_by_config_entry_id.call_count == 2
         mock_coordinator.delete_lock_by_config_entry_id.assert_any_call("invalid_entry_id_1")
         mock_coordinator.delete_lock_by_config_entry_id.assert_any_call("invalid_entry_id_2")
+
+
+class TestThrottled:
+    async def test_throttled_calls_coro_and_sleeps(self, mock_coordinator):
+        mock_coordinator._zwave_sem = asyncio.Semaphore(1)
+        coro = AsyncMock(return_value="ok")
+        with patch("asyncio.sleep", new=AsyncMock()) as sleep:
+            result = await mock_coordinator._throttled(coro, 1, test=2)
+        sleep.assert_called_once_with(ZWAVE_TX_INTERVAL)
+        coro.assert_awaited_once_with(1, test=2)
+        assert result == "ok"
+
+    async def test_throttled_logs_and_raises(self, mock_coordinator, caplog):
+        mock_coordinator._zwave_sem = asyncio.Semaphore(1)
+        coro = AsyncMock(side_effect=Exception("boom"))
+        with patch("asyncio.sleep", new=AsyncMock()):
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(Exception):
+                    await mock_coordinator._throttled(coro)
+        assert "boom" in caplog.text
+
+    async def test_throttled_handles_sync_function(self, mock_coordinator):
+        mock_coordinator._zwave_sem = asyncio.Semaphore(1)
+        func = Mock(return_value="ok")
+        with patch("asyncio.sleep", new=AsyncMock()):
+            result = await mock_coordinator._throttled(func, 1, test=2)
+        func.assert_called_once_with(1, test=2)
+        assert result == "ok"
+
+
+class TestAsyncUpdateData:
+    async def test_async_update_data_handles_exceptions(self, mock_coordinator, caplog):
+        mock_coordinator._initial_setup_done_event = asyncio.Event()
+        mock_coordinator._initial_setup_done_event.set()
+        mock_coordinator.kmlocks = {"1": object()}
+        mock_coordinator._quick_refresh = False
+        mock_coordinator._sync_status_counter = 0
+        mock_coordinator._cancel_quick_refresh = None
+        mock_coordinator.hass.async_add_executor_job = AsyncMock()
+        mock_coordinator._clear_pending_quick_refresh = AsyncMock()
+        mock_coordinator._schedule_quick_refresh_if_needed = AsyncMock()
+        mock_coordinator._update_door_and_lock_state = AsyncMock()
+        mock_coordinator._write_config_to_json = Mock()
+        mock_coordinator._update_lock_data = AsyncMock(side_effect=Exception("update"))
+        mock_coordinator._sync_child_locks = AsyncMock(side_effect=Exception("sync"))
+        with caplog.at_level(logging.ERROR):
+            result = await mock_coordinator._async_update_data()
+        assert result == mock_coordinator.kmlocks
+        assert "update" in caplog.text
+        assert "sync" in caplog.text
+
+
+async def test_update_timeout_scales_with_slots(mock_coordinator):
+    """Coordinator timeout grows with lock size."""
+    slots = {i: KeymasterCodeSlot(number=i) for i in range(1, 100)}
+    lock = KeymasterLock(
+        lock_name="BigLock",
+        lock_entity_id="lock.big",
+        keymaster_config_entry_id="big",
+        code_slots=slots,
+    )
+    mock_coordinator.kmlocks = {"big": lock}
+    mock_coordinator.update_timeout = 10
+    mock_coordinator._timeout = 10
+    mock_coordinator._recalc_update_timeout()
+    expected = (99 * ZWAVE_TX_INTERVAL * TIMEOUT_FACTOR) / ZWAVE_MAX_PARALLEL + 10
+    assert mock_coordinator._timeout >= expected
+    assert mock_coordinator.update_timeout == mock_coordinator._timeout
+
+
+async def test_update_timeout_uses_declared_slots(mock_coordinator):
+    """Timeout uses number_of_code_slots when code_slots are undefined."""
+    lock = KeymasterLock(
+        lock_name="BigLock",
+        lock_entity_id="lock.big",
+        keymaster_config_entry_id="big",
+        number_of_code_slots=99,
+        code_slots=None,
+    )
+    mock_coordinator.kmlocks = {"big": lock}
+    mock_coordinator.update_timeout = 10
+    mock_coordinator._timeout = 10
+    mock_coordinator._recalc_update_timeout()
+    expected = (99 * ZWAVE_TX_INTERVAL * TIMEOUT_FACTOR) / ZWAVE_MAX_PARALLEL + 10
+    assert mock_coordinator._timeout >= expected
+
+
+async def test_update_timeout_scales_with_security(mock_coordinator):
+    """Timeout grows when S0 security requires more traffic."""
+    lock = KeymasterLock(
+        lock_name="BigLock",
+        lock_entity_id="lock.big",
+        keymaster_config_entry_id="big",
+        number_of_code_slots=99,
+    )
+    lock.zwave_js_lock_node = SimpleNamespace(
+        highest_security_class=DummySecurityClass.S0_Legacy
+    )
+    mock_coordinator.kmlocks = {"big": lock}
+    mock_coordinator.update_timeout = 10
+    mock_coordinator._timeout = 10
+    mock_coordinator._recalc_update_timeout()
+    expected = (99 * 3 * ZWAVE_TX_INTERVAL * TIMEOUT_FACTOR) / ZWAVE_MAX_PARALLEL + 10
+    assert mock_coordinator._timeout >= expected
+
+
+async def test_add_lock_propagates_refresh_errors(mock_coordinator):
+    """add_lock should surface refresh errors."""
+    mock_coordinator._initial_setup_done_event = asyncio.Event()
+    mock_coordinator._initial_setup_done_event.set()
+    mock_coordinator._rebuild_lock_relationships = AsyncMock()
+    mock_coordinator._update_door_and_lock_state = AsyncMock()
+    mock_coordinator._update_listeners = AsyncMock()
+    mock_coordinator._setup_timer = AsyncMock()
+    mock_coordinator.async_refresh = AsyncMock(side_effect=TimeoutError("boom"))
+    lock = KeymasterLock(
+        lock_name="Test",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="test",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    with pytest.raises(asyncio.TimeoutError):
+        await mock_coordinator.add_lock(lock)
+
+
+async def test_add_lock_handles_cancelled_error(mock_coordinator):
+    """add_lock converts cancellation to HomeAssistantError."""
+    mock_coordinator._initial_setup_done_event = asyncio.Event()
+    mock_coordinator._initial_setup_done_event.set()
+    mock_coordinator._rebuild_lock_relationships = AsyncMock()
+    mock_coordinator._update_door_and_lock_state = AsyncMock()
+    mock_coordinator._update_listeners = AsyncMock()
+    mock_coordinator._setup_timer = AsyncMock()
+    mock_coordinator.async_refresh = AsyncMock(side_effect=asyncio.CancelledError())
+    lock = KeymasterLock(
+        lock_name="Test",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="test",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    with pytest.raises(HomeAssistantError):
+        await mock_coordinator.add_lock(lock)
+
+
+async def test_rebuild_lock_relationships_handles_missing_child(mock_coordinator):
+    """Orphaned child IDs are removed without error."""
+    parent = KeymasterLock(
+        lock_name="Parent",
+        lock_entity_id="lock.parent",
+        keymaster_config_entry_id="parent",
+        child_config_entry_ids=["missing"],
+    )
+    mock_coordinator.kmlocks = {"parent": parent}
+    await mock_coordinator._rebuild_lock_relationships()
+    assert parent.child_config_entry_ids == []
+
+

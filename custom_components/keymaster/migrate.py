@@ -20,7 +20,7 @@ from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import SERVICE_RELOAD
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
@@ -84,8 +84,14 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
 
     try:
         await coordinator.add_lock(kmlock=kmlock, update=True)
-    except asyncio.exceptions.CancelledError as e:
-        _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.error(
+            "Error adding lock during migration. %s: %s",
+            e.__class__.__qualname__,
+            e,
+        )
+        msg = f"Error adding lock: {e}"
+        raise HomeAssistantError(msg) from e
 
     # Delete Package files
     _LOGGER.info("[migrate_2to3] Deleting Package files")

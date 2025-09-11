@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping
+import asyncio
 import logging
 from typing import Any
 
@@ -179,7 +180,8 @@ def _get_locks_in_use(hass: HomeAssistant, exclude: str | None = None) -> list[s
         return []
     data: list[str] = []
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    data.extend([kmlock.lock_entity_id for kmlock in coordinator.data.values()])
+    kmlocks = (coordinator.data or coordinator.kmlocks).values()
+    data.extend([kmlock.lock_entity_id for kmlock in kmlocks])
     if exclude and exclude in data:
         data.remove(exclude)
 
@@ -342,7 +344,52 @@ async def _start_config_flow(
                 return cls.async_create_entry(title=title, data=user_input)
             if cls._entry is not None:
                 cls.hass.config_entries.async_update_entry(cls._entry, data=user_input)
-                await cls.hass.config_entries.async_reload(entry_id)
+                try:
+                    await cls.hass.config_entries.async_reload(entry_id)
+                except asyncio.CancelledError:
+                    _LOGGER.error(
+                        "[start_config_flow] Failed to reload entry. CancelledError",
+                    )
+                    errors["base"] = "add_lock_failed"
+                    description_placeholders["error"] = "timeout"
+                    data_schema = _get_schema(
+                        hass=cls.hass,
+                        user_input=user_input,
+                        default_dict=user_input,
+                        entry_id=entry_id,
+                        flow=cls,
+                    )
+                    if not isinstance(data_schema, vol.Schema):
+                        return data_schema
+                    return cls.async_show_form(
+                        step_id=step_id,
+                        data_schema=data_schema,
+                        errors=errors,
+                        description_placeholders=description_placeholders,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    _LOGGER.error(
+                        "[start_config_flow] Failed to reload entry. %s: %s",
+                        e.__class__.__qualname__,
+                        e,
+                    )
+                    errors["base"] = "add_lock_failed"
+                    description_placeholders["error"] = str(e)
+                    data_schema = _get_schema(
+                        hass=cls.hass,
+                        user_input=user_input,
+                        default_dict=user_input,
+                        entry_id=entry_id,
+                        flow=cls,
+                    )
+                    if not isinstance(data_schema, vol.Schema):
+                        return data_schema
+                    return cls.async_show_form(
+                        step_id=step_id,
+                        data_schema=data_schema,
+                        errors=errors,
+                        description_placeholders=description_placeholders,
+                    )
                 return cls.async_abort(reason="reconfigure_successful")
 
     data_schema = _get_schema(

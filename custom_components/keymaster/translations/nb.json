@@ -5,7 +5,8 @@
         "no_locks": "No lock devices found. Make sure the lock device is added to the Z-Wave network first, then try again."
     },
     "error": {
-      "same_name": "Name already in use"
+      "same_name": "Name already in use",
+      "add_lock_failed": "Failed to add lock: {error}"
     },
     "step": {
       "user": {

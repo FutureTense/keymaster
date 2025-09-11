@@ -4,7 +4,8 @@
         "reconfigure_successful": "Reconfigure Successful"
     },
     "error": {
-      "same_name": "keymaster Lock Name already in use"
+      "same_name": "keymaster Lock Name already in use",
+      "add_lock_failed": "Failed to add lock: {error}"
     },
     "step": {
       "user": {

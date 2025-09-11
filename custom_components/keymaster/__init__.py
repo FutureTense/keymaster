@@ -11,7 +11,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.event import async_call_later
 
@@ -161,8 +161,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     try:
         await coordinator.add_lock(kmlock=kmlock)
-    except asyncio.exceptions.CancelledError as e:
-        _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.error("Error adding lock. %s: %s", e.__class__.__qualname__, e)
+        msg = f"Error adding lock: {e}"
+        raise HomeAssistantError(msg) from e
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
     await generate_lovelace(
