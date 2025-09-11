@@ -166,7 +166,8 @@ def _get_entities(
 
     if exclude_entities:
         for ent in exclude_entities:
-            data.remove(ent)
+            if ent in data:
+                data.remove(ent)
     if sort:
         data.sort()
 
