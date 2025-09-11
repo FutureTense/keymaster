@@ -37,6 +37,16 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.asyncio
 
 
+async def test_no_locks_abort(hass):
+    """Test the flow aborts when no locks are available."""
+    with patch("custom_components.keymaster.config_flow._get_entities", return_value=[]):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_locks"
+
+
 @pytest.mark.parametrize(
     ("test_user_input", "title", "final_config_flow_data"),
     [
