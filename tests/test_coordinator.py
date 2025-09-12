@@ -28,7 +28,7 @@ class DummyRemoveNodeReason:
 main_const.CommandClass = DummyCommandClass
 main_const.RemoveNodeReason = DummyRemoveNodeReason
 class DummySecurityClass:
-    S0_Legacy = 1
+    S0_LEGACY = 1
 main_const.SecurityClass = DummySecurityClass
 sys.modules["zwave_js_server.const"] = main_const
 exc_mod = ModuleType("exceptions")
@@ -333,7 +333,7 @@ async def test_update_timeout_scales_with_security(mock_coordinator):
         number_of_code_slots=99,
     )
     lock.zwave_js_lock_node = SimpleNamespace(
-        highest_security_class=DummySecurityClass.S0_Legacy
+        highest_security_class=DummySecurityClass.S0_LEGACY
     )
     mock_coordinator.kmlocks = {"big": lock}
     mock_coordinator.update_timeout = 10

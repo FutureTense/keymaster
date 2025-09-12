@@ -244,7 +244,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 security = node.get_highest_security_class()
         except Exception:  # noqa: BLE001
             return 1
-        return 3 if security == SecurityClass.S0_Legacy else 1
+        return 3 if security == SecurityClass.S0_LEGACY else 1
 
     def _recalc_update_timeout(self) -> None:
         """Recalculate coordinator update timeout based on slot count and security."""
