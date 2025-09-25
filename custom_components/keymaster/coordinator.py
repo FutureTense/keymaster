@@ -526,6 +526,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not event:
             return
 
+        # Ignore events without a user_id - they're from zwave - let handle_zwave_js_lock_event handle it
+        if event.context.as_dict()["user_id"] is None:
+            return
+
         changed_entity: str = event.data["entity_id"]
 
         # Don't do anything if the changed entity is not this lock
