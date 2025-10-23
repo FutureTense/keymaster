@@ -2,5 +2,6 @@
   "name": "keymaster",
   "zip_release": true,
   "filename": "keymaster.zip",
-  "homeassistant": "2024.5.0b0"
+  "homeassistant": "2025.8.0",
+  "persistent_directory": "json_kmlocks"
 }
