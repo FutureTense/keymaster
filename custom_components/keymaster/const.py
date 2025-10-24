@@ -26,6 +26,7 @@ ATTR_ACTION_CODE = "action_code"
 ATTR_ACTION_TEXT = "action_text"
 ATTR_CODE_SLOT_NAME = "code_slot_name"
 ATTR_NOTIFICATION_SOURCE = "notification_source"
+ATTR_DATE_TIME_NOW = "date_time_now"
 
 # Attributes
 ATTR_CODE_SLOT = "code_slot"
