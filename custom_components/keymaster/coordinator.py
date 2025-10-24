@@ -1868,39 +1868,44 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         """Sync the pin with the lock based on conditions."""
         if not kmlock.code_slots:
             return
+
+        slot = kmlock.code_slots[code_slot_num]
+
+        # Lock reports empty/no code
         if not usercode:
-            if (
-                not kmlock.code_slots[code_slot_num].enabled
-                or not kmlock.code_slots[code_slot_num].active
-                or not kmlock.code_slots[code_slot_num].pin
-            ):
-                kmlock.code_slots[code_slot_num].synced = Synced.DISCONNECTED
-            elif kmlock.code_slots[code_slot_num].pin is not None:
-                pin: str = str(kmlock.code_slots[code_slot_num].pin)
+            if (not slot.enabled) or (not slot.active) or (not slot.pin):
+                slot.synced = Synced.DISCONNECTED
+            elif slot.pin is not None:
+                # We have a local clear PIN; push it to the lock
                 await self.set_pin_on_lock(
                     config_entry_id=kmlock.keymaster_config_entry_id,
                     code_slot_num=code_slot_num,
-                    pin=pin,
+                    pin=str(slot.pin),
                     override=True,
                 )
-        elif (
-            not kmlock.code_slots[code_slot_num].enabled
-            or not kmlock.code_slots[code_slot_num].active
-        ):
+            return
+
+        # Slot disabled or inactive -> ensure lock is cleared
+        if (not slot.enabled) or (not slot.active):
             await self.clear_pin_from_lock(
                 config_entry_id=kmlock.keymaster_config_entry_id,
                 code_slot_num=code_slot_num,
                 override=True,
             )
-        else:
-            kmlock.code_slots[code_slot_num].synced = Synced.SYNCED
-            kmlock.code_slots[code_slot_num].pin = usercode
+            return
 
-        if (
-            kmlock.code_slots[code_slot_num].synced == Synced.SYNCED
-            and kmlock.code_slots[code_slot_num].pin != usercode
-        ):
-            kmlock.code_slots[code_slot_num].synced = Synced.OUT_OF_SYNC
+        # Lock reported a value. Only overwrite local PIN if it looks like a real numeric code.
+        if usercode.isdigit():
+            slot.synced = Synced.SYNCED
+            slot.pin = usercode
+        else:
+            # Redacted/masked value reported (e.g., "******"); keep local clear PIN
+            # and consider it synced to avoid flip-flopping.
+            slot.synced = Synced.SYNCED
+
+        # Only mark out-of-sync when the lock reports a concrete numeric PIN different from ours.
+        if usercode and usercode.isdigit() and slot.synced == Synced.SYNCED and slot.pin != usercode:
+            slot.synced = Synced.OUT_OF_SYNC
             self._quick_refresh = True
 
     async def _sync_child_locks(self, keymaster_config_entry_id: str) -> None:
