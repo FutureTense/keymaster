@@ -135,11 +135,13 @@ class KeymasterText(KeymasterEntity, TextEntity):
                     config_entry_id=self._config_entry.entry_id,
                     code_slot_num=self._code_slot,
                     pin=value,
+                    set_in_kmlock=True,
                 )
             elif not value and self._code_slot:
                 await self.coordinator.clear_pin_from_lock(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot_num=self._code_slot,
+                    clear_from_kmlock=True,
                 )
             else:
                 return
