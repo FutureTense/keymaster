@@ -4,8 +4,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.event import Event
 
 from custom_components.keymaster.const import DOMAIN
+from homeassistant.components.lock import STATE_UNLOCKED
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import STATE_UNLOCKED
 
 from .const import CONFIG_DATA_910
 
