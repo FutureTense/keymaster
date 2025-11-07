@@ -1439,7 +1439,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     e,
                 )
                 return False
-            if usercode[ZWAVEJS_ATTR_USERCODE] == "":
+            # Treat both "" and "0000" as cleared (Schlage BE469 firmware bug workaround)
+            if usercode[ZWAVEJS_ATTR_USERCODE] in ("", "0000"):
                 _LOGGER.debug(
                     "[clear_pin_from_lock] %s: Code Slot %s: PIN Cleared",
                     kmlock.lock_name,
