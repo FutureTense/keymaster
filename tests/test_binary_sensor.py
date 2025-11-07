@@ -4,8 +4,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.event import Event
 
 from custom_components.keymaster.const import DOMAIN
+from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import STATE_UNLOCKED
 
 from .const import CONFIG_DATA_910
 
@@ -31,7 +31,7 @@ async def test_zwavejs_network_ready(hass, client, lock_kwikset_910, integration
 
     state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
     assert state
-    assert state.state == STATE_UNLOCKED
+    assert state.state == LockState.UNLOCKED
 
     # Load the integration with wrong lock entity_id
     config_entry = MockConfigEntry(
