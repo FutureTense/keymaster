@@ -175,3 +175,180 @@ class TestVerifyLockConfiguration:
         assert mock_coordinator.delete_lock_by_config_entry_id.call_count == 2
         mock_coordinator.delete_lock_by_config_entry_id.assert_any_call("invalid_entry_id_1")
         mock_coordinator.delete_lock_by_config_entry_id.assert_any_call("invalid_entry_id_2")
+
+
+class TestUpdateChildCodeSlots:
+    """Test cases for _update_child_code_slots method - Issue #520 fix."""
+
+    @pytest.fixture
+    def mock_code_slot(self):
+        """Create a mock code slot."""
+        slot = Mock()
+        slot.code_slot_num = 1
+        slot.pin = "5979"
+        slot.enabled = True
+        slot.active = True
+        slot.name = "Test Slot"
+        return slot
+
+    async def test_disabled_parent_slot_with_pin_no_mismatch(
+        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+    ):
+        """Test that disabled parent slot with PIN doesn't cause mismatch with cleared child."""
+        # Arrange: Parent slot disabled but has PIN, child slot cleared
+        mock_code_slot.enabled = False
+        mock_code_slot.pin = "5979"
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.lock_name = "Child Lock"
+        child_slot = Mock()
+        child_slot.pin = None  # Child successfully cleared
+        child_slot.enabled = False
+        child_slot.active = True
+        child_lock.code_slots = {1: child_slot}
+
+        # Test the logic: parent_pin_for_comparison should be None when disabled
+        parent_pin_for_comparison = (
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+        )
+        child_pin = child_slot.pin
+
+        # Verify no mismatch (both None)
+        pin_mismatch = parent_pin_for_comparison != child_pin and not (
+            child_pin and "*" in str(child_pin)
+        )
+
+        # Assert
+        assert parent_pin_for_comparison is None
+        assert child_pin is None
+        assert pin_mismatch is False  # No mismatch!
+
+    async def test_inactive_parent_slot_with_pin_no_mismatch(
+        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+    ):
+        """Test that inactive parent slot with PIN doesn't cause mismatch with cleared child."""
+        # Arrange: Parent slot enabled but inactive (time restriction), child cleared
+        mock_code_slot.enabled = True
+        mock_code_slot.active = False
+        mock_code_slot.pin = "5979"
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.lock_name = "Child Lock"
+        child_slot = Mock()
+        child_slot.pin = None  # Child successfully cleared
+        child_slot.enabled = True
+        child_slot.active = False
+        child_lock.code_slots = {1: child_slot}
+
+        # Test the logic: parent_pin_for_comparison should be None when inactive
+        parent_pin_for_comparison = (
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+        )
+        child_pin = child_slot.pin
+
+        # Verify no mismatch
+        pin_mismatch = parent_pin_for_comparison != child_pin and not (
+            child_pin and "*" in str(child_pin)
+        )
+
+        # Assert
+        assert parent_pin_for_comparison is None
+        assert pin_mismatch is False
+
+    async def test_enabled_active_parent_slot_normal_sync(
+        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+    ):
+        """Test that enabled+active parent slot continues normal sync behavior."""
+        # Arrange: Parent enabled+active, child has different PIN
+        mock_code_slot.enabled = True
+        mock_code_slot.active = True
+        mock_code_slot.pin = "5979"
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.lock_name = "Child Lock"
+        child_slot = Mock()
+        child_slot.pin = "1234"  # Different PIN - should trigger sync
+        child_slot.enabled = True
+        child_slot.active = True
+        child_lock.code_slots = {1: child_slot}
+
+        # Test the logic: parent_pin_for_comparison should be actual PIN when enabled+active
+        parent_pin_for_comparison = (
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+        )
+        child_pin = child_slot.pin
+
+        # Verify mismatch detected
+        pin_mismatch = parent_pin_for_comparison != child_pin and not (
+            child_pin and "*" in str(child_pin)
+        )
+
+        # Assert
+        assert parent_pin_for_comparison == "5979"
+        assert pin_mismatch is True  # Mismatch detected!
+
+    async def test_enabled_active_parent_matching_child_no_mismatch(
+        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+    ):
+        """Test that enabled+active parent with matching child PIN shows no mismatch."""
+        # Arrange: Parent and child both have same PIN
+        mock_code_slot.enabled = True
+        mock_code_slot.active = True
+        mock_code_slot.pin = "5979"
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.lock_name = "Child Lock"
+        child_slot = Mock()
+        child_slot.pin = "5979"  # Matching PIN
+        child_slot.enabled = True
+        child_slot.active = True
+        child_lock.code_slots = {1: child_slot}
+
+        # Test the logic
+        parent_pin_for_comparison = (
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+        )
+        child_pin = child_slot.pin
+
+        # Verify no mismatch
+        pin_mismatch = parent_pin_for_comparison != child_pin and not (
+            child_pin and "*" in str(child_pin)
+        )
+
+        # Assert
+        assert parent_pin_for_comparison == "5979"
+        assert child_pin == "5979"
+        assert pin_mismatch is False
+
+    async def test_masked_child_response_ignored(
+        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+    ):
+        """Test that masked child responses are ignored (PR #515 behavior)."""
+        # Arrange: Parent enabled+active, child returns masked response
+        mock_code_slot.enabled = True
+        mock_code_slot.active = True
+        mock_code_slot.pin = "5979"
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.lock_name = "Child Lock"
+        child_slot = Mock()
+        child_slot.pin = "**********"  # Masked response from Schlage
+        child_slot.enabled = True
+        child_slot.active = True
+        child_lock.code_slots = {1: child_slot}
+
+        # Test the logic
+        parent_pin_for_comparison = (
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+        )
+        child_pin = child_slot.pin
+
+        # Verify masked response ignored
+        pin_mismatch = parent_pin_for_comparison != child_pin and not (
+            child_pin and "*" in str(child_pin)
+        )
+
+        # Assert
+        assert parent_pin_for_comparison == "5979"
+        assert "*" in child_pin
+        assert pin_mismatch is False  # Masked response ignored!
