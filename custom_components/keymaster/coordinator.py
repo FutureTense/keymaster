@@ -2141,15 +2141,24 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
             # Check if child PIN is masked (Schlage bug workaround)
             child_pin = child_kmlock.code_slots[code_slot_num].pin
-            pin_mismatch = kmslot.pin != child_pin and not (
+
+            # If parent slot is disabled or inactive, treat parent PIN as None for comparison
+            # to prevent endless clear loops when parent still has PIN in memory
+            parent_pin_for_comparison = (
+                kmslot.pin if (kmslot.enabled and kmslot.active) else None
+            )
+
+            pin_mismatch = parent_pin_for_comparison != child_pin and not (
                 child_pin and "*" in child_pin
             )  # Ignore masked responses
 
             _LOGGER.debug(
-                "[_sync_child_locks] %s Slot %s: parent=%s child=%s mismatch=%s",
+                "[_sync_child_locks] %s Slot %s: parent=%s (actual=%s, enabled=%s) child=%s mismatch=%s",
                 child_kmlock.lock_name,
                 code_slot_num,
+                parent_pin_for_comparison,
                 kmslot.pin,
+                kmslot.enabled,
                 child_pin,
                 pin_mismatch,
             )
