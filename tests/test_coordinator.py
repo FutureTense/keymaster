@@ -60,7 +60,9 @@ class TestVerifyLockConfiguration:
         """Test that valid config entries are not deleted."""
         # Arrange
         mock_coordinator.kmlocks = {"test_entry_id": mock_keymaster_lock}
-        mock_coordinator.hass.config_entries.async_get_entry.return_value = mock_config_entry
+        mock_coordinator.hass.config_entries.async_get_entry.return_value = (
+            mock_config_entry
+        )
 
         # Act
         await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
@@ -86,7 +88,9 @@ class TestVerifyLockConfiguration:
         mock_coordinator.hass.config_entries.async_get_entry.assert_called_once_with(
             "test_entry_id"
         )
-        mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with("test_entry_id")
+        mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with(
+            "test_entry_id"
+        )
 
     async def test_verify_lock_configuration_with_multiple_locks_mixed_validity(
         self, mock_coordinator, mock_config_entry
@@ -102,21 +106,28 @@ class TestVerifyLockConfiguration:
         invalid_lock.keymaster_config_entry_id = "invalid_entry_id"
         invalid_lock.lock_name = "Invalid Lock"
 
-        mock_coordinator.kmlocks = {"valid_entry_id": valid_lock, "invalid_entry_id": invalid_lock}
+        mock_coordinator.kmlocks = {
+            "valid_entry_id": valid_lock,
+            "invalid_entry_id": invalid_lock,
+        }
 
         def mock_get_entry(entry_id):
             if entry_id == "valid_entry_id":
                 return mock_config_entry
             return None
 
-        mock_coordinator.hass.config_entries.async_get_entry.side_effect = mock_get_entry
+        mock_coordinator.hass.config_entries.async_get_entry.side_effect = (
+            mock_get_entry
+        )
 
         # Act
         await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
 
         # Assert
         assert mock_coordinator.hass.config_entries.async_get_entry.call_count == 2
-        mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with("invalid_entry_id")
+        mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with(
+            "invalid_entry_id"
+        )
 
     async def test_verify_lock_configuration_with_empty_kmlocks(self, mock_coordinator):
         """Test that verification works correctly when there are no locks."""
@@ -144,7 +155,9 @@ class TestVerifyLockConfiguration:
         lock2.lock_name = "Lock 2"
 
         mock_coordinator.kmlocks = {"entry_id_1": lock1, "entry_id_2": lock2}
-        mock_coordinator.hass.config_entries.async_get_entry.return_value = mock_config_entry
+        mock_coordinator.hass.config_entries.async_get_entry.return_value = (
+            mock_config_entry
+        )
 
         # Act
         await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
@@ -153,7 +166,9 @@ class TestVerifyLockConfiguration:
         assert mock_coordinator.hass.config_entries.async_get_entry.call_count == 2
         mock_coordinator.delete_lock_by_config_entry_id.assert_not_called()
 
-    async def test_verify_lock_configuration_with_all_invalid_locks(self, mock_coordinator):
+    async def test_verify_lock_configuration_with_all_invalid_locks(
+        self, mock_coordinator
+    ):
         """Test verification when all locks have invalid config entries."""
         # Arrange
         lock1 = Mock(spec=KeymasterLock)
@@ -164,7 +179,10 @@ class TestVerifyLockConfiguration:
         lock2.keymaster_config_entry_id = "invalid_entry_id_2"
         lock2.lock_name = "Invalid Lock 2"
 
-        mock_coordinator.kmlocks = {"invalid_entry_id_1": lock1, "invalid_entry_id_2": lock2}
+        mock_coordinator.kmlocks = {
+            "invalid_entry_id_1": lock1,
+            "invalid_entry_id_2": lock2,
+        }
         mock_coordinator.hass.config_entries.async_get_entry.return_value = None
 
         # Act
@@ -173,8 +191,12 @@ class TestVerifyLockConfiguration:
         # Assert
         assert mock_coordinator.hass.config_entries.async_get_entry.call_count == 2
         assert mock_coordinator.delete_lock_by_config_entry_id.call_count == 2
-        mock_coordinator.delete_lock_by_config_entry_id.assert_any_call("invalid_entry_id_1")
-        mock_coordinator.delete_lock_by_config_entry_id.assert_any_call("invalid_entry_id_2")
+        mock_coordinator.delete_lock_by_config_entry_id.assert_any_call(
+            "invalid_entry_id_1"
+        )
+        mock_coordinator.delete_lock_by_config_entry_id.assert_any_call(
+            "invalid_entry_id_2"
+        )
 
 
 class TestUpdateChildCodeSlots:
@@ -209,7 +231,9 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic: parent_pin_for_comparison should be None when disabled
         parent_pin_for_comparison = (
-            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+            mock_code_slot.pin
+            if (mock_code_slot.enabled and mock_code_slot.active)
+            else None
         )
         child_pin = child_slot.pin
 
@@ -242,7 +266,9 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic: parent_pin_for_comparison should be None when inactive
         parent_pin_for_comparison = (
-            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+            mock_code_slot.pin
+            if (mock_code_slot.enabled and mock_code_slot.active)
+            else None
         )
         child_pin = child_slot.pin
 
@@ -274,7 +300,9 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic: parent_pin_for_comparison should be actual PIN when enabled+active
         parent_pin_for_comparison = (
-            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+            mock_code_slot.pin
+            if (mock_code_slot.enabled and mock_code_slot.active)
+            else None
         )
         child_pin = child_slot.pin
 
@@ -306,7 +334,9 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic
         parent_pin_for_comparison = (
-            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+            mock_code_slot.pin
+            if (mock_code_slot.enabled and mock_code_slot.active)
+            else None
         )
         child_pin = child_slot.pin
 
@@ -339,7 +369,9 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic
         parent_pin_for_comparison = (
-            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
+            mock_code_slot.pin
+            if (mock_code_slot.enabled and mock_code_slot.active)
+            else None
         )
         child_pin = child_slot.pin
 
@@ -352,3 +384,82 @@ class TestUpdateChildCodeSlots:
         assert parent_pin_for_comparison == "5979"
         assert "*" in child_pin
         assert pin_mismatch is False  # Masked response ignored!
+
+
+class TestRebuildLockRelationships:
+    """Tests for _rebuild_lock_relationships method."""
+
+    async def test_rebuild_with_orphaned_child_not_in_kmlocks(self, mock_coordinator):
+        """Test that orphaned child not in kmlocks doesn't cause KeyError.
+
+        This tests the fix for the bug where line 477 used child_config_entry_id
+        instead of keymaster_config_entry_id when removing orphaned children.
+        """
+        # Arrange: Parent lock with child reference, but child not in kmlocks
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "parent_id"
+        parent_lock.lock_name = "Parent Lock"
+        parent_lock.child_config_entry_ids = {"orphaned_child_id"}
+        parent_lock.parent_config_entry_id = None
+
+        # Only parent in kmlocks, child is missing (orphaned)
+        mock_coordinator.kmlocks = {"parent_id": parent_lock}
+
+        # Act: Call _rebuild_lock_relationships
+        # This should NOT raise KeyError even though orphaned_child_id is not in kmlocks
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: Orphaned child should be removed from parent's child list
+        assert "orphaned_child_id" not in parent_lock.child_config_entry_ids
+
+    async def test_rebuild_with_valid_parent_child_relationship(self, mock_coordinator):
+        """Test that valid parent-child relationships are preserved."""
+        # Arrange: Parent and child both in kmlocks with correct references
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "parent_id"
+        parent_lock.lock_name = "Parent Lock"
+        parent_lock.child_config_entry_ids = {"child_id"}
+        parent_lock.parent_config_entry_id = None
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.keymaster_config_entry_id = "child_id"
+        child_lock.lock_name = "Child Lock"
+        child_lock.child_config_entry_ids = set()
+        child_lock.parent_config_entry_id = "parent_id"
+
+        mock_coordinator.kmlocks = {"parent_id": parent_lock, "child_id": child_lock}
+
+        # Act
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: Valid relationship should be preserved
+        assert "child_id" in parent_lock.child_config_entry_ids
+        assert child_lock.parent_config_entry_id == "parent_id"
+
+    async def test_rebuild_with_mismatched_parent(self, mock_coordinator):
+        """Test that child with mismatched parent is removed from old parent."""
+        # Arrange: Parent claims child, but child points to different parent
+        old_parent_lock = Mock(spec=KeymasterLock)
+        old_parent_lock.keymaster_config_entry_id = "old_parent_id"
+        old_parent_lock.lock_name = "Old Parent Lock"
+        old_parent_lock.child_config_entry_ids = {"child_id"}
+        old_parent_lock.parent_config_entry_id = None
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.keymaster_config_entry_id = "child_id"
+        child_lock.lock_name = "Child Lock"
+        child_lock.child_config_entry_ids = set()
+        child_lock.parent_config_entry_id = (
+            "new_parent_id"  # Points to different parent!
+        )
+
+        mock_coordinator.kmlocks = {
+            "old_parent_id": old_parent_lock,
+            "child_id": child_lock,
+        }
+
+        # Act
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: Child should be removed from old parent's list
+        assert "child_id" not in old_parent_lock.child_config_entry_ids
