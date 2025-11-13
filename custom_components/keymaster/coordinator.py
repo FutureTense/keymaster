@@ -466,7 +466,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                                 keymaster_config_entry_id
                             )
                         break
-            for child_config_entry_id in kmlock.child_config_entry_ids:
+            for child_config_entry_id in list(kmlock.child_config_entry_ids):
                 if (
                     child_config_entry_id not in self.kmlocks
                     or self.kmlocks[child_config_entry_id].parent_config_entry_id
