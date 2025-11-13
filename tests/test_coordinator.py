@@ -399,7 +399,7 @@ class TestRebuildLockRelationships:
         parent_lock = Mock(spec=KeymasterLock)
         parent_lock.keymaster_config_entry_id = "parent_id"
         parent_lock.lock_name = "Parent Lock"
-        parent_lock.child_config_entry_ids = {"orphaned_child_id"}
+        parent_lock.child_config_entry_ids = ["orphaned_child_id"]  # List, not set
         parent_lock.parent_config_entry_id = None
 
         # Only parent in kmlocks, child is missing (orphaned)
@@ -418,13 +418,13 @@ class TestRebuildLockRelationships:
         parent_lock = Mock(spec=KeymasterLock)
         parent_lock.keymaster_config_entry_id = "parent_id"
         parent_lock.lock_name = "Parent Lock"
-        parent_lock.child_config_entry_ids = {"child_id"}
+        parent_lock.child_config_entry_ids = ["child_id"]
         parent_lock.parent_config_entry_id = None
 
         child_lock = Mock(spec=KeymasterLock)
         child_lock.keymaster_config_entry_id = "child_id"
         child_lock.lock_name = "Child Lock"
-        child_lock.child_config_entry_ids = set()
+        child_lock.child_config_entry_ids = []
         child_lock.parent_config_entry_id = "parent_id"
 
         mock_coordinator.kmlocks = {"parent_id": parent_lock, "child_id": child_lock}
@@ -442,13 +442,13 @@ class TestRebuildLockRelationships:
         old_parent_lock = Mock(spec=KeymasterLock)
         old_parent_lock.keymaster_config_entry_id = "old_parent_id"
         old_parent_lock.lock_name = "Old Parent Lock"
-        old_parent_lock.child_config_entry_ids = {"child_id"}
+        old_parent_lock.child_config_entry_ids = ["child_id"]
         old_parent_lock.parent_config_entry_id = None
 
         child_lock = Mock(spec=KeymasterLock)
         child_lock.keymaster_config_entry_id = "child_id"
         child_lock.lock_name = "Child Lock"
-        child_lock.child_config_entry_ids = set()
+        child_lock.child_config_entry_ids = []
         child_lock.parent_config_entry_id = (
             "new_parent_id"  # Points to different parent!
         )
@@ -463,3 +463,191 @@ class TestRebuildLockRelationships:
 
         # Assert: Child should be removed from old parent's list
         assert "child_id" not in old_parent_lock.child_config_entry_ids
+
+    async def test_rebuild_with_multiple_orphaned_children(self, mock_coordinator):
+        """Test that multiple orphaned children are all cleaned up without errors."""
+        # Arrange: Parent with multiple orphaned children (none exist in kmlocks)
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "parent_id"
+        parent_lock.lock_name = "Parent Lock"
+        parent_lock.child_config_entry_ids = [
+            "orphan1",
+            "orphan2",
+            "orphan3",
+        ]
+        parent_lock.parent_config_entry_id = None
+        parent_lock.parent_name = None
+
+        mock_coordinator.kmlocks = {"parent_id": parent_lock}
+
+        # Act
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: All orphans removed
+        assert len(parent_lock.child_config_entry_ids) == 0
+
+    async def test_rebuild_with_mixed_valid_and_orphaned_children(
+        self, mock_coordinator
+    ):
+        """Test cleanup when parent has both valid and orphaned children."""
+        # Arrange
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "parent_id"
+        parent_lock.lock_name = "Parent Lock"
+        parent_lock.child_config_entry_ids = [
+            "valid_child",
+            "orphan1",
+            "orphan2",
+        ]
+        parent_lock.parent_config_entry_id = None
+        parent_lock.parent_name = None
+
+        valid_child = Mock(spec=KeymasterLock)
+        valid_child.keymaster_config_entry_id = "valid_child"
+        valid_child.lock_name = "Valid Child"
+        valid_child.child_config_entry_ids = []
+        valid_child.parent_config_entry_id = "parent_id"
+        valid_child.parent_name = "Parent Lock"
+
+        mock_coordinator.kmlocks = {
+            "parent_id": parent_lock,
+            "valid_child": valid_child,
+        }
+
+        # Act
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: Only valid child remains
+        assert "valid_child" in parent_lock.child_config_entry_ids
+        assert "orphan1" not in parent_lock.child_config_entry_ids
+        assert "orphan2" not in parent_lock.child_config_entry_ids
+        assert len(parent_lock.child_config_entry_ids) == 1
+
+    async def test_rebuild_with_empty_child_list(self, mock_coordinator):
+        """Test that locks with empty child lists don't cause issues."""
+        # Arrange
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "parent_id"
+        parent_lock.lock_name = "Parent Lock"
+        parent_lock.child_config_entry_ids = []  # Empty list
+        parent_lock.parent_config_entry_id = None
+        parent_lock.parent_name = None
+
+        mock_coordinator.kmlocks = {"parent_id": parent_lock}
+
+        # Act - should not raise any errors
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert
+        assert len(parent_lock.child_config_entry_ids) == 0
+
+    async def test_rebuild_with_circular_reference_prevention(self, mock_coordinator):
+        """Test that circular parent-child references are handled without crash."""
+        # Arrange: Lock A claims B as child, B claims A as child
+        lock_a = Mock(spec=KeymasterLock)
+        lock_a.keymaster_config_entry_id = "lock_a"
+        lock_a.lock_name = "Lock A"
+        lock_a.child_config_entry_ids = ["lock_b"]
+        lock_a.parent_config_entry_id = "lock_b"  # Circular!
+        lock_a.parent_name = "Lock B"
+
+        lock_b = Mock(spec=KeymasterLock)
+        lock_b.keymaster_config_entry_id = "lock_b"
+        lock_b.lock_name = "Lock B"
+        lock_b.child_config_entry_ids = ["lock_a"]
+        lock_b.parent_config_entry_id = "lock_a"  # Circular!
+        lock_b.parent_name = "Lock A"
+
+        mock_coordinator.kmlocks = {"lock_a": lock_a, "lock_b": lock_b}
+
+        # Act - should handle gracefully without infinite loop or crash
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: Function completed without errors
+        # Note: Circular refs may persist but shouldn't crash
+        assert True  # If we got here, no crash occurred
+
+    async def test_rebuild_preserves_parent_name_relationships(self, mock_coordinator):
+        """Test that parent-child relationships via parent_name are established."""
+        # Arrange: Child has parent_name but no parent_config_entry_id yet
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "parent_id"
+        parent_lock.lock_name = "Front Door"
+        parent_lock.child_config_entry_ids = []
+        parent_lock.parent_config_entry_id = None
+        parent_lock.parent_name = None
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.keymaster_config_entry_id = "child_id"
+        child_lock.lock_name = "Front Door Child"
+        child_lock.child_config_entry_ids = []
+        child_lock.parent_config_entry_id = None  # Not set yet
+        child_lock.parent_name = "Front Door"  # Set by name
+
+        mock_coordinator.kmlocks = {
+            "parent_id": parent_lock,
+            "child_id": child_lock,
+        }
+
+        # Act
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: Relationship should be established
+        assert child_lock.parent_config_entry_id == "parent_id"
+        assert "child_id" in parent_lock.child_config_entry_ids
+
+    async def test_rebuild_with_child_list_as_list_not_set(self, mock_coordinator):
+        """Test handling when child_config_entry_ids is a list (default type)."""
+        # Arrange: Using list (the actual type from lock.py)
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "parent_id"
+        parent_lock.lock_name = "Parent Lock"
+        parent_lock.child_config_entry_ids = ["orphan1", "orphan2"]  # List
+        parent_lock.parent_config_entry_id = None
+        parent_lock.parent_name = None
+
+        mock_coordinator.kmlocks = {"parent_id": parent_lock}
+
+        # Act - should handle list iteration
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: Orphans should be removed
+        assert "orphan1" not in parent_lock.child_config_entry_ids
+        assert "orphan2" not in parent_lock.child_config_entry_ids
+
+    async def test_rebuild_idempotency(self, mock_coordinator):
+        """Test that running rebuild multiple times produces same result."""
+        # Arrange
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "parent_id"
+        parent_lock.lock_name = "Parent Lock"
+        parent_lock.child_config_entry_ids = ["child_id", "orphan_id"]
+        parent_lock.parent_config_entry_id = None
+        parent_lock.parent_name = None
+
+        child_lock = Mock(spec=KeymasterLock)
+        child_lock.keymaster_config_entry_id = "child_id"
+        child_lock.lock_name = "Child Lock"
+        child_lock.child_config_entry_ids = []
+        child_lock.parent_config_entry_id = "parent_id"
+        child_lock.parent_name = "Parent Lock"
+
+        mock_coordinator.kmlocks = {
+            "parent_id": parent_lock,
+            "child_id": child_lock,
+        }
+
+        # Act - Run multiple times
+        await mock_coordinator._rebuild_lock_relationships()
+        first_result = parent_lock.child_config_entry_ids.copy()
+
+        await mock_coordinator._rebuild_lock_relationships()
+        second_result = parent_lock.child_config_entry_ids.copy()
+
+        await mock_coordinator._rebuild_lock_relationships()
+        third_result = parent_lock.child_config_entry_ids.copy()
+
+        # Assert: Results should be identical
+        assert first_result == second_result == third_result
+        assert "child_id" in first_result
+        assert "orphan_id" not in first_result
