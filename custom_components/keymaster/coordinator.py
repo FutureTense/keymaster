@@ -474,7 +474,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 ):
                     with contextlib.suppress(ValueError):
                         self.kmlocks[
-                            child_config_entry_id
+                            keymaster_config_entry_id
                         ].child_config_entry_ids.remove(child_config_entry_id)
 
     async def _handle_zwave_js_lock_event(
@@ -1989,7 +1989,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 ZWAVEJS_ATTR_IN_USE
             ]
 
-        # Fix for Schlage masked responses: if slot is not in use (status=0) but 
+        # Fix for Schlage masked responses: if slot is not in use (status=0) but
         # usercode is masked (e.g., "**********"), treat it as empty
         if in_use is False and usercode and not usercode.isdigit():
             usercode = ""
