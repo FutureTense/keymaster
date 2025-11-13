@@ -465,7 +465,7 @@ class TestParentChildSync:
         pin_at_call = []
 
         async def capture_pin_at_call(*args, **kwargs):
-            pin_at_call.append(kwargs.get('pin'))
+            pin_at_call.append(kwargs.get("pin"))
 
         mock_coordinator.set_pin_on_lock.side_effect = capture_pin_at_call
 
@@ -522,9 +522,7 @@ class TestMultiLockScenarios:
         assert "child2" in parent.child_config_entry_ids
         assert len(parent.child_config_entry_ids) == 2
 
-    async def test_orphaned_children_from_deleted_parent(
-        self, mock_coordinator
-    ):
+    async def test_orphaned_children_from_deleted_parent(self, mock_coordinator):
         """Test cleanup when parent is deleted but children remain."""
         # Arrange: Children pointing to non-existent parent
         child1 = Mock(spec=KeymasterLock)
@@ -564,7 +562,9 @@ class TestCodeSlotBoundaries:
         """Test handling of slot number 0 (invalid but possible)."""
         # Arrange: Slot 0
         parent_slot = Mock(code_slot_num=0, enabled=True, pin="1234")
-        child_slot = Mock(code_slot_num=0, enabled=False, pin=None, override_parent=False)
+        child_slot = Mock(
+            code_slot_num=0, enabled=False, pin=None, override_parent=False
+        )
 
         parent_lock.code_slots = {0: parent_slot}
         child_lock.code_slots = {0: child_slot}
@@ -581,7 +581,9 @@ class TestCodeSlotBoundaries:
         """Test handling of maximum slot number (typically 250 or 254)."""
         # Arrange: Slot 250
         parent_slot = Mock(code_slot_num=250, enabled=True, pin="1234")
-        child_slot = Mock(code_slot_num=250, enabled=False, pin=None, override_parent=False)
+        child_slot = Mock(
+            code_slot_num=250, enabled=False, pin=None, override_parent=False
+        )
 
         parent_lock.code_slots = {250: parent_slot}
         child_lock.code_slots = {250: child_slot}
@@ -621,3 +623,279 @@ class TestCodeSlotBoundaries:
 
         # Assert: All 4 slots synced
         assert mock_coordinator.set_pin_on_lock.call_count == 4
+
+
+class TestChildLockBehavior:
+    """Test child lock behavior with override flags and attribute inheritance."""
+
+    async def test_child_with_override_maintains_independence_across_syncs(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
+        """Test that child with override_parent=True maintains its own PIN across multiple syncs."""
+        # Arrange: Child has override enabled with different PIN
+        parent_slot = Mock(spec=KeymasterCodeSlot)
+        parent_slot.code_slot_num = 1
+        parent_slot.enabled = True
+        parent_slot.active = True
+        parent_slot.pin = "1111"
+        parent_slot.name = "Parent Slot"
+
+        child_slot = Mock(spec=KeymasterCodeSlot)
+        child_slot.code_slot_num = 1
+        child_slot.enabled = True
+        child_slot.active = True
+        child_slot.pin = "9999"  # Different PIN
+        child_slot.override_parent = True  # Override enabled!
+        child_slot.name = "Child Custom Slot"
+
+        parent_lock.code_slots = {1: parent_slot}
+        child_lock.code_slots = {1: child_slot}
+
+        original_child_pin = child_slot.pin
+        original_child_name = child_slot.name
+
+        # Act: Sync multiple times with parent changes
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        parent_slot.pin = "2222"  # Change parent PIN
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        parent_slot.pin = "3333"  # Change again
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        # Assert: Child maintains its original values
+        assert child_slot.pin == original_child_pin
+        assert child_slot.name == original_child_name
+        mock_coordinator.set_pin_on_lock.assert_not_called()
+        mock_coordinator.clear_pin_from_lock.assert_not_called()
+
+    async def test_child_without_override_respects_all_parent_changes(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
+        """Test that child without override follows all parent state changes."""
+        # Arrange: Child starts synced with parent
+        parent_slot = Mock(spec=KeymasterCodeSlot)
+        parent_slot.code_slot_num = 1
+        parent_slot.enabled = True
+        parent_slot.active = True
+        parent_slot.pin = "1111"
+        parent_slot.name = "Parent Slot"
+
+        child_slot = Mock(spec=KeymasterCodeSlot)
+        child_slot.code_slot_num = 1
+        child_slot.enabled = True
+        child_slot.active = True
+        child_slot.pin = "1111"  # Starts matching
+        child_slot.override_parent = False
+        child_slot.name = "Parent Slot"
+
+        parent_lock.code_slots = {1: parent_slot}
+        child_lock.code_slots = {1: child_slot}
+
+        # Act 1: Change parent PIN
+        parent_slot.pin = "2222"
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+        assert child_slot.pin == "2222"
+
+        # Act 2: Disable parent
+        parent_slot.enabled = False
+        mock_coordinator.set_pin_on_lock.reset_mock()
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+        assert child_slot.pin is None
+        mock_coordinator.clear_pin_from_lock.assert_called_once()
+
+        # Act 3: Re-enable parent with new PIN
+        parent_slot.enabled = True
+        parent_slot.pin = "3333"
+        mock_coordinator.clear_pin_from_lock.reset_mock()
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+        assert child_slot.pin == "3333"
+
+    async def test_child_inherits_all_access_limit_attributes(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
+        """Test that child inherits all access limit configurations from parent.
+
+        Note: accesslimit_day_of_week itself is not copied (only _enabled flag),
+        as the day_of_week objects are complex and managed separately.
+        """
+        # Arrange: Parent with comprehensive access limits
+        parent_slot = Mock(spec=KeymasterCodeSlot)
+        parent_slot.code_slot_num = 1
+        parent_slot.enabled = True
+        parent_slot.active = True
+        parent_slot.pin = "1234"
+        parent_slot.name = "Limited Access Slot"
+        parent_slot.accesslimit = True
+        parent_slot.accesslimit_count_enabled = True
+        parent_slot.accesslimit_count = 10
+        parent_slot.accesslimit_date_range_enabled = True
+        parent_slot.accesslimit_date_range_start = "2025-06-01"
+        parent_slot.accesslimit_date_range_end = "2025-08-31"
+        parent_slot.accesslimit_day_of_week_enabled = True
+
+        child_slot = Mock(spec=KeymasterCodeSlot)
+        child_slot.code_slot_num = 1
+        child_slot.enabled = False
+        child_slot.active = False
+        child_slot.pin = None
+        child_slot.override_parent = False
+        child_slot.name = ""
+        child_slot.accesslimit = False
+        child_slot.accesslimit_count_enabled = False
+        child_slot.accesslimit_count = 0
+        child_slot.accesslimit_date_range_enabled = False
+        child_slot.accesslimit_date_range_start = None
+        child_slot.accesslimit_date_range_end = None
+        child_slot.accesslimit_day_of_week_enabled = False
+
+        parent_lock.code_slots = {1: parent_slot}
+        child_lock.code_slots = {1: child_slot}
+
+        # Act
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        # Assert: All copied attributes match parent
+        assert child_slot.name == "Limited Access Slot"
+        assert child_slot.accesslimit is True
+        assert child_slot.accesslimit_count_enabled is True
+        assert child_slot.accesslimit_count == 10
+        assert child_slot.accesslimit_date_range_enabled is True
+        assert child_slot.accesslimit_date_range_start == "2025-06-01"
+        assert child_slot.accesslimit_date_range_end == "2025-08-31"
+        assert child_slot.accesslimit_day_of_week_enabled is True
+        # Note: accesslimit_day_of_week dict is NOT copied (managed separately)
+
+    async def test_child_disabled_when_parent_disabled(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
+        """Test that child slot is effectively disabled when parent is disabled."""
+        # Arrange: Parent disabled, child enabled
+        parent_slot = Mock(spec=KeymasterCodeSlot)
+        parent_slot.code_slot_num = 1
+        parent_slot.enabled = False  # Parent disabled
+        parent_slot.active = True
+        parent_slot.pin = "1234"
+        parent_slot.name = "Parent Slot"
+
+        child_slot = Mock(spec=KeymasterCodeSlot)
+        child_slot.code_slot_num = 1
+        child_slot.enabled = True  # Child thinks it's enabled
+        child_slot.active = True
+        child_slot.pin = "1234"  # Has PIN
+        child_slot.override_parent = False
+
+        parent_lock.code_slots = {1: parent_slot}
+        child_lock.code_slots = {1: child_slot}
+
+        # Act
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        # Assert: Child PIN should be cleared (effectively disabling it)
+        assert child_slot.pin is None
+        mock_coordinator.clear_pin_from_lock.assert_called_once_with(
+            config_entry_id="child_id",
+            code_slot_num=1,
+            override=True,
+        )
+
+    async def test_child_switching_override_flag(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
+        """Test child behavior when switching override_parent flag on and off."""
+        # Arrange: Start with override off
+        parent_slot = Mock(spec=KeymasterCodeSlot)
+        parent_slot.code_slot_num = 1
+        parent_slot.enabled = True
+        parent_slot.active = True
+        parent_slot.pin = "1111"
+        parent_slot.name = "Parent Slot"
+
+        child_slot = Mock(spec=KeymasterCodeSlot)
+        child_slot.code_slot_num = 1
+        child_slot.enabled = True
+        child_slot.active = True
+        child_slot.pin = "9999"  # Different PIN
+        child_slot.override_parent = False  # Override OFF
+        child_slot.name = "Child Slot"
+
+        parent_lock.code_slots = {1: parent_slot}
+        child_lock.code_slots = {1: child_slot}
+
+        # Act 1: Sync with override OFF - should sync to parent
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+        assert child_slot.pin == "1111"
+        assert mock_coordinator.set_pin_on_lock.call_count == 1
+
+        # Act 2: Enable override and change child PIN
+        child_slot.override_parent = True
+        child_slot.pin = "9999"  # Set custom PIN
+        parent_slot.pin = "2222"  # Change parent
+        mock_coordinator.set_pin_on_lock.reset_mock()
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        # Assert: Child maintains its PIN when override is ON
+        assert child_slot.pin == "9999"
+        mock_coordinator.set_pin_on_lock.assert_not_called()
+
+        # Act 3: Disable override - should sync back to parent
+        child_slot.override_parent = False
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+        assert child_slot.pin == "2222"  # Now matches parent
+
+    async def test_child_behavior_when_parent_slot_missing(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
+        """Test child behavior when parent doesn't have the corresponding slot."""
+        # Arrange: Child has slot 1, parent doesn't
+        parent_lock.code_slots = {}  # No slot 1
+
+        child_slot = Mock(spec=KeymasterCodeSlot)
+        child_slot.code_slot_num = 1
+        child_slot.enabled = True
+        child_slot.active = True
+        child_slot.pin = "1234"
+        child_slot.override_parent = False
+
+        child_lock.code_slots = {1: child_slot}
+
+        # Act - should not crash
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        # Assert: No operations attempted (parent slot doesn't exist)
+        mock_coordinator.set_pin_on_lock.assert_not_called()
+        mock_coordinator.clear_pin_from_lock.assert_not_called()
+
+    async def test_child_inherits_parent_name_changes(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
+        """Test that child slot name updates when parent name changes."""
+        # Arrange
+        parent_slot = Mock(spec=KeymasterCodeSlot)
+        parent_slot.code_slot_num = 1
+        parent_slot.enabled = True
+        parent_slot.active = True
+        parent_slot.pin = "1234"
+        parent_slot.name = "Original Name"
+
+        child_slot = Mock(spec=KeymasterCodeSlot)
+        child_slot.code_slot_num = 1
+        child_slot.enabled = True
+        child_slot.active = True
+        child_slot.pin = "1234"  # Matching PIN
+        child_slot.override_parent = False
+        child_slot.name = "Original Name"
+
+        parent_lock.code_slots = {1: parent_slot}
+        child_lock.code_slots = {1: child_slot}
+
+        # Act 1: Initial sync
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+        assert child_slot.name == "Original Name"
+
+        # Act 2: Change parent name
+        parent_slot.name = "Updated Name"
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        # Assert: Child name should update
+        assert child_slot.name == "Updated Name"
