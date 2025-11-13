@@ -110,7 +110,7 @@ class KeymasterTimer:
         """Return if the timer is running."""
         if not self._end_time:
             return False
-        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -122,7 +122,7 @@ class KeymasterTimer:
     @property
     def is_setup(self) -> bool:
         """Return if the timer has been initially setup."""
-        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -135,7 +135,7 @@ class KeymasterTimer:
         """Returns when the timer will end."""
         if not self._end_time:
             return None
-        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
@@ -149,14 +149,14 @@ class KeymasterTimer:
         """Return the seconds until the timer ends."""
         if not self._end_time:
             return None
-        if isinstance(self._end_time, dt) and self._end_time >= dt.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
             if isinstance(self._unsub_events, list):
                 for unsub in self._unsub_events:
                     unsub()
                 self._unsub_events = []
             self._end_time = None
             return None
-        return round((dt.now().astimezone() - self._end_time).total_seconds())
+        return round((self._end_time - dt.now().astimezone()).total_seconds())
 
 
 @callback

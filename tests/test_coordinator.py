@@ -11,14 +11,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 
-def validate_lock_relationship_invariants(coordinator: KeymasterCoordinator) -> list[str]:
+def validate_lock_relationship_invariants(
+    coordinator: KeymasterCoordinator,
+) -> list[str]:
     """Validate all lock relationship invariants hold.
-    
+
     Returns list of violation messages. Empty list = all invariants hold.
     This helper would have caught the KeyError bug immediately.
     """
     violations = []
-    
+
     # Invariant 1: Every child_id in any parent's list must exist in kmlocks
     for lock_id, lock in coordinator.kmlocks.items():
         for child_id in lock.child_config_entry_ids:
@@ -27,7 +29,7 @@ def validate_lock_relationship_invariants(coordinator: KeymasterCoordinator) -> 
                     f"Orphaned child reference: parent {lock_id} references "
                     f"non-existent child {child_id}"
                 )
-    
+
     # Invariant 2: Every parent_id referenced by a child must exist in kmlocks
     for lock_id, lock in coordinator.kmlocks.items():
         if lock.parent_config_entry_id:
@@ -36,7 +38,7 @@ def validate_lock_relationship_invariants(coordinator: KeymasterCoordinator) -> 
                     f"Invalid parent reference: child {lock_id} references "
                     f"non-existent parent {lock.parent_config_entry_id}"
                 )
-    
+
     # Invariant 3: Bidirectional consistency - if parent lists child, child must point to parent
     for lock_id, lock in coordinator.kmlocks.items():
         for child_id in lock.child_config_entry_ids:
@@ -47,24 +49,27 @@ def validate_lock_relationship_invariants(coordinator: KeymasterCoordinator) -> 
                         f"Bidirectional inconsistency: parent {lock_id} lists child {child_id}, "
                         f"but child points to parent {child.parent_config_entry_id}"
                     )
-    
+
     # Invariant 4: If child points to parent, parent must list child
     for lock_id, lock in coordinator.kmlocks.items():
-        if lock.parent_config_entry_id and lock.parent_config_entry_id in coordinator.kmlocks:
+        if (
+            lock.parent_config_entry_id
+            and lock.parent_config_entry_id in coordinator.kmlocks
+        ):
             parent = coordinator.kmlocks[lock.parent_config_entry_id]
             if lock_id not in parent.child_config_entry_ids:
                 violations.append(
                     f"Missing child reference: child {lock_id} points to parent "
                     f"{lock.parent_config_entry_id}, but parent doesn't list child"
                 )
-    
+
     # Invariant 5: No duplicates in child lists
     for lock_id, lock in coordinator.kmlocks.items():
         if len(lock.child_config_entry_ids) != len(set(lock.child_config_entry_ids)):
             violations.append(
                 f"Duplicate children: parent {lock_id} has duplicate entries in child list"
             )
-    
+
     return violations
 
 
@@ -75,6 +80,10 @@ def mock_hass():
     hass.config_entries = Mock()
     hass.config = Mock()
     hass.config.path = Mock(return_value="/test/path")
+    hass.bus = Mock()
+    hass.bus.fire = Mock()
+    hass.states = Mock()
+    hass.states.get = Mock(return_value=None)
     return hass
 
 
@@ -713,7 +722,7 @@ class TestRebuildLockRelationships:
 
 class TestLockRelationshipInvariants:
     """Tests that validate system-wide invariants always hold.
-    
+
     These tests would have caught the KeyError bug immediately by detecting
     orphaned child references that should have been cleaned up.
     """
@@ -792,14 +801,14 @@ class TestLockRelationshipInvariants:
 
     async def test_stress_random_lock_additions_and_removals(self, mock_coordinator):
         """Stress test: Randomly add/remove locks and verify no KeyError/RuntimeError.
-        
+
         This test validates that _rebuild_lock_relationships never crashes even with
         random lock configurations. It would have caught both bugs we fixed.
         """
-        
+
         mock_coordinator.kmlocks = {}
         parent_locks = []
-        
+
         # Phase 1: Add parent locks first
         for i in range(5):
             lock = Mock(spec=KeymasterLock)
@@ -810,14 +819,14 @@ class TestLockRelationshipInvariants:
             lock.parent_name = None
             mock_coordinator.kmlocks[lock.keymaster_config_entry_id] = lock
             parent_locks.append(lock)
-        
+
         # Phase 2: Add child locks with parent_name references
         for i in range(15):
             lock = Mock(spec=KeymasterLock)
             lock.keymaster_config_entry_id = f"child_{i}"
             lock.lock_name = f"Child {i}"
             lock.child_config_entry_ids = []
-            
+
             # Randomly assign parent via parent_name
             if random.random() > 0.3:
                 parent = random.choice(parent_locks)
@@ -826,36 +835,38 @@ class TestLockRelationshipInvariants:
             else:
                 lock.parent_name = None
                 lock.parent_config_entry_id = None
-            
+
             mock_coordinator.kmlocks[lock.keymaster_config_entry_id] = lock
-        
+
         # Rebuild and check no crashes and consistent parent→child relationships
         await mock_coordinator._rebuild_lock_relationships()
-        
+
         # Verify no parent lists non-existent children (would cause KeyError with bug)
         for lock in mock_coordinator.kmlocks.values():
             for child_id in lock.child_config_entry_ids:
-                assert child_id in mock_coordinator.kmlocks, \
-                    f"Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
-        
+                assert (
+                    child_id in mock_coordinator.kmlocks
+                ), f"Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
+
         # Phase 3: Randomly remove half the locks
         all_lock_ids = list(mock_coordinator.kmlocks.keys())
         locks_to_remove = random.sample(all_lock_ids, len(all_lock_ids) // 2)
         for lock_id in locks_to_remove:
             del mock_coordinator.kmlocks[lock_id]
-        
+
         # Rebuild and verify no crashes (would fail with KeyError or RuntimeError with bugs)
         await mock_coordinator._rebuild_lock_relationships()
-        
+
         # Verify no parent lists non-existent children after cleanup
         for lock in mock_coordinator.kmlocks.values():
             for child_id in lock.child_config_entry_ids:
-                assert child_id in mock_coordinator.kmlocks, \
-                    f"After removals: Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
+                assert (
+                    child_id in mock_coordinator.kmlocks
+                ), f"After removals: Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
 
     async def test_exact_production_bug_scenario(self, mock_coordinator):
         """Reproduce the EXACT scenario that caused the production KeyError bug.
-        
+
         This is a regression test - if this fails, we've reintroduced the bug.
         The bug: line 477 used child_config_entry_id instead of keymaster_config_entry_id
         when accessing kmlocks dict to remove orphaned child from parent's list.
@@ -881,14 +892,16 @@ class TestLockRelationshipInvariants:
 
         # Assert: Orphaned child should be removed
         assert "garage_lock" not in parent_lock.child_config_entry_ids
-        
+
         # Assert: All invariants hold
         violations = validate_lock_relationship_invariants(mock_coordinator)
         assert len(violations) == 0, f"Violations: {violations}"
 
-    async def test_bidirectional_consistency_after_parent_change(self, mock_coordinator):
+    async def test_bidirectional_consistency_after_parent_change(
+        self, mock_coordinator
+    ):
         """Test that bidirectional consistency maintained when child changes parent.
-        
+
         Note: _rebuild_lock_relationships only removes mismatched children from parents.
         It does NOT add children to parents when child.parent_config_entry_id is set.
         Children are added via parent_name matching only.
@@ -926,11 +939,527 @@ class TestLockRelationshipInvariants:
 
         # Assert: parent2 should no longer list child (mismatch removed)
         assert "child" not in parent2.child_config_entry_ids
-        
+
         # Assert: parent1 should now list child (via parent_name match)
         assert "child" in parent1.child_config_entry_ids
-        
+
         # Assert: All invariants hold
         violations = validate_lock_relationship_invariants(mock_coordinator)
         assert len(violations) == 0, f"Violations: {violations}"
 
+
+# ============================================================================
+# Lock State Event Handler Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestLockStateEventHandlers:
+    """Tests for lock state event handlers."""
+
+    @pytest.fixture
+    def mock_kmlock(self):
+        """Create a mock KeymasterLock."""
+        from homeassistant.components.lock import LockState
+
+        lock = Mock(spec=KeymasterLock)
+        lock.keymaster_config_entry_id = "test_lock_id"
+        lock.lock_name = "Front Door"
+        lock.lock_entity_id = "lock.front_door"
+        lock.lock_state = LockState.UNLOCKED
+        lock.door_state = "closed"
+        lock.autolock_timer = None
+        lock.lock_notifications = False
+        lock.door_notifications = False
+        lock.notify_script_name = None
+        return lock
+
+    async def test_lock_locked_basic_state_change(self, mock_coordinator, mock_kmlock):
+        """Test _lock_locked updates lock state to LOCKED."""
+        from homeassistant.components.lock import LockState
+
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._lock_locked(mock_kmlock, source="manual")
+
+        assert mock_kmlock.lock_state == LockState.LOCKED
+
+    async def test_lock_locked_already_locked_no_change(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test _lock_locked does nothing if already locked."""
+        from homeassistant.components.lock import LockState
+
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._lock_locked(mock_kmlock, source="manual")
+
+        assert mock_kmlock.lock_state == LockState.LOCKED
+
+    async def test_lock_locked_throttled(self, mock_coordinator, mock_kmlock):
+        """Test _lock_locked respects throttling."""
+        from homeassistant.components.lock import LockState
+
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=False)
+
+        initial_state = mock_kmlock.lock_state
+        await mock_coordinator._lock_locked(mock_kmlock, source="manual")
+
+        assert mock_kmlock.lock_state == initial_state
+
+    async def test_lock_locked_cancels_autolock_timer(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test _lock_locked cancels autolock timer if running."""
+        mock_kmlock.autolock_timer = AsyncMock()
+        mock_kmlock.autolock_timer.cancel = AsyncMock()
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._lock_locked(mock_kmlock, source="manual")
+
+        mock_kmlock.autolock_timer.cancel.assert_called_once()
+
+    async def test_lock_locked_with_notifications(self, mock_coordinator, mock_kmlock):
+        """Test _lock_locked sends notification when enabled."""
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._lock_locked(
+                mock_kmlock, source="keypad", event_label="Locked by User 1"
+            )
+
+            mock_notify.assert_called_once()
+            call_kwargs = mock_notify.call_args.kwargs
+            assert call_kwargs["title"] == "Front Door"
+            assert call_kwargs["message"] == "Locked by User 1"
+
+    async def test_door_opened_basic_state_change(self, mock_coordinator, mock_kmlock):
+        """Test _door_opened updates door state to open."""
+        from homeassistant.const import STATE_CLOSED, STATE_OPEN
+
+        mock_kmlock.door_state = STATE_CLOSED
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._door_opened(mock_kmlock)
+
+        assert mock_kmlock.door_state == STATE_OPEN
+
+    async def test_door_opened_already_open_no_change(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test _door_opened does nothing if already open."""
+        from homeassistant.const import STATE_OPEN
+
+        mock_kmlock.door_state = STATE_OPEN
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._door_opened(mock_kmlock)
+
+        assert mock_kmlock.door_state == STATE_OPEN
+
+    async def test_door_opened_with_notifications(self, mock_coordinator, mock_kmlock):
+        """Test _door_opened sends notification when enabled."""
+        from homeassistant.const import STATE_CLOSED
+
+        mock_kmlock.door_state = STATE_CLOSED
+        mock_kmlock.door_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._door_opened(mock_kmlock)
+
+            mock_notify.assert_called_once()
+            call_kwargs = mock_notify.call_args.kwargs
+            assert call_kwargs["title"] == "Front Door"
+            assert "opened" in call_kwargs["message"].lower()
+
+    async def test_door_closed_basic_state_change(self, mock_coordinator, mock_kmlock):
+        """Test _door_closed updates door state to closed."""
+        from homeassistant.const import STATE_OPEN, STATE_CLOSED
+
+        mock_kmlock.door_state = STATE_OPEN
+        mock_kmlock.retry_lock = False
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._door_closed(mock_kmlock)
+
+        assert mock_kmlock.door_state == STATE_CLOSED
+
+    async def test_door_closed_with_notifications(self, mock_coordinator, mock_kmlock):
+        """Test _door_closed sends notification when enabled."""
+        from homeassistant.const import STATE_OPEN
+
+        mock_kmlock.door_state = STATE_OPEN
+        mock_kmlock.door_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.retry_lock = False
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._door_closed(mock_kmlock)
+
+            mock_notify.assert_called_once()
+            call_kwargs = mock_notify.call_args.kwargs
+            assert call_kwargs["title"] == "Front Door"
+            assert "closed" in call_kwargs["message"].lower()
+
+
+# ============================================================================
+# State Synchronization Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestStateSynchronization:
+    """Tests for _update_door_and_lock_state state synchronization."""
+
+    @pytest.fixture
+    def mock_kmlock_with_entities(self):
+        """Create a mock KeymasterLock with entity IDs."""
+        from homeassistant.components.lock import LockState
+
+        lock = Mock(spec=KeymasterLock)
+        lock.keymaster_config_entry_id = "test_lock_id"
+        lock.lock_name = "Front Door"
+        lock.lock_entity_id = "lock.front_door"
+        lock.door_sensor_entity_id = "binary_sensor.front_door"
+        lock.lock_state = LockState.UNLOCKED
+        lock.door_state = "closed"
+        return lock
+
+    async def test_update_door_and_lock_state_syncs_lock_state(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that lock state is synced from entity without triggering actions."""
+        from homeassistant.components.lock import LockState
+
+        mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+
+        # Mock the hass.states.get to return locked state
+        mock_lock_state = Mock()
+        mock_lock_state.state = LockState.LOCKED
+        mock_coordinator.hass.states.get = Mock(return_value=mock_lock_state)
+
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=False
+        )
+
+        assert mock_kmlock_with_entities.lock_state == LockState.LOCKED
+
+    async def test_update_door_and_lock_state_syncs_door_state(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that door state is synced from entity without triggering actions."""
+        from homeassistant.const import STATE_OPEN, STATE_CLOSED
+
+        mock_kmlock_with_entities.door_state = STATE_CLOSED
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+
+        # Mock different returns for lock vs door entity
+        def mock_states_get(entity_id):
+            if entity_id == "lock.front_door":
+                mock_state = Mock()
+                mock_state.state = "locked"
+                return mock_state
+            elif entity_id == "binary_sensor.front_door":
+                mock_state = Mock()
+                mock_state.state = STATE_OPEN
+                return mock_state
+            return None
+
+        mock_coordinator.hass.states.get = Mock(side_effect=mock_states_get)
+
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=False
+        )
+
+        assert mock_kmlock_with_entities.door_state == STATE_OPEN
+
+    async def test_update_door_and_lock_state_triggers_lock_actions(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that lock state changes trigger actions when requested."""
+        from homeassistant.components.lock import LockState
+
+        mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+        mock_coordinator._lock_locked = AsyncMock()
+
+        # Mock lock entity showing locked state
+        mock_lock_state = Mock()
+        mock_lock_state.state = LockState.LOCKED
+        mock_coordinator.hass.states.get = Mock(return_value=mock_lock_state)
+
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=True
+        )
+
+        # Verify _lock_locked was called
+        mock_coordinator._lock_locked.assert_called_once()
+        call_kwargs = mock_coordinator._lock_locked.call_args.kwargs
+        assert call_kwargs["kmlock"] == mock_kmlock_with_entities
+        assert call_kwargs["source"] == "status_sync"
+
+    async def test_update_door_and_lock_state_triggers_unlock_actions(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that unlock state changes trigger actions when requested."""
+        from homeassistant.components.lock import LockState
+
+        mock_kmlock_with_entities.lock_state = LockState.LOCKED
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+        mock_coordinator._lock_unlocked = AsyncMock()
+
+        # Mock lock entity showing unlocked state
+        mock_lock_state = Mock()
+        mock_lock_state.state = LockState.UNLOCKED
+        mock_coordinator.hass.states.get = Mock(return_value=mock_lock_state)
+
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=True
+        )
+
+        # Verify _lock_unlocked was called
+        mock_coordinator._lock_unlocked.assert_called_once()
+        call_kwargs = mock_coordinator._lock_unlocked.call_args.kwargs
+        assert call_kwargs["kmlock"] == mock_kmlock_with_entities
+
+    async def test_update_door_and_lock_state_triggers_door_opened(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that door open changes trigger actions when requested."""
+        from homeassistant.const import STATE_OPEN, STATE_CLOSED
+        from homeassistant.components.lock import LockState
+
+        mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
+        mock_kmlock_with_entities.door_state = STATE_CLOSED
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+        mock_coordinator._door_opened = AsyncMock()
+
+        # Mock different returns for lock vs door entity
+        def mock_states_get(entity_id):
+            if entity_id == "lock.front_door":
+                mock_state = Mock()
+                mock_state.state = LockState.UNLOCKED  # Keep lock state unchanged
+                return mock_state
+            elif entity_id == "binary_sensor.front_door":
+                mock_state = Mock()
+                mock_state.state = STATE_OPEN  # Door state changes
+                return mock_state
+            return None
+
+        mock_coordinator.hass.states.get = Mock(side_effect=mock_states_get)
+
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=True
+        )
+
+        # Verify _door_opened was called
+        mock_coordinator._door_opened.assert_called_once()
+
+    async def test_update_door_and_lock_state_triggers_door_closed(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that door closed changes trigger actions when requested."""
+        from homeassistant.const import STATE_OPEN, STATE_CLOSED
+
+        mock_kmlock_with_entities.door_state = STATE_OPEN
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+        mock_coordinator._door_closed = AsyncMock()
+
+        # Mock different returns for lock vs door entity
+        def mock_states_get(entity_id):
+            if entity_id == "lock.front_door":
+                mock_state = Mock()
+                mock_state.state = "unlocked"
+                return mock_state
+            elif entity_id == "binary_sensor.front_door":
+                mock_state = Mock()
+                mock_state.state = STATE_CLOSED
+                return mock_state
+            return None
+
+        mock_coordinator.hass.states.get = Mock(side_effect=mock_states_get)
+
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=True
+        )
+
+        # Verify _door_closed was called
+        mock_coordinator._door_closed.assert_called_once()
+
+    async def test_update_door_and_lock_state_handles_missing_lock_entity(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that missing lock entity is handled gracefully."""
+        from homeassistant.components.lock import LockState
+
+        mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+
+        # Mock hass.states.get to return None (entity doesn't exist)
+        mock_coordinator.hass.states.get = Mock(return_value=None)
+
+        # Should not raise exception
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=False
+        )
+
+        # State should remain unchanged
+        assert mock_kmlock_with_entities.lock_state == LockState.UNLOCKED
+
+    async def test_update_door_and_lock_state_handles_empty_lock_entity_id(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that empty lock entity ID is handled gracefully."""
+        mock_kmlock_with_entities.lock_entity_id = ""
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+
+        # Should not raise exception
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=False
+        )
+
+    async def test_update_door_and_lock_state_handles_no_door_sensor(
+        self, mock_coordinator, mock_kmlock_with_entities
+    ):
+        """Test that lock without door sensor is handled gracefully."""
+        from homeassistant.components.lock import LockState
+
+        mock_kmlock_with_entities.door_sensor_entity_id = None
+        mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
+
+        mock_lock_state = Mock()
+        mock_lock_state.state = LockState.LOCKED
+        mock_coordinator.hass.states.get = Mock(return_value=mock_lock_state)
+
+        # Should not raise exception
+        await mock_coordinator._update_door_and_lock_state(
+            trigger_actions_if_changed=False
+        )
+
+        # Lock state should be updated, door state unchanged
+        assert mock_kmlock_with_entities.lock_state == LockState.LOCKED
+
+
+class TestCoordinatorUtilities:
+    """Test coordinator utility and getter functions."""
+
+    async def test_count_locks_not_pending_delete_with_multiple_locks(
+        self, mock_coordinator
+    ):
+        """Test counting locks excluding pending delete."""
+        from custom_components.keymaster.lock import KeymasterLock
+
+        # Create multiple locks with different states
+        lock1 = Mock(spec=KeymasterLock)
+        lock1.pending_delete = False
+        lock1.keymaster_config_entry_id = "lock1_id"
+
+        lock2 = Mock(spec=KeymasterLock)
+        lock2.pending_delete = True  # This one is pending delete
+        lock2.keymaster_config_entry_id = "lock2_id"
+
+        lock3 = Mock(spec=KeymasterLock)
+        lock3.pending_delete = False
+        lock3.keymaster_config_entry_id = "lock3_id"
+
+        mock_coordinator.kmlocks = {
+            "lock1_id": lock1,
+            "lock2_id": lock2,
+            "lock3_id": lock3,
+        }
+
+        # Should count only locks not pending delete
+        assert mock_coordinator.count_locks_not_pending_delete == 2
+
+    async def test_count_locks_not_pending_delete_empty(self, mock_coordinator):
+        """Test counting with no locks."""
+        mock_coordinator.kmlocks = {}
+        assert mock_coordinator.count_locks_not_pending_delete == 0
+
+    async def test_count_locks_not_pending_delete_all_pending(self, mock_coordinator):
+        """Test counting when all locks are pending delete."""
+        from custom_components.keymaster.lock import KeymasterLock
+
+        lock1 = Mock(spec=KeymasterLock)
+        lock1.pending_delete = True
+        lock1.keymaster_config_entry_id = "lock1_id"
+
+        lock2 = Mock(spec=KeymasterLock)
+        lock2.pending_delete = True
+        lock2.keymaster_config_entry_id = "lock2_id"
+
+        mock_coordinator.kmlocks = {
+            "lock1_id": lock1,
+            "lock2_id": lock2,
+        }
+
+        assert mock_coordinator.count_locks_not_pending_delete == 0
+
+    async def test_get_lock_by_config_entry_id_found(
+        self, mock_coordinator, mock_keymaster_lock
+    ):
+        """Test getting lock by config entry ID when it exists."""
+        mock_keymaster_lock.keymaster_config_entry_id = "test_entry_id"
+        mock_coordinator.kmlocks = {"test_entry_id": mock_keymaster_lock}
+        mock_coordinator._initial_setup_done_event = AsyncMock()
+        mock_coordinator._initial_setup_done_event.wait = AsyncMock()
+
+        result = await mock_coordinator.get_lock_by_config_entry_id("test_entry_id")
+
+        assert result == mock_keymaster_lock
+        mock_coordinator._initial_setup_done_event.wait.assert_called_once()
+
+    async def test_get_lock_by_config_entry_id_not_found(self, mock_coordinator):
+        """Test getting lock by config entry ID when it doesn't exist."""
+        mock_coordinator.kmlocks = {}
+        mock_coordinator._initial_setup_done_event = AsyncMock()
+        mock_coordinator._initial_setup_done_event.wait = AsyncMock()
+
+        result = await mock_coordinator.get_lock_by_config_entry_id("nonexistent_id")
+
+        assert result is None
+
+    async def test_sync_get_lock_by_config_entry_id_found(
+        self, mock_coordinator, mock_keymaster_lock
+    ):
+        """Test synchronously getting lock by config entry ID."""
+        mock_keymaster_lock.keymaster_config_entry_id = "test_entry_id"
+        mock_coordinator.kmlocks = {"test_entry_id": mock_keymaster_lock}
+
+        result = mock_coordinator.sync_get_lock_by_config_entry_id("test_entry_id")
+
+        assert result == mock_keymaster_lock
+
+    async def test_sync_get_lock_by_config_entry_id_not_found(self, mock_coordinator):
+        """Test synchronously getting lock when it doesn't exist."""
+        mock_coordinator.kmlocks = {}
+
+        result = mock_coordinator.sync_get_lock_by_config_entry_id("nonexistent_id")
+
+        assert result is None
