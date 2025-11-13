@@ -1,5 +1,6 @@
 """Tests for the Coordinator."""
 
+import random
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -8,6 +9,63 @@ from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+
+
+def validate_lock_relationship_invariants(coordinator: KeymasterCoordinator) -> list[str]:
+    """Validate all lock relationship invariants hold.
+    
+    Returns list of violation messages. Empty list = all invariants hold.
+    This helper would have caught the KeyError bug immediately.
+    """
+    violations = []
+    
+    # Invariant 1: Every child_id in any parent's list must exist in kmlocks
+    for lock_id, lock in coordinator.kmlocks.items():
+        for child_id in lock.child_config_entry_ids:
+            if child_id not in coordinator.kmlocks:
+                violations.append(
+                    f"Orphaned child reference: parent {lock_id} references "
+                    f"non-existent child {child_id}"
+                )
+    
+    # Invariant 2: Every parent_id referenced by a child must exist in kmlocks
+    for lock_id, lock in coordinator.kmlocks.items():
+        if lock.parent_config_entry_id:
+            if lock.parent_config_entry_id not in coordinator.kmlocks:
+                violations.append(
+                    f"Invalid parent reference: child {lock_id} references "
+                    f"non-existent parent {lock.parent_config_entry_id}"
+                )
+    
+    # Invariant 3: Bidirectional consistency - if parent lists child, child must point to parent
+    for lock_id, lock in coordinator.kmlocks.items():
+        for child_id in lock.child_config_entry_ids:
+            if child_id in coordinator.kmlocks:
+                child = coordinator.kmlocks[child_id]
+                if child.parent_config_entry_id != lock_id:
+                    violations.append(
+                        f"Bidirectional inconsistency: parent {lock_id} lists child {child_id}, "
+                        f"but child points to parent {child.parent_config_entry_id}"
+                    )
+    
+    # Invariant 4: If child points to parent, parent must list child
+    for lock_id, lock in coordinator.kmlocks.items():
+        if lock.parent_config_entry_id and lock.parent_config_entry_id in coordinator.kmlocks:
+            parent = coordinator.kmlocks[lock.parent_config_entry_id]
+            if lock_id not in parent.child_config_entry_ids:
+                violations.append(
+                    f"Missing child reference: child {lock_id} points to parent "
+                    f"{lock.parent_config_entry_id}, but parent doesn't list child"
+                )
+    
+    # Invariant 5: No duplicates in child lists
+    for lock_id, lock in coordinator.kmlocks.items():
+        if len(lock.child_config_entry_ids) != len(set(lock.child_config_entry_ids)):
+            violations.append(
+                f"Duplicate children: parent {lock_id} has duplicate entries in child list"
+            )
+    
+    return violations
 
 
 @pytest.fixture
@@ -651,3 +709,228 @@ class TestRebuildLockRelationships:
         assert first_result == second_result == third_result
         assert "child_id" in first_result
         assert "orphan_id" not in first_result
+
+
+class TestLockRelationshipInvariants:
+    """Tests that validate system-wide invariants always hold.
+    
+    These tests would have caught the KeyError bug immediately by detecting
+    orphaned child references that should have been cleaned up.
+    """
+
+    async def test_invariants_hold_after_rebuild(self, mock_coordinator):
+        """Test that all relationship invariants hold after rebuild operation."""
+        # Arrange: Complex scenario with orphaned children
+        parent = Mock(spec=KeymasterLock)
+        parent.keymaster_config_entry_id = "parent"
+        parent.lock_name = "Parent"
+        parent.child_config_entry_ids = ["child1", "orphan1", "orphan2"]
+        parent.parent_config_entry_id = None
+
+        child1 = Mock(spec=KeymasterLock)
+        child1.keymaster_config_entry_id = "child1"
+        child1.lock_name = "Child 1"
+        child1.child_config_entry_ids = []
+        child1.parent_config_entry_id = "parent"
+
+        mock_coordinator.kmlocks = {"parent": parent, "child1": child1}
+
+        # Act
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: Validate ALL invariants
+        violations = validate_lock_relationship_invariants(mock_coordinator)
+        assert len(violations) == 0, f"Invariant violations detected: {violations}"
+
+    async def test_invariants_hold_with_complex_hierarchy(self, mock_coordinator):
+        """Test invariants with multiple parents, children, and orphans."""
+        # Arrange: 2 parents, 3 children (2 valid, 1 orphan), 2 orphan references
+        parent1 = Mock(spec=KeymasterLock)
+        parent1.keymaster_config_entry_id = "parent1"
+        parent1.lock_name = "Parent 1"
+        parent1.child_config_entry_ids = ["child1", "orphan_ref_1"]
+        parent1.parent_config_entry_id = None
+
+        parent2 = Mock(spec=KeymasterLock)
+        parent2.keymaster_config_entry_id = "parent2"
+        parent2.lock_name = "Parent 2"
+        parent2.child_config_entry_ids = ["child2", "child3", "orphan_ref_2"]
+        parent2.parent_config_entry_id = None
+
+        child1 = Mock(spec=KeymasterLock)
+        child1.keymaster_config_entry_id = "child1"
+        child1.lock_name = "Child 1"
+        child1.child_config_entry_ids = []
+        child1.parent_config_entry_id = "parent1"
+
+        child2 = Mock(spec=KeymasterLock)
+        child2.keymaster_config_entry_id = "child2"
+        child2.lock_name = "Child 2"
+        child2.child_config_entry_ids = []
+        child2.parent_config_entry_id = "parent2"
+
+        child3 = Mock(spec=KeymasterLock)
+        child3.keymaster_config_entry_id = "child3"
+        child3.lock_name = "Child 3"
+        child3.child_config_entry_ids = []
+        child3.parent_config_entry_id = "parent2"
+
+        mock_coordinator.kmlocks = {
+            "parent1": parent1,
+            "parent2": parent2,
+            "child1": child1,
+            "child2": child2,
+            "child3": child3,
+        }
+
+        # Act
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: No violations
+        violations = validate_lock_relationship_invariants(mock_coordinator)
+        assert len(violations) == 0, f"Violations: {violations}"
+
+    async def test_stress_random_lock_additions_and_removals(self, mock_coordinator):
+        """Stress test: Randomly add/remove locks and verify no KeyError/RuntimeError.
+        
+        This test validates that _rebuild_lock_relationships never crashes even with
+        random lock configurations. It would have caught both bugs we fixed.
+        """
+        
+        mock_coordinator.kmlocks = {}
+        parent_locks = []
+        
+        # Phase 1: Add parent locks first
+        for i in range(5):
+            lock = Mock(spec=KeymasterLock)
+            lock.keymaster_config_entry_id = f"parent_{i}"
+            lock.lock_name = f"Parent {i}"
+            lock.child_config_entry_ids = []
+            lock.parent_config_entry_id = None
+            lock.parent_name = None
+            mock_coordinator.kmlocks[lock.keymaster_config_entry_id] = lock
+            parent_locks.append(lock)
+        
+        # Phase 2: Add child locks with parent_name references
+        for i in range(15):
+            lock = Mock(spec=KeymasterLock)
+            lock.keymaster_config_entry_id = f"child_{i}"
+            lock.lock_name = f"Child {i}"
+            lock.child_config_entry_ids = []
+            
+            # Randomly assign parent via parent_name
+            if random.random() > 0.3:
+                parent = random.choice(parent_locks)
+                lock.parent_name = parent.lock_name
+                lock.parent_config_entry_id = None  # Not set yet
+            else:
+                lock.parent_name = None
+                lock.parent_config_entry_id = None
+            
+            mock_coordinator.kmlocks[lock.keymaster_config_entry_id] = lock
+        
+        # Rebuild and check no crashes and consistent parent→child relationships
+        await mock_coordinator._rebuild_lock_relationships()
+        
+        # Verify no parent lists non-existent children (would cause KeyError with bug)
+        for lock in mock_coordinator.kmlocks.values():
+            for child_id in lock.child_config_entry_ids:
+                assert child_id in mock_coordinator.kmlocks, \
+                    f"Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
+        
+        # Phase 3: Randomly remove half the locks
+        all_lock_ids = list(mock_coordinator.kmlocks.keys())
+        locks_to_remove = random.sample(all_lock_ids, len(all_lock_ids) // 2)
+        for lock_id in locks_to_remove:
+            del mock_coordinator.kmlocks[lock_id]
+        
+        # Rebuild and verify no crashes (would fail with KeyError or RuntimeError with bugs)
+        await mock_coordinator._rebuild_lock_relationships()
+        
+        # Verify no parent lists non-existent children after cleanup
+        for lock in mock_coordinator.kmlocks.values():
+            for child_id in lock.child_config_entry_ids:
+                assert child_id in mock_coordinator.kmlocks, \
+                    f"After removals: Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
+
+    async def test_exact_production_bug_scenario(self, mock_coordinator):
+        """Reproduce the EXACT scenario that caused the production KeyError bug.
+        
+        This is a regression test - if this fails, we've reintroduced the bug.
+        The bug: line 477 used child_config_entry_id instead of keymaster_config_entry_id
+        when accessing kmlocks dict to remove orphaned child from parent's list.
+        """
+        # Arrange: Exact scenario from production
+        # - Parent lock exists in kmlocks
+        # - Parent's child_config_entry_ids list contains an orphaned child ID
+        # - Orphaned child does NOT exist in kmlocks
+        parent_lock = Mock(spec=KeymasterLock)
+        parent_lock.keymaster_config_entry_id = "front_door_lock"
+        parent_lock.lock_name = "Front Door"
+        parent_lock.child_config_entry_ids = ["garage_lock"]  # Orphaned!
+        parent_lock.parent_config_entry_id = None
+
+        # Only parent exists - child is missing (orphaned)
+        mock_coordinator.kmlocks = {"front_door_lock": parent_lock}
+
+        # Act: This would have raised KeyError with the bug
+        try:
+            await mock_coordinator._rebuild_lock_relationships()
+        except KeyError as e:
+            pytest.fail(f"KeyError raised - bug still exists: {e}")
+
+        # Assert: Orphaned child should be removed
+        assert "garage_lock" not in parent_lock.child_config_entry_ids
+        
+        # Assert: All invariants hold
+        violations = validate_lock_relationship_invariants(mock_coordinator)
+        assert len(violations) == 0, f"Violations: {violations}"
+
+    async def test_bidirectional_consistency_after_parent_change(self, mock_coordinator):
+        """Test that bidirectional consistency maintained when child changes parent.
+        
+        Note: _rebuild_lock_relationships only removes mismatched children from parents.
+        It does NOT add children to parents when child.parent_config_entry_id is set.
+        Children are added via parent_name matching only.
+        """
+        # Arrange: parent2 incorrectly lists child, but child points to parent1
+        parent1 = Mock(spec=KeymasterLock)
+        parent1.keymaster_config_entry_id = "parent1"
+        parent1.lock_name = "Parent 1"
+        parent1.child_config_entry_ids = []  # Should have child but doesn't
+        parent1.parent_config_entry_id = None
+        parent1.parent_name = None
+
+        parent2 = Mock(spec=KeymasterLock)
+        parent2.keymaster_config_entry_id = "parent2"
+        parent2.lock_name = "Parent 2"
+        parent2.child_config_entry_ids = ["child"]  # Incorrectly claims child
+        parent2.parent_config_entry_id = None
+        parent2.parent_name = None
+
+        child = Mock(spec=KeymasterLock)
+        child.keymaster_config_entry_id = "child"
+        child.lock_name = "Child"
+        child.child_config_entry_ids = []
+        child.parent_config_entry_id = "parent1"  # Points to parent1
+        child.parent_name = "Parent 1"  # Uses parent_name for relationship
+
+        mock_coordinator.kmlocks = {
+            "parent1": parent1,
+            "parent2": parent2,
+            "child": child,
+        }
+
+        # Act
+        await mock_coordinator._rebuild_lock_relationships()
+
+        # Assert: parent2 should no longer list child (mismatch removed)
+        assert "child" not in parent2.child_config_entry_ids
+        
+        # Assert: parent1 should now list child (via parent_name match)
+        assert "child" in parent1.child_config_entry_ids
+        
+        # Assert: All invariants hold
+        violations = validate_lock_relationship_invariants(mock_coordinator)
+        assert len(violations) == 0, f"Violations: {violations}"
+
