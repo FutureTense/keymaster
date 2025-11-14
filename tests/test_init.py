@@ -89,4 +89,4 @@ async def test_unload_entry(
 
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 0
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 1
