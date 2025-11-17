@@ -1,7 +1,7 @@
 """Tests for keymaster DateTime platform."""
 
 import logging
-from datetime import datetime as dt
+from datetime import datetime
 from unittest.mock import patch, AsyncMock
 
 import pytest
@@ -22,6 +22,12 @@ from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.datetime import (
+    KeymasterDateTime,
+    KeymasterDateTimeEntityDescription,
+    async_setup_entry,
+)
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
 
 CONFIG_DATA_DATETIME = {
@@ -80,8 +86,6 @@ async def test_datetime_entity_not_created_without_advanced_date_range(hass: Hom
     hass.data[DOMAIN][COORDINATOR] = coordinator
     
     # Setup the config entry (this would call async_setup_entry in datetime.py)
-    from custom_components.keymaster.datetime import async_setup_entry
-    
     entities = []
     
     def mock_add_entities(new_entities, update_before_add):
@@ -95,8 +99,6 @@ async def test_datetime_entity_not_created_without_advanced_date_range(hass: Hom
 
 async def test_datetime_entities_created_with_advanced_date_range(hass: HomeAssistant, datetime_config_entry):
     """Test datetime entities are created when advanced date range is enabled."""
-    from custom_components.keymaster.datetime import async_setup_entry
-    
     entities = []
     
     def mock_add_entities(new_entities, update_before_add):
@@ -118,8 +120,6 @@ async def test_datetime_entities_created_with_advanced_date_range(hass: HomeAssi
 
 async def test_datetime_entity_initialization(hass: HomeAssistant, datetime_config_entry, coordinator):
     """Test datetime entity initialization."""
-    from custom_components.keymaster.datetime import KeymasterDateTime, KeymasterDateTimeEntityDescription
-    
     entity_description = KeymasterDateTimeEntityDescription(
         key="datetime.code_slots:1.accesslimit_date_range_start",
         name="Code Slot 1: Date Range Start",
@@ -139,9 +139,6 @@ async def test_datetime_entity_initialization(hass: HomeAssistant, datetime_conf
 
 async def test_datetime_entity_unavailable_when_not_connected(hass: HomeAssistant, datetime_config_entry, coordinator):
     """Test datetime entity becomes unavailable when lock is not connected."""
-    from custom_components.keymaster.datetime import KeymasterDateTime, KeymasterDateTimeEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock
-    
     # Create a lock that's not connected
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -172,9 +169,6 @@ async def test_datetime_entity_unavailable_when_not_connected(hass: HomeAssistan
 
 async def test_datetime_entity_async_set_value(hass: HomeAssistant, datetime_config_entry, coordinator):
     """Test setting datetime value updates coordinator."""
-    from custom_components.keymaster.datetime import KeymasterDateTime, KeymasterDateTimeEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-    
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -201,7 +195,7 @@ async def test_datetime_entity_async_set_value(hass: HomeAssistant, datetime_con
     
     # Mock coordinator.async_refresh
     with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
-        test_datetime = dt(2025, 1, 1, 0, 0, 0)
+        test_datetime = datetime(2025, 1, 1, 0, 0, 0)
         await entity.async_set_value(test_datetime)
         
         # Should update value and call refresh
@@ -211,9 +205,6 @@ async def test_datetime_entity_async_set_value(hass: HomeAssistant, datetime_con
 
 async def test_datetime_entity_child_lock_ignores_change_without_override(hass: HomeAssistant, datetime_config_entry, coordinator, caplog):
     """Test that child lock ignores datetime changes when not overriding parent."""
-    from custom_components.keymaster.datetime import KeymasterDateTime, KeymasterDateTimeEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-    
     # Create a child lock (has parent_name) with code slot NOT set to override
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -246,7 +237,7 @@ async def test_datetime_entity_child_lock_ignores_change_without_override(hass: 
     # Mock coordinator.async_refresh
     with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
         caplog.set_level(logging.DEBUG)
-        test_datetime = dt(2025, 1, 1, 0, 0, 0)
+        test_datetime = datetime(2025, 1, 1, 0, 0, 0)
         await entity.async_set_value(test_datetime)
         
         # Should NOT call refresh because child doesn't override parent
@@ -256,9 +247,6 @@ async def test_datetime_entity_child_lock_ignores_change_without_override(hass: 
 
 async def test_datetime_entity_unavailable_when_child_not_overriding_parent(hass: HomeAssistant, datetime_config_entry, coordinator):
     """Test datetime entity becomes unavailable when child lock not overriding parent."""
-    from custom_components.keymaster.datetime import KeymasterDateTime, KeymasterDateTimeEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-    
     # Create a child lock (has parent_name) with code slot NOT set to override
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -297,9 +285,6 @@ async def test_datetime_entity_unavailable_when_child_not_overriding_parent(hass
 
 async def test_datetime_entity_unavailable_when_code_slot_missing(hass: HomeAssistant, datetime_config_entry, coordinator):
     """Test datetime entity becomes unavailable when code slot doesn't exist."""
-    from custom_components.keymaster.datetime import KeymasterDateTime, KeymasterDateTimeEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock
-    
     # Create a lock without code slots
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -332,10 +317,6 @@ async def test_datetime_entity_unavailable_when_code_slot_missing(hass: HomeAssi
 
 async def test_datetime_entity_available_with_valid_code_slot(hass: HomeAssistant, datetime_config_entry, coordinator):
     """Test datetime entity is available with valid code slot (lines 116-118)."""
-    from custom_components.keymaster.datetime import KeymasterDateTime, KeymasterDateTimeEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-    from datetime import datetime
-    
     # Create a lock WITH code slots
     kmlock = KeymasterLock(
         lock_name="frontdoor",
