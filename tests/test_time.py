@@ -19,14 +19,17 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.lock import (
+    KeymasterCodeSlot,
+    KeymasterCodeSlotDayOfWeek,
+    KeymasterLock,
+)
 from custom_components.keymaster.time import (
     KeymasterTime,
     KeymasterTimeEntityDescription,
     async_setup_entry,
 )
-from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek
 from homeassistant.core import HomeAssistant
-
 
 CONFIG_DATA_TIME = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -81,7 +84,8 @@ async def test_time_entity_not_created_without_advanced_dow(hass: HomeAssistant)
 
     entities = []
 
-    async def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, config_entry, mock_add_entities)
@@ -90,15 +94,14 @@ async def test_time_entity_not_created_without_advanced_dow(hass: HomeAssistant)
     assert len(entities) == 0
 
 
-async def test_time_entities_created_with_advanced_dow(
-    hass: HomeAssistant, time_config_entry
-):
+async def test_time_entities_created_with_advanced_dow(hass: HomeAssistant, time_config_entry):
     """Test time entities are created when advanced day of week is enabled."""
 
     entities = []
 
-    def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
         """Mock add entities function - NOT async to match HA's AddEntitiesCallback."""
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, time_config_entry, mock_add_entities)
@@ -131,16 +134,12 @@ async def test_time_entity_initialization(hass: HomeAssistant, time_config_entry
     entity = KeymasterTime(entity_description=entity_description)
 
     assert entity._attr_native_value is None
-    assert (
-        entity.entity_description.key
-        == "time.code_slots:1.accesslimit_day_of_week:0.time_start"
-    )
+    assert entity.entity_description.key == "time.code_slots:1.accesslimit_day_of_week:0.time_start"
+    assert isinstance(entity.entity_description.name, str)
     assert "Monday - Start Time" in entity.entity_description.name
 
 
-async def test_time_entity_unavailable_when_not_connected(
-    hass: HomeAssistant, time_config_entry
-):
+async def test_time_entity_unavailable_when_not_connected(hass: HomeAssistant, time_config_entry):
     """Test time entity is unavailable when lock is not connected."""
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
@@ -282,9 +281,7 @@ async def test_time_entity_child_lock_ignores_change_without_override(
         assert "not set to override parent. Ignoring change" in caplog.text
 
 
-async def test_time_entity_unavailable_when_dow_not_enabled(
-    hass: HomeAssistant, time_config_entry
-):
+async def test_time_entity_unavailable_when_dow_not_enabled(hass: HomeAssistant, time_config_entry):
     """Test time entity is unavailable when day of week is not enabled."""
 
     coordinator = hass.data[DOMAIN][COORDINATOR]

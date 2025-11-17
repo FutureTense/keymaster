@@ -1,30 +1,29 @@
 """Tests for keymaster Sensor platform."""
 
-from unittest.mock import patch, Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.core import HomeAssistant
-
 from custom_components.keymaster.const import (
-    COORDINATOR,
-    DOMAIN,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
+    DOMAIN,
+    Synced,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from custom_components.keymaster.sensor import (
     KeymasterSensor,
     KeymasterSensorEntityDescription,
     async_setup_entry,
 )
-from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-
+from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_SENSOR = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -61,9 +60,7 @@ async def coordinator(hass: HomeAssistant, sensor_config_entry):
     return hass.data[DOMAIN][COORDINATOR]
 
 
-async def test_sensor_entity_initialization(
-    hass: HomeAssistant, sensor_config_entry, coordinator
-):
+async def test_sensor_entity_initialization(hass: HomeAssistant, sensor_config_entry, coordinator):
     """Test sensor entity initialization."""
 
     entity_description = KeymasterSensorEntityDescription(
@@ -165,7 +162,7 @@ async def test_sensor_entity_available_when_connected(
     kmlock.code_slots = {
         1: KeymasterCodeSlot(
             number=1,
-            synced="synced",
+            synced=Synced.SYNCED,
         )
     }
     coordinator.kmlocks[sensor_config_entry.entry_id] = kmlock
@@ -247,8 +244,9 @@ async def test_async_setup_entry_with_parent_lock(hass: HomeAssistant):
     # Track added entities
     added_entities = []
 
-    def mock_add_entities(entities, update_before_add=True):
-        added_entities.extend(entities)
+    def mock_add_entities(new_entities, update_before_add=False):
+        del update_before_add  # Unused but required by signature
+        added_entities.extend(new_entities)
 
     # Call setup
     await async_setup_entry(hass, config_entry, mock_add_entities)

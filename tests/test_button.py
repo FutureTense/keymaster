@@ -1,15 +1,16 @@
 """Tests for keymaster Button platform."""
 
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.core import HomeAssistant
-
+from custom_components.keymaster.button import (
+    KeymasterButton,
+    KeymasterButtonEntityDescription,
+    async_setup_entry,
+)
 from custom_components.keymaster.const import (
-    COORDINATOR,
-    DOMAIN,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_DOOR_SENSOR_ENTITY_ID,
@@ -17,15 +18,12 @@ from custom_components.keymaster.const import (
     CONF_LOCK_NAME,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
+    DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.button import (
-    KeymasterButton,
-    KeymasterButtonEntityDescription,
-    async_setup_entry,
-)
-from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
+from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_BUTTON = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -58,7 +56,7 @@ async def button_config_entry(hass: HomeAssistant):
 
 
 @pytest.fixture
-async def coordinator(hass: HomeAssistant, button_config_entry):
+async def coordinator(hass: HomeAssistant, _button_config_entry):
     """Get the coordinator."""
     return hass.data[DOMAIN][COORDINATOR]
 
@@ -67,8 +65,9 @@ async def test_button_entities_created(hass: HomeAssistant, button_config_entry)
     """Test button entities are created for reset lock and code slots."""
     entities = []
 
-    def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
         """Mock add entities function."""
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, button_config_entry, mock_add_entities)

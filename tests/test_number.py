@@ -1,18 +1,12 @@
 """Tests for keymaster Number platform."""
 
 import logging
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.number import NumberDeviceClass, NumberMode
-from homeassistant.const import UnitOfTime
-from homeassistant.core import HomeAssistant
-
 from custom_components.keymaster.const import (
-    COORDINATOR,
-    DOMAIN,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_DOOR_SENSOR_ENTITY_ID,
@@ -20,15 +14,19 @@ from custom_components.keymaster.const import (
     CONF_LOCK_NAME,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
+    DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from custom_components.keymaster.number import (
     KeymasterNumber,
     KeymasterNumberEntityDescription,
     async_setup_entry,
 )
-from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-
+from homeassistant.components.number import NumberDeviceClass, NumberMode
+from homeassistant.const import UnitOfTime
+from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_NUMBER = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -71,8 +69,9 @@ async def test_number_entities_created(hass: HomeAssistant, number_config_entry)
 
     entities = []
 
-    def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
         """Mock add entities function."""
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, number_config_entry, mock_add_entities)
@@ -95,23 +94,20 @@ async def test_number_autolock_entities_have_correct_config(
 
     entities = []
 
-    def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, number_config_entry, mock_add_entities)
 
     # Find autolock entities
-    autolock_entities = [
-        e for e in entities if "Auto Lock" in e.entity_description.name
-    ]
+    autolock_entities = [e for e in entities if "Auto Lock" in e.entity_description.name]
     assert len(autolock_entities) == 2
 
     for entity in autolock_entities:
         # Check they're duration entities with minutes
         assert entity.entity_description.device_class == NumberDeviceClass.DURATION
-        assert (
-            entity.entity_description.native_unit_of_measurement == UnitOfTime.MINUTES
-        )
+        assert entity.entity_description.native_unit_of_measurement == UnitOfTime.MINUTES
         assert entity.entity_description.mode == NumberMode.BOX
         assert entity.entity_description.native_min_value == 1
         assert entity.entity_description.native_step == 1
@@ -124,15 +120,14 @@ async def test_number_accesslimit_entities_have_correct_config(
 
     entities = []
 
-    def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, number_config_entry, mock_add_entities)
 
     # Find access limit entities
-    accesslimit_entities = [
-        e for e in entities if "Uses Remaining" in e.entity_description.name
-    ]
+    accesslimit_entities = [e for e in entities if "Uses Remaining" in e.entity_description.name]
     assert len(accesslimit_entities) == 2
 
     for entity in accesslimit_entities:
@@ -143,9 +138,7 @@ async def test_number_accesslimit_entities_have_correct_config(
         assert entity.entity_description.native_step == 1
 
 
-async def test_number_entity_initialization(
-    hass: HomeAssistant, number_config_entry, coordinator
-):
+async def test_number_entity_initialization(hass: HomeAssistant, number_config_entry, coordinator):
     """Test number entity initialization."""
 
     entity_description = KeymasterNumberEntityDescription(
@@ -413,9 +406,7 @@ async def test_number_entity_available_when_autolock_enabled(
     assert entity._attr_native_value == 5
 
 
-async def test_number_entity_async_set_value(
-    hass: HomeAssistant, number_config_entry, coordinator
-):
+async def test_number_entity_async_set_value(hass: HomeAssistant, number_config_entry, coordinator):
     """Test setting number value updates coordinator."""
 
     # Create a connected lock with code slot and accesslimit enabled

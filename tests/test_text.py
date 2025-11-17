@@ -1,34 +1,32 @@
 """Tests for keymaster Text platform."""
 
 import logging
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.text import TextMode
-from homeassistant.core import HomeAssistant
-
 from custom_components.keymaster.const import (
-    COORDINATOR,
-    DOMAIN,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_DOOR_SENSOR_ENTITY_ID,
+    CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_SLOTS,
     CONF_START,
-    CONF_HIDE_PINS,
+    COORDINATOR,
+    DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from custom_components.keymaster.text import (
     KeymasterText,
     KeymasterTextEntityDescription,
     async_setup_entry,
 )
-from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-
+from homeassistant.components.text import TextMode
+from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_TEXT = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -72,8 +70,9 @@ async def test_text_entities_created(hass: HomeAssistant, text_config_entry):
 
     entities = []
 
-    def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
         """Mock add entities function."""
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, text_config_entry, mock_add_entities)
@@ -109,7 +108,8 @@ async def test_text_pin_entity_password_mode_when_hide_pins(hass: HomeAssistant)
 
     entities = []
 
-    def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, config_entry, mock_add_entities)
@@ -143,7 +143,8 @@ async def test_text_pin_entity_text_mode_when_not_hiding_pins(hass: HomeAssistan
 
     entities = []
 
-    def mock_add_entities(new_entities, update_before_add):
+    def mock_add_entities(new_entities, update_before_add=False):
+        del update_before_add  # Unused but required by signature
         entities.extend(new_entities)
 
     await async_setup_entry(hass, config_entry, mock_add_entities)
@@ -157,9 +158,7 @@ async def test_text_pin_entity_text_mode_when_not_hiding_pins(hass: HomeAssistan
         assert entity.entity_description.mode == TextMode.TEXT
 
 
-async def test_text_entity_initialization(
-    hass: HomeAssistant, text_config_entry, coordinator
-):
+async def test_text_entity_initialization(hass: HomeAssistant, text_config_entry, coordinator):
     """Test text entity initialization."""
 
     entity_description = KeymasterTextEntityDescription(
@@ -247,9 +246,7 @@ async def test_text_entity_available_when_connected(
     assert entity._attr_native_value == "Test User"
 
 
-async def test_text_entity_async_set_pin_value(
-    hass: HomeAssistant, text_config_entry, coordinator
-):
+async def test_text_entity_async_set_pin_value(hass: HomeAssistant, text_config_entry, coordinator):
     """Test setting PIN value calls coordinator methods."""
 
     # Create a connected lock with code slot
@@ -275,9 +272,10 @@ async def test_text_entity_async_set_pin_value(
     entity = KeymasterText(entity_description=entity_description)
 
     # Mock coordinator methods
-    with patch.object(
-        coordinator, "set_pin_on_lock", new=AsyncMock()
-    ) as mock_set_pin, patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with (
+        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+    ):
         await entity.async_set_value("1234")
 
         # Should call set_pin_on_lock with the PIN
@@ -317,9 +315,10 @@ async def test_text_entity_async_clear_pin_value(
     entity = KeymasterText(entity_description=entity_description)
 
     # Mock coordinator methods
-    with patch.object(
-        coordinator, "clear_pin_from_lock", new=AsyncMock()
-    ) as mock_clear_pin, patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with (
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()) as mock_clear_pin,
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+    ):
         await entity.async_set_value("")
 
         # Should call clear_pin_from_lock
@@ -358,12 +357,10 @@ async def test_text_entity_invalid_pin_ignored(
     entity = KeymasterText(entity_description=entity_description)
 
     # Mock coordinator methods
-    with patch.object(
-        coordinator, "set_pin_on_lock", new=AsyncMock()
-    ) as mock_set_pin, patch.object(
-        coordinator, "clear_pin_from_lock", new=AsyncMock()
-    ) as mock_clear_pin:
-
+    with (
+        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()) as mock_clear_pin,
+    ):
         # Invalid: too short
         await entity.async_set_value("123")
         mock_set_pin.assert_not_called()
