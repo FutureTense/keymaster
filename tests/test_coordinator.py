@@ -9,6 +9,9 @@ from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.components.lock import LockState
+from homeassistant.const import STATE_OPEN, STATE_CLOSED
+
 
 
 def validate_lock_relationship_invariants(
@@ -960,7 +963,6 @@ class TestLockStateEventHandlers:
     @pytest.fixture
     def mock_kmlock(self):
         """Create a mock KeymasterLock."""
-        from homeassistant.components.lock import LockState
 
         lock = Mock(spec=KeymasterLock)
         lock.keymaster_config_entry_id = "test_lock_id"
@@ -976,7 +978,6 @@ class TestLockStateEventHandlers:
 
     async def test_lock_locked_basic_state_change(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked updates lock state to LOCKED."""
-        from homeassistant.components.lock import LockState
 
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=True)
@@ -989,7 +990,6 @@ class TestLockStateEventHandlers:
         self, mock_coordinator, mock_kmlock
     ):
         """Test _lock_locked does nothing if already locked."""
-        from homeassistant.components.lock import LockState
 
         mock_kmlock.lock_state = LockState.LOCKED
         mock_coordinator._throttle = Mock()
@@ -1001,7 +1001,6 @@ class TestLockStateEventHandlers:
 
     async def test_lock_locked_throttled(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked respects throttling."""
-        from homeassistant.components.lock import LockState
 
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=False)
@@ -1046,7 +1045,6 @@ class TestLockStateEventHandlers:
 
     async def test_door_opened_basic_state_change(self, mock_coordinator, mock_kmlock):
         """Test _door_opened updates door state to open."""
-        from homeassistant.const import STATE_CLOSED, STATE_OPEN
 
         mock_kmlock.door_state = STATE_CLOSED
         mock_coordinator._throttle = Mock()
@@ -1060,7 +1058,6 @@ class TestLockStateEventHandlers:
         self, mock_coordinator, mock_kmlock
     ):
         """Test _door_opened does nothing if already open."""
-        from homeassistant.const import STATE_OPEN
 
         mock_kmlock.door_state = STATE_OPEN
         mock_coordinator._throttle = Mock()
@@ -1072,7 +1069,6 @@ class TestLockStateEventHandlers:
 
     async def test_door_opened_with_notifications(self, mock_coordinator, mock_kmlock):
         """Test _door_opened sends notification when enabled."""
-        from homeassistant.const import STATE_CLOSED
 
         mock_kmlock.door_state = STATE_CLOSED
         mock_kmlock.door_notifications = True
@@ -1093,7 +1089,6 @@ class TestLockStateEventHandlers:
 
     async def test_door_closed_basic_state_change(self, mock_coordinator, mock_kmlock):
         """Test _door_closed updates door state to closed."""
-        from homeassistant.const import STATE_OPEN, STATE_CLOSED
 
         mock_kmlock.door_state = STATE_OPEN
         mock_kmlock.retry_lock = False
@@ -1106,7 +1101,6 @@ class TestLockStateEventHandlers:
 
     async def test_door_closed_with_notifications(self, mock_coordinator, mock_kmlock):
         """Test _door_closed sends notification when enabled."""
-        from homeassistant.const import STATE_OPEN
 
         mock_kmlock.door_state = STATE_OPEN
         mock_kmlock.door_notifications = True
@@ -1139,7 +1133,6 @@ class TestStateSynchronization:
     @pytest.fixture
     def mock_kmlock_with_entities(self):
         """Create a mock KeymasterLock with entity IDs."""
-        from homeassistant.components.lock import LockState
 
         lock = Mock(spec=KeymasterLock)
         lock.keymaster_config_entry_id = "test_lock_id"
@@ -1154,7 +1147,6 @@ class TestStateSynchronization:
         self, mock_coordinator, mock_kmlock_with_entities
     ):
         """Test that lock state is synced from entity without triggering actions."""
-        from homeassistant.components.lock import LockState
 
         mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
@@ -1174,7 +1166,6 @@ class TestStateSynchronization:
         self, mock_coordinator, mock_kmlock_with_entities
     ):
         """Test that door state is synced from entity without triggering actions."""
-        from homeassistant.const import STATE_OPEN, STATE_CLOSED
 
         mock_kmlock_with_entities.door_state = STATE_CLOSED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
@@ -1203,7 +1194,6 @@ class TestStateSynchronization:
         self, mock_coordinator, mock_kmlock_with_entities
     ):
         """Test that lock state changes trigger actions when requested."""
-        from homeassistant.components.lock import LockState
 
         mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
@@ -1228,7 +1218,6 @@ class TestStateSynchronization:
         self, mock_coordinator, mock_kmlock_with_entities
     ):
         """Test that unlock state changes trigger actions when requested."""
-        from homeassistant.components.lock import LockState
 
         mock_kmlock_with_entities.lock_state = LockState.LOCKED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
@@ -1252,8 +1241,6 @@ class TestStateSynchronization:
         self, mock_coordinator, mock_kmlock_with_entities
     ):
         """Test that door open changes trigger actions when requested."""
-        from homeassistant.const import STATE_OPEN, STATE_CLOSED
-        from homeassistant.components.lock import LockState
 
         mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
         mock_kmlock_with_entities.door_state = STATE_CLOSED
@@ -1285,7 +1272,6 @@ class TestStateSynchronization:
         self, mock_coordinator, mock_kmlock_with_entities
     ):
         """Test that door closed changes trigger actions when requested."""
-        from homeassistant.const import STATE_OPEN, STATE_CLOSED
 
         mock_kmlock_with_entities.door_state = STATE_OPEN
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
@@ -1316,7 +1302,6 @@ class TestStateSynchronization:
         self, mock_coordinator, mock_kmlock_with_entities
     ):
         """Test that missing lock entity is handled gracefully."""
-        from homeassistant.components.lock import LockState
 
         mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
@@ -1348,7 +1333,6 @@ class TestStateSynchronization:
         self, mock_coordinator, mock_kmlock_with_entities
     ):
         """Test that lock without door sensor is handled gracefully."""
-        from homeassistant.components.lock import LockState
 
         mock_kmlock_with_entities.door_sensor_entity_id = None
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
@@ -1373,7 +1357,6 @@ class TestCoordinatorUtilities:
         self, mock_coordinator
     ):
         """Test counting locks excluding pending delete."""
-        from custom_components.keymaster.lock import KeymasterLock
 
         # Create multiple locks with different states
         lock1 = Mock(spec=KeymasterLock)
@@ -1404,7 +1387,6 @@ class TestCoordinatorUtilities:
 
     async def test_count_locks_not_pending_delete_all_pending(self, mock_coordinator):
         """Test counting when all locks are pending delete."""
-        from custom_components.keymaster.lock import KeymasterLock
 
         lock1 = Mock(spec=KeymasterLock)
         lock1.pending_delete = True

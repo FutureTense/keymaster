@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster.const import DOMAIN
-from custom_components.keymaster.services import SERVICE_REGENERATE_LOVELACE
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
+
+from custom_components.keymaster.const import COORDINATOR, DOMAIN
+from custom_components.keymaster.services import SERVICE_REGENERATE_LOVELACE, async_setup_services
 
 from .const import CONFIG_DATA
 
@@ -174,10 +178,6 @@ async def test_service_regenerate_lovelace(hass, keymaster_integration, caplog):
 
 async def test_async_setup_services_coordinator_update_fails(hass):
     """Test async_setup_services raises ConfigEntryNotReady when coordinator update fails (line 36)."""
-    from unittest.mock import AsyncMock, patch
-    from homeassistant.exceptions import ConfigEntryNotReady
-    from custom_components.keymaster.const import COORDINATOR, DOMAIN
-    from custom_components.keymaster.services import async_setup_services
 
     # Ensure DOMAIN exists in hass.data but COORDINATOR is not present
     hass.data.setdefault(DOMAIN, {})
