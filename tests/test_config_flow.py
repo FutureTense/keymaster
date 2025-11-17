@@ -202,8 +202,9 @@ async def test_form_no_script(test_user_input, title, final_config_flow_data, ha
     ],
 )
 @pytest.mark.usefixtures("_mock_get_entities")
-async def test_reconfiguration_form(test_user_input, _title, final_config_flow_data, hass):  # noqa: PT019
+async def test_reconfiguration_form(test_user_input, title, final_config_flow_data, hass):
     """Test we get the form."""
+    del title  # Used in parametrize but not in test body
 
     with (
         patch(
