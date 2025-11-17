@@ -22,6 +22,12 @@ from custom_components.keymaster.const import (
     CONF_HIDE_PINS,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.text import (
+    KeymasterText,
+    KeymasterTextEntityDescription,
+    async_setup_entry,
+)
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
 
 CONFIG_DATA_TEXT = {
@@ -63,7 +69,6 @@ async def coordinator(hass: HomeAssistant, text_config_entry):
 
 async def test_text_entities_created(hass: HomeAssistant, text_config_entry):
     """Test text entities are created for name and PIN."""
-    from custom_components.keymaster.text import async_setup_entry
 
     entities = []
 
@@ -86,7 +91,6 @@ async def test_text_entities_created(hass: HomeAssistant, text_config_entry):
 
 async def test_text_pin_entity_password_mode_when_hide_pins(hass: HomeAssistant):
     """Test PIN entities use password mode when CONF_HIDE_PINS is True."""
-    from custom_components.keymaster.text import async_setup_entry
 
     config_data = CONFIG_DATA_TEXT.copy()
     config_data[CONF_HIDE_PINS] = True
@@ -121,7 +125,6 @@ async def test_text_pin_entity_password_mode_when_hide_pins(hass: HomeAssistant)
 
 async def test_text_pin_entity_text_mode_when_not_hiding_pins(hass: HomeAssistant):
     """Test PIN entities use text mode when CONF_HIDE_PINS is False."""
-    from custom_components.keymaster.text import async_setup_entry
 
     config_data = CONFIG_DATA_TEXT.copy()
     config_data[CONF_HIDE_PINS] = False
@@ -158,10 +161,6 @@ async def test_text_entity_initialization(
     hass: HomeAssistant, text_config_entry, coordinator
 ):
     """Test text entity initialization."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
 
     entity_description = KeymasterTextEntityDescription(
         key="text.code_slots:1.name",
@@ -184,11 +183,6 @@ async def test_text_entity_unavailable_when_not_connected(
     hass: HomeAssistant, text_config_entry, coordinator
 ):
     """Test text entity becomes unavailable when lock is not connected."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock that's not connected
     kmlock = KeymasterLock(
@@ -222,11 +216,6 @@ async def test_text_entity_available_when_connected(
     hass: HomeAssistant, text_config_entry, coordinator
 ):
     """Test text entity is available and updates when lock is connected."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
@@ -262,11 +251,6 @@ async def test_text_entity_async_set_pin_value(
     hass: HomeAssistant, text_config_entry, coordinator
 ):
     """Test setting PIN value calls coordinator methods."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
@@ -309,11 +293,6 @@ async def test_text_entity_async_clear_pin_value(
     hass: HomeAssistant, text_config_entry, coordinator
 ):
     """Test clearing PIN value calls coordinator clear method."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
@@ -355,11 +334,6 @@ async def test_text_entity_invalid_pin_ignored(
     hass: HomeAssistant, text_config_entry, coordinator, caplog
 ):
     """Test that invalid PINs (too short, not numeric) are ignored."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
@@ -405,11 +379,6 @@ async def test_text_entity_child_lock_ignores_name_change_without_override(
     hass: HomeAssistant, text_config_entry, coordinator, caplog
 ):
     """Test that child lock ignores name changes when not overriding parent."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a child lock (has parent_name) with code slot NOT set to override
     kmlock = KeymasterLock(
@@ -454,11 +423,6 @@ async def test_text_entity_unavailable_when_child_not_overriding_parent(
     hass: HomeAssistant, text_config_entry, coordinator
 ):
     """Test text entity becomes unavailable when child lock not overriding parent."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a child lock (has parent_name) with code slot NOT set to override
     kmlock = KeymasterLock(
@@ -500,11 +464,6 @@ async def test_text_entity_unavailable_when_code_slot_missing(
     hass: HomeAssistant, text_config_entry, coordinator
 ):
     """Test text entity becomes unavailable when code slot doesn't exist."""
-    from custom_components.keymaster.text import (
-        KeymasterText,
-        KeymasterTextEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock without code slots
     kmlock = KeymasterLock(

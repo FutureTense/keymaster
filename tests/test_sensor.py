@@ -1,6 +1,6 @@
 """Tests for keymaster Sensor platform."""
 
-from unittest.mock import patch
+from unittest.mock import patch, Mock, AsyncMock
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -18,6 +18,12 @@ from custom_components.keymaster.const import (
     CONF_START,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.sensor import (
+    KeymasterSensor,
+    KeymasterSensorEntityDescription,
+    async_setup_entry,
+)
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
 
 CONFIG_DATA_SENSOR = {
@@ -59,10 +65,6 @@ async def test_sensor_entity_initialization(
     hass: HomeAssistant, sensor_config_entry, coordinator
 ):
     """Test sensor entity initialization."""
-    from custom_components.keymaster.sensor import (
-        KeymasterSensor,
-        KeymasterSensorEntityDescription,
-    )
 
     entity_description = KeymasterSensorEntityDescription(
         key="sensor.lock_name",
@@ -85,11 +87,6 @@ async def test_sensor_entity_unavailable_when_not_connected(
     hass: HomeAssistant, sensor_config_entry, coordinator
 ):
     """Test sensor entity becomes unavailable when lock is not connected."""
-    from custom_components.keymaster.sensor import (
-        KeymasterSensor,
-        KeymasterSensorEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock that's not connected
     kmlock = KeymasterLock(
@@ -123,11 +120,6 @@ async def test_sensor_entity_unavailable_when_code_slot_missing(
     hass: HomeAssistant, sensor_config_entry, coordinator
 ):
     """Test sensor entity becomes unavailable when code slot is missing."""
-    from custom_components.keymaster.sensor import (
-        KeymasterSensor,
-        KeymasterSensorEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a connected lock but no code slots
     kmlock = KeymasterLock(
@@ -162,11 +154,6 @@ async def test_sensor_entity_available_when_connected(
     hass: HomeAssistant, sensor_config_entry, coordinator
 ):
     """Test sensor entity becomes available when lock is connected."""
-    from custom_components.keymaster.sensor import (
-        KeymasterSensor,
-        KeymasterSensorEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
@@ -205,11 +192,6 @@ async def test_sensor_entity_available_when_connected(
 
 async def test_sensor_lock_name(hass: HomeAssistant, sensor_config_entry, coordinator):
     """Test lock_name sensor returns correct value."""
-    from custom_components.keymaster.sensor import (
-        KeymasterSensor,
-        KeymasterSensorEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a connected lock
     kmlock = KeymasterLock(
@@ -242,10 +224,6 @@ async def test_sensor_lock_name(hass: HomeAssistant, sensor_config_entry, coordi
 
 async def test_async_setup_entry_with_parent_lock(hass: HomeAssistant):
     """Test sensor setup creates parent sensor for child locks."""
-    from custom_components.keymaster.sensor import async_setup_entry
-    from custom_components.keymaster.lock import KeymasterLock
-    from unittest.mock import Mock, AsyncMock
-
     # Create config entry
     config_entry = MockConfigEntry(
         domain=DOMAIN,

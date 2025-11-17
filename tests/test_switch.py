@@ -21,6 +21,12 @@ from custom_components.keymaster.const import (
     CONF_ADVANCED_DAY_OF_WEEK,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.switch import (
+    KeymasterSwitch,
+    KeymasterSwitchEntityDescription,
+    async_setup_entry,
+)
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
 
 CONFIG_DATA_SWITCH = {
@@ -63,7 +69,6 @@ async def coordinator(hass: HomeAssistant, switch_config_entry):
 
 async def test_switch_entity_initialization(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test switch entity initialization."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
     
     entity_description = KeymasterSwitchEntityDescription(
         key="switch.autolock_enabled",
@@ -84,8 +89,6 @@ async def test_switch_entity_initialization(hass: HomeAssistant, switch_config_e
 
 async def test_switch_entity_unavailable_when_not_connected(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test switch entity becomes unavailable when lock is not connected."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock
     
     # Create a lock that's not connected
     kmlock = KeymasterLock(
@@ -117,8 +120,6 @@ async def test_switch_entity_unavailable_when_not_connected(hass: HomeAssistant,
 
 async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test turning switch on updates coordinator."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock
     
     # Create a connected lock
     kmlock = KeymasterLock(
@@ -154,8 +155,6 @@ async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, co
 
 async def test_switch_async_turn_off(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test turning switch off updates coordinator."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock
     
     # Create a connected lock
     kmlock = KeymasterLock(
@@ -191,8 +190,6 @@ async def test_switch_async_turn_off(hass: HomeAssistant, switch_config_entry, c
 
 async def test_switch_enabled_turn_on_sets_pin(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test turning on enabled switch sets PIN on lock."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
     
     # Create a connected lock with code slot and PIN
     kmlock = KeymasterLock(
@@ -243,8 +240,6 @@ async def test_switch_enabled_turn_on_sets_pin(hass: HomeAssistant, switch_confi
 
 async def test_switch_enabled_turn_off_clears_pin(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test turning off enabled switch clears PIN from lock."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
     
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
@@ -293,8 +288,6 @@ async def test_switch_enabled_turn_off_clears_pin(hass: HomeAssistant, switch_co
 
 async def test_switch_turn_on_no_op_when_already_on(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test turning on switch when already on is a no-op."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock
     
     # Create a connected lock
     kmlock = KeymasterLock(
@@ -329,8 +322,6 @@ async def test_switch_turn_on_no_op_when_already_on(hass: HomeAssistant, switch_
 
 async def test_switch_turn_off_no_op_when_already_off(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test turning off switch when already off is a no-op."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock
     
     # Create a connected lock
     kmlock = KeymasterLock(
@@ -365,8 +356,6 @@ async def test_switch_turn_off_no_op_when_already_off(hass: HomeAssistant, switc
 
 async def test_switch_unavailable_when_child_lock_without_override(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test code slot switch is unavailable when it's a child lock without override enabled."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
     
     # Create a child lock (has parent_name)
     kmlock = KeymasterLock(
@@ -407,8 +396,6 @@ async def test_switch_unavailable_when_child_lock_without_override(hass: HomeAss
 
 async def test_switch_available_when_child_lock_with_override(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test code slot switch is available when it's a child lock with override enabled."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
     
     # Create a child lock with override enabled
     kmlock = KeymasterLock(
@@ -449,8 +436,6 @@ async def test_switch_available_when_child_lock_with_override(hass: HomeAssistan
 
 async def test_switch_available_for_override_parent(hass: HomeAssistant, switch_config_entry, coordinator):
     """Test override_parent switch is always available for child locks."""
-    from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
     
     # Create a child lock
     kmlock = KeymasterLock(

@@ -19,6 +19,12 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.time import (
+    KeymasterTime,
+    KeymasterTimeEntityDescription,
+    async_setup_entry,
+)
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 from homeassistant.core import HomeAssistant
 
 
@@ -72,7 +78,6 @@ async def test_time_entity_not_created_without_advanced_dow(hass: HomeAssistant)
     hass.data[DOMAIN][COORDINATOR] = coordinator
 
     # Setup the config entry (this would call async_setup_entry in time.py)
-    from custom_components.keymaster.time import async_setup_entry
 
     entities = []
 
@@ -89,7 +94,6 @@ async def test_time_entities_created_with_advanced_dow(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entities are created when advanced day of week is enabled."""
-    from custom_components.keymaster.time import async_setup_entry
 
     entities = []
 
@@ -111,10 +115,6 @@ async def test_time_entities_created_with_advanced_dow(
 
 async def test_time_entity_initialization(hass: HomeAssistant, time_config_entry):
     """Test time entity initialization."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -142,11 +142,6 @@ async def test_time_entity_unavailable_when_not_connected(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entity is unavailable when lock is not connected."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -180,15 +175,6 @@ async def test_time_entity_unavailable_when_not_connected(
 
 async def test_time_entity_async_set_value(hass: HomeAssistant, time_config_entry):
     """Test setting time value."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-        KeymasterCodeSlotDayOfWeek,
-    )
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -243,15 +229,6 @@ async def test_time_entity_child_lock_ignores_change_without_override(
     hass: HomeAssistant, time_config_entry, caplog
 ):
     """Test that child lock ignores time changes when not overriding parent."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-        KeymasterCodeSlotDayOfWeek,
-    )
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -309,15 +286,6 @@ async def test_time_entity_unavailable_when_dow_not_enabled(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entity is unavailable when day of week is not enabled."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-        KeymasterCodeSlotDayOfWeek,
-    )
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -370,15 +338,6 @@ async def test_time_entity_unavailable_when_limit_by_time_disabled(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entity is unavailable when limit_by_time is disabled."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-        KeymasterCodeSlotDayOfWeek,
-    )
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -431,11 +390,6 @@ async def test_time_entity_child_lock_unavailable_without_code_slots(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entity is unavailable when child lock has no code_slots dict."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -474,14 +428,6 @@ async def test_time_entity_unavailable_when_code_slot_missing(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entity is unavailable when code slot number doesn't exist in code_slots dict."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-    )
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -523,11 +469,6 @@ async def test_time_entity_unavailable_when_code_slot_none_for_time(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entity is unavailable when code_slot is None for time properties."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -565,15 +506,6 @@ async def test_time_entity_unavailable_when_dow_not_in_accesslimit(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entity is unavailable when day of week number not in accesslimit_day_of_week dict."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-        KeymasterCodeSlotDayOfWeek,
-    )
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -624,15 +556,6 @@ async def test_time_entity_available_with_valid_configuration(
     hass: HomeAssistant, time_config_entry
 ):
     """Test time entity becomes available with valid configuration and sets native_value."""
-    from custom_components.keymaster.time import (
-        KeymasterTime,
-        KeymasterTimeEntityDescription,
-    )
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-        KeymasterCodeSlotDayOfWeek,
-    )
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 

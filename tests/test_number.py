@@ -22,6 +22,12 @@ from custom_components.keymaster.const import (
     CONF_START,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.number import (
+    KeymasterNumber,
+    KeymasterNumberEntityDescription,
+    async_setup_entry,
+)
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
 
 CONFIG_DATA_NUMBER = {
@@ -62,7 +68,6 @@ async def coordinator(hass: HomeAssistant, number_config_entry):
 
 async def test_number_entities_created(hass: HomeAssistant, number_config_entry):
     """Test number entities are created for autolock and access limit."""
-    from custom_components.keymaster.number import async_setup_entry
 
     entities = []
 
@@ -87,7 +92,6 @@ async def test_number_autolock_entities_have_correct_config(
     hass: HomeAssistant, number_config_entry
 ):
     """Test autolock number entities have correct configuration."""
-    from custom_components.keymaster.number import async_setup_entry
 
     entities = []
 
@@ -117,7 +121,6 @@ async def test_number_accesslimit_entities_have_correct_config(
     hass: HomeAssistant, number_config_entry
 ):
     """Test access limit number entities have correct configuration."""
-    from custom_components.keymaster.number import async_setup_entry
 
     entities = []
 
@@ -144,10 +147,6 @@ async def test_number_entity_initialization(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
     """Test number entity initialization."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
 
     entity_description = KeymasterNumberEntityDescription(
         key="number.code_slots:1.accesslimit_count",
@@ -174,11 +173,6 @@ async def test_number_entity_unavailable_when_not_connected(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
     """Test number entity becomes unavailable when lock is not connected."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock that's not connected
     kmlock = KeymasterLock(
@@ -216,11 +210,6 @@ async def test_number_entity_unavailable_when_child_not_overriding_parent(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
     """Test number entity becomes unavailable when child lock not overriding parent."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a child lock (has parent_name) with code slot NOT set to override
     kmlock = KeymasterLock(
@@ -266,11 +255,6 @@ async def test_number_entity_unavailable_when_code_slot_missing(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
     """Test number entity becomes unavailable when code slot doesn't exist."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock without code slots
     kmlock = KeymasterLock(
@@ -309,11 +293,6 @@ async def test_number_entity_unavailable_when_accesslimit_not_enabled(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
     """Test number entity becomes unavailable when accesslimit_count is not enabled."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a lock with code slot but accesslimit_count_enabled is False
     kmlock = KeymasterLock(
@@ -358,11 +337,6 @@ async def test_number_entity_unavailable_when_autolock_not_enabled(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
     """Test autolock number entity becomes unavailable when autolock is not enabled."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock with autolock disabled
     kmlock = KeymasterLock(
@@ -402,11 +376,6 @@ async def test_number_entity_available_when_autolock_enabled(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
     """Test autolock number entity is available when autolock is enabled."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock with autolock enabled
     kmlock = KeymasterLock(
@@ -448,11 +417,6 @@ async def test_number_entity_async_set_value(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
     """Test setting number value updates coordinator."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a connected lock with code slot and accesslimit enabled
     kmlock = KeymasterLock(
@@ -500,11 +464,6 @@ async def test_number_entity_child_lock_ignores_change_without_override(
     hass: HomeAssistant, number_config_entry, coordinator, caplog
 ):
     """Test that child lock ignores changes when not overriding parent."""
-    from custom_components.keymaster.number import (
-        KeymasterNumber,
-        KeymasterNumberEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a child lock (has parent_name) with code slot NOT set to override
     kmlock = KeymasterLock(
