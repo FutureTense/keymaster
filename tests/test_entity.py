@@ -52,8 +52,9 @@ async def entity_config_entry(hass: HomeAssistant):
 
 
 @pytest.fixture
-async def coordinator(hass: HomeAssistant, _entity_config_entry):
+async def coordinator(hass: HomeAssistant, entity_config_entry):
     """Get the coordinator."""
+    del entity_config_entry  # Parameter needed to ensure setup runs first
     return hass.data[DOMAIN][COORDINATOR]
 
 

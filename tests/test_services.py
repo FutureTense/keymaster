@@ -6,6 +6,7 @@ import logging
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import COORDINATOR, DOMAIN
@@ -20,18 +21,14 @@ _LOGGER = logging.getLogger(__name__)
 
 async def test_service_regenerate_lovelace(hass, keymaster_integration, caplog):
     """Test generate_package_files."""
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
-    )
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
     servicedata: dict[Any, Any] = {}
-    await hass.services.async_call(
-        DOMAIN, SERVICE_REGENERATE_LOVELACE, servicedata, blocking=True
-    )
+    await hass.services.async_call(DOMAIN, SERVICE_REGENERATE_LOVELACE, servicedata, blocking=True)
     await hass.async_block_till_done()
 
     # Check for exception when unable to create directory
@@ -194,10 +191,9 @@ async def test_async_setup_services_coordinator_update_fails(hass):
         mock_coordinator.last_update_success = False
         mock_coordinator.last_exception = Exception("Coordinator update failed")
 
-        # Attempt to setup services - should raise ConfigEntryNotReady
-        try:
+        with pytest.raises(ConfigEntryNotReady) as excinfo:
             await async_setup_services(hass)
-            assert False, "Expected ConfigEntryNotReady to be raised"
-        except ConfigEntryNotReady as exc:
-            # This is expected - line 36 should be hit
-            assert "Coordinator update failed" in str(exc.__cause__)
+
+        # This is expected - line 36 should be hit
+        assert excinfo.value.__cause__ is not None
+        assert "Coordinator update failed" in str(excinfo.value.__cause__)

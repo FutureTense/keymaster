@@ -60,8 +60,9 @@ async def datetime_config_entry(hass: HomeAssistant):
 
 
 @pytest.fixture
-async def coordinator(hass: HomeAssistant, _datetime_config_entry):
+async def coordinator(hass: HomeAssistant, datetime_config_entry):
     """Get the coordinator."""
+    del datetime_config_entry  # Parameter needed to ensure setup runs first
     return hass.data[DOMAIN][COORDINATOR]
 
 
@@ -139,10 +140,7 @@ async def test_datetime_entity_initialization(
     entity = KeymasterDateTime(entity_description=entity_description)
 
     assert entity._attr_native_value is None
-    assert (
-        entity.entity_description.key
-        == "datetime.code_slots:1.accesslimit_date_range_start"
-    )
+    assert entity.entity_description.key == "datetime.code_slots:1.accesslimit_date_range_start"
     assert isinstance(entity.entity_description.name, str)
     assert "Date Range Start" in entity.entity_description.name
 

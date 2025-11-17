@@ -184,7 +184,7 @@ async def test_sensor_entity_available_when_connected(
         entity._handle_coordinator_update()
 
     assert entity._attr_available
-    assert entity._attr_native_value == "synced"
+    assert entity._attr_native_value == Synced.SYNCED
 
 
 async def test_sensor_lock_name(hass: HomeAssistant, sensor_config_entry, coordinator):
