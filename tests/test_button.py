@@ -19,6 +19,12 @@ from custom_components.keymaster.const import (
     CONF_START,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.button import (
+    KeymasterButton,
+    KeymasterButtonEntityDescription,
+    async_setup_entry,
+)
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
 
 CONFIG_DATA_BUTTON = {
@@ -59,8 +65,6 @@ async def coordinator(hass: HomeAssistant, button_config_entry):
 
 async def test_button_entities_created(hass: HomeAssistant, button_config_entry):
     """Test button entities are created for reset lock and code slots."""
-    from custom_components.keymaster.button import async_setup_entry
-
     entities = []
 
     def mock_add_entities(new_entities, update_before_add):
@@ -83,11 +87,6 @@ async def test_button_entity_initialization(
     hass: HomeAssistant, button_config_entry, coordinator
 ):
     """Test button entity initialization."""
-    from custom_components.keymaster.button import (
-        KeymasterButton,
-        KeymasterButtonEntityDescription,
-    )
-
     entity_description = KeymasterButtonEntityDescription(
         key="button.code_slots:1.reset",
         name="Code Slot 1: Reset",
@@ -109,12 +108,6 @@ async def test_button_entity_unavailable_when_not_connected(
     hass: HomeAssistant, button_config_entry, coordinator
 ):
     """Test button entity becomes unavailable when lock is not connected."""
-    from custom_components.keymaster.button import (
-        KeymasterButton,
-        KeymasterButtonEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
-
     # Create a lock that's not connected
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -147,12 +140,6 @@ async def test_button_entity_unavailable_when_code_slot_missing(
     hass: HomeAssistant, button_config_entry, coordinator
 ):
     """Test button entity becomes unavailable when code slot doesn't exist."""
-    from custom_components.keymaster.button import (
-        KeymasterButton,
-        KeymasterButtonEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
-
     # Create a lock without code slots
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -186,12 +173,6 @@ async def test_button_entity_available_when_connected_and_slot_exists(
     hass: HomeAssistant, button_config_entry, coordinator
 ):
     """Test button entity becomes available when lock is connected and code slot exists."""
-    from custom_components.keymaster.button import (
-        KeymasterButton,
-        KeymasterButtonEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -225,12 +206,6 @@ async def test_button_press_reset_lock(
     hass: HomeAssistant, button_config_entry, coordinator
 ):
     """Test pressing reset lock button calls coordinator reset_lock."""
-    from custom_components.keymaster.button import (
-        KeymasterButton,
-        KeymasterButtonEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock
-
     # Create a connected lock
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -266,12 +241,6 @@ async def test_button_press_reset_code_slot(
     hass: HomeAssistant, button_config_entry, coordinator
 ):
     """Test pressing reset code slot button calls coordinator reset_code_slot."""
-    from custom_components.keymaster.button import (
-        KeymasterButton,
-        KeymasterButtonEntityDescription,
-    )
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
-
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
         lock_name="frontdoor",
