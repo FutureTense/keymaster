@@ -7,7 +7,6 @@ from collections.abc import MutableMapping
 from datetime import datetime as dt, timedelta
 import functools
 import logging
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -109,9 +108,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     device_registry = dr.async_get(hass)
 
-    via_device: tuple[str, Any] | None = None
-    if config_entry.data.get(CONF_PARENT_ENTRY_ID):
-        via_device = (DOMAIN, config_entry.data.get(CONF_PARENT_ENTRY_ID))
+    via_device: tuple[str, str] | None = None
+    if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
+        via_device = (DOMAIN, parent_entry_id)
 
     # _LOGGER.debug(
     #     f"[init async_setup_entry] name: {config_entry.data.get(CONF_LOCK_NAME)}, "
