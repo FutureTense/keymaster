@@ -3,25 +3,24 @@
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.core import HomeAssistant
-
 from custom_components.keymaster.const import (
-    COORDINATOR,
-    DOMAIN,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
+    DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.entity import (
-    KeymasterEntity,
-    KeymasterEntityDescription,
+from custom_components.keymaster.entity import KeymasterEntity, KeymasterEntityDescription
+from custom_components.keymaster.lock import (
+    KeymasterCodeSlot,
+    KeymasterCodeSlotDayOfWeek,
+    KeymasterLock,
 )
-from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek
-
+from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_ENTITY = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -53,7 +52,7 @@ async def entity_config_entry(hass: HomeAssistant):
 
 
 @pytest.fixture
-async def coordinator(hass: HomeAssistant, entity_config_entry):
+async def coordinator(hass: HomeAssistant, _entity_config_entry):
     """Get the coordinator."""
     return hass.data[DOMAIN][COORDINATOR]
 
@@ -239,9 +238,7 @@ async def test_entity_set_property_value_with_code_slot(
     assert kmlock.code_slots[1].enabled is True
 
 
-async def test_entity_get_code_slots_num(
-    hass: HomeAssistant, entity_config_entry, coordinator
-):
+async def test_entity_get_code_slots_num(hass: HomeAssistant, entity_config_entry, coordinator):
     """Test _get_code_slots_num extracts code slot number correctly."""
 
     kmlock = KeymasterLock(
@@ -301,9 +298,7 @@ async def test_entity_get_code_slots_num_returns_none_for_non_slot(
     assert slot_num is None
 
 
-async def test_entity_get_day_of_week_num(
-    hass: HomeAssistant, entity_config_entry, coordinator
-):
+async def test_entity_get_day_of_week_num(hass: HomeAssistant, entity_config_entry, coordinator):
     """Test _get_day_of_week_num extracts day of week number correctly."""
 
     kmlock = KeymasterLock(
@@ -363,9 +358,7 @@ async def test_entity_get_day_of_week_num_returns_none_for_non_dow(
     assert dow_num is None
 
 
-async def test_entity_available_property(
-    hass: HomeAssistant, entity_config_entry, coordinator
-):
+async def test_entity_available_property(hass: HomeAssistant, entity_config_entry, coordinator):
     """Test available property returns _attr_available."""
 
     kmlock = KeymasterLock(
@@ -501,6 +494,7 @@ async def test_entity_set_property_value_with_nested_code_slot(
     # Set nested property value
     result = entity._set_property_value(True)
     assert result is True
+    assert kmlock.code_slots[1].accesslimit_day_of_week is not None
     assert kmlock.code_slots[1].accesslimit_day_of_week[3].dow_enabled is True
 
 
@@ -578,6 +572,7 @@ async def test_entity_set_property_value_with_array_index(
     # Set the value - this exercises the array index setting logic (line 112)
     result = entity._set_property_value(True)
     assert result is True
+    assert kmlock.code_slots[1].accesslimit_day_of_week is not None
     assert kmlock.code_slots[1].accesslimit_day_of_week[5].dow_enabled is True
 
 
@@ -771,8 +766,8 @@ async def test_entity_set_property_value_with_plain_attribute_in_path(
         lock_entity_id="lock.test",
         keymaster_config_entry_id=entity_config_entry.entry_id,
     )
-    # Add a custom nested structure
-    kmlock.middle = MiddleObject()
+    # Add a custom nested structure (using setattr to avoid type errors)
+    setattr(kmlock, "middle", MiddleObject())
     coordinator.kmlocks[entity_config_entry.entry_id] = kmlock
 
     # Property path: switch.middle.settings.enabled
@@ -795,7 +790,8 @@ async def test_entity_set_property_value_with_plain_attribute_in_path(
     # Set the value - this exercises plain attribute access (line 108)
     result = entity._set_property_value(True)
     assert result is True
-    assert kmlock.middle.settings.enabled is True
+    middle_obj = getattr(kmlock, "middle")  # noqa: B009
+    assert middle_obj.settings.enabled is True
 
 
 async def test_entity_set_property_value_with_final_array_index(
@@ -803,18 +799,13 @@ async def test_entity_set_property_value_with_final_array_index(
 ):
     """Test _set_property_value when final property has array index (lines 112-113)."""
 
-    # Create a simple object with an array attribute
-    class SimpleLock:
-        def __init__(self):
-            self.settings = [False, False, False]
-
     kmlock = KeymasterLock(
         lock_name="frontdoor",
         lock_entity_id="lock.test",
         keymaster_config_entry_id=entity_config_entry.entry_id,
     )
-    # Add a custom attribute that's an array
-    kmlock.settings = [False, False, False]
+    # Add a custom attribute that's an array (using setattr to avoid type errors)
+    setattr(kmlock, "settings", [False, False, False])
     coordinator.kmlocks[entity_config_entry.entry_id] = kmlock
 
     # Property where the FINAL part has an array index
@@ -835,7 +826,8 @@ async def test_entity_set_property_value_with_final_array_index(
     # Set the value - this exercises final property array index logic (lines 112-113)
     result = entity._set_property_value(True)
     assert result is True
-    assert kmlock.settings[1] is True
+    settings = getattr(kmlock, "settings")  # noqa: B009
+    assert settings[1] is True
 
 
 async def test_entity_get_code_slots_num_without_colon_in_match(
