@@ -79,7 +79,7 @@ async def test_no_locks_abort(hass):
         )
     ],
 )
-@pytest.mark.usefixtures("_mock_get_entities")
+@pytest.mark.usefixtures("mock_get_entities")
 async def test_form(test_user_input, title, final_config_flow_data, hass):
     """Test we get the form."""
 
@@ -139,7 +139,7 @@ async def test_form(test_user_input, title, final_config_flow_data, hass):
         )
     ],
 )
-@pytest.mark.usefixtures("_mock_get_entities")
+@pytest.mark.usefixtures("mock_get_entities")
 async def test_form_no_script(test_user_input, title, final_config_flow_data, hass):
     """Test we get the form."""
 
@@ -201,7 +201,7 @@ async def test_form_no_script(test_user_input, title, final_config_flow_data, ha
         )
     ],
 )
-@pytest.mark.usefixtures("_mock_get_entities")
+@pytest.mark.usefixtures("mock_get_entities")
 async def test_reconfiguration_form(test_user_input, title, final_config_flow_data, hass):
     """Test we get the form."""
     del title  # Used in parametrize but not in test body
@@ -258,7 +258,7 @@ async def test_reconfiguration_form(test_user_input, title, final_config_flow_da
         assert entry.data.copy() == final_config_flow_data
 
 
-@pytest.mark.usefixtures("_lock_kwikset_910", "_client", "_integration")
+@pytest.mark.usefixtures("lock_kwikset_910", "client", "integration")
 async def test_get_entities(hass):
     """Test function that returns entities by domain."""
     # Load ZwaveJS
