@@ -20,6 +20,7 @@ from custom_components.keymaster.entity import (
     KeymasterEntity,
     KeymasterEntityDescription,
 )
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
 
 CONFIG_DATA_ENTITY = {
@@ -61,7 +62,6 @@ async def test_entity_get_property_value_simple(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_property_value for simple properties."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock with a simple property
     kmlock = KeymasterLock(
@@ -98,7 +98,6 @@ async def test_entity_get_property_value_with_code_slot(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_property_value for code slot properties."""
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a lock with code slots
     kmlock = KeymasterLock(
@@ -138,7 +137,6 @@ async def test_entity_get_property_value_returns_none_on_error(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_property_value returns None when property doesn't exist."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock without code slots
     kmlock = KeymasterLock(
@@ -172,7 +170,6 @@ async def test_entity_set_property_value_simple(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _set_property_value for simple properties."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a lock
     kmlock = KeymasterLock(
@@ -207,7 +204,6 @@ async def test_entity_set_property_value_with_code_slot(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _set_property_value for code slot properties."""
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a lock with code slots
     kmlock = KeymasterLock(
@@ -247,7 +243,6 @@ async def test_entity_get_code_slots_num(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_code_slots_num extracts code slot number correctly."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -279,7 +274,6 @@ async def test_entity_get_code_slots_num_returns_none_for_non_slot(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_code_slots_num returns None for non-slot properties."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -311,7 +305,6 @@ async def test_entity_get_day_of_week_num(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_day_of_week_num extracts day of week number correctly."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -343,7 +336,6 @@ async def test_entity_get_day_of_week_num_returns_none_for_non_dow(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_day_of_week_num returns None for non-DOW properties."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -375,7 +367,6 @@ async def test_entity_available_property(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test available property returns _attr_available."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -410,7 +401,6 @@ async def test_entity_set_property_value_returns_false_without_dot(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _set_property_value returns False when property has no dot."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -442,7 +432,6 @@ async def test_entity_get_property_value_returns_none_without_dot(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_property_value returns None when property has no dot."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -474,11 +463,6 @@ async def test_entity_set_property_value_with_nested_code_slot(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _set_property_value with nested code slot properties."""
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-        KeymasterCodeSlotDayOfWeek,
-    )
 
     # Create a lock with nested structure
     kmlock = KeymasterLock(
@@ -524,7 +508,6 @@ async def test_entity_get_code_slots_num_with_complex_property(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_code_slots_num with complex nested properties."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -556,11 +539,6 @@ async def test_entity_set_property_value_with_array_index(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _set_property_value with array index notation (line 108 and 112-113)."""
-    from custom_components.keymaster.lock import (
-        KeymasterLock,
-        KeymasterCodeSlot,
-        KeymasterCodeSlotDayOfWeek,
-    )
 
     # Create a lock with code slots and day of week array
     kmlock = KeymasterLock(
@@ -607,7 +585,6 @@ async def test_entity_get_code_slots_num_without_colon(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_code_slots_num returns None when code_slots has no colon (line 131)."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -640,7 +617,6 @@ async def test_entity_get_day_of_week_num_without_colon(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_day_of_week_num returns None when day of week has no colon (line 142)."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -673,7 +649,6 @@ async def test_entity_set_property_value_traversing_simple_path(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _set_property_value traversing through simple properties (line 108)."""
-    from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
 
     # Create a lock with code slots
     kmlock = KeymasterLock(
@@ -717,7 +692,6 @@ async def test_entity_get_code_slots_num_no_match_in_path(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_code_slots_num returns None when code_slots in string but not in path (line 133)."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -750,7 +724,6 @@ async def test_entity_get_day_of_week_num_no_match_in_path(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_day_of_week_num returns None when accesslimit_day_of_week in string but not in path (line 144)."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -783,7 +756,6 @@ async def test_entity_set_property_value_with_plain_attribute_in_path(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _set_property_value with plain attribute access in middle of path (line 108)."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a simple nested object structure
     class NestedSettings:
@@ -830,7 +802,6 @@ async def test_entity_set_property_value_with_final_array_index(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _set_property_value when final property has array index (lines 112-113)."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     # Create a simple object with an array attribute
     class SimpleLock:
@@ -871,7 +842,6 @@ async def test_entity_get_code_slots_num_without_colon_in_match(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_code_slots_num returns None when code_slots segment lacks colon (line 131)."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -905,7 +875,6 @@ async def test_entity_get_code_slots_num_no_segment_starts_with_code_slots(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
     """Test _get_code_slots_num returns None when no segment starts with 'code_slots' (line 133)."""
-    from custom_components.keymaster.lock import KeymasterLock
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
