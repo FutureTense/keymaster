@@ -20,7 +20,7 @@ from custom_components.keymaster.entity import (
     KeymasterEntity,
     KeymasterEntityDescription,
 )
-from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek
 
 
 CONFIG_DATA_ENTITY = {

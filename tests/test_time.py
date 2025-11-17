@@ -24,7 +24,7 @@ from custom_components.keymaster.time import (
     KeymasterTimeEntityDescription,
     async_setup_entry,
 )
-from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot
+from custom_components.keymaster.lock import KeymasterLock, KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek
 from homeassistant.core import HomeAssistant
 
 
