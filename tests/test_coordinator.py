@@ -7,11 +7,10 @@ import pytest
 
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterLock
+from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_CLOSED, STATE_OPEN
 from homeassistant.core import HomeAssistant
-from homeassistant.components.lock import LockState
-from homeassistant.const import STATE_OPEN, STATE_CLOSED
-
 
 
 def validate_lock_relationship_invariants(
@@ -25,13 +24,12 @@ def validate_lock_relationship_invariants(
     violations = []
 
     # Invariant 1: Every child_id in any parent's list must exist in kmlocks
-    for lock_id, lock in coordinator.kmlocks.items():
-        for child_id in lock.child_config_entry_ids:
-            if child_id not in coordinator.kmlocks:
-                violations.append(
-                    f"Orphaned child reference: parent {lock_id} references "
-                    f"non-existent child {child_id}"
-                )
+    violations.extend(
+        f"Orphaned child reference: parent {lock_id} references non-existent child {child_id}"
+        for lock_id, lock in coordinator.kmlocks.items()
+        for child_id in lock.child_config_entry_ids
+        if child_id not in coordinator.kmlocks
+    )
 
     # Invariant 2: Every parent_id referenced by a child must exist in kmlocks
     for lock_id, lock in coordinator.kmlocks.items():
@@ -55,10 +53,7 @@ def validate_lock_relationship_invariants(
 
     # Invariant 4: If child points to parent, parent must list child
     for lock_id, lock in coordinator.kmlocks.items():
-        if (
-            lock.parent_config_entry_id
-            and lock.parent_config_entry_id in coordinator.kmlocks
-        ):
+        if lock.parent_config_entry_id and lock.parent_config_entry_id in coordinator.kmlocks:
             parent = coordinator.kmlocks[lock.parent_config_entry_id]
             if lock_id not in parent.child_config_entry_ids:
                 violations.append(
@@ -130,12 +125,10 @@ class TestVerifyLockConfiguration:
         """Test that valid config entries are not deleted."""
         # Arrange
         mock_coordinator.kmlocks = {"test_entry_id": mock_keymaster_lock}
-        mock_coordinator.hass.config_entries.async_get_entry.return_value = (
-            mock_config_entry
-        )
+        mock_coordinator.hass.config_entries.async_get_entry.return_value = mock_config_entry
 
         # Act
-        await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
+        await mock_coordinator._verify_lock_configuration()
 
         # Assert
         mock_coordinator.hass.config_entries.async_get_entry.assert_called_once_with(
@@ -152,15 +145,13 @@ class TestVerifyLockConfiguration:
         mock_coordinator.hass.config_entries.async_get_entry.return_value = None
 
         # Act
-        await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
+        await mock_coordinator._verify_lock_configuration()
 
         # Assert
         mock_coordinator.hass.config_entries.async_get_entry.assert_called_once_with(
             "test_entry_id"
         )
-        mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with(
-            "test_entry_id"
-        )
+        mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with("test_entry_id")
 
     async def test_verify_lock_configuration_with_multiple_locks_mixed_validity(
         self, mock_coordinator, mock_config_entry
@@ -186,18 +177,14 @@ class TestVerifyLockConfiguration:
                 return mock_config_entry
             return None
 
-        mock_coordinator.hass.config_entries.async_get_entry.side_effect = (
-            mock_get_entry
-        )
+        mock_coordinator.hass.config_entries.async_get_entry.side_effect = mock_get_entry
 
         # Act
-        await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
+        await mock_coordinator._verify_lock_configuration()
 
         # Assert
         assert mock_coordinator.hass.config_entries.async_get_entry.call_count == 2
-        mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with(
-            "invalid_entry_id"
-        )
+        mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with("invalid_entry_id")
 
     async def test_verify_lock_configuration_with_empty_kmlocks(self, mock_coordinator):
         """Test that verification works correctly when there are no locks."""
@@ -205,7 +192,7 @@ class TestVerifyLockConfiguration:
         mock_coordinator.kmlocks = {}
 
         # Act
-        await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
+        await mock_coordinator._verify_lock_configuration()
 
         # Assert
         mock_coordinator.hass.config_entries.async_get_entry.assert_not_called()
@@ -225,20 +212,16 @@ class TestVerifyLockConfiguration:
         lock2.lock_name = "Lock 2"
 
         mock_coordinator.kmlocks = {"entry_id_1": lock1, "entry_id_2": lock2}
-        mock_coordinator.hass.config_entries.async_get_entry.return_value = (
-            mock_config_entry
-        )
+        mock_coordinator.hass.config_entries.async_get_entry.return_value = mock_config_entry
 
         # Act
-        await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
+        await mock_coordinator._verify_lock_configuration()
 
         # Assert
         assert mock_coordinator.hass.config_entries.async_get_entry.call_count == 2
         mock_coordinator.delete_lock_by_config_entry_id.assert_not_called()
 
-    async def test_verify_lock_configuration_with_all_invalid_locks(
-        self, mock_coordinator
-    ):
+    async def test_verify_lock_configuration_with_all_invalid_locks(self, mock_coordinator):
         """Test verification when all locks have invalid config entries."""
         # Arrange
         lock1 = Mock(spec=KeymasterLock)
@@ -256,17 +239,13 @@ class TestVerifyLockConfiguration:
         mock_coordinator.hass.config_entries.async_get_entry.return_value = None
 
         # Act
-        await mock_coordinator._verify_lock_configuration()  # noqa: SLF001
+        await mock_coordinator._verify_lock_configuration()
 
         # Assert
         assert mock_coordinator.hass.config_entries.async_get_entry.call_count == 2
         assert mock_coordinator.delete_lock_by_config_entry_id.call_count == 2
-        mock_coordinator.delete_lock_by_config_entry_id.assert_any_call(
-            "invalid_entry_id_1"
-        )
-        mock_coordinator.delete_lock_by_config_entry_id.assert_any_call(
-            "invalid_entry_id_2"
-        )
+        mock_coordinator.delete_lock_by_config_entry_id.assert_any_call("invalid_entry_id_1")
+        mock_coordinator.delete_lock_by_config_entry_id.assert_any_call("invalid_entry_id_2")
 
 
 class TestUpdateChildCodeSlots:
@@ -301,9 +280,7 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic: parent_pin_for_comparison should be None when disabled
         parent_pin_for_comparison = (
-            mock_code_slot.pin
-            if (mock_code_slot.enabled and mock_code_slot.active)
-            else None
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
         )
         child_pin = child_slot.pin
 
@@ -336,9 +313,7 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic: parent_pin_for_comparison should be None when inactive
         parent_pin_for_comparison = (
-            mock_code_slot.pin
-            if (mock_code_slot.enabled and mock_code_slot.active)
-            else None
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
         )
         child_pin = child_slot.pin
 
@@ -370,9 +345,7 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic: parent_pin_for_comparison should be actual PIN when enabled+active
         parent_pin_for_comparison = (
-            mock_code_slot.pin
-            if (mock_code_slot.enabled and mock_code_slot.active)
-            else None
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
         )
         child_pin = child_slot.pin
 
@@ -404,9 +377,7 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic
         parent_pin_for_comparison = (
-            mock_code_slot.pin
-            if (mock_code_slot.enabled and mock_code_slot.active)
-            else None
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
         )
         child_pin = child_slot.pin
 
@@ -439,9 +410,7 @@ class TestUpdateChildCodeSlots:
 
         # Test the logic
         parent_pin_for_comparison = (
-            mock_code_slot.pin
-            if (mock_code_slot.enabled and mock_code_slot.active)
-            else None
+            mock_code_slot.pin if (mock_code_slot.enabled and mock_code_slot.active) else None
         )
         child_pin = child_slot.pin
 
@@ -519,9 +488,7 @@ class TestRebuildLockRelationships:
         child_lock.keymaster_config_entry_id = "child_id"
         child_lock.lock_name = "Child Lock"
         child_lock.child_config_entry_ids = []
-        child_lock.parent_config_entry_id = (
-            "new_parent_id"  # Points to different parent!
-        )
+        child_lock.parent_config_entry_id = "new_parent_id"  # Points to different parent!
 
         mock_coordinator.kmlocks = {
             "old_parent_id": old_parent_lock,
@@ -556,9 +523,7 @@ class TestRebuildLockRelationships:
         # Assert: All orphans removed
         assert len(parent_lock.child_config_entry_ids) == 0
 
-    async def test_rebuild_with_mixed_valid_and_orphaned_children(
-        self, mock_coordinator
-    ):
+    async def test_rebuild_with_mixed_valid_and_orphaned_children(self, mock_coordinator):
         """Test cleanup when parent has both valid and orphaned children."""
         # Arrange
         parent_lock = Mock(spec=KeymasterLock)
@@ -847,9 +812,9 @@ class TestLockRelationshipInvariants:
         # Verify no parent lists non-existent children (would cause KeyError with bug)
         for lock in mock_coordinator.kmlocks.values():
             for child_id in lock.child_config_entry_ids:
-                assert (
-                    child_id in mock_coordinator.kmlocks
-                ), f"Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
+                assert child_id in mock_coordinator.kmlocks, (
+                    f"Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
+                )
 
         # Phase 3: Randomly remove half the locks
         all_lock_ids = list(mock_coordinator.kmlocks.keys())
@@ -863,9 +828,9 @@ class TestLockRelationshipInvariants:
         # Verify no parent lists non-existent children after cleanup
         for lock in mock_coordinator.kmlocks.values():
             for child_id in lock.child_config_entry_ids:
-                assert (
-                    child_id in mock_coordinator.kmlocks
-                ), f"After removals: Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
+                assert child_id in mock_coordinator.kmlocks, (
+                    f"After removals: Parent {lock.keymaster_config_entry_id} lists non-existent child {child_id}"
+                )
 
     async def test_exact_production_bug_scenario(self, mock_coordinator):
         """Reproduce the EXACT scenario that caused the production KeyError bug.
@@ -900,9 +865,7 @@ class TestLockRelationshipInvariants:
         violations = validate_lock_relationship_invariants(mock_coordinator)
         assert len(violations) == 0, f"Violations: {violations}"
 
-    async def test_bidirectional_consistency_after_parent_change(
-        self, mock_coordinator
-    ):
+    async def test_bidirectional_consistency_after_parent_change(self, mock_coordinator):
         """Test that bidirectional consistency maintained when child changes parent.
 
         Note: _rebuild_lock_relationships only removes mismatched children from parents.
@@ -986,9 +949,7 @@ class TestLockStateEventHandlers:
 
         assert mock_kmlock.lock_state == LockState.LOCKED
 
-    async def test_lock_locked_already_locked_no_change(
-        self, mock_coordinator, mock_kmlock
-    ):
+    async def test_lock_locked_already_locked_no_change(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked does nothing if already locked."""
 
         mock_kmlock.lock_state = LockState.LOCKED
@@ -1010,9 +971,7 @@ class TestLockStateEventHandlers:
 
         assert mock_kmlock.lock_state == initial_state
 
-    async def test_lock_locked_cancels_autolock_timer(
-        self, mock_coordinator, mock_kmlock
-    ):
+    async def test_lock_locked_cancels_autolock_timer(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked cancels autolock timer if running."""
         mock_kmlock.autolock_timer = AsyncMock()
         mock_kmlock.autolock_timer.cancel = AsyncMock()
@@ -1054,9 +1013,7 @@ class TestLockStateEventHandlers:
 
         assert mock_kmlock.door_state == STATE_OPEN
 
-    async def test_door_opened_already_open_no_change(
-        self, mock_coordinator, mock_kmlock
-    ):
+    async def test_door_opened_already_open_no_change(self, mock_coordinator, mock_kmlock):
         """Test _door_opened does nothing if already open."""
 
         mock_kmlock.door_state = STATE_OPEN
@@ -1156,9 +1113,7 @@ class TestStateSynchronization:
         mock_lock_state.state = LockState.LOCKED
         mock_coordinator.hass.states.get = Mock(return_value=mock_lock_state)
 
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=False
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=False)
 
         assert mock_kmlock_with_entities.lock_state == LockState.LOCKED
 
@@ -1176,7 +1131,7 @@ class TestStateSynchronization:
                 mock_state = Mock()
                 mock_state.state = "locked"
                 return mock_state
-            elif entity_id == "binary_sensor.front_door":
+            if entity_id == "binary_sensor.front_door":
                 mock_state = Mock()
                 mock_state.state = STATE_OPEN
                 return mock_state
@@ -1184,9 +1139,7 @@ class TestStateSynchronization:
 
         mock_coordinator.hass.states.get = Mock(side_effect=mock_states_get)
 
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=False
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=False)
 
         assert mock_kmlock_with_entities.door_state == STATE_OPEN
 
@@ -1204,9 +1157,7 @@ class TestStateSynchronization:
         mock_lock_state.state = LockState.LOCKED
         mock_coordinator.hass.states.get = Mock(return_value=mock_lock_state)
 
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=True
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=True)
 
         # Verify _lock_locked was called
         mock_coordinator._lock_locked.assert_called_once()
@@ -1228,9 +1179,7 @@ class TestStateSynchronization:
         mock_lock_state.state = LockState.UNLOCKED
         mock_coordinator.hass.states.get = Mock(return_value=mock_lock_state)
 
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=True
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=True)
 
         # Verify _lock_unlocked was called
         mock_coordinator._lock_unlocked.assert_called_once()
@@ -1253,7 +1202,7 @@ class TestStateSynchronization:
                 mock_state = Mock()
                 mock_state.state = LockState.UNLOCKED  # Keep lock state unchanged
                 return mock_state
-            elif entity_id == "binary_sensor.front_door":
+            if entity_id == "binary_sensor.front_door":
                 mock_state = Mock()
                 mock_state.state = STATE_OPEN  # Door state changes
                 return mock_state
@@ -1261,9 +1210,7 @@ class TestStateSynchronization:
 
         mock_coordinator.hass.states.get = Mock(side_effect=mock_states_get)
 
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=True
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=True)
 
         # Verify _door_opened was called
         mock_coordinator._door_opened.assert_called_once()
@@ -1283,7 +1230,7 @@ class TestStateSynchronization:
                 mock_state = Mock()
                 mock_state.state = "unlocked"
                 return mock_state
-            elif entity_id == "binary_sensor.front_door":
+            if entity_id == "binary_sensor.front_door":
                 mock_state = Mock()
                 mock_state.state = STATE_CLOSED
                 return mock_state
@@ -1291,9 +1238,7 @@ class TestStateSynchronization:
 
         mock_coordinator.hass.states.get = Mock(side_effect=mock_states_get)
 
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=True
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=True)
 
         # Verify _door_closed was called
         mock_coordinator._door_closed.assert_called_once()
@@ -1310,9 +1255,7 @@ class TestStateSynchronization:
         mock_coordinator.hass.states.get = Mock(return_value=None)
 
         # Should not raise exception
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=False
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=False)
 
         # State should remain unchanged
         assert mock_kmlock_with_entities.lock_state == LockState.UNLOCKED
@@ -1325,9 +1268,7 @@ class TestStateSynchronization:
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
 
         # Should not raise exception
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=False
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=False)
 
     async def test_update_door_and_lock_state_handles_no_door_sensor(
         self, mock_coordinator, mock_kmlock_with_entities
@@ -1342,9 +1283,7 @@ class TestStateSynchronization:
         mock_coordinator.hass.states.get = Mock(return_value=mock_lock_state)
 
         # Should not raise exception
-        await mock_coordinator._update_door_and_lock_state(
-            trigger_actions_if_changed=False
-        )
+        await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=False)
 
         # Lock state should be updated, door state unchanged
         assert mock_kmlock_with_entities.lock_state == LockState.LOCKED
@@ -1353,9 +1292,7 @@ class TestStateSynchronization:
 class TestCoordinatorUtilities:
     """Test coordinator utility and getter functions."""
 
-    async def test_count_locks_not_pending_delete_with_multiple_locks(
-        self, mock_coordinator
-    ):
+    async def test_count_locks_not_pending_delete_with_multiple_locks(self, mock_coordinator):
         """Test counting locks excluding pending delete."""
 
         # Create multiple locks with different states
@@ -1403,9 +1340,7 @@ class TestCoordinatorUtilities:
 
         assert mock_coordinator.count_locks_not_pending_delete == 0
 
-    async def test_get_lock_by_config_entry_id_found(
-        self, mock_coordinator, mock_keymaster_lock
-    ):
+    async def test_get_lock_by_config_entry_id_found(self, mock_coordinator, mock_keymaster_lock):
         """Test getting lock by config entry ID when it exists."""
         mock_keymaster_lock.keymaster_config_entry_id = "test_entry_id"
         mock_coordinator.kmlocks = {"test_entry_id": mock_keymaster_lock}

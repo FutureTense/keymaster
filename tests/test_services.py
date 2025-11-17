@@ -8,11 +8,9 @@ from unittest.mock import AsyncMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
-
 from custom_components.keymaster.const import COORDINATOR, DOMAIN
 from custom_components.keymaster.services import SERVICE_REGENERATE_LOVELACE, async_setup_services
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import CONFIG_DATA
 

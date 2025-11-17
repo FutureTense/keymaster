@@ -1,8 +1,8 @@
 """Test keymaster helpers."""
 
-import pytest
 from unittest.mock import patch
 
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.event import Event
 
@@ -18,7 +18,6 @@ from custom_components.keymaster.helpers import (
 from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.components.lock.const import LockState
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers import entity_registry as er
 
 from .common import async_capture_events

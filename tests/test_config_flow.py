@@ -25,9 +25,8 @@ from custom_components.keymaster.const import (
     NONE_TEXT,
 )
 from homeassistant import config_entries
-from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
-from homeassistant.components.lock.const import LockState
-from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
+from homeassistant.components.script.const import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.data_entry_flow import FlowResultType
 from tests.const import CONFIG_DATA
 
@@ -39,9 +38,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_no_locks_abort(hass):
     """Test the flow aborts when no locks are available."""
-    with patch(
-        "custom_components.keymaster.config_flow._get_entities", return_value=[]
-    ):
+    with patch("custom_components.keymaster.config_flow._get_entities", return_value=[]):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
@@ -82,9 +79,8 @@ async def test_no_locks_abort(hass):
         )
     ],
 )
-async def test_form(
-    test_user_input, title, final_config_flow_data, hass, mock_get_entities
-):
+@pytest.mark.usefixtures("_mock_get_entities")
+async def test_form(test_user_input, title, final_config_flow_data, hass):
     """Test we get the form."""
 
     _LOGGER.warning("[test_form] result Starting")
@@ -100,9 +96,7 @@ async def test_form(
         "custom_components.keymaster.async_setup_entry", return_value=True
     ) as mock_setup_entry:
         _LOGGER.warning("[test_form] result2 Starting")
-        result2 = await hass.config_entries.flow.async_configure(
-            result["flow_id"], test_user_input
-        )
+        result2 = await hass.config_entries.flow.async_configure(result["flow_id"], test_user_input)
         _LOGGER.warning("[test_form] result2: %s", result2)
         assert result2["type"] is FlowResultType.CREATE_ENTRY
         assert result2["title"] == title
@@ -145,9 +139,8 @@ async def test_form(
         )
     ],
 )
-async def test_form_no_script(
-    test_user_input, title, final_config_flow_data, hass, mock_get_entities
-):
+@pytest.mark.usefixtures("_mock_get_entities")
+async def test_form_no_script(test_user_input, title, final_config_flow_data, hass):
     """Test we get the form."""
 
     _LOGGER.warning("[test_form] result Starting")
@@ -163,9 +156,7 @@ async def test_form_no_script(
         "custom_components.keymaster.async_setup_entry", return_value=True
     ) as mock_setup_entry:
         _LOGGER.warning("[test_form] result2 Starting")
-        result2 = await hass.config_entries.flow.async_configure(
-            result["flow_id"], test_user_input
-        )
+        result2 = await hass.config_entries.flow.async_configure(result["flow_id"], test_user_input)
         _LOGGER.warning("[test_form] result2: %s", result2)
         assert result2["type"] is FlowResultType.CREATE_ENTRY
         assert result2["title"] == title
@@ -210,9 +201,8 @@ async def test_form_no_script(
         )
     ],
 )
-async def test_reconfiguration_form(
-    test_user_input, title, final_config_flow_data, hass, mock_get_entities
-):
+@pytest.mark.usefixtures("_mock_get_entities")
+async def test_reconfiguration_form(test_user_input, _title, final_config_flow_data, hass):  # noqa: PT019
     """Test we get the form."""
 
     with (
@@ -267,7 +257,8 @@ async def test_reconfiguration_form(
         assert entry.data.copy() == final_config_flow_data
 
 
-async def test_get_entities(hass, lock_kwikset_910, client, integration):
+@pytest.mark.usefixtures("_lock_kwikset_910", "_client", "_integration")
+async def test_get_entities(hass):
     """Test function that returns entities by domain."""
     # Load ZwaveJS
     # node = lock_kwikset_910
