@@ -1,0 +1,21 @@
+FROM python:3.13-slim
+
+WORKDIR /workspace
+
+# Install system dependencies including build tools
+RUN apt-get update && apt-get install -y \
+    git \
+    gcc \
+    g++ \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-homeassistant-custom-component \
+    pytest-cov \
+    zwave-js-server-python
+
+# Keep container running
+CMD ["tail", "-f", "/dev/null"]
