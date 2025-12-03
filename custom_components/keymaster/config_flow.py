@@ -59,6 +59,10 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
         CONF_NOTIFY_SCRIPT_NAME: NONE_TEXT,
     }
 
+    # Declare instance attributes at class level so static analyzers know they exist.
+    _entry: Any | None = None
+    _data: dict[str, Any] | None = None
+
     async def get_unique_name_error(
         self, user_input: MutableMapping[str, Any]
     ) -> MutableMapping[str, str]:
@@ -215,9 +219,7 @@ def _get_schema(
     lock_entities = _get_entities(
         hass=hass,
         domain=LOCK_DOMAIN,
-        exclude_entities=_get_locks_in_use(
-            hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)
-        ),
+        exclude_entities=_get_locks_in_use(hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)),
     )
     if not lock_entities:
         if flow is not None:
@@ -226,9 +228,9 @@ def _get_schema(
     return vol.Schema(
         {
             vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
-            vol.Required(
-                CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
-            ): vol.In(lock_entities),
+            vol.Required(CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)): vol.In(
+                lock_entities
+            ),
             vol.Optional(CONF_PARENT, default=_get_default(CONF_PARENT, NONE_TEXT)): vol.In(
                 _available_parent_locks(hass, entry_id)
             ),

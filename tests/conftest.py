@@ -4,25 +4,27 @@ import asyncio
 import copy
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 from unittest.mock import DEFAULT, AsyncMock, MagicMock, patch
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-from zwave_js_server.model.driver import Driver
-from zwave_js_server.model.node import Node
-from zwave_js_server.version import VersionInfo
-
-from custom_components.keymaster.const import NONE_TEXT
 from homeassistant.components.zwave_js import PLATFORMS
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from zwave_js_server.model.driver import Driver
+from zwave_js_server.model.log_config import LogConfigDataType
+from zwave_js_server.model.node import Node
+from zwave_js_server.model.node.data_model import NodeDataType
+from zwave_js_server.model.version import VersionInfo, VersionInfoDataType
+
+from custom_components.keymaster.const import NONE_TEXT
 
 from .common import load_fixture
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
-pytest_plugins = "pytest_homeassistant_custom_component"
+pytest_plugins = "pytest_homeassistant_custom_component"  # pylint: disable=invalid-name
 
 
 @pytest.fixture(autouse=True)
@@ -47,13 +49,18 @@ def mock_get_entities():
     with patch(
         "custom_components.keymaster.config_flow._get_entities",
         autospec=True,
-    ) as mock_get_entities:
-        mock_get_entities.side_effect = side_effect_get_entities
-        yield mock_get_entities
+    ) as mock_entities:
+        mock_entities.side_effect = side_effect_get_entities
+        yield mock_entities
 
 
 def side_effect_get_entities(
-    hass, domain, search=None, extra_entities=None, exclude_entities=None, sort=True
+    hass,
+    domain,
+    search=None,
+    extra_entities=None,
+    exclude_entities=None,
+    sort=True,
 ):
     """Side effect for get_entities mock."""
     if domain == "lock":
@@ -107,15 +114,15 @@ def mock_listdir_err():
 @pytest.fixture
 def mock_osremove():
     """Fixture to mock remove file."""
-    with patch("os.remove", return_value=True) as mock_osremove:
-        yield mock_osremove
+    with patch("os.remove", return_value=True) as mock_remove:
+        yield mock_remove
 
 
 @pytest.fixture
 def mock_osrmdir():
     """Fixture to mock remove directory."""
-    with patch("os.rmdir", return_value=True) as mock_osrmdir:
-        yield mock_osrmdir
+    with patch("os.rmdir", return_value=True) as mock_rmdir:
+        yield mock_rmdir
 
 
 @pytest.fixture
@@ -132,7 +139,7 @@ def mock_os_path_join():
         yield
 
 
-@pytest.fixture(name="lock_schlage_be469_state", scope="session")
+@pytest.fixture(name="lock_schlage_be469_state", scope="package")
 def lock_schlage_be469_state_fixture():
     """Load the schlage lock node state fixture data."""
     return json.loads(load_fixture("zwave_js/lock_schlage_be469_state.json"))
@@ -146,7 +153,7 @@ def lock_schlage_be469_fixture(client, lock_schlage_be469_state):
     return node
 
 
-@pytest.fixture(name="lock_kwikset_910_state", scope="session")
+@pytest.fixture(name="lock_kwikset_910_state", scope="package")
 def lock_kwikset_910_state_fixture():
     """Load the schlage lock node state fixture data."""
     return json.loads(load_fixture("zwave_js/lock_kwikset_910_state.json"))
@@ -169,7 +176,9 @@ def mock_client_fixture(
     listen_block: asyncio.Event,
 ):
     """Mock a client."""
-    with patch("homeassistant.components.zwave_js.ZwaveClient", autospec=True) as client_class:
+    with patch(
+        "homeassistant.components.zwave_js.ZwaveClient", autospec=True
+    ) as client_class:
         client = client_class.return_value
 
         async def connect():
@@ -204,7 +213,9 @@ def mock_client_fixture(
                 return {"changed": False}
             return DEFAULT
 
-        client.async_send_command.return_value = {"result": {"success": True, "status": 255}}
+        client.async_send_command.return_value = {
+            "result": {"success": True, "status": 255}
+        }
         client.async_send_command.side_effect = async_send_command_side_effect
 
         yield client
@@ -227,6 +238,7 @@ async def integration_fixture(
     hass: HomeAssistant,
     client: MagicMock,
     platforms: list[Platform],
+    caplog: pytest.LogCaptureFixture,
 ) -> MockConfigEntry:
     """Set up the zwave_js integration."""
     entry = MockConfigEntry(
@@ -241,6 +253,11 @@ async def integration_fixture(
 
     client.async_send_command.reset_mock()
 
+    # Make sure no errors logged during setup.
+    # Eg. unique id collisions are only logged as errors and not raised,
+    # and may not cause tests to fail otherwise.
+    # assert not any(record.levelno == logging.ERROR for record in caplog.records)
+
     return entry
 
 
@@ -253,7 +270,9 @@ def controller_state_fixture():
 @pytest.fixture(name="controller_node_state", scope="package")
 def controller_node_state_fixture() -> dict[str, Any]:
     """Load the controller node state fixture data."""
-    return copy.deepcopy(json.loads(load_fixture("zwave_js/controller_node_state.json")))
+    return copy.deepcopy(
+        json.loads(load_fixture("zwave_js/controller_node_state.json"))
+    )
 
 
 @pytest.fixture(name="version_state", scope="package")
@@ -289,21 +308,27 @@ async def mock_zwavejs_get_usercodes():
         {"code_slot": 13, "usercode": "", "in_use": False},
         {"code_slot": 14, "usercode": "", "in_use": False},
     ]
-    with patch("zwave_js_server.util.lock.get_usercodes", return_value=slot_data) as mock_usercodes:
+    with patch(
+        "zwave_js_server.util.lock.get_usercodes", return_value=slot_data
+    ) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_zwavejs_clear_usercode():
     """Fixture to mock clear_usercode."""
-    with patch("zwave_js_server.util.lock.clear_usercode", return_value=None) as mock_usercodes:
+    with patch(
+        "zwave_js_server.util.lock.clear_usercode", return_value=None
+    ) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_zwavejs_set_usercode():
     """Fixture to mock set_usercode."""
-    with patch("zwave_js_server.util.lock.set_usercode", return_value=None) as mock_usercodes:
+    with patch(
+        "zwave_js_server.util.lock.set_usercode", return_value=None
+    ) as mock_usercodes:
         yield mock_usercodes
 
 
@@ -331,6 +356,7 @@ def mock_async_call_later():
 
         def immediate_call(hass, delay, callback):
             # Immediately call the callback with a mock `hass` object
+            del hass, delay  # Parameters not used in immediate callback
             return callback(None)
 
         mock.side_effect = immediate_call
@@ -340,13 +366,17 @@ def mock_async_call_later():
 @pytest.fixture(name="keymaster_integration")
 async def mock_keymaster_integration(hass, client):
     """Fixture to bypass zwavejs checks."""
-    # entry = MockConfigEntry(
-    #     domain="zwave_js",
-    #     data={"url": "ws://test.org", "data_collection_opted_in": False},
-    # )
-    # entry.add_to_hass(hass)
-    # assert await hass.config_entries.async_setup(entry.entry_id)
-    # await hass.async_block_till_done()
+    entry = MockConfigEntry(
+        domain="zwave_js",
+        data={"url": "ws://test.org"},
+        unique_id=str(client.driver.controller.home_id),
+    )
+    entry.add_to_hass(hass)
+    with patch("homeassistant.components.zwave_js.PLATFORMS", platforms):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    client.async_send_command.reset_mock()
 
     with (
         patch(
@@ -354,11 +384,16 @@ async def mock_keymaster_integration(hass, client):
             return_value=True,
         ),
         patch(
-            "custom_components.keymaster.KeymasterCoordinator._update_lock_data", return_value=True
+            "custom_components.keymaster.KeymasterCoordinator._update_lock_data",
+            return_value=True,
         ),
         patch(
-            "custom_components.keymaster.KeymasterCoordinator._sync_child_locks", return_value=True
+            "custom_components.keymaster.KeymasterCoordinator._sync_child_locks",
+            return_value=True,
         ),
-        patch("custom_components.keymaster.binary_sensor.async_using_zwave_js", return_value=True),
+        patch(
+            "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+            return_value=True,
+        ),
     ):
         yield
