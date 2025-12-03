@@ -35,9 +35,14 @@ async def test_setup_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
+    # 1 existing Z-Wave sensor + 7 Keymaster sensors (1 lock name + 6 slots)
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
+    
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
+    
+    # Verify migration from version 3 to 4
+    assert entries[0].version == 4
 
 
 async def test_setup_entry_core_state(
@@ -84,7 +89,9 @@ async def test_unload_entry(
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
+    # Entities should be removed after unload. 
+    # Remaining: 1 Z-Wave sensor. Removed: 7 Keymaster sensors.
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 1
     assert len(hass.states.async_entity_ids(DOMAIN)) == 0
 
     assert await hass.config_entries.async_remove(entry.entry_id)
