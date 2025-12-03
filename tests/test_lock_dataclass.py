@@ -44,7 +44,7 @@ def test_type_lookup_consistency():
             ), f"Field '{field}' from KeymasterCodeSlot is missing in keymasterlock_type_lookup"
 
     # Verify types match (basic check)
-    for key, _type_hint in keymasterlock_type_lookup:
+    for key, type_hint in keymasterlock_type_lookup.items():  # noqa: B007, PERF102
         found = False
         # Check if key belongs to Lock or Slot
         for cls in [KeymasterLock, KeymasterCodeSlot]:

@@ -14,7 +14,10 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.entity import KeymasterEntity, KeymasterEntityDescription
+from custom_components.keymaster.entity import (
+    KeymasterEntity,
+    KeymasterEntityDescription,
+)
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
     KeymasterCodeSlotDayOfWeek,

@@ -4,7 +4,9 @@ from datetime import datetime as dt, time as dt_time
 
 import pytest
 
-from custom_components.keymaster.migrate import _migrate_2to3_validate_and_convert_property
+from custom_components.keymaster.migrate import (
+    _migrate_2to3_validate_and_convert_property,
+)
 
 
 @pytest.mark.asyncio
