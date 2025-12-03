@@ -4,7 +4,6 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.core import HomeAssistant
 
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterLock

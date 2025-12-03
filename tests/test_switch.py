@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import (
@@ -21,10 +20,8 @@ from custom_components.keymaster.const import (
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
-from custom_components.keymaster.switch import (
-    KeymasterSwitch,
-    KeymasterSwitchEntityDescription,
-)
+from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
+from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_SWITCH = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",

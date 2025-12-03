@@ -3,10 +3,10 @@
 import logging
 from unittest.mock import patch
 
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 
 from .const import CONFIG_DATA
 

@@ -4,9 +4,6 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.const import STATE_OFF, STATE_ON
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import (
@@ -20,6 +17,9 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.migrate import migrate_2to3
+from homeassistant.const import STATE_ON
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 _LOGGER = logging.getLogger(__name__)
 

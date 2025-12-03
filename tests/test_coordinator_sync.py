@@ -3,10 +3,10 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from homeassistant.core import HomeAssistant
 
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
+from homeassistant.core import HomeAssistant
 
 
 @pytest.fixture

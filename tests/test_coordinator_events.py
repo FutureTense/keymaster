@@ -4,11 +4,11 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.components.lock.const import LockState
-from homeassistant.core import Event, HomeAssistant
 
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterLock
+from homeassistant.components.lock.const import LockState
+from homeassistant.core import Event
 
 _LOGGER = logging.getLogger(__name__)
 

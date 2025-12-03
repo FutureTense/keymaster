@@ -4,21 +4,19 @@ import asyncio
 import copy
 import json
 import logging
-from typing import Any, cast
+from typing import Any
 from unittest.mock import DEFAULT, AsyncMock, MagicMock, patch
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from zwave_js_server.model.driver import Driver
+from zwave_js_server.model.node import Node
+from zwave_js_server.model.version import VersionInfo
+
+from custom_components.keymaster.const import NONE_TEXT
 from homeassistant.components.zwave_js import PLATFORMS
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-from zwave_js_server.model.driver import Driver
-from zwave_js_server.model.log_config import LogConfigDataType
-from zwave_js_server.model.node import Node
-from zwave_js_server.model.node.data_model import NodeDataType
-from zwave_js_server.model.version import VersionInfo, VersionInfoDataType
-
-from custom_components.keymaster.const import NONE_TEXT
 
 from .common import load_fixture
 

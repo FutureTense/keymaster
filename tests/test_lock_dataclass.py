@@ -1,9 +1,10 @@
 """Tests for KeymasterLock dataclass integrity."""
 
 from dataclasses import fields
+
 from custom_components.keymaster.lock import (
-    KeymasterLock,
     KeymasterCodeSlot,
+    KeymasterLock,
     keymasterlock_type_lookup,
 )
 
@@ -43,7 +44,7 @@ def test_type_lookup_consistency():
             ), f"Field '{field}' from KeymasterCodeSlot is missing in keymasterlock_type_lookup"
 
     # Verify types match (basic check)
-    for key, type_hint in keymasterlock_type_lookup.items():
+    for key, _type_hint in keymasterlock_type_lookup:
         found = False
         # Check if key belongs to Lock or Slot
         for cls in [KeymasterLock, KeymasterCodeSlot]:

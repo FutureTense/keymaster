@@ -4,13 +4,13 @@ import random
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
 from homeassistant.core import HomeAssistant
-
-from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.lock import KeymasterLock
 
 
 def validate_lock_relationship_invariants(

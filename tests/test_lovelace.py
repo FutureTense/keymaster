@@ -4,10 +4,9 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
-from homeassistant.core import HomeAssistant
 
-from custom_components.keymaster.const import DOMAIN
 from custom_components.keymaster.lovelace import generate_lovelace
+from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
