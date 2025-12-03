@@ -90,8 +90,11 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     # Delete Package files
     _LOGGER.info("[migrate_2to3] Deleting Package files")
     await hass.async_add_executor_job(_migrate_2to3_delete_lock_and_base_folder, hass, config_entry)
-    await _migrate_2to3_reload_package_platforms(hass=hass)
-
+    
+    # FIX: Check the return value. If reload fails, abort migration.
+    if not await _migrate_2to3_reload_package_platforms(hass=hass):
+        return False
+    
     # Delete existing integration entities
     _LOGGER.info("[migrate_2to3] Deleting existing integration entities")
     for del_ent in er.async_entries_for_config_entry(
