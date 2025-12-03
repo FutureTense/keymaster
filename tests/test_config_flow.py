@@ -4,6 +4,11 @@ import logging
 from unittest.mock import patch
 
 import pytest
+from homeassistant import config_entries
+from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN
+from homeassistant.components.lock.const import LockState
+from homeassistant.components.script.const import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.config_flow import _get_entities
@@ -24,10 +29,6 @@ from custom_components.keymaster.const import (
     DOMAIN,
     NONE_TEXT,
 )
-from homeassistant import config_entries
-from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
-from homeassistant.components.script.const import DOMAIN as SCRIPT_DOMAIN
-from homeassistant.data_entry_flow import FlowResultType
 from tests.const import CONFIG_DATA
 
 KWIKSET_910_LOCK_ENTITY = "lock.garage_door"
@@ -38,7 +39,9 @@ pytestmark = pytest.mark.asyncio
 
 async def test_no_locks_abort(hass):
     """Test the flow aborts when no locks are available."""
-    with patch("custom_components.keymaster.config_flow._get_entities", return_value=[]):
+    with patch(
+        "custom_components.keymaster.config_flow._get_entities", return_value=[]
+    ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
@@ -96,7 +99,9 @@ async def test_form(test_user_input, title, final_config_flow_data, hass):
         "custom_components.keymaster.async_setup_entry", return_value=True
     ) as mock_setup_entry:
         _LOGGER.warning("[test_form] result2 Starting")
-        result2 = await hass.config_entries.flow.async_configure(result["flow_id"], test_user_input)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], test_user_input
+        )
         _LOGGER.warning("[test_form] result2: %s", result2)
         assert result2["type"] is FlowResultType.CREATE_ENTRY
         assert result2["title"] == title
@@ -156,7 +161,9 @@ async def test_form_no_script(test_user_input, title, final_config_flow_data, ha
         "custom_components.keymaster.async_setup_entry", return_value=True
     ) as mock_setup_entry:
         _LOGGER.warning("[test_form] result2 Starting")
-        result2 = await hass.config_entries.flow.async_configure(result["flow_id"], test_user_input)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], test_user_input
+        )
         _LOGGER.warning("[test_form] result2: %s", result2)
         assert result2["type"] is FlowResultType.CREATE_ENTRY
         assert result2["title"] == title
@@ -202,7 +209,9 @@ async def test_form_no_script(test_user_input, title, final_config_flow_data, ha
     ],
 )
 @pytest.mark.usefixtures("mock_get_entities")
-async def test_reconfiguration_form(test_user_input, title, final_config_flow_data, hass):
+async def test_reconfiguration_form(
+    test_user_input, title, final_config_flow_data, hass
+):
     """Test we get the form."""
     del title  # Used in parametrize but not in test body
 

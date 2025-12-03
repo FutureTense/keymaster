@@ -1,10 +1,11 @@
 """Tests for keymaster DateTime platform."""
 
-from datetime import datetime
 import logging
+from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import (
@@ -26,7 +27,6 @@ from custom_components.keymaster.datetime import (
     async_setup_entry,
 )
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
-from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_DATETIME = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -140,7 +140,10 @@ async def test_datetime_entity_initialization(
     entity = KeymasterDateTime(entity_description=entity_description)
 
     assert entity._attr_native_value is None
-    assert entity.entity_description.key == "datetime.code_slots:1.accesslimit_date_range_start"
+    assert (
+        entity.entity_description.key
+        == "datetime.code_slots:1.accesslimit_date_range_start"
+    )
     assert isinstance(entity.entity_description.name, str)
     assert "Date Range Start" in entity.entity_description.name
 

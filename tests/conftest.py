@@ -8,6 +8,9 @@ from typing import Any, cast
 from unittest.mock import DEFAULT, AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.components.zwave_js import PLATFORMS
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.log_config import LogConfigDataType
@@ -16,9 +19,6 @@ from zwave_js_server.model.node.data_model import NodeDataType
 from zwave_js_server.model.version import VersionInfo, VersionInfoDataType
 
 from custom_components.keymaster.const import NONE_TEXT
-from homeassistant.components.zwave_js import PLATFORMS
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
 
 from .common import load_fixture
 
@@ -139,7 +139,7 @@ def mock_os_path_join():
         yield
 
 
-@pytest.fixture(name="lock_schlage_be469_state", scope="session")
+@pytest.fixture(name="lock_schlage_be469_state", scope="package")
 def lock_schlage_be469_state_fixture():
     """Load the schlage lock node state fixture data."""
     return json.loads(load_fixture("zwave_js/lock_schlage_be469_state.json"))
@@ -153,7 +153,7 @@ def lock_schlage_be469_fixture(client, lock_schlage_be469_state):
     return node
 
 
-@pytest.fixture(name="lock_kwikset_910_state", scope="session")
+@pytest.fixture(name="lock_kwikset_910_state", scope="package")
 def lock_kwikset_910_state_fixture():
     """Load the schlage lock node state fixture data."""
     return json.loads(load_fixture("zwave_js/lock_kwikset_910_state.json"))
@@ -176,7 +176,9 @@ def mock_client_fixture(
     listen_block: asyncio.Event,
 ):
     """Mock a client."""
-    with patch("homeassistant.components.zwave_js.ZwaveClient", autospec=True) as client_class:
+    with patch(
+        "homeassistant.components.zwave_js.ZwaveClient", autospec=True
+    ) as client_class:
         client = client_class.return_value
 
         async def connect():
@@ -197,23 +199,23 @@ def mock_client_fixture(
         client.disconnect = AsyncMock(side_effect=disconnect)
         client.disable_server_logging = MagicMock()
         client.driver = Driver(
-            client,
-            cast(dict[str, Any], copy.deepcopy(controller_state)),
-            cast(LogConfigDataType, copy.deepcopy(log_config_state)),
+            client, copy.deepcopy(controller_state), copy.deepcopy(log_config_state)
         )
-        node = Node(client, cast(NodeDataType, copy.deepcopy(controller_node_state)))
+        node = Node(client, copy.deepcopy(controller_node_state))
         client.driver.controller.nodes[node.node_id] = node
 
-        client.version = VersionInfo.from_message(cast(VersionInfoDataType, version_state))
+        client.version = VersionInfo.from_message(version_state)
         client.ws_server_url = "ws://test:3000/zjs"
 
-        async def async_send_command_side_effect(message, _require_schema=None):
+        async def async_send_command_side_effect(message, require_schema=None):
             """Return the command response."""
             if message["command"] == "node.has_device_config_changed":
                 return {"changed": False}
             return DEFAULT
 
-        client.async_send_command.return_value = {"result": {"success": True, "status": 255}}
+        client.async_send_command.return_value = {
+            "result": {"success": True, "status": 255}
+        }
         client.async_send_command.side_effect = async_send_command_side_effect
 
         yield client
@@ -236,6 +238,7 @@ async def integration_fixture(
     hass: HomeAssistant,
     client: MagicMock,
     platforms: list[Platform],
+    caplog: pytest.LogCaptureFixture,
 ) -> MockConfigEntry:
     """Set up the zwave_js integration."""
     entry = MockConfigEntry(
@@ -250,6 +253,11 @@ async def integration_fixture(
 
     client.async_send_command.reset_mock()
 
+    # Make sure no errors logged during setup.
+    # Eg. unique id collisions are only logged as errors and not raised,
+    # and may not cause tests to fail otherwise.
+    # assert not any(record.levelno == logging.ERROR for record in caplog.records)
+
     return entry
 
 
@@ -262,7 +270,9 @@ def controller_state_fixture():
 @pytest.fixture(name="controller_node_state", scope="package")
 def controller_node_state_fixture() -> dict[str, Any]:
     """Load the controller node state fixture data."""
-    return copy.deepcopy(json.loads(load_fixture("zwave_js/controller_node_state.json")))
+    return copy.deepcopy(
+        json.loads(load_fixture("zwave_js/controller_node_state.json"))
+    )
 
 
 @pytest.fixture(name="version_state", scope="package")
@@ -298,21 +308,27 @@ async def mock_zwavejs_get_usercodes():
         {"code_slot": 13, "usercode": "", "in_use": False},
         {"code_slot": 14, "usercode": "", "in_use": False},
     ]
-    with patch("zwave_js_server.util.lock.get_usercodes", return_value=slot_data) as mock_usercodes:
+    with patch(
+        "zwave_js_server.util.lock.get_usercodes", return_value=slot_data
+    ) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_zwavejs_clear_usercode():
     """Fixture to mock clear_usercode."""
-    with patch("zwave_js_server.util.lock.clear_usercode", return_value=None) as mock_usercodes:
+    with patch(
+        "zwave_js_server.util.lock.clear_usercode", return_value=None
+    ) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_zwavejs_set_usercode():
     """Fixture to mock set_usercode."""
-    with patch("zwave_js_server.util.lock.set_usercode", return_value=None) as mock_usercodes:
+    with patch(
+        "zwave_js_server.util.lock.set_usercode", return_value=None
+    ) as mock_usercodes:
         yield mock_usercodes
 
 
@@ -350,14 +366,17 @@ def mock_async_call_later():
 @pytest.fixture(name="keymaster_integration")
 async def mock_keymaster_integration(hass, client):
     """Fixture to bypass zwavejs checks."""
-    del hass, client  # Parameters not used in this fixture
-    # entry = MockConfigEntry(
-    #     domain="zwave_js",
-    #     data={"url": "ws://test.org", "data_collection_opted_in": False},
-    # )
-    # entry.add_to_hass(hass)
-    # assert await hass.config_entries.async_setup(entry.entry_id)
-    # await hass.async_block_till_done()
+    entry = MockConfigEntry(
+        domain="zwave_js",
+        data={"url": "ws://test.org"},
+        unique_id=str(client.driver.controller.home_id),
+    )
+    entry.add_to_hass(hass)
+    with patch("homeassistant.components.zwave_js.PLATFORMS", platforms):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    client.async_send_command.reset_mock()
 
     with (
         patch(

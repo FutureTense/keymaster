@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import (
@@ -20,8 +21,10 @@ from custom_components.keymaster.const import (
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
-from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
-from homeassistant.core import HomeAssistant
+from custom_components.keymaster.switch import (
+    KeymasterSwitch,
+    KeymasterSwitchEntityDescription,
+)
 
 CONFIG_DATA_SWITCH = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -61,7 +64,9 @@ async def coordinator(hass: HomeAssistant, switch_config_entry):
     return hass.data[DOMAIN][COORDINATOR]
 
 
-async def test_switch_entity_initialization(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_entity_initialization(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test switch entity initialization."""
 
     entity_description = KeymasterSwitchEntityDescription(
@@ -81,7 +86,9 @@ async def test_switch_entity_initialization(hass: HomeAssistant, switch_config_e
     assert entity.entity_description.name == "Auto Lock"
 
 
-async def test_switch_entity_unavailable_when_not_connected(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_entity_unavailable_when_not_connected(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test switch entity becomes unavailable when lock is not connected."""
 
     # Create a lock that's not connected
@@ -112,7 +119,9 @@ async def test_switch_entity_unavailable_when_not_connected(hass: HomeAssistant,
     assert not entity._attr_available
 
 
-async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_async_turn_on(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test turning switch on updates coordinator."""
 
     # Create a connected lock
@@ -147,7 +156,9 @@ async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, co
         mock_refresh.assert_called_once()
 
 
-async def test_switch_async_turn_off(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_async_turn_off(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test turning switch off updates coordinator."""
 
     # Create a connected lock
@@ -182,7 +193,9 @@ async def test_switch_async_turn_off(hass: HomeAssistant, switch_config_entry, c
         mock_refresh.assert_called_once()
 
 
-async def test_switch_enabled_turn_on_sets_pin(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_enabled_turn_on_sets_pin(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test turning on enabled switch sets PIN on lock."""
 
     # Create a connected lock with code slot and PIN
@@ -215,9 +228,13 @@ async def test_switch_enabled_turn_on_sets_pin(hass: HomeAssistant, switch_confi
     entity._attr_is_on = False
 
     # Mock coordinator methods
-    with patch.object(coordinator, "update_slot_active_state", new=AsyncMock()) as mock_update, \
-         patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin, \
-         patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with patch.object(
+        coordinator, "update_slot_active_state", new=AsyncMock()
+    ) as mock_update, patch.object(
+        coordinator, "set_pin_on_lock", new=AsyncMock()
+    ) as mock_set_pin, patch.object(
+        coordinator, "async_refresh", new=AsyncMock()
+    ):
         await entity.async_turn_on()
 
         # Should update slot state and set PIN
@@ -232,7 +249,9 @@ async def test_switch_enabled_turn_on_sets_pin(hass: HomeAssistant, switch_confi
         )
 
 
-async def test_switch_enabled_turn_off_clears_pin(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_enabled_turn_off_clears_pin(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test turning off enabled switch clears PIN from lock."""
 
     # Create a connected lock with code slot
@@ -264,9 +283,13 @@ async def test_switch_enabled_turn_off_clears_pin(hass: HomeAssistant, switch_co
     entity._attr_is_on = True
 
     # Mock coordinator methods
-    with patch.object(coordinator, "update_slot_active_state", new=AsyncMock()) as mock_update, \
-         patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()) as mock_clear_pin, \
-         patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with patch.object(
+        coordinator, "update_slot_active_state", new=AsyncMock()
+    ) as mock_update, patch.object(
+        coordinator, "clear_pin_from_lock", new=AsyncMock()
+    ) as mock_clear_pin, patch.object(
+        coordinator, "async_refresh", new=AsyncMock()
+    ):
         await entity.async_turn_off()
 
         # Should update slot state and clear PIN
@@ -280,7 +303,9 @@ async def test_switch_enabled_turn_off_clears_pin(hass: HomeAssistant, switch_co
         )
 
 
-async def test_switch_turn_on_no_op_when_already_on(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_turn_on_no_op_when_already_on(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test turning on switch when already on is a no-op."""
 
     # Create a connected lock
@@ -314,7 +339,9 @@ async def test_switch_turn_on_no_op_when_already_on(hass: HomeAssistant, switch_
         mock_refresh.assert_not_called()
 
 
-async def test_switch_turn_off_no_op_when_already_off(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_turn_off_no_op_when_already_off(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test turning off switch when already off is a no-op."""
 
     # Create a connected lock
@@ -348,7 +375,9 @@ async def test_switch_turn_off_no_op_when_already_off(hass: HomeAssistant, switc
         mock_refresh.assert_not_called()
 
 
-async def test_switch_unavailable_when_child_lock_without_override(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_unavailable_when_child_lock_without_override(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test code slot switch is unavailable when it's a child lock without override enabled."""
 
     # Create a child lock (has parent_name)
@@ -388,7 +417,9 @@ async def test_switch_unavailable_when_child_lock_without_override(hass: HomeAss
     assert not entity._attr_available
 
 
-async def test_switch_available_when_child_lock_with_override(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_available_when_child_lock_with_override(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test code slot switch is available when it's a child lock with override enabled."""
 
     # Create a child lock with override enabled
@@ -428,7 +459,9 @@ async def test_switch_available_when_child_lock_with_override(hass: HomeAssistan
     assert entity._attr_available
 
 
-async def test_switch_available_for_override_parent(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_available_for_override_parent(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test override_parent switch is always available for child locks."""
 
     # Create a child lock

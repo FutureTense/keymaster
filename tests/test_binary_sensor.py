@@ -1,12 +1,12 @@
 """Test keymaster binary sensors."""
 
 import pytest
+from homeassistant.components.lock.const import LockState
+from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.event import Event
 
 from custom_components.keymaster.const import DOMAIN
-from homeassistant.components.lock.const import LockState
-from homeassistant.config_entries import ConfigEntryState
 
 from .const import CONFIG_DATA_910
 

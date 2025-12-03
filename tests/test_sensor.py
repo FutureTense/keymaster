@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import (
@@ -23,7 +24,6 @@ from custom_components.keymaster.sensor import (
     KeymasterSensorEntityDescription,
     async_setup_entry,
 )
-from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_SENSOR = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -60,7 +60,9 @@ async def coordinator(hass: HomeAssistant, sensor_config_entry):
     return hass.data[DOMAIN][COORDINATOR]
 
 
-async def test_sensor_entity_initialization(hass: HomeAssistant, sensor_config_entry, coordinator):
+async def test_sensor_entity_initialization(
+    hass: HomeAssistant, sensor_config_entry, coordinator
+):
     """Test sensor entity initialization."""
 
     entity_description = KeymasterSensorEntityDescription(

@@ -3,10 +3,10 @@
 import logging
 from unittest.mock import patch
 
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import DOMAIN
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 
 from .const import CONFIG_DATA
 
@@ -19,7 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def test_setup_entry(
     hass,
-    keymaster_integration,
+    lock_kwikset_910,
     mock_zwavejs_get_usercodes,
     mock_zwavejs_clear_usercode,
     mock_zwavejs_set_usercode,
@@ -35,19 +35,18 @@ async def test_setup_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    # 1 existing Z-Wave sensor + 7 Keymaster sensors (1 lock name + 6 slots)
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
-    
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 10
+
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
-    
+
     # Verify migration from version 3 to 4
     assert entries[0].version == 4
 
 
 async def test_setup_entry_core_state(
     hass,
-    keymaster_integration,
+    lock_kwikset_910,
     mock_zwavejs_get_usercodes,
     mock_zwavejs_clear_usercode,
     mock_zwavejs_set_usercode,
@@ -63,7 +62,7 @@ async def test_setup_entry_core_state(
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
+        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 10
         entries = hass.config_entries.async_entries(DOMAIN)
         assert len(entries) == 1
 
@@ -71,7 +70,7 @@ async def test_setup_entry_core_state(
 async def test_unload_entry(
     hass,
     mock_async_call_later,
-    keymaster_integration,
+    lock_kwikset_910,
     integration,
 ):
     """Test unloading entities."""
@@ -83,17 +82,15 @@ async def test_unload_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 8
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 10
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
-    # Entities should be removed after unload. 
-    # Remaining: 1 Z-Wave sensor. Removed: 7 Keymaster sensors.
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 1
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 10
     assert len(hass.states.async_entity_ids(DOMAIN)) == 0
 
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 1
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 3

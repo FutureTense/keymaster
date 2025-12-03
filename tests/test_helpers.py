@@ -3,6 +3,9 @@
 from unittest.mock import patch
 
 import pytest
+from homeassistant.components.lock.const import LockState
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.event import Event
 
@@ -16,9 +19,6 @@ from custom_components.keymaster.helpers import (
     send_persistent_notification,
 )
 from custom_components.keymaster.lock import KeymasterLock
-from homeassistant.components.lock.const import LockState
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from homeassistant.helpers import entity_registry as er
 
 from .common import async_capture_events
 from .const import CONFIG_DATA_910

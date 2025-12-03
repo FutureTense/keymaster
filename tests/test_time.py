@@ -1,9 +1,11 @@
 """Test keymaster time entities."""
 
+import logging
 from datetime import time as dt_time
 from unittest.mock import patch
 
 import pytest
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import (
@@ -29,7 +31,6 @@ from custom_components.keymaster.time import (
     KeymasterTimeEntityDescription,
     async_setup_entry,
 )
-from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_TIME = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -94,7 +95,9 @@ async def test_time_entity_not_created_without_advanced_dow(hass: HomeAssistant)
     assert len(entities) == 0
 
 
-async def test_time_entities_created_with_advanced_dow(hass: HomeAssistant, time_config_entry):
+async def test_time_entities_created_with_advanced_dow(
+    hass: HomeAssistant, time_config_entry
+):
     """Test time entities are created when advanced day of week is enabled."""
 
     entities = []
@@ -134,12 +137,17 @@ async def test_time_entity_initialization(hass: HomeAssistant, time_config_entry
     entity = KeymasterTime(entity_description=entity_description)
 
     assert entity._attr_native_value is None
-    assert entity.entity_description.key == "time.code_slots:1.accesslimit_day_of_week:0.time_start"
+    assert (
+        entity.entity_description.key
+        == "time.code_slots:1.accesslimit_day_of_week:0.time_start"
+    )
     assert isinstance(entity.entity_description.name, str)
     assert "Monday - Start Time" in entity.entity_description.name
 
 
-async def test_time_entity_unavailable_when_not_connected(hass: HomeAssistant, time_config_entry):
+async def test_time_entity_unavailable_when_not_connected(
+    hass: HomeAssistant, time_config_entry
+):
     """Test time entity is unavailable when lock is not connected."""
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
@@ -273,6 +281,7 @@ async def test_time_entity_child_lock_ignores_change_without_override(
 
     # Mock coordinator.async_refresh
     with patch.object(coordinator, "async_refresh") as mock_refresh:
+        caplog.set_level(logging.DEBUG)
         test_time = dt_time(9, 30)
         await entity.async_set_value(test_time)
 
@@ -281,7 +290,9 @@ async def test_time_entity_child_lock_ignores_change_without_override(
         assert "not set to override parent. Ignoring change" in caplog.text
 
 
-async def test_time_entity_unavailable_when_dow_not_enabled(hass: HomeAssistant, time_config_entry):
+async def test_time_entity_unavailable_when_dow_not_enabled(
+    hass: HomeAssistant, time_config_entry
+):
     """Test time entity is unavailable when day of week is not enabled."""
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
