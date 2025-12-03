@@ -64,7 +64,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
         CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     ]:
-        if config_entry.data.get(prop) in {NONE_TEXT, "sensor.fake", "binary_sensor.fake"}:
+        if config_entry.data.get(prop) in {
+            NONE_TEXT,
+            "sensor.fake",
+            "binary_sensor.fake",
+        }:
             updated_config[prop] = None
 
     if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
@@ -82,12 +86,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         updated_config[CONF_NOTIFY_SCRIPT_NAME] = (
             f"keymaster_{updated_config.get(CONF_LOCK_NAME)}_manual_notify"
         )
-    elif isinstance(updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str) and updated_config[
-        CONF_NOTIFY_SCRIPT_NAME
-    ].startswith("script."):
-        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[CONF_NOTIFY_SCRIPT_NAME].split(
-            ".", maxsplit=1
-        )[1]
+    elif isinstance(
+        updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str
+    ) and updated_config[CONF_NOTIFY_SCRIPT_NAME].startswith("script."):
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[
+            CONF_NOTIFY_SCRIPT_NAME
+        ].split(".", maxsplit=1)[1]
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
@@ -136,7 +140,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     ):
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(DAY_NAMES):
-            dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
+            dow_slots[i] = KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i, day_of_week_name=dow
+            )
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     kmlock = KeymasterLock(
@@ -231,7 +237,9 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         data = config_entry.data.copy()
 
         data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL, None)
-        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(CONF_ALARM_TYPE, None)
+        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(
+            CONF_ALARM_TYPE, None
+        )
         data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_ENTITY_ID)
         if CONF_HIDE_PINS not in data:
             data[CONF_HIDE_PINS] = DEFAULT_HIDE_PINS

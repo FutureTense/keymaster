@@ -95,7 +95,9 @@ async def async_setup_entry(
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterNumberEntityDescription(KeymasterEntityDescription, NumberEntityDescription):
+class KeymasterNumberEntityDescription(
+    KeymasterEntityDescription, NumberEntityDescription
+):
     """Entity Description for keymaster Number entities."""
 
 
@@ -137,7 +139,8 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             return
 
         if ".code_slots" in self._property and (
-            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
+            not self._kmlock.code_slots
+            or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()

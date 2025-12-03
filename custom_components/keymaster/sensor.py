@@ -17,7 +17,9 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Create keymaster Sensor entities."""
 
@@ -78,7 +80,9 @@ async def async_setup_entry(
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterSensorEntityDescription(KeymasterEntityDescription, SensorEntityDescription):
+class KeymasterSensorEntityDescription(
+    KeymasterEntityDescription, SensorEntityDescription
+):
     """Entity Description for keymaster Sensors."""
 
 
@@ -106,7 +110,8 @@ class KeymasterSensor(KeymasterEntity, SensorEntity):
             return
 
         if ".code_slots" in self._property and (
-            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
+            not self._kmlock.code_slots
+            or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()

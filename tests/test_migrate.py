@@ -63,7 +63,7 @@ async def test_migrate_2to3_success(hass: HomeAssistant, mock_coordinator):
     hass.states.async_set("input_text.frontdoor_pin_1", "1234")
     hass.states.async_set("input_text.frontdoor_name_1", "User One")
     hass.states.async_set("input_boolean.notify_frontdoor_1", STATE_ON)
-    
+
     # Setup Entity Registry mock
     mock_registry = MagicMock(spec=er.EntityRegistry)
     mock_registry.entities = {
@@ -71,13 +71,16 @@ async def test_migrate_2to3_success(hass: HomeAssistant, mock_coordinator):
         "input_text.frontdoor_pin_1": MagicMock(),
     }
     mock_registry.async_remove = MagicMock()
-    
+
     # Mock entities for config entry
     mock_entry_entity = MagicMock()
     mock_entry_entity.entity_id = "binary_sensor.frontdoor_network"
-    
+
     with (
-        patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_registry),
+        patch(
+            "homeassistant.helpers.entity_registry.async_get",
+            return_value=mock_registry,
+        ),
         patch(
             "homeassistant.helpers.entity_registry.async_entries_for_config_entry",
             return_value=[mock_entry_entity],
@@ -86,15 +89,20 @@ async def test_migrate_2to3_success(hass: HomeAssistant, mock_coordinator):
             "custom_components.keymaster.migrate.KeymasterCoordinator",
             return_value=mock_coordinator,
         ),
-        patch("custom_components.keymaster.migrate._migrate_2to3_delete_lock_and_base_folder") as mock_delete_files,
-        patch("custom_components.keymaster.migrate._migrate_2to3_reload_package_platforms", return_value=True),
+        patch(
+            "custom_components.keymaster.migrate._migrate_2to3_delete_lock_and_base_folder"
+        ) as mock_delete_files,
+        patch(
+            "custom_components.keymaster.migrate._migrate_2to3_reload_package_platforms",
+            return_value=True,
+        ),
         patch.dict(hass.data, {DOMAIN: {}}),
     ):
         success = await migrate_2to3(hass, config_entry)
 
         assert success is True
         assert config_entry.version == 3
-        
+
         # Verify coordinator.add_lock was called with populated lock object
         assert mock_coordinator.add_lock.called
         kmlock = mock_coordinator.add_lock.call_args[1]["kmlock"]
@@ -103,7 +111,7 @@ async def test_migrate_2to3_success(hass: HomeAssistant, mock_coordinator):
         assert kmlock.code_slots[1].pin == "1234"
         assert kmlock.code_slots[1].name == "User One"
         assert kmlock.code_slots[1].notifications is True
-        
+
         # Verify cleanup
         mock_delete_files.assert_called_once()
         mock_registry.async_remove.assert_any_call("input_boolean.enabled_frontdoor_1")
@@ -130,7 +138,9 @@ async def test_migrate_2to3_coordinator_failure(hass: HomeAssistant, mock_coordi
             "custom_components.keymaster.migrate.KeymasterCoordinator",
             return_value=mock_coordinator,
         ),
-        pytest.raises(Exception, match="Setup failed"), # Should raise ConfigEntryNotReady from coordinator exception
+        pytest.raises(
+            Exception, match="Setup failed"
+        ),  # Should raise ConfigEntryNotReady from coordinator exception
     ):
         await migrate_2to3(hass, config_entry)
 
@@ -152,8 +162,13 @@ async def test_migrate_2to3_reload_failure(hass: HomeAssistant, mock_coordinator
             "custom_components.keymaster.migrate.KeymasterCoordinator",
             return_value=mock_coordinator,
         ),
-        patch("custom_components.keymaster.migrate._migrate_2to3_delete_lock_and_base_folder"),
-        patch("custom_components.keymaster.migrate._migrate_2to3_reload_package_platforms", return_value=False),
+        patch(
+            "custom_components.keymaster.migrate._migrate_2to3_delete_lock_and_base_folder"
+        ),
+        patch(
+            "custom_components.keymaster.migrate._migrate_2to3_reload_package_platforms",
+            return_value=False,
+        ),
     ):
         success = await migrate_2to3(hass, config_entry)
         assert success is False
