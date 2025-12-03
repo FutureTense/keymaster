@@ -4,11 +4,6 @@ import logging
 from unittest.mock import patch
 
 import pytest
-from homeassistant import config_entries
-from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN
-from homeassistant.components.lock.const import LockState
-from homeassistant.components.script.const import DOMAIN as SCRIPT_DOMAIN
-from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.config_flow import _get_entities
@@ -29,6 +24,10 @@ from custom_components.keymaster.const import (
     DOMAIN,
     NONE_TEXT,
 )
+from homeassistant import config_entries
+from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
+from homeassistant.components.script.const import DOMAIN as SCRIPT_DOMAIN
+from homeassistant.data_entry_flow import FlowResultType
 from tests.const import CONFIG_DATA
 
 KWIKSET_910_LOCK_ENTITY = "lock.garage_door"

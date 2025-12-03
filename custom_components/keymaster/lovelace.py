@@ -40,13 +40,13 @@ async def generate_lovelace(
         child=bool(parent_config_entry_id),
         door=bool(door_sensor is not None),
     )
-    mapped_badges_list: (
-        MutableMapping[str, Any] | list[MutableMapping[str, Any]]
-    ) = await _map_property_to_entity_id(
-        hass=hass,
-        lovelace_entities=badges_list,
-        keymaster_config_entry_id=keymaster_config_entry_id,
-        parent_config_entry_id=parent_config_entry_id,
+    mapped_badges_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = (
+        await _map_property_to_entity_id(
+            hass=hass,
+            lovelace_entities=badges_list,
+            keymaster_config_entry_id=keymaster_config_entry_id,
+            parent_config_entry_id=parent_config_entry_id,
+        )
     )
     if isinstance(mapped_badges_list, list):
         await _add_lock_and_door_to_badges(
@@ -60,10 +60,12 @@ async def generate_lovelace(
         code_slot_start + code_slots,
     ):
         if parent_config_entry_id:
-            code_slot_dict: MutableMapping[str, Any] = await _generate_child_code_slot_dict(
-                code_slot_num=code_slot_num,
-                advanced_date_range=advanced_date_range,
-                advanced_day_of_week=advanced_day_of_week,
+            code_slot_dict: MutableMapping[str, Any] = (
+                await _generate_child_code_slot_dict(
+                    code_slot_num=code_slot_num,
+                    advanced_date_range=advanced_date_range,
+                    advanced_day_of_week=advanced_day_of_week,
+                )
             )
         else:
             code_slot_dict = await _generate_code_slot_dict(
@@ -72,13 +74,13 @@ async def generate_lovelace(
                 advanced_day_of_week=advanced_day_of_week,
             )
         code_slot_list.append(code_slot_dict)
-    lovelace_list: (
-        MutableMapping[str, Any] | list[MutableMapping[str, Any]]
-    ) = await _map_property_to_entity_id(
-        hass=hass,
-        lovelace_entities=code_slot_list,
-        keymaster_config_entry_id=keymaster_config_entry_id,
-        parent_config_entry_id=parent_config_entry_id,
+    lovelace_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = (
+        await _map_property_to_entity_id(
+            hass=hass,
+            lovelace_entities=code_slot_list,
+            keymaster_config_entry_id=keymaster_config_entry_id,
+            parent_config_entry_id=parent_config_entry_id,
+        )
     )
     lovelace: list[MutableMapping[str, Any]] = [
         {
@@ -130,7 +132,9 @@ def _create_lovelace_folder(folder: str) -> None:
 def _dump_with_indent(data: Any, indent: int = 2) -> str:
     """Convert dict to YAML and indent each line by a given number of spaces."""
     yaml_string: str = yaml.dump(data, default_flow_style=False, sort_keys=False)
-    indented_yaml: str = "\n".join(" " * indent + line for line in yaml_string.splitlines())
+    indented_yaml: str = "\n".join(
+        " " * indent + line for line in yaml_string.splitlines()
+    )
     return indented_yaml
 
 
@@ -166,17 +170,17 @@ async def _map_property_to_entity_id(
     #     f"parent_config_entry_id: {parent_config_entry_id}"
     # )
     entity_registry: er.EntityRegistry = er.async_get(hass)
-    lovelace_list: (
-        list[MutableMapping[str, Any]] | MutableMapping[str, Any]
-    ) = await _process_entities(
-        lovelace_entities,
-        "entity",
-        functools.partial(
-            _get_entity_id,
-            entity_registry,
-            keymaster_config_entry_id,
-            parent_config_entry_id,
-        ),
+    lovelace_list: list[MutableMapping[str, Any]] | MutableMapping[str, Any] = (
+        await _process_entities(
+            lovelace_entities,
+            "entity",
+            functools.partial(
+                _get_entity_id,
+                entity_registry,
+                keymaster_config_entry_id,
+                parent_config_entry_id,
+            ),
+        )
     )
     return lovelace_list
 
@@ -191,11 +195,15 @@ async def _process_entities(data: Any, key_to_find: str, process_func: Callable)
                 updated_dict[key] = await process_func(value)
             else:
                 # Recursively process the value
-                updated_dict[key] = await _process_entities(value, key_to_find, process_func)
+                updated_dict[key] = await _process_entities(
+                    value, key_to_find, process_func
+                )
         return updated_dict
     if isinstance(data, list):
         # Recursively process each item in the list
-        return [await _process_entities(item, key_to_find, process_func) for item in data]
+        return [
+            await _process_entities(item, key_to_find, process_func) for item in data
+        ]
     # If not a dict or list, return the data as-is
     return data
 
@@ -926,7 +934,9 @@ async def _generate_child_code_slot_dict(
     return code_slot_dict
 
 
-async def _generate_child_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]:
+async def _generate_child_dow_entities(
+    code_slot_num: int,
+) -> list[MutableMapping[str, Any]]:
     """Build the day of week entities for a child code slot."""
     dow_list: list[MutableMapping[str, Any]] = []
     for dow_num, dow in enumerate(DAY_NAMES):

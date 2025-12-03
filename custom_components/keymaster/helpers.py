@@ -31,7 +31,9 @@ class Throttle:
 
     def __init__(self) -> None:
         """Initialize Throttle class."""
-        self._cooldowns: MutableMapping = {}  # Nested dictionary: {function_name: {key: last_called_time}}
+        self._cooldowns: MutableMapping = (
+            {}
+        )  # Nested dictionary: {function_name: {key: last_called_time}}
 
     def is_allowed(self, func_name: str, key: str, cooldown_seconds: int) -> bool:
         """Check if function is allowed to run or not."""
@@ -78,7 +80,9 @@ class KeymasterTimer:
             self._unsub_events = []
 
         if sun.is_up(self.hass):
-            delay: int = (self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY) * 60
+            delay: int = (
+                self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY
+            ) * 60
         else:
             delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
         self._end_time = dt.now().astimezone() + timedelta(seconds=delay)
@@ -90,7 +94,9 @@ class KeymasterTimer:
         self._unsub_events.append(
             async_call_later(hass=self.hass, delay=delay, action=self._call_action)
         )
-        self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=self.cancel))
+        self._unsub_events.append(
+            async_call_later(hass=self.hass, delay=delay, action=self.cancel)
+        )
         return True
 
     async def cancel(self, timer_elapsed: dt | None = None) -> None:
@@ -233,7 +239,9 @@ async def delete_code_slot_entities(
         if entity_id:
             try:
                 entity_registry.async_remove(entity_id)
-                _LOGGER.debug("[delete_code_slot_entities] Removed entity: %s", entity_id)
+                _LOGGER.debug(
+                    "[delete_code_slot_entities] Removed entity: %s", entity_id
+                )
             except (KeyError, ValueError) as e:
                 _LOGGER.warning(
                     "Error removing entity: %s. %s: %s",
@@ -261,7 +269,9 @@ async def delete_code_slot_entities(
             if entity_id:
                 try:
                     entity_registry.async_remove(entity_id)
-                    _LOGGER.debug("[delete_code_slot_entities] Removed entity: %s", entity_id)
+                    _LOGGER.debug(
+                        "[delete_code_slot_entities] Removed entity: %s", entity_id
+                    )
                 except (KeyError, ValueError) as e:
                     _LOGGER.warning(
                         "Error removing entity: %s. %s: %s",
@@ -270,7 +280,9 @@ async def delete_code_slot_entities(
                         e,
                     )
             else:
-                _LOGGER.debug("[delete_code_slot_entities] No entity_id found for %s", prop)
+                _LOGGER.debug(
+                    "[delete_code_slot_entities] No entity_id found for %s", prop
+                )
 
 
 async def call_hass_service(
@@ -290,7 +302,9 @@ async def call_hass_service(
     )
 
     try:
-        await hass.services.async_call(domain, service, service_data=service_data, target=target)
+        await hass.services.async_call(
+            domain, service, service_data=service_data, target=target
+        )
     except ServiceNotFound:
         _LOGGER.warning("Action Not Found: %s.%s", domain, service)
 
@@ -337,7 +351,11 @@ async def send_persistent_notification(
     )
 
 
-async def dismiss_persistent_notification(hass: HomeAssistant, notification_id: str) -> None:
+async def dismiss_persistent_notification(
+    hass: HomeAssistant, notification_id: str
+) -> None:
     """Clear or dismisss a persistent notification."""
-    _LOGGER.debug("[dismiss_persistent_notification] notification_id: %s", notification_id)
+    _LOGGER.debug(
+        "[dismiss_persistent_notification] notification_id: %s", notification_id
+    )
     persistent_notification.async_dismiss(hass=hass, notification_id=notification_id)

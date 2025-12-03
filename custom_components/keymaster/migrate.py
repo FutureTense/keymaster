@@ -69,7 +69,9 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
         ent = hass.states.get(ent_id)
         if not ent:
             continue
-        await _migrate_2to3_set_property_value(kmlock=kmlock, prop=prop, value=ent.state)
+        await _migrate_2to3_set_property_value(
+            kmlock=kmlock, prop=prop, value=ent.state
+        )
     _LOGGER.debug("[migrate_2to3] kmlock: %s", kmlock)
     hass.data.setdefault(DOMAIN, {})
     if COORDINATOR not in hass.data[DOMAIN]:
@@ -89,8 +91,13 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
 
     # Delete Package files
     _LOGGER.info("[migrate_2to3] Deleting Package files")
-    await hass.async_add_executor_job(_migrate_2to3_delete_lock_and_base_folder, hass, config_entry)
-    await _migrate_2to3_reload_package_platforms(hass=hass)
+    await hass.async_add_executor_job(
+        _migrate_2to3_delete_lock_and_base_folder, hass, config_entry
+    )
+
+    # FIX: Check the return value. If reload fails, abort migration.
+    if not await _migrate_2to3_reload_package_platforms(hass=hass):
+        return False
 
     # Delete existing integration entities
     _LOGGER.info("[migrate_2to3] Deleting existing integration entities")
@@ -142,7 +149,9 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
     ):
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(DAY_NAMES):
-            dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
+            dow_slots[i] = KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i, day_of_week_name=dow
+            )
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     return KeymasterLock(
@@ -164,7 +173,9 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
     )
 
 
-async def _migrate_2to3_set_property_value(kmlock: KeymasterLock, prop: str, value: Any) -> bool:
+async def _migrate_2to3_set_property_value(
+    kmlock: KeymasterLock, prop: str, value: Any
+) -> bool:
     if "." not in prop:
         return False
 
@@ -182,8 +193,10 @@ async def _migrate_2to3_set_property_value(kmlock: KeymasterLock, prop: str, val
     final_prop: str = prop_list[-1]
     if ":" in final_prop:
         attr, num = final_prop.split(":")
-        getattr(obj, attr)[int(num)] = await _migrate_2to3_validate_and_convert_property(
-            prop=prop, attr=attr, value=value
+        getattr(obj, attr)[int(num)] = (
+            await _migrate_2to3_validate_and_convert_property(
+                prop=prop, attr=attr, value=value
+            )
         )
     else:
         setattr(
@@ -197,7 +210,9 @@ async def _migrate_2to3_set_property_value(kmlock: KeymasterLock, prop: str, val
     return True
 
 
-async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, value: Any) -> Any:
+async def _migrate_2to3_validate_and_convert_property(
+    prop: str, attr: str, value: Any
+) -> Any:
     if keymasterlock_type_lookup.get(attr) is not None and isinstance(
         value, keymasterlock_type_lookup.get(attr, object)
     ):
@@ -211,7 +226,9 @@ async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, valu
         except ValueError:
             try:
                 time_obj: dt = dt.strptime(value, "%H:%M:%S")
-                value = round(time_obj.hour * 60 + time_obj.minute + round(time_obj.second))
+                value = round(
+                    time_obj.hour * 60 + time_obj.minute + round(time_obj.second)
+                )
             except ValueError:
                 _LOGGER.debug(
                     "[migrate_2to3_set_property_value] Value Type Mismatch, cannot convert str to int. Property: %s, final_prop: %s, value: %s. Type: %s, Expected Type: %s",
@@ -308,7 +325,9 @@ async def _migrate_2to3_reload_package_platforms(hass: HomeAssistant) -> bool:
         TIMER_DOMAIN,
     ]:
         if hass.services.has_service(domain=domain, service=SERVICE_RELOAD):
-            await hass.services.async_call(domain=domain, service=SERVICE_RELOAD, blocking=True)
+            await hass.services.async_call(
+                domain=domain, service=SERVICE_RELOAD, blocking=True
+            )
         else:
             _LOGGER.warning("Reload service not found for domain: %s", domain)
             return False

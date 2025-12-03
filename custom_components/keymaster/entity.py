@@ -36,18 +36,26 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self._config_entry: ConfigEntry = entity_description.config_entry
         self.entity_description: KeymasterEntityDescription = entity_description
         self._attr_available = False
-        self._property: str = entity_description.key  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
-        self._kmlock: KeymasterLock | None = self.coordinator.sync_get_lock_by_config_entry_id(
-            self._config_entry.entry_id
+        self._property: str = (
+            entity_description.key
+        )  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
+        self._kmlock: KeymasterLock | None = (
+            self.coordinator.sync_get_lock_by_config_entry_id(
+                self._config_entry.entry_id
+            )
         )
         if self._kmlock:
-            self._attr_name: str | None = f"{self._kmlock.lock_name} {self.entity_description.name}"
+            self._attr_name: str | None = (
+                f"{self._kmlock.lock_name} {self.entity_description.name}"
+            )
         # _LOGGER.debug(
         #     "[Entity init] entity_description.name: %s, name: %s",
         #     self.entity_description.name,
         #     self.name,
         # )
-        self._attr_unique_id: str = f"{self._config_entry.entry_id}_{slugify(self._property)}"
+        self._attr_unique_id: str = (
+            f"{self._config_entry.entry_id}_{slugify(self._property)}"
+        )
         # _LOGGER.debug(
         #     "[Entity init] %s: property: %s, unique_id: %s",
         #     self.name,
