@@ -13,7 +13,7 @@ ISSUE_URL = "https://github.com/FutureTense/keymaster"
 
 # Strategy module constants
 FILES_URL_BASE = f"/{DOMAIN}_files"
-STRATEGY_FILENAME = "keymaster-lovelace-strategy.js"
+STRATEGY_FILENAME = "keymaster.js"
 STRATEGY_PATH = f"{FILES_URL_BASE}/{STRATEGY_FILENAME}"
 PLATFORMS: list = [
     Platform.BINARY_SENSOR,

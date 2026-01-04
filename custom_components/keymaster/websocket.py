@@ -10,6 +10,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.util import slugify
 
 from .const import (
     CONF_ADVANCED_DATE_RANGE,
@@ -37,12 +38,12 @@ async def async_setup(hass: HomeAssistant) -> None:
         vol.Schema(
             {
                 vol.Required("type"): f"{DOMAIN}/get_view_config",
+                vol.Optional("lock_name"): str,
                 vol.Optional("config_entry_id"): str,
-                vol.Optional("config_entry_title"): str,
             }
         ),
-        cv.has_at_least_one_key("config_entry_id", "config_entry_title"),
-        cv.has_at_most_one_key("config_entry_id", "config_entry_title"),
+        cv.has_at_least_one_key("lock_name", "config_entry_id"),
+        cv.has_at_most_one_key("lock_name", "config_entry_id"),
     )
 )
 @websocket_api.async_response
@@ -54,26 +55,29 @@ async def ws_get_view_config(
     """Handle get view config websocket command.
 
     Returns the complete Lovelace view configuration for a keymaster lock.
-    Requires either config_entry_id or config_entry_title (but not both).
+    Accepts either lock_name (user-facing) or config_entry_id (internal).
     """
+    lock_name = msg.get("lock_name")
     config_entry_id = msg.get("config_entry_id")
-    config_entry_title = msg.get("config_entry_title")
 
     # Find the config entry
     config_entry = None
+    lock_name_slug = slugify(lock_name).lower() if lock_name else None
     for entry in hass.config_entries.async_entries(DOMAIN):
         if config_entry_id and entry.entry_id == config_entry_id:
             config_entry = entry
             break
-        if config_entry_title and entry.title == config_entry_title:
-            config_entry = entry
-            break
+        if lock_name_slug:
+            entry_lock_name = entry.data.get(CONF_LOCK_NAME, "")
+            if slugify(entry_lock_name).lower() == lock_name_slug:
+                config_entry = entry
+                break
 
     if config_entry is None:
         connection.send_error(
             msg["id"],
-            "config_entry_not_found",
-            f"Config entry not found: {config_entry_id or config_entry_title}",
+            "lock_not_found",
+            f"Lock not found: {lock_name or config_entry_id}",
         )
         return
 

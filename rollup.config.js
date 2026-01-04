@@ -8,7 +8,7 @@ const dev = process.env.ROLLUP_WATCH;
 export default {
     input: 'lovelace_strategy/main.ts',
     output: {
-        file: 'custom_components/keymaster/www/keymaster-lovelace-strategy.js',
+        file: 'custom_components/keymaster/www/keymaster.js',
         format: 'es'
     },
     plugins: [

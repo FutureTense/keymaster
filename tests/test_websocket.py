@@ -47,8 +47,7 @@ async def test_async_setup_registers_command(hass: HomeAssistant):
 
 @pytest.mark.asyncio
 async def test_ws_get_view_config_by_entry_id(hass: HomeAssistant):
-    """Test getting view config by config entry ID."""
-    # Import the undecorated inner function for testing
+    """Test getting view config by config entry ID (internal use)."""
     from custom_components.keymaster import websocket
 
     mock_config_entry = MockConfigEntry(
@@ -78,7 +77,6 @@ async def test_ws_get_view_config_by_entry_id(hass: HomeAssistant):
         "generate_view_config",
         side_effect=mock_generate,
     ) as mock_gen:
-        # Call the wrapped handler's __wrapped__ to bypass decorators
         await websocket.ws_get_view_config.__wrapped__(
             hass,
             mock_connection,
@@ -98,13 +96,13 @@ async def test_ws_get_view_config_by_entry_id(hass: HomeAssistant):
 
 
 @pytest.mark.asyncio
-async def test_ws_get_view_config_by_title(hass: HomeAssistant):
-    """Test getting view config by config entry title."""
+async def test_ws_get_view_config_by_lock_name(hass: HomeAssistant):
+    """Test getting view config by lock name."""
     from custom_components.keymaster import websocket
 
     mock_config_entry = MockConfigEntry(
         domain=DOMAIN,
-        title="frontdoor",
+        title="Front Door",  # Title can differ from lock_name
         entry_id="test_entry_id",
         data={
             CONF_LOCK_NAME: "frontdoor",
@@ -129,7 +127,7 @@ async def test_ws_get_view_config_by_title(hass: HomeAssistant):
         await websocket.ws_get_view_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_view_config", "config_entry_title": "frontdoor"},
+            {"id": 1, "type": f"{DOMAIN}/get_view_config", "lock_name": "frontdoor"},
         )
 
         mock_connection.send_result.assert_called_once_with(1, mock_view)
@@ -137,7 +135,7 @@ async def test_ws_get_view_config_by_title(hass: HomeAssistant):
 
 @pytest.mark.asyncio
 async def test_ws_get_view_config_not_found(hass: HomeAssistant):
-    """Test error when config entry not found."""
+    """Test error when lock not found."""
     from custom_components.keymaster import websocket
 
     mock_connection = _create_mock_connection()
@@ -145,23 +143,23 @@ async def test_ws_get_view_config_not_found(hass: HomeAssistant):
     await websocket.ws_get_view_config.__wrapped__(
         hass,
         mock_connection,
-        {"id": 1, "type": f"{DOMAIN}/get_view_config", "config_entry_id": "nonexistent"},
+        {"id": 1, "type": f"{DOMAIN}/get_view_config", "lock_name": "nonexistent"},
     )
 
     mock_connection.send_error.assert_called_once()
     error_args = mock_connection.send_error.call_args[0]
     assert error_args[0] == 1
-    assert error_args[1] == "config_entry_not_found"
+    assert error_args[1] == "lock_not_found"
 
 
 @pytest.mark.asyncio
 async def test_ws_get_view_config_missing_identifier(hass: HomeAssistant):
-    """Test error when neither config_entry_id nor config_entry_title provided.
+    """Test error when neither lock_name nor config_entry_id provided.
 
     Note: The validation (has_at_least_one_key) happens in the decorator's schema.
     When calling __wrapped__ directly we bypass the decorator, so this test
     verifies the function's behavior when called with no identifiers (falls through
-    to config_entry_not_found since no config entry can be found).
+    to lock_not_found since no lock can be found).
     """
     from custom_components.keymaster import websocket
 
@@ -174,11 +172,11 @@ async def test_ws_get_view_config_missing_identifier(hass: HomeAssistant):
     )
 
     # When bypassing the decorator, no validation happens, so it falls through
-    # to the config_entry_not_found error
+    # to the lock_not_found error
     mock_connection.send_error.assert_called_once()
     error_args = mock_connection.send_error.call_args[0]
     assert error_args[0] == 1
-    assert error_args[1] == "config_entry_not_found"
+    assert error_args[1] == "lock_not_found"
 
 
 @pytest.mark.asyncio
@@ -212,7 +210,7 @@ async def test_ws_get_view_config_passes_door_sensor(hass: HomeAssistant):
         await websocket.ws_get_view_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_view_config", "config_entry_id": "test_entry_id"},
+            {"id": 1, "type": f"{DOMAIN}/get_view_config", "lock_name": "frontdoor"},
         )
 
         call_kwargs = mock_gen.call_args[1]
@@ -250,7 +248,7 @@ async def test_ws_get_view_config_passes_parent_entry(hass: HomeAssistant):
         await websocket.ws_get_view_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_view_config", "config_entry_id": "child_entry_id"},
+            {"id": 1, "type": f"{DOMAIN}/get_view_config", "lock_name": "backdoor"},
         )
 
         call_kwargs = mock_gen.call_args[1]
@@ -285,7 +283,7 @@ async def test_ws_get_view_config_defaults(hass: HomeAssistant):
         await websocket.ws_get_view_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_view_config", "config_entry_id": "minimal_id"},
+            {"id": 1, "type": f"{DOMAIN}/get_view_config", "lock_name": "minimal"},
         )
 
         call_kwargs = mock_gen.call_args[1]
@@ -300,7 +298,7 @@ async def test_ws_get_view_config_defaults(hass: HomeAssistant):
 
 @pytest.mark.asyncio
 async def test_ws_get_view_config_multiple_entries(hass: HomeAssistant):
-    """Test finding correct entry among multiple."""
+    """Test finding correct entry among multiple by lock_name."""
     from custom_components.keymaster import websocket
 
     entry1 = MockConfigEntry(
@@ -330,7 +328,7 @@ async def test_ws_get_view_config_multiple_entries(hass: HomeAssistant):
         await websocket.ws_get_view_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_view_config", "config_entry_id": "entry2"},
+            {"id": 1, "type": f"{DOMAIN}/get_view_config", "lock_name": "backdoor"},
         )
 
         call_kwargs = mock_gen.call_args[1]

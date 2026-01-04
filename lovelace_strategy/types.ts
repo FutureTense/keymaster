@@ -20,7 +20,6 @@ export interface KeymasterDashboardStrategyConfig {
 }
 
 export interface KeymasterViewStrategyConfig {
-    config_entry_id?: string;
-    config_entry_title?: string;
+    lock_name: string;
     type: 'custom:keymaster';
 }
