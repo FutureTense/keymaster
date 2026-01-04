@@ -244,6 +244,20 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
                 delay=20,
                 action=functools.partial(delete_coordinator, hass),
             )
+
+    # Clean up strategy resource if no other keymaster entries need it
+    remaining_entries = [
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.entry_id != config_entry.entry_id
+    ]
+    if not remaining_entries:
+        _LOGGER.debug(
+            "[async_unload_entry] Last keymaster entry unloaded, cleaning up strategy resource"
+        )
+        hass_data = hass.data.get(DOMAIN, {})
+        await async_cleanup_strategy_resource(hass, hass_data)
+
     return unload_ok
 
 
@@ -259,7 +273,6 @@ async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
         _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")
         await hass.async_add_executor_job(coordinator.delete_json)
         await coordinator.async_shutdown()
-        await async_cleanup_strategy_resource(hass, hass_data)
         hass.data.pop(DOMAIN, None)
 
 
