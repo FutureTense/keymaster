@@ -84,8 +84,6 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up is called when Home Assistant is loading our component."""
-    hass.data.setdefault(DOMAIN, {})
-
     updated_config = config_entry.data.copy()
 
     for prop in [
