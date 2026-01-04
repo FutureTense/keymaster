@@ -5,10 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.lovelace.const import (
-    CONF_RESOURCE_TYPE_WS,
-    DOMAIN as LL_DOMAIN,
-)
+from homeassistant.components.lovelace.const import CONF_RESOURCE_TYPE_WS, DOMAIN as LL_DOMAIN
 from homeassistant.components.lovelace.resources import (
     ResourceStorageCollection,
     ResourceYAMLCollection,
@@ -36,7 +33,7 @@ async def async_register_strategy_resource(hass: HomeAssistant) -> None:
     if not resources:
         return
 
-    if not resources.loaded:
+    if isinstance(resources, ResourceStorageCollection) and not resources.loaded:
         await resources.async_load()
         _LOGGER.debug("Manually loaded resources")
         resources.loaded = True
@@ -77,12 +74,13 @@ async def async_cleanup_strategy_resource(
     if not resources:
         return
 
-    if isinstance(resources, ResourceYAMLCollection) and hass_data.get("resources"):
-        _LOGGER.debug(
-            "Resources switched to YAML mode after registration, "
-            "skipping automatic removal for %s",
-            STRATEGY_PATH,
-        )
+    if isinstance(resources, ResourceYAMLCollection):
+        if hass_data.get("resources"):
+            _LOGGER.debug(
+                "Resources switched to YAML mode after registration, "
+                "skipping automatic removal for %s",
+                STRATEGY_PATH,
+            )
         return
 
     if not hass_data.get("resources"):

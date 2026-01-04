@@ -83,11 +83,11 @@ async def ws_get_view_config(
 
     view_config = await generate_view_config(
         hass=hass,
-        kmlock_name=config_entry.data.get(CONF_LOCK_NAME),
+        kmlock_name=config_entry.data[CONF_LOCK_NAME],
         keymaster_config_entry_id=config_entry.entry_id,
         code_slot_start=config_entry.data.get(CONF_START, 1),
         code_slots=config_entry.data.get(CONF_SLOTS, 0),
-        lock_entity=config_entry.data.get(CONF_LOCK_ENTITY_ID),
+        lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
         advanced_date_range=config_entry.data.get(CONF_ADVANCED_DATE_RANGE, True),
         advanced_day_of_week=config_entry.data.get(CONF_ADVANCED_DAY_OF_WEEK, True),
         door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),

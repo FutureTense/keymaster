@@ -3,9 +3,9 @@
 import logging
 from unittest.mock import MagicMock, patch
 
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.keymaster import websocket
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
@@ -31,7 +31,6 @@ def _create_mock_connection():
     return connection
 
 
-@pytest.mark.asyncio
 async def test_async_setup_registers_command(hass: HomeAssistant):
     """Test that async_setup registers the WebSocket command."""
     with patch(
@@ -45,10 +44,8 @@ async def test_async_setup_registers_command(hass: HomeAssistant):
         assert registered_func.__name__ == "ws_get_view_config"
 
 
-@pytest.mark.asyncio
 async def test_ws_get_view_config_by_entry_id(hass: HomeAssistant):
     """Test getting view config by config entry ID (internal use)."""
-    from custom_components.keymaster import websocket
 
     mock_config_entry = MockConfigEntry(
         domain=DOMAIN,
@@ -95,10 +92,8 @@ async def test_ws_get_view_config_by_entry_id(hass: HomeAssistant):
         mock_connection.send_result.assert_called_once_with(1, mock_view)
 
 
-@pytest.mark.asyncio
 async def test_ws_get_view_config_by_lock_name(hass: HomeAssistant):
     """Test getting view config by lock name."""
-    from custom_components.keymaster import websocket
 
     mock_config_entry = MockConfigEntry(
         domain=DOMAIN,
@@ -133,10 +128,8 @@ async def test_ws_get_view_config_by_lock_name(hass: HomeAssistant):
         mock_connection.send_result.assert_called_once_with(1, mock_view)
 
 
-@pytest.mark.asyncio
 async def test_ws_get_view_config_not_found(hass: HomeAssistant):
     """Test error when lock not found."""
-    from custom_components.keymaster import websocket
 
     mock_connection = _create_mock_connection()
 
@@ -152,7 +145,6 @@ async def test_ws_get_view_config_not_found(hass: HomeAssistant):
     assert error_args[1] == "lock_not_found"
 
 
-@pytest.mark.asyncio
 async def test_ws_get_view_config_missing_identifier(hass: HomeAssistant):
     """Test error when neither lock_name nor config_entry_id provided.
 
@@ -161,7 +153,6 @@ async def test_ws_get_view_config_missing_identifier(hass: HomeAssistant):
     verifies the function's behavior when called with no identifiers (falls through
     to lock_not_found since no lock can be found).
     """
-    from custom_components.keymaster import websocket
 
     mock_connection = _create_mock_connection()
 
@@ -179,10 +170,8 @@ async def test_ws_get_view_config_missing_identifier(hass: HomeAssistant):
     assert error_args[1] == "lock_not_found"
 
 
-@pytest.mark.asyncio
 async def test_ws_get_view_config_passes_door_sensor(hass: HomeAssistant):
     """Test that door sensor is passed to generate_view_config."""
-    from custom_components.keymaster import websocket
 
     mock_config_entry = MockConfigEntry(
         domain=DOMAIN,
@@ -217,10 +206,8 @@ async def test_ws_get_view_config_passes_door_sensor(hass: HomeAssistant):
         assert call_kwargs["door_sensor"] == "binary_sensor.frontdoor"
 
 
-@pytest.mark.asyncio
 async def test_ws_get_view_config_passes_parent_entry(hass: HomeAssistant):
     """Test that parent entry ID is passed for child locks."""
-    from custom_components.keymaster import websocket
 
     child_entry = MockConfigEntry(
         domain=DOMAIN,
@@ -255,10 +242,8 @@ async def test_ws_get_view_config_passes_parent_entry(hass: HomeAssistant):
         assert call_kwargs["parent_config_entry_id"] == "parent_entry_id"
 
 
-@pytest.mark.asyncio
 async def test_ws_get_view_config_defaults(hass: HomeAssistant):
     """Test default values are used when config data is missing."""
-    from custom_components.keymaster import websocket
 
     minimal_entry = MockConfigEntry(
         domain=DOMAIN,
@@ -296,10 +281,8 @@ async def test_ws_get_view_config_defaults(hass: HomeAssistant):
         assert call_kwargs["parent_config_entry_id"] is None
 
 
-@pytest.mark.asyncio
 async def test_ws_get_view_config_multiple_entries(hass: HomeAssistant):
     """Test finding correct entry among multiple by lock_name."""
-    from custom_components.keymaster import websocket
 
     entry1 = MockConfigEntry(
         domain=DOMAIN,

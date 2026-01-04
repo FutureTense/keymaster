@@ -8,7 +8,6 @@ from datetime import datetime as dt, timedelta
 import functools
 import logging
 from pathlib import Path
-from typing import Any
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
@@ -67,7 +66,7 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
-                STRATEGY_PATH, Path(__file__).parent / "www" / STRATEGY_FILENAME, False
+                STRATEGY_PATH, str(Path(__file__).parent / "www" / STRATEGY_FILENAME), False
             )
         ]
     )
