@@ -61,7 +61,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     """Set up integration."""
-    hass.data.setdefault(DOMAIN, {COORDINATOR: None, "resources": False})
+    hass.data.setdefault(DOMAIN, {"resources": False})
 
     # Expose strategy javascript
     await hass.http.async_register_static_paths(
