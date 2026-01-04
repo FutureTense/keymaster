@@ -1,0 +1,57 @@
+import { ReactiveElement } from 'lit';
+
+import { DOMAIN } from './const';
+import { HomeAssistant } from './ha_type_stubs';
+import { createErrorView } from './strategy-utils';
+import { GetConfigEntriesResponse, KeymasterDashboardStrategyConfig } from './types';
+
+/** Message shown when no Keymaster configurations exist */
+export const NO_CONFIG_MESSAGE = '# No Keymaster configurations found!';
+
+/** Zero-width space used as placeholder title for single-view hack */
+export const ZERO_WIDTH_SPACE = '\u200B';
+
+/** Simple slugify to match Home Assistant's slugify for path generation */
+function slugify(text: string): string {
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '');
+}
+
+export class KeymasterDashboardStrategy extends ReactiveElement {
+    static async generate(config: KeymasterDashboardStrategyConfig, hass: HomeAssistant) {
+        const configEntries = await hass.callWS<GetConfigEntriesResponse>({
+            domain: DOMAIN,
+            type: 'config_entries/get'
+        });
+
+        if (configEntries.length === 0) {
+            return {
+                title: 'Keymaster',
+                views: [createErrorView(NO_CONFIG_MESSAGE)]
+            };
+        }
+
+        const views: object[] = configEntries.map((configEntry) => {
+            return {
+                path: `keymaster_${slugify(configEntry.title)}`,
+                strategy: {
+                    config_entry_id: configEntry.entry_id,
+                    type: 'custom:keymaster'
+                },
+                title: configEntry.title
+            };
+        });
+
+        // Single view hack: add placeholder to force tab visibility
+        if (views.length === 1) {
+            views.push({ title: ZERO_WIDTH_SPACE });
+        }
+
+        return {
+            title: 'Keymaster',
+            views
+        };
+    }
+}

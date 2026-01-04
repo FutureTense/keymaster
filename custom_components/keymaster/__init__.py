@@ -7,9 +7,13 @@ from collections.abc import MutableMapping
 from datetime import datetime as dt, timedelta
 import functools
 import logging
+from pathlib import Path
+from typing import Any
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.core_config import Config
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.event import async_call_later
@@ -40,15 +44,42 @@ from .const import (
     DOMAIN,
     NONE_TEXT,
     PLATFORMS,
+    STRATEGY_FILENAME,
+    STRATEGY_PATH,
 )
 from .coordinator import KeymasterCoordinator
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 from .lovelace import generate_lovelace
 from .migrate import migrate_2to3
+from .resources import async_cleanup_strategy_resource, async_register_strategy_resource
 from .services import async_setup_services
+from .websocket import async_setup as async_websocket_setup
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: Config) -> bool:
+    """Set up integration."""
+    hass.data.setdefault(DOMAIN, {COORDINATOR: None, "resources": False})
+
+    # Expose strategy javascript
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                STRATEGY_PATH, Path(__file__).parent / "www" / STRATEGY_FILENAME, False
+            )
+        ]
+    )
+    _LOGGER.debug("Exposed strategy module at %s", STRATEGY_PATH)
+
+    await async_register_strategy_resource(hass)
+
+    # Set up websocket API
+    await async_websocket_setup(hass)
+    _LOGGER.debug("Finished setting up websocket API")
+
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -219,11 +250,16 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
     """Delete the coordinator if no more kmlock entities exist."""
     # _LOGGER.debug("[delete_coordinator] Triggered")
-    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    hass_data = hass.data.get(DOMAIN, {})
+    coordinator: KeymasterCoordinator | None = hass_data.get(COORDINATOR)
+    if coordinator is None:
+        return
+
     if len(coordinator.data) == 0:
         _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")
         await hass.async_add_executor_job(coordinator.delete_json)
         await coordinator.async_shutdown()
+        await async_cleanup_strategy_resource(hass, hass_data)
         hass.data.pop(DOMAIN, None)
 
 

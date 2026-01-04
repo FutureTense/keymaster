@@ -19,7 +19,7 @@ from .const import DAY_NAMES, DOMAIN
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-async def generate_lovelace(
+async def generate_view_config(
     hass: HomeAssistant,
     kmlock_name: str,
     keymaster_config_entry_id: str,
@@ -30,12 +30,11 @@ async def generate_lovelace(
     advanced_day_of_week: bool,
     door_sensor: str | None = None,
     parent_config_entry_id: str | None = None,
-) -> None:
-    """Create the lovelace file for the keymaster lock."""
-    folder: str = hass.config.path("custom_components", DOMAIN, "lovelace")
-    filename: str = f"{kmlock_name}.yaml"
-    await hass.async_add_executor_job(_create_lovelace_folder, folder)
+) -> MutableMapping[str, Any]:
+    """Generate the Lovelace view configuration for a keymaster lock.
 
+    Returns the view configuration as a dict (for WebSocket/strategy use).
+    """
     badges_list: list[MutableMapping[str, Any]] = await _generate_lock_badges(
         child=bool(parent_config_entry_id),
         door=bool(door_sensor is not None),
@@ -82,16 +81,46 @@ async def generate_lovelace(
             parent_config_entry_id=parent_config_entry_id,
         )
     )
-    lovelace: list[MutableMapping[str, Any]] = [
-        {
-            "type": "sections",
-            "max_columns": 4,
-            "title": f"{kmlock_name}",
-            "path": f"keymaster_{kmlock_name}",
-            "badges": mapped_badges_list,
-            "sections": lovelace_list,
-        }
-    ]
+    return {
+        "type": "sections",
+        "max_columns": 4,
+        "title": f"{kmlock_name}",
+        "path": f"keymaster_{slugify(kmlock_name)}",
+        "badges": mapped_badges_list,
+        "sections": lovelace_list,
+    }
+
+
+async def generate_lovelace(
+    hass: HomeAssistant,
+    kmlock_name: str,
+    keymaster_config_entry_id: str,
+    code_slot_start: int,
+    code_slots: int,
+    lock_entity: str,
+    advanced_date_range: bool,
+    advanced_day_of_week: bool,
+    door_sensor: str | None = None,
+    parent_config_entry_id: str | None = None,
+) -> None:
+    """Create the lovelace file for the keymaster lock."""
+    folder: str = hass.config.path("custom_components", DOMAIN, "lovelace")
+    filename: str = f"{kmlock_name}.yaml"
+    await hass.async_add_executor_job(_create_lovelace_folder, folder)
+
+    view_config = await generate_view_config(
+        hass=hass,
+        kmlock_name=kmlock_name,
+        keymaster_config_entry_id=keymaster_config_entry_id,
+        code_slot_start=code_slot_start,
+        code_slots=code_slots,
+        lock_entity=lock_entity,
+        advanced_date_range=advanced_date_range,
+        advanced_day_of_week=advanced_day_of_week,
+        door_sensor=door_sensor,
+        parent_config_entry_id=parent_config_entry_id,
+    )
+    lovelace: list[MutableMapping[str, Any]] = [view_config]
     await hass.async_add_executor_job(_write_lovelace_yaml, folder, filename, lovelace)
 
 
