@@ -31,6 +31,14 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     return
 
 
+@pytest.fixture(autouse=True)
+def mock_hass_http(hass: HomeAssistant):
+    """Mock hass.http for static path registration."""
+    hass.http = MagicMock()
+    hass.http.async_register_static_paths = AsyncMock()
+    return hass.http
+
+
 @pytest.fixture(name="skip_notifications", autouse=True)
 def skip_notifications_fixture():
     """Skip notification calls."""
