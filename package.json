@@ -6,7 +6,7 @@
   "description": "Keymaster Lovelace Dashboard Strategy",
   "repository": {
     "type": "git",
-    "url": "github.com:FutureTense/keymaster"
+    "url": "git+https://github.com/FutureTense/keymaster.git"
   },
   "keywords": [],
   "author": "FutureTense",
