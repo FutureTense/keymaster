@@ -1,0 +1,20 @@
+coverage:
+  status:
+    project:
+      python:
+        flags:
+          - python
+      typescript:
+        flags:
+          - typescript
+    patch:
+      python:
+        flags:
+          - python
+      typescript:
+        flags:
+          - typescript
+
+flag_management:
+  default_rules:
+    carryforward: true
