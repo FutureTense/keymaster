@@ -47,7 +47,6 @@ def mock_coordinator():
     return coordinator
 
 
-@pytest.mark.asyncio
 async def test_migrate_2to3_success(hass: HomeAssistant, mock_coordinator):
     """Test successful migration from version 2 to 3."""
     config_entry = MockConfigEntry(
@@ -118,7 +117,6 @@ async def test_migrate_2to3_success(hass: HomeAssistant, mock_coordinator):
         mock_registry.async_remove.assert_any_call("binary_sensor.frontdoor_network")
 
 
-@pytest.mark.asyncio
 async def test_migrate_2to3_coordinator_failure(hass: HomeAssistant, mock_coordinator):
     """Test migration fails if coordinator setup fails."""
     config_entry = MockConfigEntry(
@@ -145,7 +143,6 @@ async def test_migrate_2to3_coordinator_failure(hass: HomeAssistant, mock_coordi
         await migrate_2to3(hass, config_entry)
 
 
-@pytest.mark.asyncio
 async def test_migrate_2to3_reload_failure(hass: HomeAssistant, mock_coordinator):
     """Test migration aborts if package reload fails."""
     config_entry = MockConfigEntry(

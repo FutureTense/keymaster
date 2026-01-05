@@ -49,7 +49,6 @@ def _extract_entity_refs(entities: list) -> list:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_basic(hass: HomeAssistant):
     """Test generating basic view configuration."""
     mock_registry = _create_mock_registry()
@@ -90,7 +89,6 @@ async def test_generate_view_config_basic(hass: HomeAssistant):
     assert len(sections) == 2  # 2 code slots
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_sections_structure(hass: HomeAssistant):
     """Test code slot section structure."""
     mock_registry = _create_mock_registry()
@@ -133,7 +131,6 @@ async def test_generate_view_config_sections_structure(hass: HomeAssistant):
     assert entities_card["state_color"] is True
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_slot_entities(hass: HomeAssistant):
     """Test code slot contains expected entities."""
     mock_registry = _create_mock_registry()
@@ -172,7 +169,6 @@ async def test_generate_view_config_slot_entities(hass: HomeAssistant):
         assert any(pattern in str(e) for e in all_entity_refs), f"Missing entity: {pattern}"
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_custom_slot_start(hass: HomeAssistant):
     """Test code slots with custom start number."""
     mock_registry = _create_mock_registry()
@@ -200,7 +196,6 @@ async def test_generate_view_config_custom_slot_start(hass: HomeAssistant):
     assert sections[1]["cards"][0]["heading"] == "Code Slot 11"
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_badges_no_door(hass: HomeAssistant):
     """Test badges when no door sensor is configured."""
     mock_registry = _create_mock_registry()
@@ -233,7 +228,6 @@ async def test_generate_view_config_badges_no_door(hass: HomeAssistant):
     assert not any(b.get("name") == "Door Notifications" for b in badges)
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_badges_with_door(hass: HomeAssistant):
     """Test badges when door sensor is configured."""
     mock_registry = _create_mock_registry()
@@ -266,7 +260,6 @@ async def test_generate_view_config_badges_with_door(hass: HomeAssistant):
     assert any(b.get("name") == "Retry Lock" for b in badges)
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_advanced_date_range(hass: HomeAssistant):
     """Test view configuration with advanced date range enabled."""
     mock_registry = _create_mock_registry()
@@ -297,7 +290,6 @@ async def test_generate_view_config_advanced_date_range(hass: HomeAssistant):
     assert any("accesslimit_date_range_end" in str(e) for e in all_entity_refs)
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_advanced_day_of_week(hass: HomeAssistant):
     """Test view configuration with advanced day of week enabled."""
     mock_registry = _create_mock_registry()
@@ -328,7 +320,6 @@ async def test_generate_view_config_advanced_day_of_week(hass: HomeAssistant):
     assert any("time_end" in str(e) for e in all_entity_refs)
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_child_lock(hass: HomeAssistant):
     """Test view configuration for a child lock."""
     mock_registry = _create_mock_registry()
@@ -369,7 +360,6 @@ async def test_generate_view_config_child_lock(hass: HomeAssistant):
     assert override_card["conditions"][0]["state"] == "on"
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_child_lock_parent_entities(hass: HomeAssistant):
     """Test child lock view includes parent entities with simple-entity type."""
     mock_registry = _create_mock_registry()
@@ -405,7 +395,6 @@ async def test_generate_view_config_child_lock_parent_entities(hass: HomeAssista
     assert "Enabled" in names
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_child_lock_override_parent(hass: HomeAssistant):
     """Test child lock has override parent switch somewhere in the view."""
     mock_registry = _create_mock_registry()
@@ -432,7 +421,6 @@ async def test_generate_view_config_child_lock_override_parent(hass: HomeAssista
     assert "override_parent" in view_str
 
 
-@pytest.mark.asyncio
 async def test_generate_view_config_slugified_path(hass: HomeAssistant):
     """Test path is properly slugified."""
     mock_registry = _create_mock_registry()
@@ -461,7 +449,6 @@ async def test_generate_view_config_slugified_path(hass: HomeAssistant):
 # =============================================================================
 
 
-@pytest.mark.asyncio
 async def test_generate_lovelace_creates_folder(hass: HomeAssistant):
     """Test that generate_lovelace creates the folder."""
     mock_registry = _create_mock_registry()
@@ -492,7 +479,6 @@ async def test_generate_lovelace_creates_folder(hass: HomeAssistant):
         assert "lovelace" in folder_path
 
 
-@pytest.mark.asyncio
 async def test_generate_lovelace_writes_yaml(hass: HomeAssistant):
     """Test that generate_lovelace writes YAML file."""
     mock_registry = _create_mock_registry()
@@ -529,7 +515,6 @@ async def test_generate_lovelace_writes_yaml(hass: HomeAssistant):
         assert len(lovelace_data) == 1
 
 
-@pytest.mark.asyncio
 async def test_generate_lovelace_filename_matches_lock_name(hass: HomeAssistant):
     """Test that filename matches lock name."""
     mock_registry = _create_mock_registry()
@@ -559,7 +544,6 @@ async def test_generate_lovelace_filename_matches_lock_name(hass: HomeAssistant)
         assert filename == "my_special_lock.yaml"
 
 
-@pytest.mark.asyncio
 async def test_generate_lovelace_delegates_to_view_config(hass: HomeAssistant):
     """Test that generate_lovelace delegates to generate_view_config."""
     mock_registry = _create_mock_registry()

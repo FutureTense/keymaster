@@ -475,7 +475,6 @@ async def test_keymaster_timer_properties(hass):
     )  # Time remaining (positive because end_time is in future)
 
 
-@pytest.mark.asyncio
 async def test_delete_code_slot_entities_removes_all(hass):
     """Test that delete_code_slot_entities attempts to remove all expected entities."""
     config_entry_id = "entry_123"
@@ -514,7 +513,6 @@ async def test_delete_code_slot_entities_removes_all(hass):
     )
 
 
-@pytest.mark.asyncio
 async def test_delete_code_slot_entities_handles_errors(hass):
     """Test that deletion errors are logged but don't stop the process."""
     mock_registry = MagicMock()

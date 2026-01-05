@@ -60,7 +60,6 @@ def test_get_lovelace_resources_returns_none_when_missing(hass: HomeAssistant):
     assert result is None
 
 
-@pytest.mark.asyncio
 async def test_register_strategy_resource_creates_new(
     hass: HomeAssistant, mock_storage_resources
 ):
@@ -78,7 +77,6 @@ async def test_register_strategy_resource_creates_new(
     assert hass.data[DOMAIN]["resources"] is True
 
 
-@pytest.mark.asyncio
 async def test_register_strategy_resource_already_exists(
     hass: HomeAssistant, mock_storage_resources
 ):
@@ -95,7 +93,6 @@ async def test_register_strategy_resource_already_exists(
     mock_storage_resources.async_create_item.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_register_strategy_resource_loads_if_needed(
     hass: HomeAssistant, mock_storage_resources
 ):
@@ -112,7 +109,6 @@ async def test_register_strategy_resource_loads_if_needed(
     assert mock_storage_resources.loaded is True
 
 
-@pytest.mark.asyncio
 async def test_register_strategy_resource_yaml_mode_warning(
     hass: HomeAssistant, mock_yaml_resources, caplog
 ):
@@ -128,7 +124,6 @@ async def test_register_strategy_resource_yaml_mode_warning(
     assert STRATEGY_PATH in caplog.text
 
 
-@pytest.mark.asyncio
 async def test_register_strategy_resource_no_resources(hass: HomeAssistant):
     """Test registering when no resources available."""
     # No lovelace domain
@@ -138,7 +133,6 @@ async def test_register_strategy_resource_no_resources(hass: HomeAssistant):
     await async_register_strategy_resource(hass)
 
 
-@pytest.mark.asyncio
 async def test_cleanup_strategy_resource_removes(
     hass: HomeAssistant, mock_storage_resources
 ):
@@ -154,7 +148,6 @@ async def test_cleanup_strategy_resource_removes(
     mock_storage_resources.async_delete_item.assert_called_once_with("resource_id")
 
 
-@pytest.mark.asyncio
 async def test_cleanup_strategy_resource_not_auto_registered(
     hass: HomeAssistant, mock_storage_resources
 ):
@@ -167,7 +160,6 @@ async def test_cleanup_strategy_resource_not_auto_registered(
     mock_storage_resources.async_delete_item.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_cleanup_strategy_resource_not_found(
     hass: HomeAssistant, mock_storage_resources
 ):
@@ -182,7 +174,6 @@ async def test_cleanup_strategy_resource_not_found(
     mock_storage_resources.async_delete_item.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_cleanup_strategy_resource_yaml_mode_skipped(
     hass: HomeAssistant, mock_yaml_resources, caplog
 ):
@@ -196,7 +187,6 @@ async def test_cleanup_strategy_resource_yaml_mode_skipped(
     assert "YAML mode" in caplog.text
 
 
-@pytest.mark.asyncio
 async def test_cleanup_strategy_resource_no_resources(hass: HomeAssistant):
     """Test cleanup when no resources available."""
     # No lovelace domain
