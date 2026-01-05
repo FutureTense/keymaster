@@ -14,7 +14,7 @@
   "scripts": {
     "build": "yarn install ; rollup -c",
     "watch": "rollup -c --watch",
-    "lint": "eslint --ext .ts ./ts",
+    "lint": "eslint --ext .ts ./lovelace_strategy",
     "lint:fix": "yarn lint --fix",
     "test": "vitest run",
     "test:watch": "vitest",
