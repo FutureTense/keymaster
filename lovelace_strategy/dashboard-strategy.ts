@@ -1,7 +1,7 @@
 import { ReactiveElement } from 'lit';
 
 import { DOMAIN } from './const';
-import { HomeAssistant, LovelaceViewConfig } from './ha_type_stubs';
+import { HomeAssistant } from './ha_type_stubs';
 import { createErrorView } from './strategy-utils';
 import { GetConfigEntriesResponse, KeymasterDashboardStrategyConfig } from './types';
 
@@ -30,24 +30,14 @@ export class KeymasterDashboardStrategy extends ReactiveElement {
             a.title.localeCompare(b.title)
         );
 
-        // Fetch view configs for all locks in parallel (using config_entry_id for efficiency)
-        const viewPromises = sortedEntries.map(async (configEntry) => {
-            try {
-                const viewConfig = await hass.callWS<LovelaceViewConfig>({
-                    config_entry_id: configEntry.entry_id,
-                    type: `${DOMAIN}/get_view_config`
-                });
-
-                return viewConfig;
-            } catch {
-                return createErrorView(
-                    `## ERROR: Failed to load view for \`${configEntry.title}\``,
-                    configEntry.title
-                );
-            }
-        });
-
-        const views = await Promise.all(viewPromises);
+        // Return view strategy configs - HA will call KeymasterViewStrategy for each
+        const views = sortedEntries.map((configEntry) => ({
+            strategy: {
+                config_entry_id: configEntry.entry_id,
+                type: `custom:${DOMAIN}`
+            },
+            title: configEntry.title
+        }));
 
         // Single view hack: add placeholder to force tab visibility
         if (views.length === 1) {
