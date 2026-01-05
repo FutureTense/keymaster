@@ -1,6 +1,9 @@
 import { LovelaceViewConfig } from './ha_type_stubs';
 
 export interface KeymasterConfigEntry {
+    data: {
+        lock_name: string;
+    };
     disabled_by: string;
     domain: string;
     entry_id: string;

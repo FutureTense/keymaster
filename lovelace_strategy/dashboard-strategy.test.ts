@@ -16,8 +16,9 @@ function createMockHass(overrides: Partial<HomeAssistant> = {}): HomeAssistant {
     } as unknown as HomeAssistant;
 }
 
-function createMockConfigEntry(title: string, entryId: string) {
+function createMockConfigEntry(lockName: string, entryId: string) {
     return {
+        data: { lock_name: lockName },
         disabled_by: '',
         domain: 'keymaster',
         entry_id: entryId,
@@ -29,7 +30,7 @@ function createMockConfigEntry(title: string, entryId: string) {
         supports_options: true,
         supports_remove_device: false,
         supports_unload: true,
-        title,
+        title: lockName,
     };
 }
 

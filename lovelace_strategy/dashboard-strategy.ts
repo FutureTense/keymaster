@@ -25,9 +25,9 @@ export class KeymasterDashboardStrategy extends ReactiveElement {
             };
         }
 
-        // Sort config entries alphabetically by title (lock name)
+        // Sort config entries alphabetically by lock name
         const sortedEntries = [...configEntries].sort((a, b) =>
-            a.title.localeCompare(b.title)
+            a.data.lock_name.localeCompare(b.data.lock_name)
         );
 
         // Return view strategy configs - HA will call KeymasterViewStrategy for each
@@ -36,7 +36,7 @@ export class KeymasterDashboardStrategy extends ReactiveElement {
                 config_entry_id: configEntry.entry_id,
                 type: `custom:${DOMAIN}`
             },
-            title: configEntry.title
+            title: configEntry.data.lock_name
         }));
 
         // Single view hack: add placeholder to force tab visibility
