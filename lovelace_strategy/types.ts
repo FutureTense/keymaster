@@ -24,5 +24,7 @@ export interface KeymasterViewStrategyConfig {
     config_entry_id?: string;
     /** Lock name - user-friendly option for manual view configuration */
     lock_name?: string;
+    /** Optional title override for the view tab */
+    title?: string;
     type: 'custom:keymaster';
 }

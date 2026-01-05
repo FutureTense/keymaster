@@ -125,5 +125,33 @@ describe('KeymasterViewStrategy', () => {
             expect(result.cards![0]).toHaveProperty('type', 'markdown');
             expect((result.cards![0] as { content: string }).content).toContain('nonexistent_id');
         });
+
+        it('uses generated title when no title override provided', async () => {
+            const mockView: LovelaceViewConfig = { title: 'Generated Title', cards: [] };
+            const hass = createMockHass({
+                callWS: vi.fn().mockResolvedValue(mockView),
+            });
+
+            const result = await KeymasterViewStrategy.generate(
+                { type: 'custom:keymaster', lock_name: 'Test Lock' },
+                hass
+            );
+
+            expect(result.title).toBe('Generated Title');
+        });
+
+        it('overrides title when title provided in config', async () => {
+            const mockView: LovelaceViewConfig = { title: 'Generated Title', cards: [] };
+            const hass = createMockHass({
+                callWS: vi.fn().mockResolvedValue(mockView),
+            });
+
+            const result = await KeymasterViewStrategy.generate(
+                { type: 'custom:keymaster', lock_name: 'Test Lock', title: 'Custom Title' },
+                hass
+            );
+
+            expect(result.title).toBe('Custom Title');
+        });
     });
 });

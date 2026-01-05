@@ -8,7 +8,7 @@ import { KeymasterViewStrategyConfig } from './types';
 
 export class KeymasterViewStrategy extends ReactiveElement {
     static async generate(config: KeymasterViewStrategyConfig, hass: HomeAssistant) {
-        const { config_entry_id, lock_name } = config;
+        const { config_entry_id, lock_name, title } = config;
 
         if (hass.config.state === STATE_NOT_RUNNING) {
             return createStartingView();
@@ -28,6 +28,10 @@ export class KeymasterViewStrategy extends ReactiveElement {
                 type: `${DOMAIN}/get_view_config`,
                 ...(config_entry_id ? { config_entry_id } : { lock_name })
             });
+            // Allow user to override the title from the strategy config
+            if (title) {
+                viewConfig.title = title;
+            }
             return viewConfig;
         } catch {
             const identifier = lock_name || config_entry_id || 'unknown';
