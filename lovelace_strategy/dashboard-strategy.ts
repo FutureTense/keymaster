@@ -25,8 +25,13 @@ export class KeymasterDashboardStrategy extends ReactiveElement {
             };
         }
 
-        // Fetch view configs for all locks in parallel
-        const viewPromises = configEntries.map(async (configEntry) => {
+        // Sort config entries alphabetically by title (lock name)
+        const sortedEntries = [...configEntries].sort((a, b) =>
+            a.title.localeCompare(b.title)
+        );
+
+        // Fetch view configs for all locks in parallel (using config_entry_id for efficiency)
+        const viewPromises = sortedEntries.map(async (configEntry) => {
             try {
                 const viewConfig = await hass.callWS<LovelaceViewConfig>({
                     config_entry_id: configEntry.entry_id,

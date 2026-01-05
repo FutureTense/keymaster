@@ -20,6 +20,9 @@ export interface KeymasterDashboardStrategyConfig {
 }
 
 export interface KeymasterViewStrategyConfig {
-    lock_name: string;
+    /** Config entry ID - used internally by dashboard strategy for efficiency */
+    config_entry_id?: string;
+    /** Lock name - user-friendly option for manual view configuration */
+    lock_name?: string;
     type: 'custom:keymaster';
 }
