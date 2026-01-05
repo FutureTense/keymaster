@@ -627,15 +627,14 @@ property-decorators = ["propcache.cached_property"]
 
 [tool.tox.gh-actions]
 python = """
-    3.11: py311
-    3.12: py312
     3.13: py313, lint, mypy
+    3.14: py314
 """
 
 [tool.tox]
 skipsdist = true
 requires = ["tox>=4.19"]
-env_list = ["py311", "py312", "py313", "lint", "mypy"]
+env_list = ["py313", "py314", "lint", "mypy"]
 skip_missing_interpreters = true
 
 [tool.tox.env_run_base]

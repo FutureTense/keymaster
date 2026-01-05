@@ -7,3 +7,14 @@ venv
 coverage.xml
 .tox
 ha-core/
+
+# Node.js / TypeScript build
+node_modules/
+yarn.lock
+package-lock.json
+
+# AI assistant files
+.claude/
+.cursor/
+.aider*
+.continue/
