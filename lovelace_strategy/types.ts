@@ -1,3 +1,5 @@
+import { LovelaceViewConfig } from './ha_type_stubs';
+
 export interface KeymasterConfigEntry {
     disabled_by: string;
     domain: string;
@@ -19,12 +21,13 @@ export interface KeymasterDashboardStrategyConfig {
     type: 'custom:keymaster';
 }
 
-export interface KeymasterViewStrategyConfig {
+/** View-level properties that can be overridden in the strategy config */
+type ViewOverrides = Pick<LovelaceViewConfig, 'icon' | 'path' | 'theme' | 'title' | 'visible'>;
+
+export interface KeymasterViewStrategyConfig extends ViewOverrides {
     /** Config entry ID - used internally by dashboard strategy for efficiency */
     config_entry_id?: string;
     /** Lock name - user-friendly option for manual view configuration */
     lock_name?: string;
-    /** Optional title override for the view tab */
-    title?: string;
     type: 'custom:keymaster';
 }

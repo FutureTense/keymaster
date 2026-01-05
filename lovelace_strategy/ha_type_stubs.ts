@@ -9,6 +9,11 @@ export interface HomeAssistant {
     callWS<T>(msg: MessageBase): Promise<T>;
 }
 
+/** Visibility condition for a view */
+export interface LovelaceViewVisibility {
+    user?: string;
+}
+
 export interface LovelaceViewConfig {
     badges?: Array<string | object>;
     cards?: object[];
@@ -16,6 +21,8 @@ export interface LovelaceViewConfig {
     max_columns?: number;
     path?: string;
     sections?: object[];
+    theme?: string;
     title?: string;
     type?: string;
+    visible?: boolean | LovelaceViewVisibility[];
 }

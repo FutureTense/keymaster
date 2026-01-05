@@ -153,5 +153,73 @@ describe('KeymasterViewStrategy', () => {
 
             expect(result.title).toBe('Custom Title');
         });
+
+        it('sets default path from slugified title when backend provides no path', async () => {
+            const mockView: LovelaceViewConfig = { title: 'Front Door Lock', cards: [] };
+            const hass = createMockHass({
+                callWS: vi.fn().mockResolvedValue(mockView),
+            });
+
+            const result = await KeymasterViewStrategy.generate(
+                { type: 'custom:keymaster', lock_name: 'frontdoor' },
+                hass
+            );
+
+            expect(result.path).toBe('front-door-lock');
+        });
+
+        it('preserves path from backend when provided', async () => {
+            const mockView: LovelaceViewConfig = { title: 'Front Door', path: 'custom-path', cards: [] };
+            const hass = createMockHass({
+                callWS: vi.fn().mockResolvedValue(mockView),
+            });
+
+            const result = await KeymasterViewStrategy.generate(
+                { type: 'custom:keymaster', lock_name: 'frontdoor' },
+                hass
+            );
+
+            expect(result.path).toBe('custom-path');
+        });
+
+        it('allows path override from config', async () => {
+            const mockView: LovelaceViewConfig = { title: 'Front Door', path: 'backend-path', cards: [] };
+            const hass = createMockHass({
+                callWS: vi.fn().mockResolvedValue(mockView),
+            });
+
+            const result = await KeymasterViewStrategy.generate(
+                { type: 'custom:keymaster', lock_name: 'frontdoor', path: 'user-path' },
+                hass
+            );
+
+            expect(result.path).toBe('user-path');
+        });
+
+        it('applies all view-level overrides from config', async () => {
+            const mockView: LovelaceViewConfig = { title: 'Front Door', cards: [] };
+            const hass = createMockHass({
+                callWS: vi.fn().mockResolvedValue(mockView),
+            });
+
+            const result = await KeymasterViewStrategy.generate(
+                {
+                    type: 'custom:keymaster',
+                    lock_name: 'frontdoor',
+                    title: 'My Lock',
+                    icon: 'mdi:door',
+                    path: 'my-lock',
+                    theme: 'dark',
+                    visible: false,
+                },
+                hass
+            );
+
+            expect(result.title).toBe('My Lock');
+            expect(result.icon).toBe('mdi:door');
+            expect(result.path).toBe('my-lock');
+            expect(result.theme).toBe('dark');
+            expect(result.visible).toBe(false);
+        });
     });
 });

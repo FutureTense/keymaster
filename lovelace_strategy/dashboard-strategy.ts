@@ -37,6 +37,12 @@ export class KeymasterDashboardStrategy extends ReactiveElement {
                     config_entry_id: configEntry.entry_id,
                     type: `${DOMAIN}/get_view_config`
                 });
+
+                // Ensure title is set from config entry (lock_name)
+                if (!viewConfig.title) {
+                    viewConfig.title = configEntry.title;
+                }
+
                 return viewConfig;
             } catch {
                 return createErrorView(
