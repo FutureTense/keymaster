@@ -66,7 +66,7 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
-                STRATEGY_PATH, str(Path(__file__).parent / "www" / STRATEGY_FILENAME), False
+                STRATEGY_PATH, str(Path(__file__).parent / "www" / "generated" / STRATEGY_FILENAME), False
             )
         ]
     )
