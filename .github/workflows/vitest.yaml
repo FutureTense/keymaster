@@ -1,0 +1,47 @@
+name: Vitest
+
+on:
+  push:
+    paths:
+      - 'lovelace_strategy/**'
+      - 'package.json'
+      - 'vitest.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/vitest.yaml'
+  pull_request:
+    paths:
+      - 'lovelace_strategy/**'
+      - 'package.json'
+      - 'vitest.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/vitest.yaml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Run TypeScript tests
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Run tests with coverage
+        run: yarn test:coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-coverage
+          path: coverage/
