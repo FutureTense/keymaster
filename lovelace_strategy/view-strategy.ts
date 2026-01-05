@@ -7,8 +7,8 @@ import { slugify } from './slugify';
 import { createErrorView, createStartingView, formatLockNotFoundError } from './strategy-utils';
 import { KeymasterViewStrategyConfig } from './types';
 
-/** View-level properties that can be overridden */
-const VIEW_OVERRIDE_KEYS = ['icon', 'path', 'theme', 'title', 'visible'] as const;
+/** View-level properties that can be overridden (title handled separately) */
+const VIEW_OVERRIDE_KEYS = ['icon', 'path', 'theme', 'visible'] as const;
 
 export class KeymasterViewStrategy extends ReactiveElement {
     static async generate(config: KeymasterViewStrategyConfig, hass: HomeAssistant) {
@@ -32,6 +32,9 @@ export class KeymasterViewStrategy extends ReactiveElement {
                 type: `${DOMAIN}/get_view_config`,
                 ...(config_entry_id ? { config_entry_id } : { lock_name })
             });
+
+            // Title: use backend's title, allow strategy config to override
+            viewConfig.title = config.title ?? viewConfig.title;
 
             // Generate path from title (path is a frontend concern, not provided by backend)
             viewConfig.path = slugify(viewConfig.title!);
