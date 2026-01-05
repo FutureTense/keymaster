@@ -33,10 +33,8 @@ export class KeymasterViewStrategy extends ReactiveElement {
                 ...(config_entry_id ? { config_entry_id } : { lock_name })
             });
 
-            // Set default path if not provided by backend
-            if (!viewConfig.path && viewConfig.title) {
-                viewConfig.path = slugify(viewConfig.title);
-            }
+            // Generate path from title (path is a frontend concern, not provided by backend)
+            viewConfig.path = slugify(viewConfig.title!);
 
             // Apply any view-level overrides from the strategy config
             for (const key of VIEW_OVERRIDE_KEYS) {

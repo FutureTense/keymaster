@@ -154,7 +154,7 @@ describe('KeymasterViewStrategy', () => {
             expect(result.title).toBe('Custom Title');
         });
 
-        it('sets default path from slugified title when backend provides no path', async () => {
+        it('generates path from slugified title', async () => {
             const mockView: LovelaceViewConfig = { title: 'Front Door Lock', cards: [] };
             const hass = createMockHass({
                 callWS: vi.fn().mockResolvedValue(mockView),
@@ -168,22 +168,8 @@ describe('KeymasterViewStrategy', () => {
             expect(result.path).toBe('front-door-lock');
         });
 
-        it('preserves path from backend when provided', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Front Door', path: 'custom-path', cards: [] };
-            const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
-            });
-
-            const result = await KeymasterViewStrategy.generate(
-                { type: 'custom:keymaster', lock_name: 'frontdoor' },
-                hass
-            );
-
-            expect(result.path).toBe('custom-path');
-        });
-
         it('allows path override from config', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Front Door', path: 'backend-path', cards: [] };
+            const mockView: LovelaceViewConfig = { title: 'Front Door', cards: [] };
             const hass = createMockHass({
                 callWS: vi.fn().mockResolvedValue(mockView),
             });
