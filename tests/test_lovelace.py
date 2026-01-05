@@ -40,9 +40,7 @@ def _extract_entity_refs(entities: list) -> list:
             if "row" in e and isinstance(e["row"], dict) and "entity" in e["row"]:
                 refs.append(e["row"]["entity"])
             if "conditions" in e:
-                for cond in e["conditions"]:
-                    if "entity" in cond:
-                        refs.append(cond["entity"])
+                refs.extend(cond["entity"] for cond in e["conditions"] if "entity" in cond)
     return refs
 
 
