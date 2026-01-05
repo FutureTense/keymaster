@@ -53,7 +53,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-              core.setFailed('Repo is dirty after lint! Run yarn lint:fix locally before pushing changes.')
+              core.setFailed('Repo is dirty after lint! TypeScript files have linting issues that were auto-fixed. Run yarn lint:fix locally before pushing changes.')
       - name: Build
         run: |
           yarn build
@@ -65,4 +65,4 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-              core.setFailed('Repo is dirty after build! Run yarn build locally before pushing changes.')
+              core.setFailed('Repo is dirty after build! The generated JavaScript in custom_components/keymaster/www/generated/ does not match the TypeScript source. Run yarn build locally before pushing changes.')
