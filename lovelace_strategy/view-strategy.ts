@@ -34,10 +34,13 @@ export class KeymasterViewStrategy extends ReactiveElement {
             });
 
             // Title: use backend's title, allow strategy config to override
-            viewConfig.title = config.title ?? viewConfig.title;
+            const backendTitle = viewConfig.title!;
+            viewConfig.title = config.title ?? backendTitle;
 
-            // Generate path from title (path is a frontend concern, not provided by backend)
-            viewConfig.path = slugify(viewConfig.title!);
+            // Generate path: prepend keymaster- for default title, just slugify for custom title
+            viewConfig.path = config.title
+                ? slugify(config.title)
+                : `keymaster-${slugify(backendTitle)}`;
 
             // Apply any view-level overrides from the strategy config
             for (const key of VIEW_OVERRIDE_KEYS) {

@@ -21,6 +21,7 @@ export interface LovelaceViewConfig {
     max_columns?: number;
     path?: string;
     sections?: object[];
+    strategy?: { type: string; [key: string]: unknown };
     theme?: string;
     title?: string;
     type?: string;

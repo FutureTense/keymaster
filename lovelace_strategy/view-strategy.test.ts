@@ -154,7 +154,7 @@ describe('KeymasterViewStrategy', () => {
             expect(result.title).toBe('Custom Title');
         });
 
-        it('generates path from slugified title', async () => {
+        it('generates path with keymaster- prefix from slugified title', async () => {
             const mockView: LovelaceViewConfig = { title: 'Front Door Lock', cards: [] };
             const hass = createMockHass({
                 callWS: vi.fn().mockResolvedValue(mockView),
@@ -165,7 +165,21 @@ describe('KeymasterViewStrategy', () => {
                 hass
             );
 
-            expect(result.path).toBe('front-door-lock');
+            expect(result.path).toBe('keymaster-front-door-lock');
+        });
+
+        it('generates path without prefix when title is customized', async () => {
+            const mockView: LovelaceViewConfig = { title: 'Front Door Lock', cards: [] };
+            const hass = createMockHass({
+                callWS: vi.fn().mockResolvedValue(mockView),
+            });
+
+            const result = await KeymasterViewStrategy.generate(
+                { type: 'custom:keymaster', lock_name: 'frontdoor', title: 'My Custom Title' },
+                hass
+            );
+
+            expect(result.path).toBe('my-custom-title');
         });
 
         it('allows path override from config', async () => {

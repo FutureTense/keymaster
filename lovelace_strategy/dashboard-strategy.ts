@@ -1,7 +1,7 @@
 import { ReactiveElement } from 'lit';
 
 import { DOMAIN } from './const';
-import { HomeAssistant } from './ha_type_stubs';
+import { HomeAssistant, LovelaceViewConfig } from './ha_type_stubs';
 import { createErrorView } from './strategy-utils';
 import { GetConfigEntriesResponse, KeymasterDashboardStrategyConfig } from './types';
 
@@ -31,7 +31,7 @@ export class KeymasterDashboardStrategy extends ReactiveElement {
         );
 
         // Return view strategy configs - HA will call KeymasterViewStrategy for each
-        const views = sortedEntries.map((configEntry) => ({
+        const views: LovelaceViewConfig[] = sortedEntries.map((configEntry) => ({
             strategy: {
                 config_entry_id: configEntry.entry_id,
                 type: `custom:${DOMAIN}`
