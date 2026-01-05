@@ -1,0 +1,2 @@
+# Mark generated JavaScript as generated (excludes from diffs and Copilot review)
+custom_components/keymaster/www/*.js linguist-generated=true
