@@ -362,20 +362,8 @@ def mock_async_call_later():
 
 
 @pytest.fixture(name="keymaster_integration")
-async def mock_keymaster_integration(hass, client):
-    """Fixture to bypass zwavejs checks."""
-    entry = MockConfigEntry(
-        domain="zwave_js",
-        data={"url": "ws://test.org"},
-        unique_id=str(client.driver.controller.home_id),
-    )
-    entry.add_to_hass(hass)
-    with patch("homeassistant.components.zwave_js.PLATFORMS", platforms):
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
-
-    client.async_send_command.reset_mock()
-
+async def mock_keymaster_integration(hass, integration):
+    """Fixture to bypass zwavejs checks. Depends on integration fixture for zwave_js."""
     with (
         patch(
             "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock",
@@ -394,4 +382,4 @@ async def mock_keymaster_integration(hass, client):
             return_value=True,
         ),
     ):
-        yield
+        yield integration
