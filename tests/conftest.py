@@ -182,9 +182,7 @@ def mock_client_fixture(
     listen_block: asyncio.Event,
 ):
     """Mock a client."""
-    with patch(
-        "homeassistant.components.zwave_js.ZwaveClient", autospec=True
-    ) as client_class:
+    with patch("homeassistant.components.zwave_js.ZwaveClient", autospec=True) as client_class:
         client = client_class.return_value
 
         async def connect():
@@ -219,9 +217,7 @@ def mock_client_fixture(
                 return {"changed": False}
             return DEFAULT
 
-        client.async_send_command.return_value = {
-            "result": {"success": True, "status": 255}
-        }
+        client.async_send_command.return_value = {"result": {"success": True, "status": 255}}
         client.async_send_command.side_effect = async_send_command_side_effect
 
         yield client
@@ -276,9 +272,7 @@ def controller_state_fixture():
 @pytest.fixture(name="controller_node_state", scope="package")
 def controller_node_state_fixture() -> dict[str, Any]:
     """Load the controller node state fixture data."""
-    return copy.deepcopy(
-        json.loads(load_fixture("zwave_js/controller_node_state.json"))
-    )
+    return copy.deepcopy(json.loads(load_fixture("zwave_js/controller_node_state.json")))
 
 
 @pytest.fixture(name="version_state", scope="package")
@@ -314,27 +308,21 @@ async def mock_zwavejs_get_usercodes():
         {"code_slot": 13, "usercode": "", "in_use": False},
         {"code_slot": 14, "usercode": "", "in_use": False},
     ]
-    with patch(
-        "zwave_js_server.util.lock.get_usercodes", return_value=slot_data
-    ) as mock_usercodes:
+    with patch("zwave_js_server.util.lock.get_usercodes", return_value=slot_data) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_zwavejs_clear_usercode():
     """Fixture to mock clear_usercode."""
-    with patch(
-        "zwave_js_server.util.lock.clear_usercode", return_value=None
-    ) as mock_usercodes:
+    with patch("zwave_js_server.util.lock.clear_usercode", return_value=None) as mock_usercodes:
         yield mock_usercodes
 
 
 @pytest.fixture
 async def mock_zwavejs_set_usercode():
     """Fixture to mock set_usercode."""
-    with patch(
-        "zwave_js_server.util.lock.set_usercode", return_value=None
-    ) as mock_usercodes:
+    with patch("zwave_js_server.util.lock.set_usercode", return_value=None) as mock_usercodes:
         yield mock_usercodes
 
 

@@ -215,15 +215,11 @@ def _get_schema(
         script_default = NONE_TEXT
     elif script_default != NONE_TEXT and not script_default.startswith("script."):
         script_default = f"script.{script_default}"
-    _LOGGER.debug(
-        "[get_schema] script_default: %s (%s)", script_default, type(script_default)
-    )
+    _LOGGER.debug("[get_schema] script_default: %s (%s)", script_default, type(script_default))
     lock_entities = _get_entities(
         hass=hass,
         domain=LOCK_DOMAIN,
-        exclude_entities=_get_locks_in_use(
-            hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)
-        ),
+        exclude_entities=_get_locks_in_use(hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)),
     )
     if not lock_entities:
         if flow is not None:
@@ -232,18 +228,18 @@ def _get_schema(
     return vol.Schema(
         {
             vol.Required(CONF_LOCK_NAME, default=_get_default(CONF_LOCK_NAME)): str,
-            vol.Required(
-                CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)
-            ): vol.In(lock_entities),
-            vol.Optional(
-                CONF_PARENT, default=_get_default(CONF_PARENT, NONE_TEXT)
-            ): vol.In(_available_parent_locks(hass, entry_id)),
-            vol.Required(
-                CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)
-            ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-            vol.Required(
-                CONF_START, default=_get_default(CONF_START, DEFAULT_START)
-            ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+            vol.Required(CONF_LOCK_ENTITY_ID, default=_get_default(CONF_LOCK_ENTITY_ID)): vol.In(
+                lock_entities
+            ),
+            vol.Optional(CONF_PARENT, default=_get_default(CONF_PARENT, NONE_TEXT)): vol.In(
+                _available_parent_locks(hass, entry_id)
+            ),
+            vol.Required(CONF_SLOTS, default=_get_default(CONF_SLOTS, DEFAULT_CODE_SLOTS)): vol.All(
+                vol.Coerce(int), vol.Range(min=1)
+            ),
+            vol.Required(CONF_START, default=_get_default(CONF_START, DEFAULT_START)): vol.All(
+                vol.Coerce(int), vol.Range(min=1)
+            ),
             vol.Optional(
                 CONF_DOOR_SENSOR_ENTITY_ID,
                 default=_get_default(CONF_DOOR_SENSOR_ENTITY_ID, NONE_TEXT),
@@ -256,9 +252,7 @@ def _get_schema(
             ),
             vol.Optional(
                 CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-                default=_get_default(
-                    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, NONE_TEXT
-                ),
+                default=_get_default(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, NONE_TEXT),
             ): vol.In(
                 _get_entities(
                     hass=hass,
@@ -293,15 +287,11 @@ def _get_schema(
             ),
             vol.Required(
                 CONF_ADVANCED_DATE_RANGE,
-                default=_get_default(
-                    CONF_ADVANCED_DATE_RANGE, DEFAULT_ADVANCED_DATE_RANGE
-                ),
+                default=_get_default(CONF_ADVANCED_DATE_RANGE, DEFAULT_ADVANCED_DATE_RANGE),
             ): bool,
             vol.Required(
                 CONF_ADVANCED_DAY_OF_WEEK,
-                default=_get_default(
-                    CONF_ADVANCED_DAY_OF_WEEK, DEFAULT_ADVANCED_DAY_OF_WEEK
-                ),
+                default=_get_default(CONF_ADVANCED_DAY_OF_WEEK, DEFAULT_ADVANCED_DAY_OF_WEEK),
             ): bool,
             vol.Required(
                 CONF_HIDE_PINS, default=_get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)

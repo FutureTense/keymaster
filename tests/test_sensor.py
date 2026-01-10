@@ -60,9 +60,7 @@ async def coordinator(hass: HomeAssistant, sensor_config_entry):
     return hass.data[DOMAIN][COORDINATOR]
 
 
-async def test_sensor_entity_initialization(
-    hass: HomeAssistant, sensor_config_entry, coordinator
-):
+async def test_sensor_entity_initialization(hass: HomeAssistant, sensor_config_entry, coordinator):
     """Test sensor entity initialization."""
 
     entity_description = KeymasterSensorEntityDescription(

@@ -27,9 +27,7 @@ async def test_setup_entry(
 ):
     """Test setting up entities."""
 
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
-    )
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -54,9 +52,7 @@ async def test_setup_entry_core_state(
 ):
     """Test setting up entities."""
     with patch.object(hass, "state", return_value="STARTING"):
-        entry = MockConfigEntry(
-            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
-        )
+        entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
         entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -74,9 +70,7 @@ async def test_unload_entry(
     integration,
 ):
     """Test unloading entities."""
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
-    )
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)

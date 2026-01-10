@@ -33,15 +33,15 @@ def test_type_lookup_consistency():
 
     for field in lock_fields:
         if field not in excluded_fields:
-            assert (
-                field in lookup_keys
-            ), f"Field '{field}' from KeymasterLock is missing in keymasterlock_type_lookup"
+            assert field in lookup_keys, (
+                f"Field '{field}' from KeymasterLock is missing in keymasterlock_type_lookup"
+            )
 
     for field in slot_fields:
         if field not in excluded_fields:
-            assert (
-                field in lookup_keys
-            ), f"Field '{field}' from KeymasterCodeSlot is missing in keymasterlock_type_lookup"
+            assert field in lookup_keys, (
+                f"Field '{field}' from KeymasterCodeSlot is missing in keymasterlock_type_lookup"
+            )
 
     # Verify types match (basic check)
     for key, type_hint in keymasterlock_type_lookup.items():  # noqa: B007, PERF102

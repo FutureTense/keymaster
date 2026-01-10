@@ -83,9 +83,7 @@ async def test_button_entities_created(hass: HomeAssistant, button_config_entry)
     assert "Code Slot 2: Reset" in entity_names
 
 
-async def test_button_entity_initialization(
-    hass: HomeAssistant, button_config_entry, coordinator
-):
+async def test_button_entity_initialization(hass: HomeAssistant, button_config_entry, coordinator):
     """Test button entity initialization."""
     entity_description = KeymasterButtonEntityDescription(
         key="button.code_slots:1.reset",
@@ -202,9 +200,7 @@ async def test_button_entity_available_when_connected_and_slot_exists(
     assert entity._attr_available
 
 
-async def test_button_press_reset_lock(
-    hass: HomeAssistant, button_config_entry, coordinator
-):
+async def test_button_press_reset_lock(hass: HomeAssistant, button_config_entry, coordinator):
     """Test pressing reset lock button calls coordinator reset_lock."""
     # Create a connected lock
     kmlock = KeymasterLock(
@@ -237,9 +233,7 @@ async def test_button_press_reset_lock(
         )
 
 
-async def test_button_press_reset_code_slot(
-    hass: HomeAssistant, button_config_entry, coordinator
-):
+async def test_button_press_reset_code_slot(hass: HomeAssistant, button_config_entry, coordinator):
     """Test pressing reset code slot button calls coordinator reset_code_slot."""
     # Create a connected lock with code slot
     kmlock = KeymasterLock(
@@ -264,9 +258,7 @@ async def test_button_press_reset_code_slot(
     entity = KeymasterButton(entity_description=entity_description)
 
     # Mock coordinator.reset_code_slot
-    with patch.object(
-        coordinator, "reset_code_slot", new=AsyncMock()
-    ) as mock_reset_slot:
+    with patch.object(coordinator, "reset_code_slot", new=AsyncMock()) as mock_reset_slot:
         await entity.async_press()
 
         # Should call reset_code_slot with config entry ID and slot number

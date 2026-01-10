@@ -1,1 +1,1 @@
-export const DOMAIN = 'keymaster';
+export const DOMAIN = "keymaster";

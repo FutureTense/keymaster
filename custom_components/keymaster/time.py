@@ -10,17 +10,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    CONF_ADVANCED_DAY_OF_WEEK,
-    CONF_SLOTS,
-    CONF_START,
-    COORDINATOR,
-    DAY_NAMES,
-    DOMAIN,
-)
+from .const import CONF_ADVANCED_DAY_OF_WEEK, CONF_SLOTS, CONF_START, COORDINATOR, DAY_NAMES, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek
+from .lock import KeymasterCodeSlotDayOfWeek
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -119,8 +112,7 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             return
 
         if ".code_slots" in self._property and (
-            not self._kmlock.code_slots
-            or self._code_slot not in self._kmlock.code_slots
+            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -129,24 +121,20 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
         if ".accesslimit_day_of_week" in self._property and (
             not self._kmlock.code_slots
             or not self._code_slot
-            or not self._kmlock.code_slots[
-                self._code_slot
-            ].accesslimit_day_of_week_enabled
+            or not self._kmlock.code_slots[self._code_slot].accesslimit_day_of_week_enabled
         ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        if self._property.endswith(".time_start") or self._property.endswith(
-            ".time_end"
-        ):
+        if self._property.endswith(".time_start") or self._property.endswith(".time_end"):
             # code_slots and _code_slot validation already handled by lines 117-121 above
             # Safe to assert these are not None here
             assert self._kmlock.code_slots is not None
             assert self._code_slot is not None
-            accesslimit_day_of_week: (
-                MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None
-            ) = self._kmlock.code_slots[self._code_slot].accesslimit_day_of_week
+            accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = (
+                self._kmlock.code_slots[self._code_slot].accesslimit_day_of_week
+            )
             if (
                 self._day_of_week_num is None
                 or accesslimit_day_of_week is None
@@ -159,11 +147,7 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             day_of_week: KeymasterCodeSlotDayOfWeek | None = accesslimit_day_of_week[
                 self._day_of_week_num
             ]
-            if (
-                day_of_week is None
-                or not day_of_week.dow_enabled
-                or not day_of_week.limit_by_time
-            ):
+            if day_of_week is None or not day_of_week.dow_enabled or not day_of_week.limit_by_time:
                 self._attr_available = False
                 self.async_write_ha_state()
                 return
@@ -195,10 +179,7 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             value,
         )
         if (
-            (
-                self._property.endswith(".time_start")
-                or self._property.endswith(".time_end")
-            )
+            (self._property.endswith(".time_start") or self._property.endswith(".time_end"))
             and self._kmlock
             and self._kmlock.parent_name
             and (
