@@ -18,9 +18,10 @@ export function createErrorView(message: string, title = 'Keymaster'): LovelaceV
 /**
  * Creates the "starting" view shown when HA is not running.
  */
-export function createStartingView(): LovelaceViewConfig {
+export function createStartingView(title = 'Keymaster'): LovelaceViewConfig {
     return {
-        cards: [{ type: 'starting' }]
+        cards: [{ type: 'starting' }],
+        title
     };
 }
 

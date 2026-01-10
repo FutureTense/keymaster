@@ -57,7 +57,7 @@ async def test_generate_view_config_basic(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -97,7 +97,7 @@ async def test_generate_view_config_sections_structure(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -139,7 +139,7 @@ async def test_generate_view_config_slot_entities(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -177,7 +177,7 @@ async def test_generate_view_config_custom_slot_start(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -204,7 +204,7 @@ async def test_generate_view_config_badges_no_door(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -236,7 +236,7 @@ async def test_generate_view_config_badges_with_door(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -268,7 +268,7 @@ async def test_generate_view_config_advanced_date_range(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -298,7 +298,7 @@ async def test_generate_view_config_advanced_day_of_week(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -328,7 +328,7 @@ async def test_generate_view_config_child_lock(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="backdoor",
             keymaster_config_entry_id="child_entry_id",
@@ -368,7 +368,7 @@ async def test_generate_view_config_child_lock_parent_entities(hass: HomeAssista
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="backdoor",
             keymaster_config_entry_id="child_entry_id",
@@ -403,7 +403,7 @@ async def test_generate_view_config_child_lock_override_parent(hass: HomeAssista
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="backdoor",
             keymaster_config_entry_id="child_entry_id",
@@ -429,7 +429,7 @@ async def test_generate_view_config_slugified_path(hass: HomeAssistant):
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_registry,
     ):
-        view = await generate_view_config(
+        view = generate_view_config(
             hass=hass,
             kmlock_name="Front Door Lock",
             keymaster_config_entry_id="test_entry_id",
@@ -463,7 +463,7 @@ async def test_generate_lovelace_creates_folder(hass: HomeAssistant):
         ) as mock_create_folder,
         patch("custom_components.keymaster.lovelace._write_lovelace_yaml"),
     ):
-        await generate_lovelace(
+        generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -493,7 +493,7 @@ async def test_generate_lovelace_writes_yaml(hass: HomeAssistant):
             "custom_components.keymaster.lovelace._write_lovelace_yaml"
         ) as mock_write_yaml,
     ):
-        await generate_lovelace(
+        generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -529,7 +529,7 @@ async def test_generate_lovelace_filename_matches_lock_name(hass: HomeAssistant)
             "custom_components.keymaster.lovelace._write_lovelace_yaml"
         ) as mock_write_yaml,
     ):
-        await generate_lovelace(
+        generate_lovelace(
             hass=hass,
             kmlock_name="my_special_lock",
             keymaster_config_entry_id="test_entry_id",
@@ -561,7 +561,7 @@ async def test_generate_lovelace_delegates_to_view_config(hass: HomeAssistant):
     ):
         mock_view_config.return_value = {"type": "sections", "title": "test"}
 
-        await generate_lovelace(
+        generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",

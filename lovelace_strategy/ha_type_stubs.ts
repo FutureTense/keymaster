@@ -20,10 +20,35 @@ export interface LovelaceViewConfig {
     icon?: string;
     max_columns?: number;
     path?: string;
-    sections?: object[];
+    sections?: (LovelaceSectionConfig | LovelaceStrategySectionConfig)[];
     strategy?: { type: string; [key: string]: unknown };
     theme?: string;
     title?: string;
     type?: string;
     visible?: boolean | LovelaceViewVisibility[];
+}
+
+/** Section configuration */
+export interface LovelaceSectionConfig {
+    type?: string;
+    cards?: object[];
+    title?: string;
+    [key: string]: unknown;
+}
+
+/** Section configuration that uses a strategy */
+export interface LovelaceStrategySectionConfig {
+    strategy: {
+        type: string;
+        [key: string]: unknown;
+    };
+}
+
+/** View metadata response from keymaster backend */
+export interface KeymasterViewMetadataResponse {
+    title: string;
+    badges: object[];
+    config_entry_id: string;
+    slot_start: number;
+    slot_count: number;
 }

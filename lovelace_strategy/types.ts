@@ -34,3 +34,12 @@ export interface KeymasterViewStrategyConfig extends ViewOverrides {
     lock_name?: string;
     type: 'custom:keymaster';
 }
+
+/** Configuration for the keymaster section strategy (single code slot) */
+export interface KeymasterSectionStrategyConfig {
+    /** Config entry ID - required to identify the lock */
+    config_entry_id: string;
+    /** Slot number - which code slot to generate */
+    slot_num: number;
+    type: 'custom:keymaster';
+}

@@ -2,8 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { STATE_NOT_RUNNING } from 'home-assistant-js-websocket';
 
-import { HomeAssistant, LovelaceViewConfig } from './ha_type_stubs';
+import { HomeAssistant, KeymasterViewMetadataResponse } from './ha_type_stubs';
 import { KeymasterViewStrategy } from './view-strategy';
+
+/** Creates a mock backend response with required metadata */
+function createMockResponse(overrides: Partial<KeymasterViewMetadataResponse> = {}): KeymasterViewMetadataResponse {
+    return {
+        title: 'Test Lock',
+        badges: [],
+        config_entry_id: 'abc123',
+        slot_start: 1,
+        slot_count: 3,
+        ...overrides,
+    };
+}
 
 function createMockHass(overrides: Partial<HomeAssistant> = {}): HomeAssistant {
     return {
@@ -27,6 +39,7 @@ describe('KeymasterViewStrategy', () => {
 
             expect(result.cards).toHaveLength(1);
             expect(result.cards![0]).toEqual({ type: 'starting' });
+            expect(result.title).toBe('Test Lock');
         });
 
         it('returns error when neither config_entry_id nor lock_name provided', async () => {
@@ -42,6 +55,7 @@ describe('KeymasterViewStrategy', () => {
             expect((result.cards![0] as { content: string }).content).toContain(
                 'Either `config_entry_id` or `lock_name` must be provided'
             );
+            expect(result.title).toBe('Keymaster');
         });
 
         it('returns error when both config_entry_id and lock_name provided', async () => {
@@ -57,12 +71,14 @@ describe('KeymasterViewStrategy', () => {
             expect((result.cards![0] as { content: string }).content).toContain(
                 'Provide only one of `config_entry_id` or `lock_name`, not both'
             );
+            // Uses lock_name as fallback title since both provided
+            expect(result.title).toBe('Test Lock');
         });
 
         it('calls websocket with config_entry_id when provided', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Test Lock', cards: [] };
+            const mockResponse = createMockResponse({ config_entry_id: 'abc123' });
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
+                callWS: vi.fn().mockResolvedValue(mockResponse),
             });
 
             const result = await KeymasterViewStrategy.generate(
@@ -71,16 +87,25 @@ describe('KeymasterViewStrategy', () => {
             );
 
             expect(hass.callWS).toHaveBeenCalledWith({
-                type: 'keymaster/get_view_config',
+                type: 'keymaster/get_view_metadata',
                 config_entry_id: 'abc123',
             });
-            expect(result).toEqual(mockView);
+            // View strategy now generates section strategies
+            expect(result.type).toBe('sections');
+            expect(result.sections).toHaveLength(3);
+            expect(result.sections![0]).toEqual({
+                strategy: {
+                    type: 'custom:keymaster',
+                    config_entry_id: 'abc123',
+                    slot_num: 1,
+                },
+            });
         });
 
         it('calls websocket with lock_name when provided', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Test Lock', cards: [] };
+            const mockResponse = createMockResponse();
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
+                callWS: vi.fn().mockResolvedValue(mockResponse),
             });
 
             const result = await KeymasterViewStrategy.generate(
@@ -89,10 +114,12 @@ describe('KeymasterViewStrategy', () => {
             );
 
             expect(hass.callWS).toHaveBeenCalledWith({
-                type: 'keymaster/get_view_config',
+                type: 'keymaster/get_view_metadata',
                 lock_name: 'Test Lock',
             });
-            expect(result).toEqual(mockView);
+            // View strategy now generates section strategies
+            expect(result.type).toBe('sections');
+            expect(result.sections).toHaveLength(3);
         });
 
         it('returns error view when websocket call fails with lock_name', async () => {
@@ -109,6 +136,7 @@ describe('KeymasterViewStrategy', () => {
             expect(result.cards![0]).toHaveProperty('type', 'markdown');
             expect((result.cards![0] as { content: string }).content).toContain('Unknown Lock');
             expect((result.cards![0] as { content: string }).content).toContain('found');
+            expect(result.title).toBe('Unknown Lock');
         });
 
         it('returns error view when websocket call fails with config_entry_id', async () => {
@@ -124,12 +152,13 @@ describe('KeymasterViewStrategy', () => {
             expect(result.cards).toHaveLength(1);
             expect(result.cards![0]).toHaveProperty('type', 'markdown');
             expect((result.cards![0] as { content: string }).content).toContain('nonexistent_id');
+            expect(result.title).toBe('nonexistent_id');
         });
 
         it('uses generated title when no title override provided', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Generated Title', cards: [] };
+            const mockResponse = createMockResponse({ title: 'Generated Title' });
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
+                callWS: vi.fn().mockResolvedValue(mockResponse),
             });
 
             const result = await KeymasterViewStrategy.generate(
@@ -141,9 +170,9 @@ describe('KeymasterViewStrategy', () => {
         });
 
         it('overrides title when title provided in config', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Generated Title', cards: [] };
+            const mockResponse = createMockResponse({ title: 'Generated Title' });
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
+                callWS: vi.fn().mockResolvedValue(mockResponse),
             });
 
             const result = await KeymasterViewStrategy.generate(
@@ -155,9 +184,9 @@ describe('KeymasterViewStrategy', () => {
         });
 
         it('generates path with keymaster- prefix from slugified title', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Front Door Lock', cards: [] };
+            const mockResponse = createMockResponse({ title: 'Front Door Lock' });
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
+                callWS: vi.fn().mockResolvedValue(mockResponse),
             });
 
             const result = await KeymasterViewStrategy.generate(
@@ -169,9 +198,9 @@ describe('KeymasterViewStrategy', () => {
         });
 
         it('generates path without prefix when title is customized', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Front Door Lock', cards: [] };
+            const mockResponse = createMockResponse({ title: 'Front Door Lock' });
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
+                callWS: vi.fn().mockResolvedValue(mockResponse),
             });
 
             const result = await KeymasterViewStrategy.generate(
@@ -183,9 +212,9 @@ describe('KeymasterViewStrategy', () => {
         });
 
         it('allows path override from config', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Front Door', cards: [] };
+            const mockResponse = createMockResponse({ title: 'Front Door' });
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
+                callWS: vi.fn().mockResolvedValue(mockResponse),
             });
 
             const result = await KeymasterViewStrategy.generate(
@@ -197,9 +226,9 @@ describe('KeymasterViewStrategy', () => {
         });
 
         it('applies all view-level overrides from config', async () => {
-            const mockView: LovelaceViewConfig = { title: 'Front Door', cards: [] };
+            const mockResponse = createMockResponse({ title: 'Front Door' });
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(mockView),
+                callWS: vi.fn().mockResolvedValue(mockResponse),
             });
 
             const result = await KeymasterViewStrategy.generate(
