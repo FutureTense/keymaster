@@ -14,8 +14,8 @@ import { KeymasterSectionStrategyConfig } from './types';
  * Usage:
  *   sections:
  *     - strategy:
- *         type: custom:keymaster-section
- *         config_entry_id: <entry_id>
+ *         type: custom:keymaster
+ *         lock_name: Front Door
  *         slot_num: 1
  */
 export class KeymasterSectionStrategy extends ReactiveElement {
@@ -23,6 +23,8 @@ export class KeymasterSectionStrategy extends ReactiveElement {
         config: KeymasterSectionStrategyConfig,
         hass: HomeAssistant
     ): Promise<LovelaceSectionConfig> {
+        const { config_entry_id, lock_name } = config;
+
         // Return error section if HA is starting
         if (hass.config.state === STATE_NOT_RUNNING) {
             return {
@@ -31,9 +33,9 @@ export class KeymasterSectionStrategy extends ReactiveElement {
             };
         }
 
-        // Validate required fields
-        if (!config.config_entry_id) {
-            return createErrorSection('config_entry_id is required');
+        // Validate required fields - need exactly one identifier
+        if (!config_entry_id && !lock_name) {
+            return createErrorSection('Either config_entry_id or lock_name is required');
         }
         if (config.slot_num === undefined) {
             return createErrorSection('slot_num is required');
@@ -42,7 +44,7 @@ export class KeymasterSectionStrategy extends ReactiveElement {
         try {
             const sectionConfig = await hass.callWS<LovelaceSectionConfig>({
                 type: `${DOMAIN}/get_section_config`,
-                config_entry_id: config.config_entry_id,
+                ...(config_entry_id ? { config_entry_id } : { lock_name }),
                 slot_num: config.slot_num
             });
 

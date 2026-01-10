@@ -349,6 +349,44 @@ async def test_ws_get_section_config_basic(hass: HomeAssistant):
         mock_connection.send_result.assert_called_once_with(1, mock_section)
 
 
+async def test_ws_get_section_config_by_lock_name(hass: HomeAssistant):
+    """Test getting section config using lock_name instead of config_entry_id."""
+
+    mock_config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="frontdoor",
+        entry_id="test_entry_id",
+        data={
+            CONF_LOCK_NAME: "frontdoor",
+            CONF_LOCK_ENTITY_ID: "lock.frontdoor",
+            CONF_SLOTS: 4,
+            CONF_START: 1,
+        },
+    )
+    mock_config_entry.add_to_hass(hass)
+    mock_connection = _create_mock_connection()
+
+    mock_section = {"type": "grid", "cards": []}
+
+    with patch.object(
+        websocket,
+        "generate_section_config",
+        return_value=mock_section,
+    ) as mock_gen:
+        await websocket.ws_get_section_config.__wrapped__(
+            hass,
+            mock_connection,
+            {"id": 1, "type": f"{DOMAIN}/get_section_config", "lock_name": "frontdoor", "slot_num": 2},
+        )
+
+        mock_gen.assert_called_once()
+        call_kwargs = mock_gen.call_args[1]
+        assert call_kwargs["keymaster_config_entry_id"] == "test_entry_id"
+        assert call_kwargs["slot_num"] == 2
+
+        mock_connection.send_result.assert_called_once_with(1, mock_section)
+
+
 async def test_ws_get_section_config_invalid_slot(hass: HomeAssistant):
     """Test error when slot_num is out of range."""
 

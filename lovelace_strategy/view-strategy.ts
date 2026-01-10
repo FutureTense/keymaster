@@ -42,12 +42,13 @@ export class KeymasterViewStrategy extends ReactiveElement {
             });
 
             // Generate section strategies for each code slot
+            // Pass through whichever identifier was provided in the config
             const sections: LovelaceStrategySectionConfig[] = [];
             for (let i = 0; i < response.slot_count; i++) {
                 sections.push({
                     strategy: {
                         type: 'custom:keymaster',
-                        config_entry_id: response.config_entry_id,
+                        ...(config_entry_id ? { config_entry_id } : { lock_name }),
                         slot_num: response.slot_start + i
                     }
                 });

@@ -113,10 +113,13 @@ async def ws_get_view_metadata(
         vol.Schema(
             {
                 vol.Required("type"): f"{DOMAIN}/get_section_config",
-                vol.Required("config_entry_id"): str,
+                vol.Optional("lock_name"): str,
+                vol.Optional("config_entry_id"): str,
                 vol.Required("slot_num"): int,
             }
         ),
+        cv.has_at_least_one_key("lock_name", "config_entry_id"),
+        cv.has_at_most_one_key("lock_name", "config_entry_id"),
     )
 )
 @websocket_api.async_response
@@ -128,23 +131,30 @@ async def ws_get_section_config(
     """Handle get section config websocket command.
 
     Returns the Lovelace section configuration for a single code slot.
-    Requires config_entry_id and slot_num.
+    Accepts either lock_name (user-facing) or config_entry_id (internal).
     """
-    config_entry_id = msg["config_entry_id"]
+    lock_name = msg.get("lock_name")
+    config_entry_id = msg.get("config_entry_id")
     slot_num = msg["slot_num"]
 
     # Find the config entry
     config_entry = None
+    lock_name_slug = slugify(lock_name).lower() if lock_name else None
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.entry_id == config_entry_id:
+        if config_entry_id and entry.entry_id == config_entry_id:
             config_entry = entry
             break
+        if lock_name_slug:
+            entry_lock_name = entry.data.get(CONF_LOCK_NAME, "")
+            if slugify(entry_lock_name).lower() == lock_name_slug:
+                config_entry = entry
+                break
 
     if config_entry is None:
         connection.send_error(
             msg["id"],
             "lock_not_found",
-            f"Lock not found: {config_entry_id}",
+            f"Lock not found: {lock_name or config_entry_id}",
         )
         return
 
