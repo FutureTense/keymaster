@@ -32,8 +32,9 @@ def generate_badges_config(
     Returns the badges configuration as a list (for WebSocket/strategy use).
     """
     badges_list: list[MutableMapping[str, Any]] = _generate_lock_badges(
+        lock_entity=lock_entity,
+        door_sensor=door_sensor,
         child=bool(parent_config_entry_id),
-        door=bool(door_sensor is not None),
     )
     mapped_badges_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = (
         _map_property_to_entity_id(
@@ -44,11 +45,6 @@ def generate_badges_config(
         )
     )
     if isinstance(mapped_badges_list, list):
-        _add_lock_and_door_to_badges(
-            badges_list=mapped_badges_list,
-            lock_entity=lock_entity,
-            door_sensor=door_sensor,
-        )
         return mapped_badges_list
     return badges_list
 
@@ -287,29 +283,31 @@ def _get_entity_id(
     parent_config_entry_id: str | None,
     prop: str,
 ) -> str | None:
-    """Lookup the entity_id from the property."""
+    """Lookup the entity_id from the property.
+
+    For Keymaster entity paths (e.g., 'sensor.lock_name'), looks up the real
+    entity ID in the registry. For external entity IDs (e.g., 'lock.frontdoor')
+    that aren't found in the registry, returns the value unchanged.
+    """
     if not prop:
         return None
     if prop.split(".", maxsplit=1)[0] == "parent":
         if not parent_config_entry_id:
             return None
         prop = prop.split(".", maxsplit=1)[1]
-        # _LOGGER.debug(
-        #     f"[get_entity_id] Looking up parent ({parent_config_entry_id}) property: {prop}"
-        # )
         entity_id: str | None = entity_registry.async_get_entity_id(
             domain=prop.split(".", maxsplit=1)[0],
             platform=DOMAIN,
             unique_id=f"{parent_config_entry_id}_{slugify(prop)}",
         )
     else:
-        # _LOGGER.debug(f"[get_entity_id] Looking up property: {prop}")
         entity_id = entity_registry.async_get_entity_id(
             domain=prop.split(".", maxsplit=1)[0],
             platform=DOMAIN,
             unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
         )
-    return entity_id
+    # If not found in registry, assume it's already a complete entity ID
+    return entity_id if entity_id else prop
 
 
 def _generate_code_slot_dict(
@@ -501,21 +499,12 @@ def _generate_code_slot_dict(
     return code_slot_dict
 
 
-def _add_lock_and_door_to_badges(
-    badges_list: list[MutableMapping[str, Any]],
+def _generate_lock_badges(
     lock_entity: str,
     door_sensor: str | None = None,
-) -> None:
-    for badge in badges_list:
-        if badge.get("name") == "Lock":
-            badge["entity"] = lock_entity
-        elif badge.get("name") == "Door":
-            badge["entity"] = door_sensor
-
-
-def _generate_lock_badges(
-    child: bool = False, door: bool = False
+    child: bool = False,
 ) -> list[MutableMapping[str, Any]]:
+    door = door_sensor is not None
     badges: list[MutableMapping[str, Any]] = [
         {
             "type": "entity",
@@ -582,7 +571,7 @@ def _generate_lock_badges(
             "show_name": True,
             "show_state": True,
             "show_icon": True,
-            "entity": None,
+            "entity": lock_entity,
             "name": "Lock",
             "color": "",
             "tap_action": {"action": "toggle"},
@@ -595,7 +584,7 @@ def _generate_lock_badges(
                 "show_name": True,
                 "show_state": True,
                 "show_icon": True,
-                "entity": None,
+                "entity": door_sensor,
                 "name": "Door",
                 "color": "",
                 "tap_action": {"action": "none"},

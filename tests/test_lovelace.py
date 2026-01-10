@@ -22,11 +22,37 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _create_mock_registry():
-    """Create a mock entity registry that returns predictable entity IDs."""
-    mock_registry = MagicMock()
-    mock_registry.async_get_entity_id.side_effect = (
-        lambda domain, platform, unique_id: f"{domain}.{unique_id}"
+    """Create a mock entity registry that returns predictable entity IDs.
+
+    Only returns entity IDs for Keymaster entities. Returns None for external
+    entities like lock.frontdoor or binary_sensor.frontdoor (door sensor).
+    """
+    # Known keymaster entity name patterns (after the domain prefix in unique_id)
+    # Keymaster entities: sensor_lock_name, binary_sensor_connected, switch_code_slots_1_enabled
+    # External entities: lock_frontdoor, binary_sensor_frontdoor
+    keymaster_patterns = (
+        "_lock_name",
+        "_parent_name",
+        "_connected",
+        "_lock_notifications",
+        "_door_notifications",
+        "_autolock",
+        "_retry_lock",
+        "_code_slots",
+        "_accesslimit",
     )
+
+    def mock_lookup(domain: str, platform: str, unique_id: str) -> str | None:
+        # lock domain is never keymaster - locks are external
+        if domain == "lock":
+            return None
+        # Check if unique_id contains a keymaster pattern
+        if not any(pattern in unique_id for pattern in keymaster_patterns):
+            return None
+        return f"{domain}.{unique_id}"
+
+    mock_registry = MagicMock()
+    mock_registry.async_get_entity_id.side_effect = mock_lookup
     return mock_registry
 
 
@@ -54,7 +80,7 @@ async def test_generate_view_config_basic(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -94,7 +120,7 @@ async def test_generate_view_config_sections_structure(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -136,7 +162,7 @@ async def test_generate_view_config_slot_entities(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -174,7 +200,7 @@ async def test_generate_view_config_custom_slot_start(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -201,7 +227,7 @@ async def test_generate_view_config_badges_no_door(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -233,7 +259,7 @@ async def test_generate_view_config_badges_with_door(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -265,7 +291,7 @@ async def test_generate_view_config_advanced_date_range(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -295,7 +321,7 @@ async def test_generate_view_config_advanced_day_of_week(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -325,7 +351,7 @@ async def test_generate_view_config_child_lock(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -365,7 +391,7 @@ async def test_generate_view_config_child_lock_parent_entities(hass: HomeAssista
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -400,7 +426,7 @@ async def test_generate_view_config_child_lock_override_parent(hass: HomeAssista
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -426,7 +452,7 @@ async def test_generate_view_config_slugified_path(hass: HomeAssistant):
     mock_registry = _create_mock_registry()
 
     with patch(
-        "homeassistant.helpers.entity_registry.async_get",
+        "custom_components.keymaster.lovelace.er.async_get",
         return_value=mock_registry,
     ):
         view = generate_view_config(
@@ -455,7 +481,7 @@ async def test_async_generate_lovelace_creates_folder(hass: HomeAssistant):
 
     with (
         patch(
-            "homeassistant.helpers.entity_registry.async_get",
+            "custom_components.keymaster.lovelace.er.async_get",
             return_value=mock_registry,
         ),
         patch(
@@ -485,7 +511,7 @@ async def test_async_generate_lovelace_writes_yaml(hass: HomeAssistant):
 
     with (
         patch(
-            "homeassistant.helpers.entity_registry.async_get",
+            "custom_components.keymaster.lovelace.er.async_get",
             return_value=mock_registry,
         ),
         patch("custom_components.keymaster.lovelace._create_lovelace_folder"),
@@ -521,7 +547,7 @@ async def test_async_generate_lovelace_filename_matches_lock_name(hass: HomeAssi
 
     with (
         patch(
-            "homeassistant.helpers.entity_registry.async_get",
+            "custom_components.keymaster.lovelace.er.async_get",
             return_value=mock_registry,
         ),
         patch("custom_components.keymaster.lovelace._create_lovelace_folder"),
@@ -550,7 +576,7 @@ async def test_async_generate_lovelace_delegates_to_view_config(hass: HomeAssist
 
     with (
         patch(
-            "homeassistant.helpers.entity_registry.async_get",
+            "custom_components.keymaster.lovelace.er.async_get",
             return_value=mock_registry,
         ),
         patch("custom_components.keymaster.lovelace._create_lovelace_folder"),
