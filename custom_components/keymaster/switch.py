@@ -162,7 +162,9 @@ async def async_setup_entry(
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterSwitchEntityDescription(KeymasterEntityDescription, SwitchEntityDescription):
+class KeymasterSwitchEntityDescription(
+    KeymasterEntityDescription, SwitchEntityDescription
+):
     """Entity Description for keymaster Switches."""
 
 
@@ -209,7 +211,10 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         if (
             not self._property.endswith(".enabled")
             and ".code_slots" in self._property
-            and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
+            and (
+                not self._kmlock.code_slots
+                or self._code_slot not in self._kmlock.code_slots
+            )
         ):
             self._attr_available = False
             self.async_write_ha_state()
@@ -221,14 +226,18 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             and (
                 not self._kmlock.code_slots
                 or not self._code_slot
-                or not self._kmlock.code_slots[self._code_slot].accesslimit_day_of_week_enabled
+                or not self._kmlock.code_slots[
+                    self._code_slot
+                ].accesslimit_day_of_week_enabled
             )
         ):
             self._attr_available = False
             self.async_write_ha_state()
             return
 
-        code_slots: MutableMapping[int, KeymasterCodeSlot] | None = self._kmlock.code_slots
+        code_slots: MutableMapping[int, KeymasterCodeSlot] | None = (
+            self._kmlock.code_slots
+        )
         accesslimit_dow: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
         if self._code_slot is not None and code_slots and self._code_slot in code_slots:
             accesslimit_dow = code_slots[self._code_slot].accesslimit_day_of_week

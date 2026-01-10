@@ -35,13 +35,13 @@ def generate_badges_config(
         child=bool(parent_config_entry_id),
         door=bool(door_sensor is not None),
     )
-    mapped_badges_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = (
-        _map_property_to_entity_id(
-            hass=hass,
-            lovelace_entities=badges_list,
-            keymaster_config_entry_id=keymaster_config_entry_id,
-            parent_config_entry_id=parent_config_entry_id,
-        )
+    mapped_badges_list: (
+        MutableMapping[str, Any] | list[MutableMapping[str, Any]]
+    ) = _map_property_to_entity_id(
+        hass=hass,
+        lovelace_entities=badges_list,
+        keymaster_config_entry_id=keymaster_config_entry_id,
+        parent_config_entry_id=parent_config_entry_id,
     )
     if isinstance(mapped_badges_list, list):
         _add_lock_and_door_to_badges(
@@ -79,13 +79,13 @@ def generate_section_config(
             advanced_day_of_week=advanced_day_of_week,
         )
 
-    mapped_section: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = (
-        _map_property_to_entity_id(
-            hass=hass,
-            lovelace_entities=code_slot_dict,
-            keymaster_config_entry_id=keymaster_config_entry_id,
-            parent_config_entry_id=parent_config_entry_id,
-        )
+    mapped_section: (
+        MutableMapping[str, Any] | list[MutableMapping[str, Any]]
+    ) = _map_property_to_entity_id(
+        hass=hass,
+        lovelace_entities=code_slot_dict,
+        keymaster_config_entry_id=keymaster_config_entry_id,
+        parent_config_entry_id=parent_config_entry_id,
     )
 
     # _map_property_to_entity_id returns the same type it receives
@@ -112,7 +112,7 @@ def generate_view_config(
 
     Returns the view configuration as a dict, composing badges and sections.
     """
-    badges = generate_badges_config(
+    badges =generate_badges_config(
         hass=hass,
         keymaster_config_entry_id=keymaster_config_entry_id,
         lock_entity=lock_entity,
@@ -252,7 +252,9 @@ def _map_property_to_entity_id(
     #     f"parent_config_entry_id: {parent_config_entry_id}"
     # )
     entity_registry: er.EntityRegistry = er.async_get(hass)
-    lovelace_list: list[MutableMapping[str, Any]] | MutableMapping[str, Any] = _process_entities(
+    lovelace_list: (
+        list[MutableMapping[str, Any]] | MutableMapping[str, Any]
+    ) = _process_entities(
         lovelace_entities,
         "entity",
         functools.partial(

@@ -66,7 +66,9 @@ async def async_setup_entry(
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterDateTimeEntityDescription(KeymasterEntityDescription, DateTimeEntityDescription):
+class KeymasterDateTimeEntityDescription(
+    KeymasterEntityDescription, DateTimeEntityDescription
+):
     """Entity Description for keymaster DateTime."""
 
 
@@ -107,7 +109,8 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
             return
 
         if ".code_slots" in self._property and (
-            not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
+            not self._kmlock.code_slots
+            or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
             self.async_write_ha_state()

@@ -235,7 +235,9 @@ class TestParentChildSync:
         mock_coordinator.set_pin_on_lock.assert_not_called()
         mock_coordinator.clear_pin_from_lock.assert_not_called()
 
-    async def test_sync_skips_missing_child_slots(self, mock_coordinator, parent_lock, child_lock):
+    async def test_sync_skips_missing_child_slots(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
         """Test that sync skips slots not present on child."""
         # Arrange: Parent has slot 5, child doesn't
         parent_slot = Mock(spec=KeymasterCodeSlot)
@@ -258,9 +260,15 @@ class TestParentChildSync:
         """Test syncing multiple code slots at once."""
         # Arrange: Multiple slots with different states
         parent_lock.code_slots = {
-            1: Mock(code_slot_num=1, enabled=True, active=True, pin="1111", name="Slot 1"),
-            2: Mock(code_slot_num=2, enabled=False, active=True, pin="2222", name="Slot 2"),
-            3: Mock(code_slot_num=3, enabled=True, active=True, pin="3333", name="Slot 3"),
+            1: Mock(
+                code_slot_num=1, enabled=True, active=True, pin="1111", name="Slot 1"
+            ),
+            2: Mock(
+                code_slot_num=2, enabled=False, active=True, pin="2222", name="Slot 2"
+            ),
+            3: Mock(
+                code_slot_num=3, enabled=True, active=True, pin="3333", name="Slot 3"
+            ),
         }
 
         child_lock.code_slots = {
@@ -294,7 +302,9 @@ class TestParentChildSync:
         assert mock_coordinator.set_pin_on_lock.call_count == 1
         assert mock_coordinator.clear_pin_from_lock.call_count == 1
 
-    async def test_sync_handles_none_parent_pin(self, mock_coordinator, parent_lock, child_lock):
+    async def test_sync_handles_none_parent_pin(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
         """Test sync when parent has no PIN set."""
         # Arrange: Parent enabled but no PIN
         parent_slot = Mock(spec=KeymasterCodeSlot)
@@ -321,7 +331,9 @@ class TestParentChildSync:
         mock_coordinator.clear_pin_from_lock.assert_called_once()
         assert child_slot.pin is None
 
-    async def test_sync_empty_parent_slots(self, mock_coordinator, parent_lock, child_lock):
+    async def test_sync_empty_parent_slots(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
         """Test that empty parent code_slots doesn't crash."""
         # Arrange
         parent_lock.code_slots = None  # or {}
@@ -334,7 +346,9 @@ class TestParentChildSync:
         mock_coordinator.set_pin_on_lock.assert_not_called()
         mock_coordinator.clear_pin_from_lock.assert_not_called()
 
-    async def test_sync_attribute_propagation(self, mock_coordinator, parent_lock, child_lock):
+    async def test_sync_attribute_propagation(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
         """Test that all slot attributes are propagated to child."""
         # Arrange: Parent with all attributes set
         parent_slot = Mock(spec=KeymasterCodeSlot)
@@ -378,7 +392,9 @@ class TestParentChildSync:
         assert child_slot.accesslimit_count == 5
         assert child_slot.accesslimit_date_range_start == "2025-01-01"
 
-    async def test_sync_multiple_children_from_same_parent(self, mock_coordinator, parent_lock):
+    async def test_sync_multiple_children_from_same_parent(
+        self, mock_coordinator, parent_lock
+    ):
         """Test that one parent can sync to multiple children simultaneously."""
         # Arrange: One parent with 3 children
         parent_slot = Mock(spec=KeymasterCodeSlot)
@@ -466,7 +482,9 @@ class TestParentChildSync:
 class TestMultiLockScenarios:
     """Test scenarios with multiple locks and complex relationships."""
 
-    async def test_parent_with_multiple_children_cascading_updates(self, mock_coordinator):
+    async def test_parent_with_multiple_children_cascading_updates(
+        self, mock_coordinator
+    ):
         """Test that parent updates cascade to all children correctly."""
         # Arrange: 1 parent, 2 children
         parent = Mock(spec=KeymasterLock)
@@ -538,11 +556,15 @@ class TestMultiLockScenarios:
 class TestCodeSlotBoundaries:
     """Test code slot boundary conditions and validation."""
 
-    async def test_sync_slot_number_zero(self, mock_coordinator, parent_lock, child_lock):
+    async def test_sync_slot_number_zero(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
         """Test handling of slot number 0 (invalid but possible)."""
         # Arrange: Slot 0
         parent_slot = Mock(code_slot_num=0, enabled=True, pin="1234")
-        child_slot = Mock(code_slot_num=0, enabled=False, pin=None, override_parent=False)
+        child_slot = Mock(
+            code_slot_num=0, enabled=False, pin=None, override_parent=False
+        )
 
         parent_lock.code_slots = {0: parent_slot}
         child_lock.code_slots = {0: child_slot}
@@ -553,11 +575,15 @@ class TestCodeSlotBoundaries:
         # Assert: Operation completed
         assert mock_coordinator.set_pin_on_lock.call_count >= 0
 
-    async def test_sync_slot_number_max(self, mock_coordinator, parent_lock, child_lock):
+    async def test_sync_slot_number_max(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
         """Test handling of maximum slot number (typically 250 or 254)."""
         # Arrange: Slot 250
         parent_slot = Mock(code_slot_num=250, enabled=True, pin="1234")
-        child_slot = Mock(code_slot_num=250, enabled=False, pin=None, override_parent=False)
+        child_slot = Mock(
+            code_slot_num=250, enabled=False, pin=None, override_parent=False
+        )
 
         parent_lock.code_slots = {250: parent_slot}
         child_lock.code_slots = {250: child_slot}
@@ -573,7 +599,9 @@ class TestCodeSlotBoundaries:
             override=True,
         )
 
-    async def test_sync_with_sparse_slot_numbers(self, mock_coordinator, parent_lock, child_lock):
+    async def test_sync_with_sparse_slot_numbers(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
         """Test sync with non-contiguous slot numbers (1, 5, 10, 100)."""
         # Arrange: Non-contiguous slots
         parent_lock.code_slots = {
@@ -771,7 +799,9 @@ class TestChildLockBehavior:
             override=True,
         )
 
-    async def test_child_switching_override_flag(self, mock_coordinator, parent_lock, child_lock):
+    async def test_child_switching_override_flag(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
         """Test child behavior when switching override_parent flag on and off."""
         # Arrange: Start with override off
         parent_slot = Mock(spec=KeymasterCodeSlot)

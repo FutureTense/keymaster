@@ -140,7 +140,10 @@ async def test_datetime_entity_initialization(
     entity = KeymasterDateTime(entity_description=entity_description)
 
     assert entity._attr_native_value is None
-    assert entity.entity_description.key == "datetime.code_slots:1.accesslimit_date_range_start"
+    assert (
+        entity.entity_description.key
+        == "datetime.code_slots:1.accesslimit_date_range_start"
+    )
     assert isinstance(entity.entity_description.name, str)
     assert "Date Range Start" in entity.entity_description.name
 

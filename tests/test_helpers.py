@@ -470,7 +470,9 @@ async def test_keymaster_timer_properties(hass):
     assert timer.is_running
     assert timer.end_time is not None
     assert timer.remaining_seconds is not None
-    assert timer.remaining_seconds > 0  # Time remaining (positive because end_time is in future)
+    assert (
+        timer.remaining_seconds > 0
+    )  # Time remaining (positive because end_time is in future)
 
 
 async def test_delete_code_slot_entities_removes_all(hass):
@@ -489,7 +491,9 @@ async def test_delete_code_slot_entities_removes_all(hass):
 
     mock_registry.async_get_entity_id.side_effect = mock_get_entity_id
 
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+    with patch(
+        "custom_components.keymaster.helpers.er.async_get", return_value=mock_registry
+    ):
         await delete_code_slot_entities(hass, config_entry_id, code_slot_num)
 
     # Check count.
@@ -513,9 +517,13 @@ async def test_delete_code_slot_entities_handles_errors(hass):
     """Test that deletion errors are logged but don't stop the process."""
     mock_registry = MagicMock()
     mock_registry.async_get_entity_id.return_value = "entity.test"
-    mock_registry.async_remove.side_effect = KeyError("Entity not found")  # Simulate error
+    mock_registry.async_remove.side_effect = KeyError(
+        "Entity not found"
+    )  # Simulate error
 
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+    with patch(
+        "custom_components.keymaster.helpers.er.async_get", return_value=mock_registry
+    ):
         await delete_code_slot_entities(hass, "entry", 1)
 
     # Should finish without raising exception and try to remove all
@@ -538,12 +546,12 @@ def test_async_using_zwave_js_checks(hass):
     mock_registry.async_get.side_effect = lambda eid: (
         mock_entity_zwave
         if eid == "lock.zwave"
-        else mock_entity_other
-        if eid == "lock.other"
-        else None
+        else mock_entity_other if eid == "lock.other" else None
     )
 
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+    with patch(
+        "custom_components.keymaster.helpers.er.async_get", return_value=mock_registry
+    ):
         # Test with entity_id
         assert async_using_zwave_js(hass, entity_id="lock.zwave") is True
         assert async_using_zwave_js(hass, entity_id="lock.other") is False

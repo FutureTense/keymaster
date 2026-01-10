@@ -60,7 +60,9 @@ async def async_setup_entry(
 
 
 @dataclass(frozen=True, kw_only=True)
-class KeymasterButtonEntityDescription(KeymasterEntityDescription, ButtonEntityDescription):
+class KeymasterButtonEntityDescription(
+    KeymasterEntityDescription, ButtonEntityDescription
+):
     """Entity Description for Keymaster Buttons."""
 
 

@@ -14,7 +14,10 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.entity import KeymasterEntity, KeymasterEntityDescription
+from custom_components.keymaster.entity import (
+    KeymasterEntity,
+    KeymasterEntityDescription,
+)
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
     KeymasterCodeSlotDayOfWeek,
@@ -239,7 +242,9 @@ async def test_entity_set_property_value_with_code_slot(
     assert kmlock.code_slots[1].enabled is True
 
 
-async def test_entity_get_code_slots_num(hass: HomeAssistant, entity_config_entry, coordinator):
+async def test_entity_get_code_slots_num(
+    hass: HomeAssistant, entity_config_entry, coordinator
+):
     """Test _get_code_slots_num extracts code slot number correctly."""
 
     kmlock = KeymasterLock(
@@ -299,7 +304,9 @@ async def test_entity_get_code_slots_num_returns_none_for_non_slot(
     assert slot_num is None
 
 
-async def test_entity_get_day_of_week_num(hass: HomeAssistant, entity_config_entry, coordinator):
+async def test_entity_get_day_of_week_num(
+    hass: HomeAssistant, entity_config_entry, coordinator
+):
     """Test _get_day_of_week_num extracts day of week number correctly."""
 
     kmlock = KeymasterLock(
@@ -359,7 +366,9 @@ async def test_entity_get_day_of_week_num_returns_none_for_non_dow(
     assert dow_num is None
 
 
-async def test_entity_available_property(hass: HomeAssistant, entity_config_entry, coordinator):
+async def test_entity_available_property(
+    hass: HomeAssistant, entity_config_entry, coordinator
+):
     """Test available property returns _attr_available."""
 
     kmlock = KeymasterLock(

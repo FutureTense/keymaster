@@ -159,7 +159,9 @@ async def test_migrate_2to3_reload_failure(hass: HomeAssistant, mock_coordinator
             "custom_components.keymaster.migrate.KeymasterCoordinator",
             return_value=mock_coordinator,
         ),
-        patch("custom_components.keymaster.migrate._migrate_2to3_delete_lock_and_base_folder"),
+        patch(
+            "custom_components.keymaster.migrate._migrate_2to3_delete_lock_and_base_folder"
+        ),
         patch(
             "custom_components.keymaster.migrate._migrate_2to3_reload_package_platforms",
             return_value=False,

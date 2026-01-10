@@ -40,7 +40,9 @@ async def async_register_strategy_resource(hass: HomeAssistant) -> None:
 
     try:
         res_id = next(
-            data[CONF_ID] for data in resources.async_items() if data[CONF_URL] == STRATEGY_PATH
+            data[CONF_ID]
+            for data in resources.async_items()
+            if data[CONF_URL] == STRATEGY_PATH
         )
     except StopIteration:
         if isinstance(resources, ResourceYAMLCollection):
@@ -64,7 +66,9 @@ async def async_register_strategy_resource(hass: HomeAssistant) -> None:
     _LOGGER.debug("Strategy module already registered with resource ID %s", res_id)
 
 
-async def async_cleanup_strategy_resource(hass: HomeAssistant, hass_data: dict[str, Any]) -> None:
+async def async_cleanup_strategy_resource(
+    hass: HomeAssistant, hass_data: dict[str, Any]
+) -> None:
     """Remove the Lovelace strategy resource if we registered it."""
     resources = get_lovelace_resources(hass)
     if not resources:
@@ -85,7 +89,9 @@ async def async_cleanup_strategy_resource(hass: HomeAssistant, hass_data: dict[s
 
     try:
         resource_id = next(
-            data[CONF_ID] for data in resources.async_items() if data[CONF_URL] == STRATEGY_PATH
+            data[CONF_ID]
+            for data in resources.async_items()
+            if data[CONF_URL] == STRATEGY_PATH
         )
     except StopIteration:
         _LOGGER.debug("Strategy module not found so there is nothing to remove")

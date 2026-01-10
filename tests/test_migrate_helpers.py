@@ -2,29 +2,50 @@
 
 from datetime import datetime as dt, time as dt_time
 
-from custom_components.keymaster.migrate import _migrate_2to3_validate_and_convert_property
+import pytest
+
+from custom_components.keymaster.migrate import (
+    _migrate_2to3_validate_and_convert_property,
+)
 
 
 async def test_convert_boolean():
     """Test converting boolean values."""
     # Test 'on' string -> True
-    assert await _migrate_2to3_validate_and_convert_property("test.prop", "enabled", "on") is True
+    assert (
+        await _migrate_2to3_validate_and_convert_property("test.prop", "enabled", "on")
+        is True
+    )
 
     # Test 'off' string -> False
-    assert await _migrate_2to3_validate_and_convert_property("test.prop", "enabled", "off") is False
+    assert (
+        await _migrate_2to3_validate_and_convert_property("test.prop", "enabled", "off")
+        is False
+    )
 
 
 async def test_convert_integer():
     """Test converting integer values."""
     # Test numeric string
-    assert await _migrate_2to3_validate_and_convert_property("test.prop", "number", "123") == 123
+    assert (
+        await _migrate_2to3_validate_and_convert_property("test.prop", "number", "123")
+        == 123
+    )
 
     # Test float string
-    assert await _migrate_2to3_validate_and_convert_property("test.prop", "number", "123.0") == 123
+    assert (
+        await _migrate_2to3_validate_and_convert_property(
+            "test.prop", "number", "123.0"
+        )
+        == 123
+    )
 
     # Test time string conversion to minutes (HH:MM:SS -> minutes)
     assert (
-        await _migrate_2to3_validate_and_convert_property("test.prop", "number", "01:00:00") == 60
+        await _migrate_2to3_validate_and_convert_property(
+            "test.prop", "number", "01:00:00"
+        )
+        == 60
     )
 
 
@@ -46,7 +67,9 @@ async def test_convert_datetime():
 async def test_convert_time():
     """Test converting time values."""
     time_str = "12:30:00"
-    result = await _migrate_2to3_validate_and_convert_property("test.prop", "time_start", time_str)
+    result = await _migrate_2to3_validate_and_convert_property(
+        "test.prop", "time_start", time_str
+    )
 
     assert isinstance(result, dt_time)
     assert result.hour == 12
@@ -58,7 +81,10 @@ async def test_conversion_failures():
     """Test conversion failure handling."""
     # Invalid int
     assert (
-        await _migrate_2to3_validate_and_convert_property("test.prop", "number", "invalid") is None
+        await _migrate_2to3_validate_and_convert_property(
+            "test.prop", "number", "invalid"
+        )
+        is None
     )
 
     # Invalid datetime
@@ -71,6 +97,8 @@ async def test_conversion_failures():
 
     # Invalid time
     assert (
-        await _migrate_2to3_validate_and_convert_property("test.prop", "time_start", "invalid-time")
+        await _migrate_2to3_validate_and_convert_property(
+            "test.prop", "time_start", "invalid-time"
+        )
         is None
     )

@@ -20,7 +20,10 @@ from custom_components.keymaster.const import (
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
-from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
+from custom_components.keymaster.switch import (
+    KeymasterSwitch,
+    KeymasterSwitchEntityDescription,
+)
 from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_SWITCH = {
@@ -61,7 +64,9 @@ async def coordinator(hass: HomeAssistant, switch_config_entry):
     return hass.data[DOMAIN][COORDINATOR]
 
 
-async def test_switch_entity_initialization(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_entity_initialization(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test switch entity initialization."""
 
     entity_description = KeymasterSwitchEntityDescription(
@@ -114,7 +119,9 @@ async def test_switch_entity_unavailable_when_not_connected(
     assert not entity._attr_available
 
 
-async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_async_turn_on(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test turning switch on updates coordinator."""
 
     # Create a connected lock
@@ -149,7 +156,9 @@ async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, co
         mock_refresh.assert_called_once()
 
 
-async def test_switch_async_turn_off(hass: HomeAssistant, switch_config_entry, coordinator):
+async def test_switch_async_turn_off(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
     """Test turning switch off updates coordinator."""
 
     # Create a connected lock
@@ -219,10 +228,12 @@ async def test_switch_enabled_turn_on_sets_pin(
     entity._attr_is_on = False
 
     # Mock coordinator methods
-    with (
-        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()) as mock_update,
-        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+    with patch.object(
+        coordinator, "update_slot_active_state", new=AsyncMock()
+    ) as mock_update, patch.object(
+        coordinator, "set_pin_on_lock", new=AsyncMock()
+    ) as mock_set_pin, patch.object(
+        coordinator, "async_refresh", new=AsyncMock()
     ):
         await entity.async_turn_on()
 
@@ -272,10 +283,12 @@ async def test_switch_enabled_turn_off_clears_pin(
     entity._attr_is_on = True
 
     # Mock coordinator methods
-    with (
-        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()) as mock_update,
-        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()) as mock_clear_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+    with patch.object(
+        coordinator, "update_slot_active_state", new=AsyncMock()
+    ) as mock_update, patch.object(
+        coordinator, "clear_pin_from_lock", new=AsyncMock()
+    ) as mock_clear_pin, patch.object(
+        coordinator, "async_refresh", new=AsyncMock()
     ):
         await entity.async_turn_off()
 

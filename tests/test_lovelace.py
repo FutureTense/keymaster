@@ -9,6 +9,8 @@ import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from custom_components.keymaster.lovelace import (
     async_generate_lovelace,
     delete_lovelace,
@@ -456,7 +458,9 @@ async def test_async_generate_lovelace_creates_folder(hass: HomeAssistant):
             "homeassistant.helpers.entity_registry.async_get",
             return_value=mock_registry,
         ),
-        patch("custom_components.keymaster.lovelace._create_lovelace_folder") as mock_create_folder,
+        patch(
+            "custom_components.keymaster.lovelace._create_lovelace_folder"
+        ) as mock_create_folder,
         patch("custom_components.keymaster.lovelace._write_lovelace_yaml"),
     ):
         await async_generate_lovelace(
@@ -485,7 +489,9 @@ async def test_async_generate_lovelace_writes_yaml(hass: HomeAssistant):
             return_value=mock_registry,
         ),
         patch("custom_components.keymaster.lovelace._create_lovelace_folder"),
-        patch("custom_components.keymaster.lovelace._write_lovelace_yaml") as mock_write_yaml,
+        patch(
+            "custom_components.keymaster.lovelace._write_lovelace_yaml"
+        ) as mock_write_yaml,
     ):
         await async_generate_lovelace(
             hass=hass,
@@ -519,7 +525,9 @@ async def test_async_generate_lovelace_filename_matches_lock_name(hass: HomeAssi
             return_value=mock_registry,
         ),
         patch("custom_components.keymaster.lovelace._create_lovelace_folder"),
-        patch("custom_components.keymaster.lovelace._write_lovelace_yaml") as mock_write_yaml,
+        patch(
+            "custom_components.keymaster.lovelace._write_lovelace_yaml"
+        ) as mock_write_yaml,
     ):
         await async_generate_lovelace(
             hass=hass,
@@ -547,7 +555,9 @@ async def test_async_generate_lovelace_delegates_to_view_config(hass: HomeAssist
         ),
         patch("custom_components.keymaster.lovelace._create_lovelace_folder"),
         patch("custom_components.keymaster.lovelace._write_lovelace_yaml") as mock_write,
-        patch("custom_components.keymaster.lovelace.generate_view_config") as mock_view_config,
+        patch(
+            "custom_components.keymaster.lovelace.generate_view_config"
+        ) as mock_view_config,
     ):
         mock_view_config.return_value = {"type": "sections", "title": "test"}
 
@@ -614,7 +624,9 @@ def test_delete_lovelace_handles_missing_file(hass: HomeAssistant, tmp_path: Pat
         delete_lovelace(hass, "nonexistent")
 
 
-def test_delete_lovelace_handles_permission_error(hass: HomeAssistant, tmp_path: Path, caplog):
+def test_delete_lovelace_handles_permission_error(
+    hass: HomeAssistant, tmp_path: Path, caplog
+):
     """Test that delete_lovelace handles permission errors gracefully."""
     lovelace_dir = tmp_path / "custom_components" / "keymaster" / "lovelace"
     lovelace_dir.mkdir(parents=True)

@@ -95,7 +95,9 @@ async def test_time_entity_not_created_without_advanced_dow(hass: HomeAssistant)
     assert len(entities) == 0
 
 
-async def test_time_entities_created_with_advanced_dow(hass: HomeAssistant, time_config_entry):
+async def test_time_entities_created_with_advanced_dow(
+    hass: HomeAssistant, time_config_entry
+):
     """Test time entities are created when advanced day of week is enabled."""
 
     entities = []
@@ -135,12 +137,17 @@ async def test_time_entity_initialization(hass: HomeAssistant, time_config_entry
     entity = KeymasterTime(entity_description=entity_description)
 
     assert entity._attr_native_value is None
-    assert entity.entity_description.key == "time.code_slots:1.accesslimit_day_of_week:0.time_start"
+    assert (
+        entity.entity_description.key
+        == "time.code_slots:1.accesslimit_day_of_week:0.time_start"
+    )
     assert isinstance(entity.entity_description.name, str)
     assert "Monday - Start Time" in entity.entity_description.name
 
 
-async def test_time_entity_unavailable_when_not_connected(hass: HomeAssistant, time_config_entry):
+async def test_time_entity_unavailable_when_not_connected(
+    hass: HomeAssistant, time_config_entry
+):
     """Test time entity is unavailable when lock is not connected."""
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
@@ -283,7 +290,9 @@ async def test_time_entity_child_lock_ignores_change_without_override(
         assert "not set to override parent. Ignoring change" in caplog.text
 
 
-async def test_time_entity_unavailable_when_dow_not_enabled(hass: HomeAssistant, time_config_entry):
+async def test_time_entity_unavailable_when_dow_not_enabled(
+    hass: HomeAssistant, time_config_entry
+):
     """Test time entity is unavailable when day of week is not enabled."""
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
