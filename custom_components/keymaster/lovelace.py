@@ -142,7 +142,7 @@ def generate_view_config(
     }
 
 
-def generate_lovelace(
+async def async_generate_lovelace(
     hass: HomeAssistant,
     kmlock_name: str,
     keymaster_config_entry_id: str,
@@ -171,8 +171,12 @@ def generate_lovelace(
         parent_config_entry_id=parent_config_entry_id,
     )
     lovelace: list[MutableMapping[str, Any]] = [view_config]
-    _create_lovelace_folder(folder)
-    _write_lovelace_yaml(folder, filename, lovelace)
+
+    def _ll_fs_ops():
+        _create_lovelace_folder(folder)
+        _write_lovelace_yaml(folder, filename, lovelace)
+
+    await hass.async_add_executor_job(_ll_fs_ops)
 
 
 def delete_lovelace(hass: HomeAssistant, kmlock_name: str) -> None:

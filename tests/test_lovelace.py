@@ -2,7 +2,7 @@
 
 This module tests both:
 - generate_view_config(): Core view generation logic
-- generate_lovelace(): File writing wrapper
+- async_generate_lovelace(): File writing wrapper
 """
 
 import logging
@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from custom_components.keymaster.lovelace import (
+    async_generate_lovelace,
     delete_lovelace,
-    generate_lovelace,
     generate_view_config,
 )
 from homeassistant.core import HomeAssistant
@@ -445,12 +445,12 @@ async def test_generate_view_config_slugified_path(hass: HomeAssistant):
 
 
 # =============================================================================
-# generate_lovelace() tests - File writing behavior
+# async_generate_lovelace() tests - File writing behavior
 # =============================================================================
 
 
-async def test_generate_lovelace_creates_folder(hass: HomeAssistant):
-    """Test that generate_lovelace creates the folder."""
+async def test_async_generate_lovelace_creates_folder(hass: HomeAssistant):
+    """Test that async_generate_lovelace creates the folder."""
     mock_registry = _create_mock_registry()
 
     with (
@@ -463,7 +463,7 @@ async def test_generate_lovelace_creates_folder(hass: HomeAssistant):
         ) as mock_create_folder,
         patch("custom_components.keymaster.lovelace._write_lovelace_yaml"),
     ):
-        generate_lovelace(
+        await async_generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -479,8 +479,8 @@ async def test_generate_lovelace_creates_folder(hass: HomeAssistant):
         assert "lovelace" in folder_path
 
 
-async def test_generate_lovelace_writes_yaml(hass: HomeAssistant):
-    """Test that generate_lovelace writes YAML file."""
+async def test_async_generate_lovelace_writes_yaml(hass: HomeAssistant):
+    """Test that async_generate_lovelace writes YAML file."""
     mock_registry = _create_mock_registry()
 
     with (
@@ -493,7 +493,7 @@ async def test_generate_lovelace_writes_yaml(hass: HomeAssistant):
             "custom_components.keymaster.lovelace._write_lovelace_yaml"
         ) as mock_write_yaml,
     ):
-        generate_lovelace(
+        await async_generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",
@@ -515,7 +515,7 @@ async def test_generate_lovelace_writes_yaml(hass: HomeAssistant):
         assert len(lovelace_data) == 1
 
 
-async def test_generate_lovelace_filename_matches_lock_name(hass: HomeAssistant):
+async def test_async_generate_lovelace_filename_matches_lock_name(hass: HomeAssistant):
     """Test that filename matches lock name."""
     mock_registry = _create_mock_registry()
 
@@ -529,7 +529,7 @@ async def test_generate_lovelace_filename_matches_lock_name(hass: HomeAssistant)
             "custom_components.keymaster.lovelace._write_lovelace_yaml"
         ) as mock_write_yaml,
     ):
-        generate_lovelace(
+        await async_generate_lovelace(
             hass=hass,
             kmlock_name="my_special_lock",
             keymaster_config_entry_id="test_entry_id",
@@ -544,8 +544,8 @@ async def test_generate_lovelace_filename_matches_lock_name(hass: HomeAssistant)
         assert filename == "my_special_lock.yaml"
 
 
-async def test_generate_lovelace_delegates_to_view_config(hass: HomeAssistant):
-    """Test that generate_lovelace delegates to generate_view_config."""
+async def test_async_generate_lovelace_delegates_to_view_config(hass: HomeAssistant):
+    """Test that async_generate_lovelace delegates to generate_view_config."""
     mock_registry = _create_mock_registry()
 
     with (
@@ -561,7 +561,7 @@ async def test_generate_lovelace_delegates_to_view_config(hass: HomeAssistant):
     ):
         mock_view_config.return_value = {"type": "sections", "title": "test"}
 
-        generate_lovelace(
+        await async_generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
             keymaster_config_entry_id="test_entry_id",

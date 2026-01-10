@@ -48,7 +48,7 @@ from .const import (
 )
 from .coordinator import KeymasterCoordinator
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
-from .lovelace import generate_lovelace
+from .lovelace import async_generate_lovelace
 from .migrate import migrate_2to3
 from .resources import async_cleanup_strategy_resource, async_register_strategy_resource
 from .services import async_setup_services
@@ -198,20 +198,17 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
-    await hass.async_add_executor_job(
-        functools.partial(
-            generate_lovelace,
-            hass=hass,
-            kmlock_name=config_entry.data[CONF_LOCK_NAME],
-            keymaster_config_entry_id=config_entry.entry_id,
-            parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
-            code_slot_start=config_entry.data[CONF_START],
-            code_slots=config_entry.data[CONF_SLOTS],
-            lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
-            advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
-            advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
-            door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
-        )
+    await async_generate_lovelace(
+        hass=hass,
+        kmlock_name=config_entry.data[CONF_LOCK_NAME],
+        keymaster_config_entry_id=config_entry.entry_id,
+        parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+        code_slot_start=config_entry.data[CONF_START],
+        code_slots=config_entry.data[CONF_SLOTS],
+        lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
+        advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
+        advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
+        door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
     )
 
     return True

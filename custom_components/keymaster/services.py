@@ -21,7 +21,7 @@ from .const import (
     SERVICE_REGENERATE_LOVELACE,
 )
 from .coordinator import KeymasterCoordinator
-from .lovelace import generate_lovelace
+from .lovelace import async_generate_lovelace
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -72,9 +72,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def service_regenerate_lovelace(_: ServiceCall) -> None:
         entries: list[ConfigEntry] = hass.config_entries.async_entries(domain=DOMAIN)
         for config_entry in entries:
-            await hass.async_add_executor_job(
-                functools.partial(
-                    generate_lovelace,
+            await async_generate_lovelace(
                     hass=hass,
                     kmlock_name=config_entry.data[CONF_LOCK_NAME],
                     keymaster_config_entry_id=config_entry.entry_id,
@@ -86,7 +84,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
                     door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
                 )
-            )
 
     # hass.services.async_register(
     #     DOMAIN,
