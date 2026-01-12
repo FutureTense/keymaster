@@ -62,9 +62,7 @@ def get_provider_class_for_lock(
     entry = entity_registry.async_get(lock_entity_id)
 
     if not entry:
-        _LOGGER.debug(
-            "[get_provider_class_for_lock] Entity not found: %s", lock_entity_id
-        )
+        _LOGGER.debug("[get_provider_class_for_lock] Entity not found: %s", lock_entity_id)
         return None
 
     platform = entry.platform
@@ -76,9 +74,7 @@ def get_provider_class_for_lock(
         )
         return PROVIDER_MAP[platform]
 
-    _LOGGER.debug(
-        "[get_provider_class_for_lock] No provider for platform: %s", platform
-    )
+    _LOGGER.debug("[get_provider_class_for_lock] No provider for platform: %s", platform)
     return None
 
 

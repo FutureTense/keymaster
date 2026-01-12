@@ -54,9 +54,7 @@ def mock_lock():
 
 
 @pytest.mark.asyncio
-async def test_handle_provider_lock_event_keypad_lock(
-    hass, mock_coordinator, mock_lock
-):
+async def test_handle_provider_lock_event_keypad_lock(hass, mock_coordinator, mock_lock):
     """Test handling a keypad lock event from provider callback."""
     # Set the state in the state machine
     hass.states.async_set(mock_lock.lock_entity_id, LockState.LOCKED)
@@ -77,9 +75,7 @@ async def test_handle_provider_lock_event_keypad_lock(
 
 
 @pytest.mark.asyncio
-async def test_handle_provider_lock_event_rf_unlock(
-    hass, mock_coordinator, mock_lock
-):
+async def test_handle_provider_lock_event_rf_unlock(hass, mock_coordinator, mock_lock):
     """Test handling an RF unlock event from provider callback."""
     # Set the state in the state machine
     hass.states.async_set(mock_lock.lock_entity_id, LockState.UNLOCKED)
@@ -100,9 +96,7 @@ async def test_handle_provider_lock_event_rf_unlock(
 
 
 @pytest.mark.asyncio
-async def test_handle_provider_lock_event_unknown_state(
-    hass, mock_coordinator, mock_lock
-):
+async def test_handle_provider_lock_event_unknown_state(hass, mock_coordinator, mock_lock):
     """Test that unknown lock states are handled gracefully."""
     # Set lock to unknown state
     hass.states.async_set(mock_lock.lock_entity_id, "jammed")

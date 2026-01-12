@@ -87,9 +87,7 @@ class BaseLockProvider(ABC):
         """
 
     @abstractmethod
-    async def async_set_usercode(
-        self, slot_num: int, code: str, name: str | None = None
-    ) -> bool:
+    async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
         """Set user code on a slot.
 
         Args:
@@ -149,9 +147,7 @@ class BaseLockProvider(ABC):
         """
         return lambda: None  # No-op by default
 
-    def subscribe_connection_events(
-        self, callback: ConnectionCallback
-    ) -> Callable[[], None]:
+    def subscribe_connection_events(self, callback: ConnectionCallback) -> Callable[[], None]:
         """Subscribe to connection state changes.
 
         Args:

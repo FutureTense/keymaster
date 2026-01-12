@@ -102,9 +102,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return False
 
         try:
-            zwave_entry = self.hass.config_entries.async_get_entry(
-                self.lock_config_entry_id
-            )
+            zwave_entry = self.hass.config_entries.async_get_entry(self.lock_config_entry_id)
             if not zwave_entry:
                 _LOGGER.error(
                     "[ZWaveJSProvider] Can't find Z-Wave JS config entry: %s",
@@ -249,9 +247,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return None
 
         try:
-            zw_slot: ZwaveJSCodeSlot = await get_usercode_from_node(
-                self._node, slot_num
-            )
+            zw_slot: ZwaveJSCodeSlot = await get_usercode_from_node(self._node, slot_num)
             return CodeSlot(
                 slot_num=slot_num,
                 code=zw_slot[ZWAVEJS_ATTR_USERCODE] or None,
@@ -266,9 +262,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return None
 
-    async def async_set_usercode(
-        self, slot_num: int, code: str, name: str | None = None
-    ) -> bool:
+    async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
         """Set user code on a slot."""
         if not self._node:
             _LOGGER.error("[ZWaveJSProvider] No node available for set_usercode")

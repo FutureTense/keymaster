@@ -34,6 +34,7 @@ def cleanup_keymaster_json():
                 shutil.rmtree(json_dir, ignore_errors=True)
     yield
 
+
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 pytest_plugins = "pytest_homeassistant_custom_component"  # pylint: disable=invalid-name
