@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .helpers import async_using_zwave_js
+from .helpers import async_has_supported_provider
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -30,7 +30,18 @@ async def async_setup_entry(
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
     kmlock = await coordinator.get_lock_by_config_entry_id(config_entry.entry_id)
     entities: list = []
-    if async_using_zwave_js(hass=hass, kmlock=kmlock):
+
+    if not kmlock:
+        _LOGGER.error("Lock not found for config entry %s", config_entry.entry_id)
+        raise PlatformNotReady
+
+    # Check if lock has a supported provider
+    if not async_has_supported_provider(hass=hass, kmlock=kmlock):
+        _LOGGER.error("No supported provider for lock platform")
+        raise PlatformNotReady
+
+    # Add connection status sensor if provider supports it
+    if kmlock.provider and kmlock.provider.supports_connection_status:
         entities.append(
             KeymasterBinarySensor(
                 entity_description=KeymasterBinarySensorEntityDescription(
@@ -44,28 +55,27 @@ async def async_setup_entry(
                 ),
             )
         )
-        entities.extend(
-            [
-                KeymasterBinarySensor(
-                    entity_description=KeymasterBinarySensorEntityDescription(
-                        key=f"binary_sensor.code_slots:{x}.active",
-                        name=f"Code Slot {x}: Active",
-                        icon="mdi:run",
-                        entity_registry_enabled_default=True,
-                        hass=hass,
-                        config_entry=config_entry,
-                        coordinator=coordinator,
-                    )
+
+    # Add code slot active sensors
+    entities.extend(
+        [
+            KeymasterBinarySensor(
+                entity_description=KeymasterBinarySensorEntityDescription(
+                    key=f"binary_sensor.code_slots:{x}.active",
+                    name=f"Code Slot {x}: Active",
+                    icon="mdi:run",
+                    entity_registry_enabled_default=True,
+                    hass=hass,
+                    config_entry=config_entry,
+                    coordinator=coordinator,
                 )
-                for x in range(
-                    config_entry.data[CONF_START],
-                    config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-                )
-            ]
-        )
-    else:
-        _LOGGER.error("Z-Wave integration not found")
-        raise PlatformNotReady
+            )
+            for x in range(
+                config_entry.data[CONF_START],
+                config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+            )
+        ]
+    )
 
     async_add_entities(entities, True)
 

@@ -23,7 +23,7 @@ from .const import (
 )
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .helpers import async_using_zwave_js
+from .helpers import async_has_supported_provider
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -41,7 +41,12 @@ async def async_setup_entry(
     )
     entities: list = []
 
-    if async_using_zwave_js(hass=hass, kmlock=kmlock):
+    if not kmlock:
+        _LOGGER.error("Lock not found for config entry %s", config_entry.entry_id)
+        raise PlatformNotReady
+
+    # Check if lock has a supported provider
+    if async_has_supported_provider(hass=hass, kmlock=kmlock):
         switch_entities: list[MutableMapping[str, str]] = [
             {
                 "prop": "switch.autolock_enabled",
@@ -155,7 +160,7 @@ async def async_setup_entry(
         )
 
     else:
-        _LOGGER.error("Z-Wave integration not found")
+        _LOGGER.error("No supported provider for lock platform")
         raise PlatformNotReady
 
     async_add_entities(entities, True)

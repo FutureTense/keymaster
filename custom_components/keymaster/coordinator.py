@@ -14,33 +14,9 @@ import logging
 from pathlib import Path
 from typing import Any, Union, get_args, get_origin
 
-from zwave_js_server.client import Client as ZwaveJSClient
-from zwave_js_server.const.command_class.lock import (
-    ATTR_CODE_SLOT as ZWAVEJS_ATTR_CODE_SLOT,
-    ATTR_IN_USE as ZWAVEJS_ATTR_IN_USE,
-    ATTR_USERCODE as ZWAVEJS_ATTR_USERCODE,
-)
-from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
-from zwave_js_server.model.node import Node as ZwaveJSNode
-from zwave_js_server.util.lock import (
-    CodeSlot as ZwaveJSCodeSlot,
-    clear_usercode,
-    get_usercode,
-    get_usercode_from_node,
-    get_usercodes,
-    set_usercode,
-)
-from zwave_js_server.util.node import dump_node_state
-
 from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
-from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
-from homeassistant.components.zwave_js.const import (
-    ATTR_PARAMETERS,
-    DOMAIN as ZWAVE_JS_DOMAIN,
-)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    ATTR_DEVICE_ID,
     ATTR_ENTITY_ID,
     ATTR_STATE,
     EVENT_HOMEASSISTANT_STARTED,
@@ -66,7 +42,6 @@ from .const import (
     ATTR_CODE_SLOT,
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
-    ATTR_NODE_ID,
     ATTR_NOTIFICATION_SOURCE,
     DAY_NAMES,
     DOMAIN,
@@ -85,7 +60,6 @@ from .exceptions import ZWaveIntegrationNotConfiguredError
 from .helpers import (
     KeymasterTimer,
     Throttle,
-    async_using_zwave_js,
     call_hass_service,
     delete_code_slot_entities,
     dismiss_persistent_notification,
@@ -99,6 +73,7 @@ from .lock import (
     keymasterlock_type_lookup,
 )
 from .lovelace import delete_lovelace
+from .providers import CodeSlot, create_provider
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -451,70 +426,47 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                             child_config_entry_id
                         )
 
-    async def _handle_zwave_js_lock_event(self, kmlock: KeymasterLock, event: Event) -> None:
-        """Handle Z-Wave JS event."""
-
-        if (
-            not kmlock.zwave_js_lock_node
-            or not kmlock.zwave_js_lock_device
-            or event.data[ATTR_NODE_ID] != kmlock.zwave_js_lock_node.node_id
-            or event.data[ATTR_DEVICE_ID] != kmlock.zwave_js_lock_device.id
-        ):
-            return
-
-        # Get lock state to provide as part of event data
+    async def _handle_provider_lock_event(
+        self,
+        kmlock: KeymasterLock,
+        code_slot_num: int,
+        event_label: str,
+        action_code: int | None,
+    ) -> None:
+        """Handle lock event from provider callback."""
+        # Get current lock state
         new_state: str | None = None
         if temp_new_state := self.hass.states.get(kmlock.lock_entity_id):
             new_state = temp_new_state.state
 
-        params: MutableMapping[str, Any] = event.data.get(ATTR_PARAMETERS) or {}
-        code_slot_num: int = params.get("userId", 0)
-
-        if (
-            event.data.get("command_class") == 113
-            and event.data.get("type") == 6
-            and event.data.get("event")
-        ):
-            action: MutableMapping[str, Any] | None = None
-            for activity in LOCK_ACTIVITY_MAP:
-                if activity.get("zwavejs_event") == event.data.get("event"):
-                    action = activity
-                    break
-            if action:
-                event_label: str = action.get("name", "Unknown Lock Event")
-                if action.get("method") != LockMethod.KEYPAD:
-                    code_slot_num = 0
-            else:
-                event_label = event.data.get("event_label", "Unknown Lock Event")
-        else:
-            event_label = event.data.get("event_label", "Unknown Lock Event")
-
         _LOGGER.debug(
-            "[handle_zwave_js_lock_event] %s: event: %s, new_state: %s, params: %s, code_slot_num: %s",
+            "[handle_lock_event_from_provider] %s: event_label: %s, new_state: %s, "
+            "code_slot_num: %s, action_code: %s",
             kmlock.lock_name,
-            event,
+            event_label,
             new_state,
-            params,
             code_slot_num,
+            action_code,
         )
+
         if new_state == LockState.UNLOCKED:
             await self._lock_unlocked(
                 kmlock=kmlock,
                 code_slot_num=code_slot_num,
                 source="event",
                 event_label=event_label,
-                action_code=event.data.get("event", None),
+                action_code=action_code,
             )
         elif new_state == LockState.LOCKED:
             await self._lock_locked(
                 kmlock=kmlock,
                 source="event",
                 event_label=event_label,
-                action_code=event.data.get("event", None),
+                action_code=action_code,
             )
         else:
             _LOGGER.debug(
-                "[handle_zwave_js_lock_event] %s: Unknown lock state: %s",
+                "[handle_lock_event_from_provider] %s: Unknown lock state: %s",
                 kmlock.lock_name,
                 new_state,
             )
@@ -690,17 +642,17 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         """Start tracking state changes after HomeAssistant has started."""
 
         _LOGGER.debug(
-            "[create_listeners] %s: Creating handle_zwave_js_lock_event listener",
+            "[create_listeners] %s: Creating lock event listeners",
             kmlock.lock_name,
         )
-        if async_using_zwave_js(hass=self.hass, kmlock=kmlock):
-            # Listen to Z-Wave JS events so we can fire our own events
-            kmlock.listeners.append(
-                self.hass.bus.async_listen(
-                    ZWAVE_JS_NOTIFICATION_EVENT,
-                    functools.partial(self._handle_zwave_js_lock_event, kmlock),
-                )
+
+        # Subscribe to lock events via provider if available and supports push updates
+        if kmlock.provider and kmlock.provider.supports_push_updates:
+            unsub = kmlock.provider.subscribe_lock_events(
+                kmlock=kmlock,
+                callback=functools.partial(self._handle_provider_lock_event, kmlock),
             )
+            kmlock.listeners.append(unsub)
 
         if kmlock.door_sensor_entity_id is not None:
             _LOGGER.debug(
@@ -1337,19 +1289,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         kmlock.code_slots[code_slot_num].synced = Synced.ADDING
         self._quick_refresh = True
-        if (
-            async_using_zwave_js(hass=self.hass, entity_id=kmlock.lock_entity_id)
-            and kmlock.zwave_js_lock_node
-        ):
-            try:
-                await set_usercode(kmlock.zwave_js_lock_node, code_slot_num, pin)
-            except BaseZwaveJSServerError as e:
+
+        # Use provider if available
+        if kmlock.provider:
+            success = await kmlock.provider.async_set_usercode(code_slot_num, pin)
+            if not success:
                 _LOGGER.error(
-                    "[Coordinator] %s: Code Slot %s: Unable to set PIN. %s: %s",
+                    "[Coordinator] %s: Code Slot %s: Unable to set PIN via provider",
                     kmlock.lock_name,
                     code_slot_num,
-                    e.__class__.__qualname__,
-                    e,
                 )
                 return False
             _LOGGER.debug(
@@ -1359,6 +1307,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 pin,
             )
             return True
+
         raise ZWaveIntegrationNotConfiguredError
 
     async def clear_pin_from_lock(
@@ -1410,52 +1359,24 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         kmlock.code_slots[code_slot_num].synced = Synced.DELETING
         self._quick_refresh = True
-        if (
-            async_using_zwave_js(hass=self.hass, entity_id=kmlock.lock_entity_id)
-            and kmlock.zwave_js_lock_node
-        ):
-            try:
-                await clear_usercode(kmlock.zwave_js_lock_node, code_slot_num)
-            except BaseZwaveJSServerError as e:
+
+        # Use provider if available
+        if kmlock.provider:
+            success = await kmlock.provider.async_clear_usercode(code_slot_num)
+            if not success:
                 _LOGGER.error(
-                    "[Coordinator] %s: Code Slot %s: Unable to clear PIN. %s: %s",
+                    "[Coordinator] %s: Code Slot %s: Unable to clear PIN via provider",
                     kmlock.lock_name,
                     code_slot_num,
-                    e.__class__.__qualname__,
-                    e,
                 )
                 return False
-            else:
-                _LOGGER.debug(
-                    "[clear_pin_from_lock] %s: Code Slot %s: Clear command sent, confirming",
-                    kmlock.lock_name,
-                    code_slot_num,
-                )
-            try:
-                usercode: ZwaveJSCodeSlot = get_usercode(kmlock.zwave_js_lock_node, code_slot_num)
-            except BaseZwaveJSServerError as e:
-                _LOGGER.error(
-                    "[Coordinator] %s: Code Slot %s: Unable to confirm PIN is cleared. %s: %s",
-                    kmlock.lock_name,
-                    code_slot_num,
-                    e.__class__.__qualname__,
-                    e,
-                )
-                return False
-            # Treat both "" and "0000" as cleared (Schlage BE469 firmware bug workaround)
-            if usercode[ZWAVEJS_ATTR_USERCODE] in ("", "0000"):
-                _LOGGER.debug(
-                    "[clear_pin_from_lock] %s: Code Slot %s: PIN Cleared (or 0000 - Schlage bug)",
-                    kmlock.lock_name,
-                    code_slot_num,
-                )
-            else:
-                _LOGGER.debug(
-                    "[clear_pin_from_lock] %s: Code Slot %s: PIN Not Cleared, will retry",
-                    kmlock.lock_name,
-                    code_slot_num,
-                )
+            _LOGGER.debug(
+                "[clear_pin_from_lock] %s: Code Slot %s: PIN cleared via provider",
+                kmlock.lock_name,
+                code_slot_num,
+            )
             return True
+
         raise ZWaveIntegrationNotConfiguredError
 
     async def reset_lock(self, config_entry_id: str) -> None:
@@ -1601,127 +1522,76 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         return True
 
     async def _connect_and_update_lock(self, kmlock: KeymasterLock) -> bool:
+        """Connect to the lock using the appropriate provider."""
         prev_lock_connected: bool = kmlock.connected
         kmlock.connected = False
-        lock_ent_reg_entry: er.RegistryEntry | None = None
-        if kmlock.lock_config_entry_id is None:
-            lock_ent_reg_entry = self._entity_registry.async_get(kmlock.lock_entity_id)
 
-            if not lock_ent_reg_entry:
-                _LOGGER.error(
-                    "[Coordinator] %s: Can't find the lock in the Entity Registry",
+        # If provider already exists and was previously connected, just verify connection
+        if kmlock.provider and prev_lock_connected:
+            kmlock.connected = await kmlock.provider.async_is_connected()
+            if kmlock.connected:
+                _LOGGER.debug(
+                    "[connect_and_update_lock] %s: Provider still connected",
                     kmlock.lock_name,
                 )
-                kmlock.connected = False
-                return False
+                return True
 
-            kmlock.lock_config_entry_id = lock_ent_reg_entry.config_entry_id
-        if kmlock.lock_config_entry_id is None:
-            return False
-        try:
-            zwave_entry: ConfigEntry | None = self.hass.config_entries.async_get_entry(
-                kmlock.lock_config_entry_id
+        # Create provider if not exists
+        if not kmlock.provider:
+            keymaster_entry = self.hass.config_entries.async_get_entry(
+                kmlock.keymaster_config_entry_id
             )
-            if zwave_entry:
-                client: ZwaveJSClient = zwave_entry.runtime_data.client
-            else:
+            if not keymaster_entry:
                 _LOGGER.error(
-                    "[Coordinator] %s: Can't access the Z-Wave JS client.",
+                    "[Coordinator] %s: Can't find keymaster config entry",
                     kmlock.lock_name,
                 )
-                kmlock.connected = False
                 return False
-        except (KeyError, TypeError) as e:
-            _LOGGER.error(
-                "[Coordinator] %s: Can't access the Z-Wave JS client. %s: %s",
-                kmlock.lock_name,
-                e.__class__.__qualname__,
-                e,
-            )
-            kmlock.connected = False
-            return False
 
-        kmlock.connected = bool(
-            client and client.connected and client.driver and client.driver.controller
-        )
+            kmlock.provider = create_provider(
+                hass=self.hass,
+                lock_entity_id=kmlock.lock_entity_id,
+                keymaster_config_entry=keymaster_entry,
+            )
+
+            if not kmlock.provider:
+                _LOGGER.error(
+                    "[Coordinator] %s: No supported provider for this lock platform",
+                    kmlock.lock_name,
+                )
+                return False
+
+        # Connect the provider
+        kmlock.connected = await kmlock.provider.async_connect()
 
         if not kmlock.connected:
             _LOGGER.error(
-                "[Coordinator] %s: Z-Wave JS not connected",
+                "[Coordinator] %s: Provider failed to connect",
                 kmlock.lock_name,
             )
             return False
 
-        if (
-            hasattr(kmlock, "zwave_js_lock_node")
-            and kmlock.zwave_js_lock_node is not None
-            and hasattr(kmlock, "zwave_js_lock_device")
-            and kmlock.zwave_js_lock_device is not None
-            and kmlock.connected
-            and prev_lock_connected
-        ):
-            kmlock_node_state: MutableMapping = dump_node_state(kmlock.zwave_js_lock_node)
-            _LOGGER.debug(
-                "[connect_and_update_lock] %s: node_status: %s",
-                kmlock.lock_name,
-                kmlock_node_state.get("status"),
-            )
-            return True
+        # Update lock_config_entry_id from provider
+        if kmlock.provider.lock_config_entry_id:
+            kmlock.lock_config_entry_id = kmlock.provider.lock_config_entry_id
+
+        # For backward compatibility, also set the deprecated fields if using Z-Wave JS
+        if kmlock.provider.domain == "zwave_js":
+            # Import here to avoid issues if zwave_js not installed
+            try:
+                from .providers.zwave_js import ZWaveJSLockProvider
+
+                if isinstance(kmlock.provider, ZWaveJSLockProvider):
+                    kmlock.zwave_js_lock_node = kmlock.provider.node
+                    kmlock.zwave_js_lock_device = kmlock.provider.device
+            except ImportError:
+                pass
 
         _LOGGER.debug(
-            "[connect_and_update_lock] %s: Lock connected, updating Device and Nodes",
+            "[connect_and_update_lock] %s: Provider connected (platform: %s)",
             kmlock.lock_name,
+            kmlock.provider.domain,
         )
-
-        if lock_ent_reg_entry is None:
-            lock_ent_reg_entry = self._entity_registry.async_get(kmlock.lock_entity_id)
-            if not lock_ent_reg_entry:
-                _LOGGER.error(
-                    "[Coordinator] %s: Can't find the lock in the Entity Registry",
-                    kmlock.lock_name,
-                )
-                kmlock.connected = False
-                return False
-
-        lock_dev_reg_entry = None
-        if lock_ent_reg_entry and lock_ent_reg_entry.device_id:
-            lock_dev_reg_entry = self._device_registry.async_get(lock_ent_reg_entry.device_id)
-        if not lock_dev_reg_entry:
-            _LOGGER.error(
-                "[Coordinator] %s: Can't find the lock in the Device Registry",
-                kmlock.lock_name,
-            )
-            kmlock.connected = False
-            return False
-        node_id: int = 0
-        for identifier in lock_dev_reg_entry.identifiers:
-            if identifier[0] == ZWAVE_JS_DOMAIN:
-                node_id = int(identifier[1].split("-")[1])
-        if node_id == 0:
-            _LOGGER.error(
-                "[Coordinator] %s: Unable to get Z-Wave node for lock",
-                kmlock.lock_name,
-            )
-            kmlock.connected = False
-            return False
-
-        if client and client.connected and client.driver and client.driver.controller:
-            kmlock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
-        kmlock.zwave_js_lock_device = lock_dev_reg_entry
-        if kmlock.zwave_js_lock_node:
-            kmlock_node_state = dump_node_state(kmlock.zwave_js_lock_node)
-        _LOGGER.debug(
-            "[connect_and_update_lock] %s: node_status: %s",
-            kmlock.lock_name,
-            kmlock_node_state.get("status"),
-        )
-        # _LOGGER.debug(
-        #     "[connect_and_update_lock] %s: zwave_js_lock_node: %s, zwave_js_lock_device: %s, kmlock_node_state: %s",
-        #     kmlock.lock_name,
-        #     kmlock.zwave_js_lock_node,
-        #     kmlock.zwave_js_lock_device,
-        #     kmlock_node_state,
-        # )
         return True
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -1772,52 +1642,23 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if not kmlock.connected:
             _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
-            # self._set_code_slots_to_disconnected(kmlock)
             return
 
-        if not async_using_zwave_js(hass=self.hass, kmlock=kmlock):
-            _LOGGER.error("[Coordinator] %s: Not using Z-Wave JS", kmlock.lock_name)
+        if not kmlock.provider:
+            _LOGGER.error("[Coordinator] %s: No provider available", kmlock.lock_name)
             return
 
-        node: ZwaveJSNode | None = kmlock.zwave_js_lock_node
-        if node is None:
-            _LOGGER.error("[Coordinator] %s: Z-Wave JS Node not defined", kmlock.lock_name)
-            return
-
-        usercodes: list[ZwaveJSCodeSlot] = await KeymasterCoordinator._get_usercodes_from_node(
-            node=node, kmlock=kmlock
-        )
+        # Get usercodes via provider
+        usercodes: list[CodeSlot] = await kmlock.provider.async_get_usercodes()
         _LOGGER.debug(
-            "[update_lock_data] %s: usercodes: %s",
+            "[update_lock_data] %s: usercodes count: %s",
             kmlock.lock_name,
-            usercodes[
-                (kmlock.starting_code_slot - 1) : (
-                    kmlock.starting_code_slot + (kmlock.number_of_code_slots or 1) - 1
-                )
-            ],
+            len(usercodes),
         )
 
         await self._update_code_slots(kmlock=kmlock, usercodes=usercodes)
 
-    @staticmethod
-    async def _get_usercodes_from_node(
-        node: ZwaveJSNode, kmlock: KeymasterLock
-    ) -> list[ZwaveJSCodeSlot]:
-        """Get usercodes from Z-Wave JS lock node."""
-        try:
-            return get_usercodes(node)
-        except FailedZWaveCommand as e:
-            _LOGGER.error(
-                "[Coordinator] %s: Z-Wave JS Command Failed. %s: %s",
-                kmlock.lock_name,
-                e.__class__.__qualname__,
-                e,
-            )
-            return []
-
-    async def _update_code_slots(
-        self, kmlock: KeymasterLock, usercodes: list[ZwaveJSCodeSlot]
-    ) -> None:
+    async def _update_code_slots(self, kmlock: KeymasterLock, usercodes: list[CodeSlot]) -> None:
         """Update the code slots for a keymaster lock."""
         # Check active status of code slots and set/clear PINs on Z-Wave JS Lock
         if kmlock.code_slots:
@@ -1851,28 +1692,35 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 override=True,
             )
 
-    async def _sync_usercode(self, kmlock: KeymasterLock, usercode_slot: ZwaveJSCodeSlot) -> None:
-        """Sync a usercode from Z-Wave JS."""
-        code_slot_num: int = int(usercode_slot[ZWAVEJS_ATTR_CODE_SLOT])
-        usercode: str = usercode_slot[ZWAVEJS_ATTR_USERCODE]
-        in_use: bool = usercode_slot[ZWAVEJS_ATTR_IN_USE]
+    async def _sync_usercode(self, kmlock: KeymasterLock, usercode_slot: CodeSlot) -> None:
+        """Sync a usercode from the lock."""
+        code_slot_num: int = usercode_slot.slot_num
+        usercode: str | None = usercode_slot.code
+        in_use: bool = usercode_slot.in_use
 
         if not kmlock.code_slots or code_slot_num not in kmlock.code_slots:
             return
 
-        if in_use is None and code_slot_num in kmlock.code_slots:
-            usercode_resp: ZwaveJSCodeSlot = await get_usercode_from_node(
-                kmlock.zwave_js_lock_node, code_slot_num
-            )
-            usercode = usercode_slot[ZWAVEJS_ATTR_USERCODE] = usercode_resp[ZWAVEJS_ATTR_USERCODE]
-            in_use = usercode_slot[ZWAVEJS_ATTR_IN_USE] = usercode_resp[ZWAVEJS_ATTR_IN_USE]
+        # If in_use is not set, try to refresh from lock via provider
+        if not in_use and usercode is None and kmlock.provider:
+            # Try to get fresh data from provider if it supports it
+            try:
+                from .providers.zwave_js import ZWaveJSLockProvider
+
+                if isinstance(kmlock.provider, ZWaveJSLockProvider):
+                    refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)
+                    if refreshed:
+                        usercode = refreshed.code
+                        in_use = refreshed.in_use
+            except (ImportError, AttributeError):
+                pass
 
         # Fix for Schlage masked responses: if slot is not in use (status=0) but
         # usercode is masked (e.g., "**********"), treat it as empty
-        if in_use is False and usercode and not usercode.isdigit():
+        if not in_use and usercode and not usercode.isdigit():
             usercode = ""
 
-        await self._sync_pin(kmlock, code_slot_num, usercode)
+        await self._sync_pin(kmlock, code_slot_num, usercode or "")
 
     async def _sync_pin(self, kmlock: KeymasterLock, code_slot_num: int, usercode: str) -> None:
         """Sync the pin with the lock based on conditions."""
@@ -1934,8 +1782,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
             return
 
-        if not async_using_zwave_js(hass=self.hass, kmlock=kmlock):
-            _LOGGER.error("[Coordinator] %s: Not using Z-Wave JS", kmlock.lock_name)
+        if not kmlock.provider:
+            _LOGGER.error("[Coordinator] %s: No provider available", kmlock.lock_name)
             return
 
         if (
@@ -1957,8 +1805,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.error("[Coordinator] %s: Not Connected", child_kmlock.lock_name)
             return
 
-        if not async_using_zwave_js(hass=self.hass, kmlock=child_kmlock):
-            _LOGGER.error("[Coordinator] %s: Not using Z-Wave JS", child_kmlock.lock_name)
+        if not child_kmlock.provider:
+            _LOGGER.error("[Coordinator] %s: No provider available", child_kmlock.lock_name)
             return
 
         if kmlock.code_slots == child_kmlock.code_slots:

@@ -187,13 +187,73 @@ def async_using_zwave_js(
     kmlock: KeymasterLock | None = None,
     entity_id: str | None = None,
 ) -> bool:
-    """Return whether the zwave_js integration is configured."""
+    """Return whether the zwave_js integration is configured.
+
+    Deprecated: Use async_has_supported_provider() or check kmlock.provider instead.
+    """
     return ZWAVE_JS_SUPPORTED and _async_using(
         hass=hass,
         domain=ZWAVE_JS_DOMAIN,
         kmlock=kmlock,
         entity_id=entity_id,
     )
+
+
+@callback
+def async_has_supported_provider(
+    hass: HomeAssistant,
+    kmlock: KeymasterLock | None = None,
+    entity_id: str | None = None,
+) -> bool:
+    """Return whether the lock has a supported provider.
+
+    Args:
+        hass: Home Assistant instance
+        kmlock: KeymasterLock instance (optional)
+        entity_id: Lock entity ID (optional)
+
+    Returns:
+        True if the lock platform has a supported provider.
+    """
+    # Import here to avoid circular imports
+    from .providers import is_platform_supported
+
+    if kmlock and kmlock.lock_entity_id:
+        return is_platform_supported(hass, kmlock.lock_entity_id)
+    if entity_id:
+        return is_platform_supported(hass, entity_id)
+    return False
+
+
+@callback
+def async_get_lock_platform(
+    hass: HomeAssistant,
+    kmlock: KeymasterLock | None = None,
+    entity_id: str | None = None,
+) -> str | None:
+    """Get the platform domain for a lock entity.
+
+    Args:
+        hass: Home Assistant instance
+        kmlock: KeymasterLock instance (optional)
+        entity_id: Lock entity ID (optional)
+
+    Returns:
+        The platform domain string (e.g., 'zwave_js') or None.
+    """
+    ent_reg = er.async_get(hass)
+    lock_entity_id = None
+
+    if kmlock and kmlock.lock_entity_id:
+        lock_entity_id = kmlock.lock_entity_id
+    elif entity_id:
+        lock_entity_id = entity_id
+
+    if not lock_entity_id:
+        return None
+
+    entity = ent_reg.async_get(lock_entity_id)
+    return entity.platform if entity else None
 
 
 async def delete_code_slot_entities(
