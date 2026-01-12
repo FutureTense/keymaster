@@ -42,11 +42,9 @@ def mock_lock():
     lock.lock_entity_id = "lock.test_lock"
     lock.keymaster_config_entry_id = "test_entry"
 
-    # Setup Z-Wave node/device mocks for matching
-    lock.zwave_js_lock_node = MagicMock()
-    lock.zwave_js_lock_node.node_id = 10
-    lock.zwave_js_lock_device = MagicMock()
-    lock.zwave_js_lock_device.id = "device_id_123"
+    # Setup provider mock (replaces Z-Wave specific mocks)
+    lock.provider = MagicMock()
+    lock.provider.supports_push_updates = True
 
     # Default state
     lock.lock_state = LockState.UNLOCKED
@@ -55,74 +53,68 @@ def mock_lock():
     return lock
 
 
-async def test_handle_zwave_js_event_manual_lock(hass, mock_coordinator, mock_lock):
-    """Test handling a Z-Wave JS Keypad Lock event."""
-    # 113/6/5 = Access Control, Event 5 (Keypad Lock)
-    # Using Event 5 because 'Manual Lock' (Event 1) implies physical turn,
-    # while the previous test logic seemed to want to test 'Keypad Lock'.
-    event_data = {
-        "node_id": 10,
-        "device_id": "device_id_123",
-        "command_class": 113,
-        "type": 6,
-        "event": 5,
-        "event_label": "Keypad Lock",
-        "parameters": {"userId": 1},
-    }
-    event = Event("zwave_js_notification", event_data)
-
-    # Set the state in the state machine instead of patching get
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_keypad_lock(
+    hass, mock_coordinator, mock_lock
+):
+    """Test handling a keypad lock event from provider callback."""
+    # Set the state in the state machine
     hass.states.async_set(mock_lock.lock_entity_id, LockState.LOCKED)
 
-    await mock_coordinator._handle_zwave_js_lock_event(mock_lock, event)
+    # Call the provider event handler with pre-processed event data
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=1,
+        event_label="Keypad Lock",
+        action_code=5,
+    )
 
     mock_coordinator._lock_locked.assert_called_once()
     args, kwargs = mock_coordinator._lock_locked.call_args
     assert kwargs["source"] == "event"
-    # Event 5 maps to "Keypad Lock" in const.py
     assert kwargs["event_label"] == "Keypad Lock"
+    assert kwargs["action_code"] == 5
 
 
-async def test_handle_zwave_js_event_rf_unlock(hass, mock_coordinator, mock_lock):
-    """Test handling a Z-Wave JS RF unlock event."""
-    # 113/6/4 = Access Control, Event 4 (RF Unlock)
-    event_data = {
-        "node_id": 10,
-        "device_id": "device_id_123",
-        "command_class": 113,
-        "type": 6,
-        "event": 4,
-        "event_label": "RF Unlock",
-        "parameters": {},
-    }
-    event = Event("zwave_js_notification", event_data)
-
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_rf_unlock(
+    hass, mock_coordinator, mock_lock
+):
+    """Test handling an RF unlock event from provider callback."""
     # Set the state in the state machine
     hass.states.async_set(mock_lock.lock_entity_id, LockState.UNLOCKED)
 
-    await mock_coordinator._handle_zwave_js_lock_event(mock_lock, event)
+    # RF unlock typically has no code slot
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=0,
+        event_label="RF Unlock",
+        action_code=4,
+    )
 
     mock_coordinator._lock_unlocked.assert_called_once()
     args, kwargs = mock_coordinator._lock_unlocked.call_args
-    # RF unlock usually doesn't have a specific slot associated in this context, or is 0
     assert kwargs["code_slot_num"] == 0
     assert kwargs["source"] == "event"
     assert kwargs["event_label"] == "RF Unlock"
 
 
-async def test_handle_zwave_js_event_node_mismatch(hass, mock_coordinator, mock_lock):
-    """Test that events for other nodes are ignored."""
-    event_data = {
-        "node_id": 99,  # Mismatch (lock is 10)
-        "device_id": "device_id_123",
-        "command_class": 113,
-        "type": 6,
-        "event": 6,
-    }
-    event = Event("zwave_js_notification", event_data)
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_unknown_state(
+    hass, mock_coordinator, mock_lock
+):
+    """Test that unknown lock states are handled gracefully."""
+    # Set lock to unknown state
+    hass.states.async_set(mock_lock.lock_entity_id, "jammed")
 
-    await mock_coordinator._handle_zwave_js_lock_event(mock_lock, event)
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=1,
+        event_label="Unknown Event",
+        action_code=99,
+    )
 
+    # Neither lock nor unlock should be called for unknown states
     mock_coordinator._lock_locked.assert_not_called()
     mock_coordinator._lock_unlocked.assert_not_called()
 

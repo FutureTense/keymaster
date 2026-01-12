@@ -4,6 +4,8 @@ import asyncio
 import copy
 import json
 import logging
+import shutil
+from pathlib import Path
 from typing import Any
 from unittest.mock import DEFAULT, AsyncMock, MagicMock, patch
 
@@ -19,6 +21,18 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .common import load_fixture
+
+
+@pytest.fixture(autouse=True)
+def cleanup_keymaster_json():
+    """Clean up keymaster JSON files before each test to prevent corruption."""
+    # Find and remove the keymaster testing config directory before each test
+    testing_config_base = Path(__file__).parent.parent / ".venv"
+    if testing_config_base.exists():
+        for json_dir in testing_config_base.rglob("json_kmlocks"):
+            if json_dir.is_dir():
+                shutil.rmtree(json_dir, ignore_errors=True)
+    yield
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -359,7 +373,7 @@ def mock_async_call_later():
 
 @pytest.fixture(name="keymaster_integration")
 async def mock_keymaster_integration(hass, integration):
-    """Fixture to bypass zwavejs checks. Depends on integration fixture for zwave_js."""
+    """Fixture to bypass provider checks. Depends on integration fixture for zwave_js."""
     with (
         patch(
             "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock",
@@ -374,7 +388,11 @@ async def mock_keymaster_integration(hass, integration):
             return_value=True,
         ),
         patch(
-            "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+            "custom_components.keymaster.binary_sensor.async_has_supported_provider",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.switch.async_has_supported_provider",
             return_value=True,
         ),
     ):

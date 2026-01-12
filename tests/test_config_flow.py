@@ -220,7 +220,11 @@ async def test_reconfiguration_form(test_user_input, title, final_config_flow_da
             return_value=True,
         ),
         patch(
-            "custom_components.keymaster.binary_sensor.async_using_zwave_js",
+            "custom_components.keymaster.binary_sensor.async_has_supported_provider",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.switch.async_has_supported_provider",
             return_value=True,
         ),
     ):
