@@ -324,7 +324,6 @@ def _generate_code_slot_dict(
                 "type": "heading",
                 "heading": f"Code Slot {code_slot_num}",
                 "heading_style": "title",
-                "badges": [],
             },
             {
                 "type": "conditional",
@@ -337,43 +336,23 @@ def _generate_code_slot_dict(
                         {
                             "entity": f"text.code_slots:{code_slot_num}.name",
                             "name": "Name",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "entity": f"text.code_slots:{code_slot_num}.pin",
                             "name": "PIN",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {"type": "divider"},
                         {
                             "entity": f"switch.code_slots:{code_slot_num}.enabled",
                             "name": "Enabled",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "entity": f"binary_sensor.code_slots:{code_slot_num}.active",
                             "name": "Active",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "entity": f"sensor.code_slots:{code_slot_num}.synced",
                             "name": "Sync Status",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                     ],
                 },
@@ -385,10 +364,6 @@ def _generate_code_slot_dict(
             {
                 "entity": f"switch.code_slots:{code_slot_num}.override_parent",
                 "name": "Override Parent",
-                "secondary_info": "none",
-                "tap_action": {"action": "none"},
-                "hold_action": {"action": "none"},
-                "double_tap_action": {"action": "none"},
             }
         )
     code_slot_dict["cards"][1]["card"]["entities"].extend(
@@ -396,19 +371,11 @@ def _generate_code_slot_dict(
             {
                 "entity": f"switch.code_slots:{code_slot_num}.notifications",
                 "name": "Notifications",
-                "secondary_info": "none",
-                "tap_action": {"action": "none"},
-                "hold_action": {"action": "none"},
-                "double_tap_action": {"action": "none"},
             },
             {"type": "divider"},
             {
                 "entity": f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
                 "name": "Limit by Number of Uses",
-                "secondary_info": "none",
-                "tap_action": {"action": "none"},
-                "hold_action": {"action": "none"},
-                "double_tap_action": {"action": "none"},
             },
             {
                 "type": "conditional",
@@ -421,10 +388,6 @@ def _generate_code_slot_dict(
                 "row": {
                     "entity": f"number.code_slots:{code_slot_num}.accesslimit_count",
                     "name": "Uses Remaining",
-                    "secondary_info": "none",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
                 },
             },
         ]
@@ -436,10 +399,6 @@ def _generate_code_slot_dict(
                 {
                     "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
                     "name": "Limit by Date Range",
-                    "secondary_info": "none",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
                 },
                 {
                     "type": "conditional",
@@ -452,10 +411,6 @@ def _generate_code_slot_dict(
                     "row": {
                         "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
                         "name": "Date Range Start",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -469,10 +424,6 @@ def _generate_code_slot_dict(
                     "row": {
                         "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
                         "name": "Date Range End",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
             ]
@@ -484,10 +435,6 @@ def _generate_code_slot_dict(
                 {
                     "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                     "name": "Limit by Day of Week",
-                    "secondary_info": "none",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
                 },
             ]
         )
@@ -509,11 +456,8 @@ def _generate_lock_badges(
         {
             "type": "entity",
             "show_name": False,
-            "show_state": True,
-            "show_icon": True,
             "entity": "sensor.lock_name",
             "color": "",
-            "tap_action": {"action": "none"},
         }
     ]
     if child:
@@ -521,30 +465,22 @@ def _generate_lock_badges(
             {
                 "type": "entity",
                 "show_name": True,
-                "show_state": True,
-                "show_icon": True,
                 "entity": "sensor.parent_name",
                 "name": "Parent Lock",
                 "color": "",
-                "tap_action": {"action": "none"},
-            }
+                }
         )
     badges.extend(
         [
             {
                 "type": "entity",
                 "show_name": False,
-                "show_state": True,
-                "show_icon": True,
                 "entity": "binary_sensor.connected",
                 "color": "",
-                "tap_action": {"action": "none"},
-            },
+                },
             {
                 "type": "entity",
                 "show_name": True,
-                "show_state": True,
-                "show_icon": True,
                 "entity": "switch.lock_notifications",
                 "color": "",
                 "name": "Lock Notifications",
@@ -557,8 +493,6 @@ def _generate_lock_badges(
             {
                 "type": "entity",
                 "show_name": True,
-                "show_state": True,
-                "show_icon": True,
                 "entity": "switch.door_notifications",
                 "color": "",
                 "tap_action": {"action": "toggle"},
@@ -569,8 +503,6 @@ def _generate_lock_badges(
         {
             "type": "entity",
             "show_name": True,
-            "show_state": True,
-            "show_icon": True,
             "entity": lock_entity,
             "name": "Lock",
             "color": "",
@@ -582,20 +514,15 @@ def _generate_lock_badges(
             {
                 "type": "entity",
                 "show_name": True,
-                "show_state": True,
-                "show_icon": True,
                 "entity": door_sensor,
                 "name": "Door",
                 "color": "",
-                "tap_action": {"action": "none"},
-            }
+                }
         )
     badges.append(
         {
             "type": "entity",
             "show_name": True,
-            "show_state": True,
-            "show_icon": True,
             "entity": "switch.autolock_enabled",
             "color": "",
             "tap_action": {"action": "toggle"},
@@ -607,8 +534,6 @@ def _generate_lock_badges(
             {
                 "type": "entity",
                 "show_name": True,
-                "show_state": True,
-                "show_icon": True,
                 "entity": "switch.retry_lock",
                 "color": "",
                 "tap_action": {"action": "toggle"},
@@ -627,8 +552,6 @@ def _generate_lock_badges(
             {
                 "type": "entity",
                 "show_name": True,
-                "show_state": True,
-                "show_icon": True,
                 "entity": "number.autolock_min_day",
                 "color": "",
                 "name": "Day Auto Lock",
@@ -643,8 +566,6 @@ def _generate_lock_badges(
             {
                 "type": "entity",
                 "show_name": True,
-                "show_state": True,
-                "show_icon": True,
                 "entity": "number.autolock_min_night",
                 "color": "",
                 "name": "Night Auto Lock",
@@ -678,10 +599,6 @@ def _generate_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]
                     "row": {
                         "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                         "name": f"{dow}",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -699,10 +616,6 @@ def _generate_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]
                     "row": {
                         "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                         "name": "Limit by Time of Day",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -724,10 +637,6 @@ def _generate_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]
                     "row": {
                         "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.include_exclude",
                         "name": "Include (On)/Exclude (Off) Time",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -749,10 +658,6 @@ def _generate_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]
                     "row": {
                         "entity": f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_start",
                         "name": "Start Time",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -774,10 +679,6 @@ def _generate_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]
                     "row": {
                         "entity": f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_end",
                         "name": "End Time",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
             ]
@@ -805,7 +706,6 @@ def _generate_child_code_slot_dict(
                 "type": "heading",
                 "heading": f"Code Slot {code_slot_num}",
                 "heading_style": "title",
-                "badges": [],
             },
             {
                 "type": "conditional",
@@ -825,69 +725,37 @@ def _generate_child_code_slot_dict(
                             "type": "simple-entity",
                             "name": "Name",
                             "entity": f"parent.text.code_slots:{code_slot_num}.name",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "type": "simple-entity",
                             "name": "PIN",
                             "entity": f"parent.text.code_slots:{code_slot_num}.pin",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "type": "simple-entity",
                             "name": "Enabled",
                             "entity": f"parent.switch.code_slots:{code_slot_num}.enabled",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "entity": f"binary_sensor.code_slots:{code_slot_num}.active",
                             "name": "Active",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "entity": f"sensor.code_slots:{code_slot_num}.synced",
                             "name": "Sync Status",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "entity": f"switch.code_slots:{code_slot_num}.override_parent",
                             "name": "Override Parent",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "entity": f"switch.code_slots:{code_slot_num}.notifications",
                             "name": "Notifications",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "type": "simple-entity",
                             "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
                             "name": "Limit by Number of Uses",
-                            "secondary_info": "none",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
                         },
                         {
                             "type": "conditional",
@@ -901,10 +769,6 @@ def _generate_child_code_slot_dict(
                                 "type": "simple-entity",
                                 "entity": f"parent.number.code_slots:{code_slot_num}.accesslimit_count",
                                 "name": "Uses Remaining",
-                                "secondary_info": "none",
-                                "tap_action": {"action": "none"},
-                                "hold_action": {"action": "none"},
-                                "double_tap_action": {"action": "none"},
                             },
                         },
                     ],
@@ -931,10 +795,6 @@ def _generate_child_code_slot_dict(
                     "type": "simple-entity",
                     "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
                     "name": "Limit by Date Range",
-                    "secondary_info": "none",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
                 },
                 {
                     "type": "conditional",
@@ -948,10 +808,6 @@ def _generate_child_code_slot_dict(
                         "type": "simple-entity",
                         "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
                         "name": "Date Range Start",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -966,10 +822,6 @@ def _generate_child_code_slot_dict(
                         "type": "simple-entity",
                         "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
                         "name": "Date Range End",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
             ]
@@ -982,10 +834,6 @@ def _generate_child_code_slot_dict(
                     "type": "simple-entity",
                     "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
                     "name": "Limit by Day of Week",
-                    "secondary_info": "none",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
                 },
             ]
         )
@@ -1016,10 +864,6 @@ def _generate_child_dow_entities(
                         "type": "simple-entity",
                         "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
                         "name": f"{dow}",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -1038,10 +882,6 @@ def _generate_child_dow_entities(
                         "type": "simple-entity",
                         "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
                         "name": "Limit by Time",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -1064,10 +904,6 @@ def _generate_child_dow_entities(
                         "type": "simple-entity",
                         "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.include_exclude",
                         "name": "Include (On)/Exclude (Off) Time",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -1090,10 +926,6 @@ def _generate_child_dow_entities(
                         "type": "simple-entity",
                         "entity": f"parent.time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_start",
                         "name": "Start Time",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
                 {
@@ -1116,10 +948,6 @@ def _generate_child_dow_entities(
                         "type": "simple-entity",
                         "entity": f"parent.time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_end",
                         "name": "End Time",
-                        "secondary_info": "none",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
                     },
                 },
             ]
