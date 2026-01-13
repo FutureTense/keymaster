@@ -40,7 +40,6 @@ def mock_lock():
     return lock
 
 
-@pytest.mark.asyncio
 async def test_add_lock_new(mock_coordinator, mock_lock):
     """Test adding a new lock."""
     await mock_coordinator.add_lock(mock_lock)
@@ -55,7 +54,6 @@ async def test_add_lock_new(mock_coordinator, mock_lock):
     mock_coordinator.async_refresh.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_add_lock_existing_update(mock_coordinator, mock_lock):
     """Test adding a lock that already exists (update)."""
     # Pre-populate
@@ -68,7 +66,6 @@ async def test_add_lock_existing_update(mock_coordinator, mock_lock):
     mock_coordinator._update_lock.assert_called_once_with(mock_lock)
 
 
-@pytest.mark.asyncio
 async def test_add_lock_existing_no_update(mock_coordinator, mock_lock):
     """Test adding a lock that exists without update flag."""
     mock_coordinator.kmlocks["test_entry"] = mock_lock
@@ -79,7 +76,6 @@ async def test_add_lock_existing_no_update(mock_coordinator, mock_lock):
     mock_coordinator._update_lock.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_delete_lock(hass, mock_coordinator, mock_lock):
     """Test deleting a lock."""
     # Pre-populate
@@ -99,7 +95,6 @@ async def test_delete_lock(hass, mock_coordinator, mock_lock):
     mock_coordinator.async_refresh.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_delete_lock_not_pending(hass, mock_coordinator, mock_lock):
     """Test delete lock aborts if pending_delete is False."""
     mock_coordinator.kmlocks["test_entry"] = mock_lock

@@ -1,3 +1,8 @@
+# uv package manager
+uv.lock
+.uv/
+.cache/uv/
+
 .vscode/settings.json
 custom_components/*/__pycache__/
 .venv

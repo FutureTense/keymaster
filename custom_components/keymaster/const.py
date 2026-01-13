@@ -10,6 +10,11 @@ from homeassistant.const import Platform
 DOMAIN = "keymaster"
 VERSION = "v0.0.0"  # this will be automatically updated as part of the release workflow
 ISSUE_URL = "https://github.com/FutureTense/keymaster"
+
+# Strategy module constants
+FILES_URL_BASE = f"/{DOMAIN}_files"
+STRATEGY_FILENAME = "keymaster.js"
+STRATEGY_PATH = f"{FILES_URL_BASE}/{STRATEGY_FILENAME}"
 PLATFORMS: list = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,

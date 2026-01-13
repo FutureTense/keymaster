@@ -9,7 +9,6 @@ from custom_components.keymaster.migrate import (
 )
 
 
-@pytest.mark.asyncio
 async def test_convert_boolean():
     """Test converting boolean values."""
     # Test 'on' string -> True
@@ -25,7 +24,6 @@ async def test_convert_boolean():
     )
 
 
-@pytest.mark.asyncio
 async def test_convert_integer():
     """Test converting integer values."""
     # Test numeric string
@@ -51,7 +49,6 @@ async def test_convert_integer():
     )
 
 
-@pytest.mark.asyncio
 async def test_convert_datetime():
     """Test converting datetime values."""
     iso_str = "2023-01-01T12:00:00"
@@ -67,7 +64,6 @@ async def test_convert_datetime():
     assert result.tzinfo is not None
 
 
-@pytest.mark.asyncio
 async def test_convert_time():
     """Test converting time values."""
     time_str = "12:30:00"
@@ -81,7 +77,6 @@ async def test_convert_time():
     assert result.second == 0
 
 
-@pytest.mark.asyncio
 async def test_conversion_failures():
     """Test conversion failure handling."""
     # Invalid int

@@ -7,9 +7,12 @@ from collections.abc import MutableMapping
 from datetime import datetime as dt, timedelta
 import functools
 import logging
+from pathlib import Path
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.core_config import Config
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.event import async_call_later
@@ -40,21 +43,48 @@ from .const import (
     DOMAIN,
     NONE_TEXT,
     PLATFORMS,
+    STRATEGY_FILENAME,
+    STRATEGY_PATH,
 )
 from .coordinator import KeymasterCoordinator
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
-from .lovelace import generate_lovelace
+from .lovelace import async_generate_lovelace
 from .migrate import migrate_2to3
+from .resources import async_cleanup_strategy_resource, async_register_strategy_resource
 from .services import async_setup_services
+from .websocket import async_setup as async_websocket_setup
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
+async def async_setup(hass: HomeAssistant, config: Config) -> bool:
+    """Set up integration."""
+    hass.data.setdefault(DOMAIN, {"resources": False})
+
+    # Expose strategy javascript
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                STRATEGY_PATH,
+                str(Path(__file__).parent / "www" / "generated" / STRATEGY_FILENAME),
+                False,
+            )
+        ]
+    )
+    _LOGGER.debug("Exposed strategy module at %s", STRATEGY_PATH)
+
+    await async_register_strategy_resource(hass)
+
+    # Set up websocket API
+    await async_websocket_setup(hass)
+    _LOGGER.debug("Finished setting up websocket API")
+
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up is called when Home Assistant is loading our component."""
-    hass.data.setdefault(DOMAIN, {})
-
     updated_config = config_entry.data.copy()
 
     for prop in [
@@ -86,12 +116,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         updated_config[CONF_NOTIFY_SCRIPT_NAME] = (
             f"keymaster_{updated_config.get(CONF_LOCK_NAME)}_manual_notify"
         )
-    elif isinstance(
-        updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str
-    ) and updated_config[CONF_NOTIFY_SCRIPT_NAME].startswith("script."):
-        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[
-            CONF_NOTIFY_SCRIPT_NAME
-        ].split(".", maxsplit=1)[1]
+    elif isinstance(updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str) and updated_config[
+        CONF_NOTIFY_SCRIPT_NAME
+    ].startswith("script."):
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[CONF_NOTIFY_SCRIPT_NAME].split(
+            ".", maxsplit=1
+        )[1]
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
@@ -140,9 +170,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     ):
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(DAY_NAMES):
-            dow_slots[i] = KeymasterCodeSlotDayOfWeek(
-                day_of_week_num=i, day_of_week_name=dow
-            )
+            dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     kmlock = KeymasterLock(
@@ -170,7 +198,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
-    await generate_lovelace(
+    await async_generate_lovelace(
         hass=hass,
         kmlock_name=config_entry.data[CONF_LOCK_NAME],
         keymaster_config_entry_id=config_entry.entry_id,
@@ -213,13 +241,31 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
                 delay=20,
                 action=functools.partial(delete_coordinator, hass),
             )
+
+    # Clean up strategy resource if no other keymaster entries need it
+    remaining_entries = [
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.entry_id != config_entry.entry_id
+    ]
+    if not remaining_entries:
+        _LOGGER.debug(
+            "[async_unload_entry] Last keymaster entry unloaded, cleaning up strategy resource"
+        )
+        hass_data = hass.data.get(DOMAIN, {})
+        await async_cleanup_strategy_resource(hass, hass_data)
+
     return unload_ok
 
 
 async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
     """Delete the coordinator if no more kmlock entities exist."""
     # _LOGGER.debug("[delete_coordinator] Triggered")
-    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    hass_data = hass.data.get(DOMAIN, {})
+    coordinator: KeymasterCoordinator | None = hass_data.get(COORDINATOR)
+    if coordinator is None:
+        return
+
     if len(coordinator.data) == 0:
         _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")
         await hass.async_add_executor_job(coordinator.delete_json)
@@ -237,9 +283,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         data = config_entry.data.copy()
 
         data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL, None)
-        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(
-            CONF_ALARM_TYPE, None
-        )
+        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(CONF_ALARM_TYPE, None)
         data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_ENTITY_ID)
         if CONF_HIDE_PINS not in data:
             data[CONF_HIDE_PINS] = DEFAULT_HIDE_PINS

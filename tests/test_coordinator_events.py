@@ -55,7 +55,6 @@ def mock_lock():
     return lock
 
 
-@pytest.mark.asyncio
 async def test_handle_zwave_js_event_manual_lock(hass, mock_coordinator, mock_lock):
     """Test handling a Z-Wave JS Keypad Lock event."""
     # 113/6/5 = Access Control, Event 5 (Keypad Lock)
@@ -84,7 +83,6 @@ async def test_handle_zwave_js_event_manual_lock(hass, mock_coordinator, mock_lo
     assert kwargs["event_label"] == "Keypad Lock"
 
 
-@pytest.mark.asyncio
 async def test_handle_zwave_js_event_rf_unlock(hass, mock_coordinator, mock_lock):
     """Test handling a Z-Wave JS RF unlock event."""
     # 113/6/4 = Access Control, Event 4 (RF Unlock)
@@ -112,7 +110,6 @@ async def test_handle_zwave_js_event_rf_unlock(hass, mock_coordinator, mock_lock
     assert kwargs["event_label"] == "RF Unlock"
 
 
-@pytest.mark.asyncio
 async def test_handle_zwave_js_event_node_mismatch(hass, mock_coordinator, mock_lock):
     """Test that events for other nodes are ignored."""
     event_data = {
@@ -130,7 +127,6 @@ async def test_handle_zwave_js_event_node_mismatch(hass, mock_coordinator, mock_
     mock_coordinator._lock_unlocked.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_handle_lock_state_change_entity(hass, mock_coordinator, mock_lock):
     """Test handling a state change from an entity (polling/generic)."""
     event_data = {

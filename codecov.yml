@@ -1,0 +1,38 @@
+coverage:
+  status:
+    project:
+      python:
+        flags:
+          - python
+        paths:
+          - custom_components/
+          - tests/
+      typescript:
+        flags:
+          - typescript
+        paths:
+          - lovelace_strategy/
+    patch:
+      python:
+        flags:
+          - python
+        paths:
+          - custom_components/
+          - tests/
+      typescript:
+        flags:
+          - typescript
+        paths:
+          - lovelace_strategy/
+
+flag_management:
+  default_rules:
+    carryforward: true
+  individual_flags:
+    - name: python
+      paths:
+        - custom_components/
+        - tests/
+    - name: typescript
+      paths:
+        - lovelace_strategy/

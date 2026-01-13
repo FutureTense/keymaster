@@ -1,0 +1,45 @@
+---
+name: Vitest
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches: [beta, main]
+    paths:
+      - "**.ts"
+      - "lovelace_strategy/**"
+      - "package.json"
+      - "vitest.config.ts"
+  pull_request:
+    branches: [beta, main]
+    paths:
+      - "**.ts"
+      - "lovelace_strategy/**"
+      - "package.json"
+      - "vitest.config.ts"
+
+jobs:
+  test:
+    name: TypeScript Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version:
+          - "lts/iron"
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install dependencies
+        run: yarn install
+      - name: Run tests and generate coverage report
+        run: yarn test --coverage --coverage.reporter=json
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: typescript
+          files: ./coverage/coverage-final.json

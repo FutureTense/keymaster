@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["lovelace_strategy/**/*.ts"],
+  "exclude": ["lovelace_strategy/**/*.test.ts"]
+}

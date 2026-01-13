@@ -954,7 +954,6 @@ class TestLockRelationshipInvariants:
 # ============================================================================
 
 
-@pytest.mark.asyncio
 class TestLockStateEventHandlers:
     """Tests for lock state event handlers."""
 
@@ -1124,7 +1123,6 @@ class TestLockStateEventHandlers:
 # ============================================================================
 
 
-@pytest.mark.asyncio
 class TestStateSynchronization:
     """Tests for _update_door_and_lock_state state synchronization."""
 

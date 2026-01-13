@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "experimentalDecorators": true,
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "paths": {
+      "*": ["./node_modules/*"]
+    },
+    "resolveJsonModule": true,
+    "rootDir": ".",
+    "target": "es2022",
+    "useDefineForClassFields": false,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true
+  },
+  "include": [
+    "lovelace_strategy/**/*",
+    "tsconfig.json",
+    "rollup.config.js"
+  ]
+}

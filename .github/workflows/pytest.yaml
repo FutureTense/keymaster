@@ -2,7 +2,23 @@ name: Pytest
 
 on:
   push:
+    branches: [beta, main]
+    paths:
+      - "**.py"
+      - "custom_components/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - ".github/workflows/pytest.yaml"
   pull_request:
+    branches: [beta, main]
+    paths:
+      - "**.py"
+      - "custom_components/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - ".github/workflows/pytest.yaml"
   schedule:
     - cron: "0 7 1-28/7 * *"
 
@@ -48,6 +64,8 @@ jobs:
         with:
           name: coverage-data
       - name: 📤 Upload coverage report
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }} # required
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: python
+          files: ./coverage.xml
