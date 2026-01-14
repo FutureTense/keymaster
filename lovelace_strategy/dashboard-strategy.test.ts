@@ -107,6 +107,31 @@ describe('KeymasterDashboardStrategy', () => {
             expect(result.views![1]).toEqual({ title: ZERO_WIDTH_SPACE });
         });
 
+        it('filters out entries with missing or invalid lock_name', async () => {
+            const configEntries = [
+                createMockConfigEntry('Valid Lock', 'entry_valid'),
+                { ...createMockConfigEntry('', 'entry_empty'), data: { lock_name: '' } },
+                { ...createMockConfigEntry('', 'entry_null'), data: { lock_name: null } },
+                { ...createMockConfigEntry('', 'entry_undefined'), data: { lock_name: undefined } },
+                { ...createMockConfigEntry('', 'entry_no_data'), data: undefined },
+                createMockConfigEntry('Another Valid', 'entry_valid2'),
+            ] as GetConfigEntriesResponse;
+
+            const hass = createMockHass({
+                callWS: vi.fn().mockResolvedValue(configEntries),
+            });
+
+            const result = await KeymasterDashboardStrategy.generate(
+                { type: 'custom:keymaster' },
+                hass
+            );
+
+            // Should only have 2 valid entries (no placeholder since > 1 view)
+            expect(result.views).toHaveLength(2);
+            expect(result.views![0].title).toBe('Another Valid');
+            expect(result.views![1].title).toBe('Valid Lock');
+        });
+
         it('only makes one websocket call for config entries', async () => {
             const configEntries: GetConfigEntriesResponse = [
                 createMockConfigEntry('Lock A', 'entry_a'),
