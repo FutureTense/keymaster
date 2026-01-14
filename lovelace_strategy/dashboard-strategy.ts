@@ -18,7 +18,12 @@ export class KeymasterDashboardStrategy extends ReactiveElement {
             type: 'config_entries/get'
         });
 
-        if (configEntries.length === 0) {
+        // Filter to only entries with valid lock_name data
+        const validEntries = configEntries.filter(
+            (entry) => entry.data?.lock_name
+        );
+
+        if (validEntries.length === 0) {
             return {
                 title: 'Keymaster',
                 views: [createErrorView(NO_CONFIG_MESSAGE)]
@@ -26,7 +31,7 @@ export class KeymasterDashboardStrategy extends ReactiveElement {
         }
 
         // Sort config entries alphabetically by lock name
-        const sortedEntries = [...configEntries].sort((a, b) =>
+        const sortedEntries = [...validEntries].sort((a, b) =>
             a.data.lock_name.localeCompare(b.data.lock_name)
         );
 
