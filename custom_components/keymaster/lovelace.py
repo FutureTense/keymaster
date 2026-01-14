@@ -540,6 +540,11 @@ def _generate_dow_entities(
             parent=parent,
             type_=type_,
         ),
+        # Generate conditional cards for each day of week.
+        # num_conditions controls visibility nesting via [:num_conditions] slice:
+        #   1 = show when DOW enabled
+        #   2 = show when DOW enabled AND this day enabled
+        #   3 = show when DOW enabled AND this day enabled AND limit_by_time on
         *(
             _generate_conditional_card_ll_config(
                 code_slot_num,
