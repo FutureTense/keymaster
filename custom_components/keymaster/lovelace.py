@@ -338,7 +338,7 @@ def _generate_entity_card_ll_config(
     parent: bool = False,
     type_: str | None = None,
 ) -> MutableMapping[str, Any]:
-    """Generate Lovelace config for an `entity` card."""
+    """Generate entity configuration for use in Lovelace cards."""
     prefix = "parent." if parent else ""
     entity = f"{prefix}{domain}.code_slots:{code_slot_num}.{key}"
     data: MutableMapping[str, Any] = {
@@ -360,7 +360,7 @@ def _generate_badge_ll_config(
     tap_action: str | None = "none",
     show_name: bool = False,
 ) -> MutableMapping[str, Any]:
-    """Generate Lovelace config for a `badge` card."""
+    """Generate Lovelace config for a badge."""
     data: MutableMapping[str, Any] = {
         "type": "entity",
         "show_name": show_name,
@@ -472,7 +472,7 @@ def _generate_code_slot_conditional_entities_card_ll_config(
 
 
 def _generate_header_ll_config(code_slot_num: int) -> MutableMapping[str, Any]:
-    """Generate Lovelace config for a `header` card."""
+    """Generate Lovelace config for a heading card."""
     return {"type": "heading", "heading": f"Code Slot {code_slot_num}", "heading_style": "title"}
 
 
