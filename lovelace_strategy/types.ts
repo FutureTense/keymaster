@@ -2,7 +2,7 @@ import { LovelaceViewConfig } from './ha_type_stubs';
 
 export interface KeymasterConfigEntry {
     data: {
-        lock_name: string;
+        lockname: string;  // Note: no underscore, matches Python CONF_LOCK_NAME
     };
     disabled_by: string;
     domain: string;
