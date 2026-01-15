@@ -18,7 +18,6 @@ function createMockHass(overrides: Partial<HomeAssistant> = {}): HomeAssistant {
 
 function createMockConfigEntry(lockName: string, entryId: string) {
     return {
-        data: { lockname: lockName },
         disabled_by: '',
         domain: 'keymaster',
         entry_id: entryId,
@@ -30,7 +29,7 @@ function createMockConfigEntry(lockName: string, entryId: string) {
         supports_options: true,
         supports_remove_device: false,
         supports_unload: true,
-        title: lockName,
+        title: lockName,  // title contains the lock name
     };
 }
 
@@ -107,13 +106,10 @@ describe('KeymasterDashboardStrategy', () => {
             expect(result.views![1]).toEqual({ title: ZERO_WIDTH_SPACE });
         });
 
-        it('filters out entries with missing or invalid lockname', async () => {
+        it('filters out entries with missing or empty title', async () => {
             const configEntries = [
                 createMockConfigEntry('Valid Lock', 'entry_valid'),
-                { ...createMockConfigEntry('', 'entry_empty'), data: { lockname: '' } },
-                { ...createMockConfigEntry('', 'entry_null'), data: { lockname: null } },
-                { ...createMockConfigEntry('', 'entry_undefined'), data: { lockname: undefined } },
-                { ...createMockConfigEntry('', 'entry_no_data'), data: undefined },
+                { ...createMockConfigEntry('', 'entry_empty'), title: '' },
                 createMockConfigEntry('Another Valid', 'entry_valid2'),
             ] as GetConfigEntriesResponse;
 
