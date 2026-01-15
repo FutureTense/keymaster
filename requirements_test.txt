@@ -1,13 +1,14 @@
--r requirements_dev.txt
+# Test dependencies for pytest
+pytest
+pytest-homeassistant-custom-component
+
+# Additional HA ecosystem packages required by tests
 aiohttp_cors
 aiousbwatcher
 asyncio_mqtt
-mypy
+homeassistant
 pydispatcher
-pylint
-pytest
-pytest-homeassistant-custom-component
-ruff
-tox
-types-PyYAML
+pyserial
+pyudev
 zeroconf
+zwave-js-server-python

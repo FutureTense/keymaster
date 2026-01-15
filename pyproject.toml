@@ -652,13 +652,13 @@ commands = [
     ["ruff", "check", "custom_components{/}"],
     ["ruff", "check", "tests{/}"],
 ]
-deps = ["-rrequirements_test.txt"]
+deps = ["-rrequirements_lint.txt"]
 
 [tool.tox.env.mypy]
 description = "Run mypy for type-checking under {base_python}"
 ignore_errors = true
 commands = [["mypy", "custom_components{/}keymaster"]]
-deps = ["-rrequirements_test.txt"]
+deps = ["-rrequirements_lint.txt"]
 
 [tool.codespell]
 ignore-words-list = "hass"
