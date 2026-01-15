@@ -83,10 +83,10 @@ async def test_delete_lock(hass, mock_coordinator, mock_lock):
     mock_lock.pending_delete = True
 
     # Mock file operations
-    with patch("custom_components.keymaster.coordinator.delete_lovelace"), patch.object(
-        mock_coordinator, "_write_config_to_json"
+    with (
+        patch("custom_components.keymaster.coordinator.delete_lovelace"),
+        patch.object(mock_coordinator, "_write_config_to_json"),
     ):
-
         # Call private method directly as it's usually called via callback
         await mock_coordinator._delete_lock(mock_lock, None)
 
@@ -100,9 +100,7 @@ async def test_delete_lock_not_pending(hass, mock_coordinator, mock_lock):
     mock_coordinator.kmlocks["test_entry"] = mock_lock
     mock_lock.pending_delete = False  # Simulate cancelled delete
 
-    with patch(
-        "custom_components.keymaster.coordinator.delete_lovelace"
-    ) as mock_delete_lovelace:
+    with patch("custom_components.keymaster.coordinator.delete_lovelace") as mock_delete_lovelace:
         await mock_coordinator._delete_lock(mock_lock, None)
 
         mock_delete_lovelace.assert_not_called()

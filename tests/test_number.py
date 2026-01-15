@@ -101,17 +101,13 @@ async def test_number_autolock_entities_have_correct_config(
     await async_setup_entry(hass, number_config_entry, mock_add_entities)
 
     # Find autolock entities
-    autolock_entities = [
-        e for e in entities if "Auto Lock" in e.entity_description.name
-    ]
+    autolock_entities = [e for e in entities if "Auto Lock" in e.entity_description.name]
     assert len(autolock_entities) == 2
 
     for entity in autolock_entities:
         # Check they're duration entities with minutes
         assert entity.entity_description.device_class == NumberDeviceClass.DURATION
-        assert (
-            entity.entity_description.native_unit_of_measurement == UnitOfTime.MINUTES
-        )
+        assert entity.entity_description.native_unit_of_measurement == UnitOfTime.MINUTES
         assert entity.entity_description.mode == NumberMode.BOX
         assert entity.entity_description.native_min_value == 1
         assert entity.entity_description.native_step == 1
@@ -131,9 +127,7 @@ async def test_number_accesslimit_entities_have_correct_config(
     await async_setup_entry(hass, number_config_entry, mock_add_entities)
 
     # Find access limit entities
-    accesslimit_entities = [
-        e for e in entities if "Uses Remaining" in e.entity_description.name
-    ]
+    accesslimit_entities = [e for e in entities if "Uses Remaining" in e.entity_description.name]
     assert len(accesslimit_entities) == 2
 
     for entity in accesslimit_entities:
@@ -144,9 +138,7 @@ async def test_number_accesslimit_entities_have_correct_config(
         assert entity.entity_description.native_step == 1
 
 
-async def test_number_entity_initialization(
-    hass: HomeAssistant, number_config_entry, coordinator
-):
+async def test_number_entity_initialization(hass: HomeAssistant, number_config_entry, coordinator):
     """Test number entity initialization."""
 
     entity_description = KeymasterNumberEntityDescription(
@@ -414,9 +406,7 @@ async def test_number_entity_available_when_autolock_enabled(
     assert entity._attr_native_value == 5
 
 
-async def test_number_entity_async_set_value(
-    hass: HomeAssistant, number_config_entry, coordinator
-):
+async def test_number_entity_async_set_value(hass: HomeAssistant, number_config_entry, coordinator):
     """Test setting number value updates coordinator."""
 
     # Create a connected lock with code slot and accesslimit enabled

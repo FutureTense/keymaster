@@ -24,18 +24,14 @@ _LOGGER = logging.getLogger(__name__)
 
 async def test_service_regenerate_lovelace(hass, keymaster_integration, caplog):
     """Test generate_package_files."""
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3
-    )
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
     servicedata: dict[Any, Any] = {}
-    await hass.services.async_call(
-        DOMAIN, SERVICE_REGENERATE_LOVELACE, servicedata, blocking=True
-    )
+    await hass.services.async_call(DOMAIN, SERVICE_REGENERATE_LOVELACE, servicedata, blocking=True)
     await hass.async_block_till_done()
 
     # Check for exception when unable to create directory

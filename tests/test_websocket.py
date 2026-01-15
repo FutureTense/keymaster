@@ -35,9 +35,7 @@ def _create_mock_connection():
 
 async def test_async_setup_registers_commands(hass: HomeAssistant):
     """Test that async_setup registers the WebSocket commands."""
-    with patch(
-        "homeassistant.components.websocket_api.async_register_command"
-    ) as mock_register:
+    with patch("homeassistant.components.websocket_api.async_register_command") as mock_register:
         await async_setup(hass)
 
         assert mock_register.call_count == 3
@@ -424,7 +422,12 @@ async def test_ws_get_section_config_basic(hass: HomeAssistant):
         await websocket.ws_get_section_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_section_config", "config_entry_id": "test_entry_id", "slot_num": 2},
+            {
+                "id": 1,
+                "type": f"{DOMAIN}/get_section_config",
+                "config_entry_id": "test_entry_id",
+                "slot_num": 2,
+            },
         )
 
         mock_gen.assert_called_once()
@@ -464,7 +467,12 @@ async def test_ws_get_section_config_by_lock_name(hass: HomeAssistant):
         await websocket.ws_get_section_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_section_config", "lock_name": "frontdoor", "slot_num": 2},
+            {
+                "id": 1,
+                "type": f"{DOMAIN}/get_section_config",
+                "lock_name": "frontdoor",
+                "slot_num": 2,
+            },
         )
 
         mock_gen.assert_called_once()
@@ -495,7 +503,12 @@ async def test_ws_get_section_config_invalid_slot(hass: HomeAssistant):
     await websocket.ws_get_section_config.__wrapped__(
         hass,
         mock_connection,
-        {"id": 1, "type": f"{DOMAIN}/get_section_config", "config_entry_id": "test_entry_id", "slot_num": 10},
+        {
+            "id": 1,
+            "type": f"{DOMAIN}/get_section_config",
+            "config_entry_id": "test_entry_id",
+            "slot_num": 10,
+        },
     )
 
     mock_connection.send_error.assert_called_once()
@@ -512,7 +525,12 @@ async def test_ws_get_section_config_lock_not_found(hass: HomeAssistant):
     await websocket.ws_get_section_config.__wrapped__(
         hass,
         mock_connection,
-        {"id": 1, "type": f"{DOMAIN}/get_section_config", "config_entry_id": "nonexistent", "slot_num": 1},
+        {
+            "id": 1,
+            "type": f"{DOMAIN}/get_section_config",
+            "config_entry_id": "nonexistent",
+            "slot_num": 1,
+        },
     )
 
     mock_connection.send_error.assert_called_once()
@@ -547,7 +565,12 @@ async def test_ws_get_section_config_passes_parent_entry(hass: HomeAssistant):
         await websocket.ws_get_section_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_section_config", "config_entry_id": "child_entry_id", "slot_num": 1},
+            {
+                "id": 1,
+                "type": f"{DOMAIN}/get_section_config",
+                "config_entry_id": "child_entry_id",
+                "slot_num": 1,
+            },
         )
 
         call_kwargs = mock_gen.call_args[1]
@@ -579,7 +602,12 @@ async def test_ws_get_section_config_defaults(hass: HomeAssistant):
         await websocket.ws_get_section_config.__wrapped__(
             hass,
             mock_connection,
-            {"id": 1, "type": f"{DOMAIN}/get_section_config", "config_entry_id": "minimal_id", "slot_num": 1},
+            {
+                "id": 1,
+                "type": f"{DOMAIN}/get_section_config",
+                "config_entry_id": "minimal_id",
+                "slot_num": 1,
+            },
         )
 
         call_kwargs = mock_gen.call_args[1]

@@ -14,9 +14,7 @@ NETWORK_READY_ENTITY = "binary_sensor.frontdoor_network"
 KWIKSET_910_LOCK_ENTITY = "lock.garage_door"
 
 
-async def test_zwavejs_network_ready(
-    hass, client, lock_kwikset_910, integration, caplog
-):
+async def test_zwavejs_network_ready(hass, client, lock_kwikset_910, integration, caplog):
     """Test zwavejs network ready sensor."""
 
     # Skip test if Z-Wave integration didn't load properly (USB module missing)
