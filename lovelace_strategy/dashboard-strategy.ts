@@ -3,7 +3,7 @@ import { ReactiveElement } from 'lit';
 import { DOMAIN } from './const';
 import { HomeAssistant, LovelaceViewConfig } from './ha_type_stubs';
 import { createErrorView } from './strategy-utils';
-import { GetConfigEntriesResponse, KeymasterDashboardStrategyConfig } from './types';
+import { KeymasterDashboardStrategyConfig, ListLocksResponse } from './types';
 
 /** Message shown when no Keymaster configurations exist */
 export const NO_CONFIG_MESSAGE = '# No Keymaster configurations found!';
@@ -13,35 +13,29 @@ export const ZERO_WIDTH_SPACE = '\u200B';
 
 export class KeymasterDashboardStrategy extends ReactiveElement {
     static async generate(config: KeymasterDashboardStrategyConfig, hass: HomeAssistant) {
-        const configEntries = await hass.callWS<GetConfigEntriesResponse>({
-            domain: DOMAIN,
-            type: 'config_entries/get'
+        const locks = await hass.callWS<ListLocksResponse>({
+            type: `${DOMAIN}/list_locks`
         });
 
-        // Filter to only entries with valid title (title contains lock name)
-        const validEntries = configEntries.filter(
-            (entry) => entry.title
-        );
-
-        if (validEntries.length === 0) {
+        if (locks.length === 0) {
             return {
                 title: 'Keymaster',
                 views: [createErrorView(NO_CONFIG_MESSAGE)]
             };
         }
 
-        // Sort config entries alphabetically by title (title = lock name)
-        const sortedEntries = [...validEntries].sort((a, b) =>
-            a.title.localeCompare(b.title)
+        // Sort locks alphabetically by name
+        const sortedLocks = [...locks].sort((a, b) =>
+            a.lock_name.localeCompare(b.lock_name)
         );
 
         // Return view strategy configs - HA will call KeymasterViewStrategy for each
-        const views: LovelaceViewConfig[] = sortedEntries.map((configEntry) => ({
+        const views: LovelaceViewConfig[] = sortedLocks.map((lock) => ({
             strategy: {
-                config_entry_id: configEntry.entry_id,
+                config_entry_id: lock.entry_id,
                 type: `custom:${DOMAIN}`
             },
-            title: configEntry.title
+            title: lock.lock_name
         }));
 
         // Single view hack: add placeholder to force tab visibility

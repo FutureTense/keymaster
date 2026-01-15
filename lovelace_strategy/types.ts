@@ -1,26 +1,12 @@
 import { LovelaceViewConfig } from './ha_type_stubs';
 
-/**
- * Config entry response from config_entries/get WebSocket API.
- * Note: The 'data' field is intentionally excluded by Home Assistant's API
- * for security reasons. We use 'title' which contains the lock name.
- */
-export interface KeymasterConfigEntry {
-    disabled_by: string;
-    domain: string;
+/** Lock entry from keymaster/list_locks WebSocket API */
+export interface KeymasterLockEntry {
     entry_id: string;
-    pref_disable_new_entities: boolean;
-    pref_disable_polling: boolean;
-    reason: string | null;
-    source: string;
-    state: string;
-    supports_options: boolean;
-    supports_remove_device: boolean;
-    supports_unload: boolean;
-    title: string;  // Contains the lock name
+    lock_name: string;
 }
 
-export type GetConfigEntriesResponse = KeymasterConfigEntry[];
+export type ListLocksResponse = KeymasterLockEntry[];
 
 export interface KeymasterDashboardStrategyConfig {
     type: 'custom:keymaster';
