@@ -125,9 +125,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=60),
             config_entry=None,
         )
-        self._json_folder: str = self.hass.config.path(
-            "custom_components", DOMAIN, "json_kmlocks"
-        )
+        self._json_folder: str = self.hass.config.path("custom_components", DOMAIN, "json_kmlocks")
         self._json_filename: str = f"{DOMAIN}_kmlocks.json"
 
     async def initial_setup(self) -> None:
@@ -142,9 +140,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         await self.hass.async_add_executor_job(self._create_json_folder)
 
-        imported_config = await self.hass.async_add_executor_job(
-            self._get_dict_from_json_file
-        )
+        imported_config = await self.hass.async_add_executor_job(self._get_dict_from_json_file)
 
         _LOGGER.debug("[async_setup] Imported %s keymaster locks", len(imported_config))
         self.kmlocks = imported_config
@@ -157,9 +153,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._verify_lock_configuration()
 
     def _create_json_folder(self) -> None:
-        _LOGGER.debug(
-            "[create_json_folder] json_kmlocks Location: %s", self._json_folder
-        )
+        _LOGGER.debug("[create_json_folder] json_kmlocks Location: %s", self._json_folder)
 
         try:
             Path(self._json_folder).mkdir(parents=True, exist_ok=True)
@@ -199,8 +193,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # _LOGGER.debug(f"[get_dict_from_json_file] Imported JSON: {config}")
         kmlocks: MutableMapping = {
-            key: self._dict_to_kmlocks(value, KeymasterLock)
-            for key, value in config.items()
+            key: self._dict_to_kmlocks(value, KeymasterLock) for key, value in config.items()
         }
 
         _LOGGER.debug("[get_dict_from_json_file] Imported kmlocks: %s", kmlocks)
@@ -216,9 +209,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 config_entry_id
             )
             if config_entry is None:
-                _LOGGER.debug(
-                    "[verify_lock_configuration] %s: No config entry found", lock
-                )
+                _LOGGER.debug("[verify_lock_configuration] %s: No config entry found", lock)
                 _LOGGER.debug("deleting %s from kmlocks", lock)
                 await self.delete_lock_by_config_entry_id(config_entry_id)
             _LOGGER.debug("================================")
@@ -302,16 +293,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         # )
                         if isinstance(field_value, dict):
                             # If the value_type is a dataclass, recursively process it
-                            if is_dataclass(value_type) and isinstance(
-                                value_type, type
-                            ):
+                            if is_dataclass(value_type) and isinstance(value_type, type):
                                 # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting dict items for {field_name}")
                                 field_value = {
                                     (
                                         int(k)
-                                        if key_type is int
-                                        and isinstance(k, str)
-                                        and k.isdigit()
+                                        if key_type is int and isinstance(k, str) and k.isdigit()
                                         else k
                                     ): self._dict_to_kmlocks(v, value_type)
                                     for k, v in field_value.items()
@@ -321,9 +308,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                                 field_value = {
                                     (
                                         int(k)
-                                        if key_type is int
-                                        and isinstance(k, str)
-                                        and k.isdigit()
+                                        if key_type is int and isinstance(k, str) and k.isdigit()
                                         else k
                                     ): v
                                     for k, v in field_value.items()
@@ -386,11 +371,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     ]
                 elif isinstance(field_value, dict):
                     result[field_name] = {
-                        k: (
-                            self._kmlocks_to_dict(v)
-                            if hasattr(v, "__dataclass_fields__")
-                            else v
-                        )
+                        k: (self._kmlocks_to_dict(v) if hasattr(v, "__dataclass_fields__") else v)
                         for k, v in field_value.items()
                     }
                 else:
@@ -431,9 +412,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # _LOGGER.debug(f"[write_config_to_json] Dict to Save: {config}")
         if config == self._prev_kmlocks_dict:
-            _LOGGER.debug(
-                "[write_config_to_json] No changes to kmlocks. Not updating JSON file"
-            )
+            _LOGGER.debug("[write_config_to_json] No changes to kmlocks. Not updating JSON file")
             return True
         self._prev_kmlocks_dict = config
         try:
@@ -458,13 +437,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     if kmlock.parent_name == parent_lock.lock_name:
                         if kmlock.parent_config_entry_id is None:
                             kmlock.parent_config_entry_id = parent_config_entry_id
-                        if (
-                            keymaster_config_entry_id
-                            not in parent_lock.child_config_entry_ids
-                        ):
-                            parent_lock.child_config_entry_ids.append(
-                                keymaster_config_entry_id
-                            )
+                        if keymaster_config_entry_id not in parent_lock.child_config_entry_ids:
+                            parent_lock.child_config_entry_ids.append(keymaster_config_entry_id)
                         break
             for child_config_entry_id in list(kmlock.child_config_entry_ids):
                 if (
@@ -473,13 +447,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     != keymaster_config_entry_id
                 ):
                     with contextlib.suppress(ValueError):
-                        self.kmlocks[
-                            keymaster_config_entry_id
-                        ].child_config_entry_ids.remove(child_config_entry_id)
+                        self.kmlocks[keymaster_config_entry_id].child_config_entry_ids.remove(
+                            child_config_entry_id
+                        )
 
-    async def _handle_zwave_js_lock_event(
-        self, kmlock: KeymasterLock, event: Event
-    ) -> None:
+    async def _handle_zwave_js_lock_event(self, kmlock: KeymasterLock, event: Event) -> None:
         """Handle Z-Wave JS event."""
 
         if (
@@ -553,9 +525,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         event: Event[EventStateChangedData],
     ) -> None:
         """Track state changes to lock entities."""
-        _LOGGER.debug(
-            "[handle_lock_state_change] %s: event: %s", kmlock.lock_name, event
-        )
+        _LOGGER.debug("[handle_lock_state_change] %s: event: %s", kmlock.lock_name, event)
         if not event:
             return
 
@@ -576,23 +546,19 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         action_type: str = ""
         if kmlock.alarm_type_or_access_control_entity_id and (
             ALARM_TYPE in kmlock.alarm_type_or_access_control_entity_id
-            or ALARM_TYPE.replace("_", "")
-            in kmlock.alarm_type_or_access_control_entity_id
+            or ALARM_TYPE.replace("_", "") in kmlock.alarm_type_or_access_control_entity_id
         ):
             action_type = ALARM_TYPE
         elif kmlock.alarm_type_or_access_control_entity_id and (
             ACCESS_CONTROL in kmlock.alarm_type_or_access_control_entity_id
-            or ACCESS_CONTROL.replace("_", "")
-            in kmlock.alarm_type_or_access_control_entity_id
+            or ACCESS_CONTROL.replace("_", "") in kmlock.alarm_type_or_access_control_entity_id
         ):
             action_type = ACCESS_CONTROL
 
         # Get alarm_level/usercode and alarm_type/access_control states
         alarm_level_state = None
         if kmlock.alarm_level_or_user_code_entity_id:
-            alarm_level_state = self.hass.states.get(
-                kmlock.alarm_level_or_user_code_entity_id
-            )
+            alarm_level_state = self.hass.states.get(kmlock.alarm_level_or_user_code_entity_id)
         alarm_level_value: int | None = (
             int(alarm_level_state.state)
             if alarm_level_state
@@ -601,13 +567,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         alarm_type_state = None
         if kmlock.alarm_type_or_access_control_entity_id:
-            alarm_type_state = self.hass.states.get(
-                kmlock.alarm_type_or_access_control_entity_id
-            )
+            alarm_type_state = self.hass.states.get(kmlock.alarm_type_or_access_control_entity_id)
         alarm_type_value: int | None = (
             int(alarm_type_state.state)
-            if alarm_type_state
-            and alarm_type_state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}
+            if alarm_type_state and alarm_type_state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}
             else None
         )
 
@@ -655,9 +618,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             new_state,
         )
         if old_state not in {LockState.LOCKED, LockState.UNLOCKED}:
-            _LOGGER.debug(
-                "[handle_lock_state_change] %s: Ignoring state change", kmlock.lock_name
-            )
+            _LOGGER.debug("[handle_lock_state_change] %s: Ignoring state change", kmlock.lock_name)
         elif new_state == LockState.UNLOCKED:
             await self._lock_unlocked(
                 kmlock=kmlock,
@@ -686,9 +647,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         event: Event[EventStateChangedData],
     ) -> None:
         """Track state changes to door entities."""
-        _LOGGER.debug(
-            "[handle_door_state_change] %s: event: %s", kmlock.lock_name, event
-        )
+        _LOGGER.debug("[handle_door_state_change] %s: event: %s", kmlock.lock_name, event)
         if not event:
             return
 
@@ -711,9 +670,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             new_state,
         )
         if old_state not in {STATE_ON, STATE_OFF}:
-            _LOGGER.debug(
-                "[handle_door_state_change] %s: Ignoring state change", kmlock.lock_name
-            )
+            _LOGGER.debug("[handle_door_state_change] %s: Ignoring state change", kmlock.lock_name)
         elif new_state == STATE_ON:
             await self._door_opened(kmlock)
         elif new_state == STATE_OFF:
@@ -780,9 +737,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     @staticmethod
     async def _unsubscribe_listeners(kmlock: KeymasterLock) -> None:
         # Unsubscribe to any listeners
-        _LOGGER.debug(
-            "[unsubscribe_listeners] %s: Removing all listeners", kmlock.lock_name
-        )
+        _LOGGER.debug("[unsubscribe_listeners] %s: Removing all listeners", kmlock.lock_name)
         if not hasattr(kmlock, "listeners") or kmlock.listeners is None:
             kmlock.listeners = []
             return
@@ -819,9 +774,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not self._throttle.is_allowed(
             "lock_unlocked", kmlock.keymaster_config_entry_id, THROTTLE_SECONDS
         ):
-            _LOGGER.debug(
-                "[lock_unlocked] %s: Throttled. source: %s", kmlock.lock_name, source
-            )
+            _LOGGER.debug("[lock_unlocked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
 
         if kmlock.lock_state == LockState.UNLOCKED:
@@ -851,7 +804,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     and kmlock.code_slots.get(code_slot_num)
                     and kmlock.code_slots[code_slot_num].name
                 ):
-                    message = f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
+                    message = (
+                        f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
+                    )
                 else:
                     message = f"{message} by Code Slot {code_slot_num}"
             await send_manual_notification(
@@ -861,29 +816,21 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 message=message,
             )
 
-        if (
-            code_slot_num > 0
-            and kmlock.code_slots
-            and code_slot_num in kmlock.code_slots
-        ):
+        if code_slot_num > 0 and kmlock.code_slots and code_slot_num in kmlock.code_slots:
             if (
                 kmlock.parent_name
                 and kmlock.parent_config_entry_id
                 and not kmlock.code_slots[code_slot_num].override_parent
             ):
-                parent_kmlock: KeymasterLock | None = (
-                    await self.get_lock_by_config_entry_id(
-                        kmlock.parent_config_entry_id
-                    )
+                parent_kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(
+                    kmlock.parent_config_entry_id
                 )
                 if (
                     isinstance(parent_kmlock, KeymasterLock)
                     and parent_kmlock.code_slots
                     and code_slot_num
                     and code_slot_num in parent_kmlock.code_slots
-                    and parent_kmlock.code_slots[
-                        code_slot_num
-                    ].accesslimit_count_enabled
+                    and parent_kmlock.code_slots[code_slot_num].accesslimit_count_enabled
                 ):
                     accesslimit_count: int | None = parent_kmlock.code_slots[
                         code_slot_num
@@ -895,17 +842,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             elif kmlock.code_slots[code_slot_num].accesslimit_count_enabled:
                 accesslimit_count = kmlock.code_slots[code_slot_num].accesslimit_count
                 if isinstance(accesslimit_count, int) and accesslimit_count > 0:
-                    kmlock.code_slots[code_slot_num].accesslimit_count = (
-                        accesslimit_count - 1
-                    )
+                    kmlock.code_slots[code_slot_num].accesslimit_count = accesslimit_count - 1
 
-            if (
-                kmlock.code_slots[code_slot_num].notifications
-                and not kmlock.lock_notifications
-            ):
+            if kmlock.code_slots[code_slot_num].notifications and not kmlock.lock_notifications:
                 if kmlock.code_slots[code_slot_num].name:
                     message = event_label
-                    message = f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
+                    message = (
+                        f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
+                    )
                 else:
                     message = f"{message} by Code Slot {code_slot_num}"
                 await send_manual_notification(
@@ -944,9 +888,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not self._throttle.is_allowed(
             "lock_locked", kmlock.keymaster_config_entry_id, THROTTLE_SECONDS
         ):
-            _LOGGER.debug(
-                "[lock_locked] %s: Throttled. source: %s", kmlock.lock_name, source
-            )
+            _LOGGER.debug("[lock_locked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
 
         if kmlock.lock_state == LockState.LOCKED:
@@ -1082,9 +1024,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         else:
             await self._lock_lock(kmlock=kmlock)
 
-    async def _update_door_and_lock_state(
-        self, trigger_actions_if_changed: bool = False
-    ) -> None:
+    async def _update_door_and_lock_state(self, trigger_actions_if_changed: bool = False) -> None:
         # _LOGGER.debug("[update_door_and_lock_state] Running")
         for kmlock in self.kmlocks.values():
             if isinstance(kmlock.lock_entity_id, str) and kmlock.lock_entity_id:
@@ -1126,9 +1066,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         kmlock.lock_state = lock_state
 
             if kmlock.door_sensor_entity_id:
-                if temp_door_state := self.hass.states.get(
-                    kmlock.door_sensor_entity_id
-                ):
+                if temp_door_state := self.hass.states.get(kmlock.door_sensor_entity_id):
                     door_state: str = temp_door_state.state
                     if door_state in {STATE_OPEN, STATE_CLOSED}:
                         if (
@@ -1175,9 +1113,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete = False
                 await self._update_lock(kmlock)
                 return
-            _LOGGER.debug(
-                "[add_lock] %s: Lock already exists, not adding", kmlock.lock_name
-            )
+            _LOGGER.debug("[add_lock] %s: Lock already exists, not adding", kmlock.lock_name)
             return
         _LOGGER.debug("[add_lock] %s", kmlock.lock_name)
         self.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
@@ -1192,9 +1128,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._initial_setup_done_event.wait()
         _LOGGER.debug("[update_lock] %s", new.lock_name)
         if new.keymaster_config_entry_id not in self.kmlocks:
-            _LOGGER.debug(
-                "[update_lock] %s: Can't update, lock doesn't exist", new.lock_name
-            )
+            _LOGGER.debug("[update_lock] %s: Can't update, lock doesn't exist", new.lock_name)
             return False
         old: KeymasterLock = self.kmlocks[new.keymaster_config_entry_id]
         if (
@@ -1235,26 +1169,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             new_kmslot.notifications = old_kmslot.notifications
             new_kmslot.accesslimit_count_enabled = old_kmslot.accesslimit_count_enabled
             new_kmslot.accesslimit_count = old_kmslot.accesslimit_count
-            new_kmslot.accesslimit_date_range_enabled = (
-                old_kmslot.accesslimit_date_range_enabled
-            )
-            new_kmslot.accesslimit_date_range_start = (
-                old_kmslot.accesslimit_date_range_start
-            )
-            new_kmslot.accesslimit_date_range_end = (
-                old_kmslot.accesslimit_date_range_end
-            )
-            new_kmslot.accesslimit_day_of_week_enabled = (
-                old_kmslot.accesslimit_day_of_week_enabled
-            )
+            new_kmslot.accesslimit_date_range_enabled = old_kmslot.accesslimit_date_range_enabled
+            new_kmslot.accesslimit_date_range_start = old_kmslot.accesslimit_date_range_start
+            new_kmslot.accesslimit_date_range_end = old_kmslot.accesslimit_date_range_end
+            new_kmslot.accesslimit_day_of_week_enabled = old_kmslot.accesslimit_day_of_week_enabled
             if not new_kmslot.accesslimit_day_of_week:
                 continue
             for dow_num, new_dow in new_kmslot.accesslimit_day_of_week.items():
                 if not old_kmslot.accesslimit_day_of_week:
                     continue
-                old_dow: KeymasterCodeSlotDayOfWeek = (
-                    old_kmslot.accesslimit_day_of_week[dow_num]
-                )
+                old_dow: KeymasterCodeSlotDayOfWeek = old_kmslot.accesslimit_day_of_week[dow_num]
                 new_dow.dow_enabled = old_dow.dow_enabled
                 new_dow.limit_by_time = old_dow.limit_by_time
                 new_dow.include_exclude = old_dow.include_exclude
@@ -1288,9 +1212,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return
         _LOGGER.debug("[delete_lock] %s: Deleting", kmlock.lock_name)
-        await self.hass.async_add_executor_job(
-            delete_lovelace, self.hass, kmlock.lock_name
-        )
+        await self.hass.async_add_executor_job(delete_lovelace, self.hass, kmlock.lock_name)
         if kmlock.autolock_timer:
             await kmlock.autolock_timer.cancel()
         await KeymasterCoordinator._unsubscribe_listeners(
@@ -1333,17 +1255,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 count += 1
         return count
 
-    async def get_lock_by_config_entry_id(
-        self, config_entry_id: str
-    ) -> KeymasterLock | None:
+    async def get_lock_by_config_entry_id(self, config_entry_id: str) -> KeymasterLock | None:
         """Get a keymaster lock by entry_id."""
         await self._initial_setup_done_event.wait()
         # _LOGGER.debug(f"[get_lock_by_config_entry_id] config_entry_id: {config_entry_id}")
         return self.kmlocks.get(config_entry_id, None)
 
-    def sync_get_lock_by_config_entry_id(
-        self, config_entry_id: str
-    ) -> KeymasterLock | None:
+    def sync_get_lock_by_config_entry_id(self, config_entry_id: str) -> KeymasterLock | None:
         """Get a keymaster lock by entry_id."""
         # _LOGGER.debug(f"[sync_get_lock_by_config_entry_id] config_entry_id: {config_entry_id}")
         return self.kmlocks.get(config_entry_id, None)
@@ -1360,9 +1278,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._initial_setup_done_event.wait()
         # _LOGGER.debug(f"[set_pin_on_lock] config_entry_id: {config_entry_id}, code_slot_num: {code_slot_num}, pin: {pin}, update_after: {update_after}")
 
-        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(
-            config_entry_id
-        )
+        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(config_entry_id)
         if not isinstance(kmlock, KeymasterLock):
             _LOGGER.error(
                 "[Coordinator] Can't find lock with config_entry_id: %s",
@@ -1454,9 +1370,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     ) -> bool:
         """Clear the usercode from a code slot."""
         await self._initial_setup_done_event.wait()
-        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(
-            config_entry_id
-        )
+        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(config_entry_id)
         if not isinstance(kmlock, KeymasterLock):
             _LOGGER.error(
                 "[Coordinator] Can't find lock with config_entry_id: %s",
@@ -1518,9 +1432,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     code_slot_num,
                 )
             try:
-                usercode: ZwaveJSCodeSlot = get_usercode(
-                    kmlock.zwave_js_lock_node, code_slot_num
-                )
+                usercode: ZwaveJSCodeSlot = get_usercode(kmlock.zwave_js_lock_node, code_slot_num)
             except BaseZwaveJSServerError as e:
                 _LOGGER.error(
                     "[Coordinator] %s: Code Slot %s: Unable to confirm PIN is cleared. %s: %s",
@@ -1600,9 +1512,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(DAY_NAMES):
-            dow_slots[i] = KeymasterCodeSlotDayOfWeek(
-                day_of_week_num=i, day_of_week_name=dow
-            )
+            dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
         new_kmslot = KeymasterCodeSlot(
             number=code_slot_num, enabled=False, accesslimit_day_of_week=dow_slots
         )
@@ -1619,8 +1529,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
 
         if kmslot.accesslimit_count_enabled and (
-            not isinstance(kmslot.accesslimit_count, float)
-            or kmslot.accesslimit_count <= 0
+            not isinstance(kmslot.accesslimit_count, float) or kmslot.accesslimit_count <= 0
         ):
             return False
 
@@ -1634,12 +1543,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if kmslot.accesslimit_day_of_week_enabled and kmslot.accesslimit_day_of_week:
             today_index: int = dt.now().astimezone().weekday()
-            today: KeymasterCodeSlotDayOfWeek = kmslot.accesslimit_day_of_week[
-                today_index
-            ]
-            _LOGGER.debug(
-                "[is_slot_active] today_index: %s, today: %s", today_index, today
-            )
+            today: KeymasterCodeSlotDayOfWeek = kmslot.accesslimit_day_of_week[today_index]
+            _LOGGER.debug("[is_slot_active] today_index: %s, today: %s", today_index, today)
             if not today.dow_enabled:
                 return False
 
@@ -1661,10 +1566,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 and (
                     not isinstance(today.time_start, dt_time)
                     or not isinstance(today.time_end, dt_time)
-                    or (
-                        dt.now().time() >= today.time_start
-                        and dt.now().time() <= today.time_end
-                    )
+                    or (dt.now().time() >= today.time_start and dt.now().time() <= today.time_end)
                 )
             ):
                 return False
@@ -1674,14 +1576,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def _trigger_quick_refresh(self, _: dt) -> None:
         await self.async_request_refresh()
 
-    async def update_slot_active_state(
-        self, config_entry_id: str, code_slot_num: int
-    ) -> bool:
+    async def update_slot_active_state(self, config_entry_id: str, code_slot_num: int) -> bool:
         """Update the active state for a code slot."""
         await self._initial_setup_done_event.wait()
-        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(
-            config_entry_id
-        )
+        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(config_entry_id)
         if not isinstance(kmlock, KeymasterLock):
             _LOGGER.error(
                 "[Coordinator] Can't find lock with config_entry_id: %s",
@@ -1697,8 +1595,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return False
 
-        kmlock.code_slots[code_slot_num].active = (
-            await KeymasterCoordinator._is_slot_active(kmlock.code_slots[code_slot_num])
+        kmlock.code_slots[code_slot_num].active = await KeymasterCoordinator._is_slot_active(
+            kmlock.code_slots[code_slot_num]
         )
         return True
 
@@ -1762,9 +1660,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             and kmlock.connected
             and prev_lock_connected
         ):
-            kmlock_node_state: MutableMapping = dump_node_state(
-                kmlock.zwave_js_lock_node
-            )
+            kmlock_node_state: MutableMapping = dump_node_state(kmlock.zwave_js_lock_node)
             _LOGGER.debug(
                 "[connect_and_update_lock] %s: node_status: %s",
                 kmlock.lock_name,
@@ -1789,9 +1685,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         lock_dev_reg_entry = None
         if lock_ent_reg_entry and lock_ent_reg_entry.device_id:
-            lock_dev_reg_entry = self._device_registry.async_get(
-                lock_ent_reg_entry.device_id
-            )
+            lock_dev_reg_entry = self._device_registry.async_get(lock_ent_reg_entry.device_id)
         if not lock_dev_reg_entry:
             _LOGGER.error(
                 "[Coordinator] %s: Can't find the lock in the Device Registry",
@@ -1841,15 +1735,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # Update all keymaster locks
         for keymaster_config_entry_id in self.kmlocks:
-            await self._update_lock_data(
-                keymaster_config_entry_id=keymaster_config_entry_id
-            )
+            await self._update_lock_data(keymaster_config_entry_id=keymaster_config_entry_id)
 
         # Propagate parent kmlock settings to child kmlocks
         for keymaster_config_entry_id in self.kmlocks:
-            await self._sync_child_locks(
-                keymaster_config_entry_id=keymaster_config_entry_id
-            )
+            await self._sync_child_locks(keymaster_config_entry_id=keymaster_config_entry_id)
 
         # Handle sync status update if necessary
         if self._sync_status_counter > SYNC_STATUS_THRESHOLD:
@@ -1891,15 +1781,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         node: ZwaveJSNode | None = kmlock.zwave_js_lock_node
         if node is None:
-            _LOGGER.error(
-                "[Coordinator] %s: Z-Wave JS Node not defined", kmlock.lock_name
-            )
+            _LOGGER.error("[Coordinator] %s: Z-Wave JS Node not defined", kmlock.lock_name)
             return
 
-        usercodes: list[ZwaveJSCodeSlot] = (
-            await KeymasterCoordinator._get_usercodes_from_node(
-                node=node, kmlock=kmlock
-            )
+        usercodes: list[ZwaveJSCodeSlot] = await KeymasterCoordinator._get_usercodes_from_node(
+            node=node, kmlock=kmlock
         )
         _LOGGER.debug(
             "[update_lock_data] %s: usercodes: %s",
@@ -1936,9 +1822,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         # Check active status of code slots and set/clear PINs on Z-Wave JS Lock
         if kmlock.code_slots:
             for code_slot_num, kmslot in kmlock.code_slots.items():
-                await self._update_slot(
-                    kmlock=kmlock, kmslot=kmslot, code_slot_num=code_slot_num
-                )
+                await self._update_slot(kmlock=kmlock, kmslot=kmslot, code_slot_num=code_slot_num)
 
         # Get usercodes from Z-Wave JS Lock and update kmlock PINs
         for usercode_slot in usercodes:
@@ -1967,9 +1851,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 override=True,
             )
 
-    async def _sync_usercode(
-        self, kmlock: KeymasterLock, usercode_slot: ZwaveJSCodeSlot
-    ) -> None:
+    async def _sync_usercode(self, kmlock: KeymasterLock, usercode_slot: ZwaveJSCodeSlot) -> None:
         """Sync a usercode from Z-Wave JS."""
         code_slot_num: int = int(usercode_slot[ZWAVEJS_ATTR_CODE_SLOT])
         usercode: str = usercode_slot[ZWAVEJS_ATTR_USERCODE]
@@ -1982,12 +1864,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             usercode_resp: ZwaveJSCodeSlot = await get_usercode_from_node(
                 kmlock.zwave_js_lock_node, code_slot_num
             )
-            usercode = usercode_slot[ZWAVEJS_ATTR_USERCODE] = usercode_resp[
-                ZWAVEJS_ATTR_USERCODE
-            ]
-            in_use = usercode_slot[ZWAVEJS_ATTR_IN_USE] = usercode_resp[
-                ZWAVEJS_ATTR_IN_USE
-            ]
+            usercode = usercode_slot[ZWAVEJS_ATTR_USERCODE] = usercode_resp[ZWAVEJS_ATTR_USERCODE]
+            in_use = usercode_slot[ZWAVEJS_ATTR_IN_USE] = usercode_resp[ZWAVEJS_ATTR_IN_USE]
 
         # Fix for Schlage masked responses: if slot is not in use (status=0) but
         # usercode is masked (e.g., "**********"), treat it as empty
@@ -1996,9 +1874,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         await self._sync_pin(kmlock, code_slot_num, usercode)
 
-    async def _sync_pin(
-        self, kmlock: KeymasterLock, code_slot_num: int, usercode: str
-    ) -> None:
+    async def _sync_pin(self, kmlock: KeymasterLock, code_slot_num: int, usercode: str) -> None:
         """Sync the pin with the lock based on conditions."""
         if not kmlock.code_slots:
             return
@@ -2071,9 +1947,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         for child_entry_id in kmlock.child_config_entry_ids:
             await self._sync_child_lock(kmlock, child_entry_id)
 
-    async def _sync_child_lock(
-        self, kmlock: KeymasterLock, child_entry_id: str
-    ) -> None:
+    async def _sync_child_lock(self, kmlock: KeymasterLock, child_entry_id: str) -> None:
         """Sync the settings for a child lock."""
         child_kmlock = await self.get_lock_by_config_entry_id(child_entry_id)
         if not isinstance(child_kmlock, KeymasterLock):
@@ -2084,9 +1958,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         if not async_using_zwave_js(hass=self.hass, kmlock=child_kmlock):
-            _LOGGER.error(
-                "[Coordinator] %s: Not using Z-Wave JS", child_kmlock.lock_name
-            )
+            _LOGGER.error("[Coordinator] %s: Not using Z-Wave JS", child_kmlock.lock_name)
             return
 
         if kmlock.code_slots == child_kmlock.code_slots:
@@ -2106,10 +1978,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not kmlock.code_slots:
             return
         for code_slot_num, kmslot in kmlock.code_slots.items():
-            if (
-                not child_kmlock.code_slots
-                or code_slot_num not in child_kmlock.code_slots
-            ):
+            if not child_kmlock.code_slots or code_slot_num not in child_kmlock.code_slots:
                 continue
             if (
                 not child_kmlock.code_slots
@@ -2144,9 +2013,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
             # If parent slot is disabled or inactive, treat parent PIN as None for comparison
             # to prevent endless clear loops when parent still has PIN in memory
-            parent_pin_for_comparison = (
-                kmslot.pin if (kmslot.enabled and kmslot.active) else None
-            )
+            parent_pin_for_comparison = kmslot.pin if (kmslot.enabled and kmslot.active) else None
 
             pin_mismatch = parent_pin_for_comparison != child_pin and not (
                 child_pin and "*" in child_pin

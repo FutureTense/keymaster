@@ -158,9 +158,7 @@ async def test_text_pin_entity_text_mode_when_not_hiding_pins(hass: HomeAssistan
         assert entity.entity_description.mode == TextMode.TEXT
 
 
-async def test_text_entity_initialization(
-    hass: HomeAssistant, text_config_entry, coordinator
-):
+async def test_text_entity_initialization(hass: HomeAssistant, text_config_entry, coordinator):
     """Test text entity initialization."""
 
     entity_description = KeymasterTextEntityDescription(
@@ -248,9 +246,7 @@ async def test_text_entity_available_when_connected(
     assert entity._attr_native_value == "Test User"
 
 
-async def test_text_entity_async_set_pin_value(
-    hass: HomeAssistant, text_config_entry, coordinator
-):
+async def test_text_entity_async_set_pin_value(hass: HomeAssistant, text_config_entry, coordinator):
     """Test setting PIN value calls coordinator methods."""
 
     # Create a connected lock with code slot
@@ -320,9 +316,7 @@ async def test_text_entity_async_clear_pin_value(
 
     # Mock coordinator methods
     with (
-        patch.object(
-            coordinator, "clear_pin_from_lock", new=AsyncMock()
-        ) as mock_clear_pin,
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()) as mock_clear_pin,
         patch.object(coordinator, "async_refresh", new=AsyncMock()),
     ):
         await entity.async_set_value("")
@@ -365,9 +359,7 @@ async def test_text_entity_invalid_pin_ignored(
     # Mock coordinator methods
     with (
         patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
-        patch.object(
-            coordinator, "clear_pin_from_lock", new=AsyncMock()
-        ) as mock_clear_pin,
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()) as mock_clear_pin,
     ):
         # Invalid: too short
         await entity.async_set_value("123")

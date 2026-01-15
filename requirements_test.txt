@@ -1,5 +1,6 @@
 # Test dependencies for pytest
 pytest
+pytest-cov
 pytest-homeassistant-custom-component
 
 # Additional HA ecosystem packages required by tests

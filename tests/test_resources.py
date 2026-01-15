@@ -60,9 +60,7 @@ def test_get_lovelace_resources_returns_none_when_missing(hass: HomeAssistant):
     assert result is None
 
 
-async def test_register_strategy_resource_creates_new(
-    hass: HomeAssistant, mock_storage_resources
-):
+async def test_register_strategy_resource_creates_new(hass: HomeAssistant, mock_storage_resources):
     """Test registering a new strategy resource."""
     hass.data[LOVELACE_DOMAIN] = MagicMock()
     hass.data[LOVELACE_DOMAIN].resources = mock_storage_resources
@@ -81,9 +79,7 @@ async def test_register_strategy_resource_already_exists(
     hass: HomeAssistant, mock_storage_resources
 ):
     """Test registering when resource already exists."""
-    mock_storage_resources.async_items.return_value = [
-        {"id": "existing_id", "url": STRATEGY_PATH}
-    ]
+    mock_storage_resources.async_items.return_value = [{"id": "existing_id", "url": STRATEGY_PATH}]
     hass.data[LOVELACE_DOMAIN] = MagicMock()
     hass.data[LOVELACE_DOMAIN].resources = mock_storage_resources
     hass.data[DOMAIN] = {}
@@ -133,13 +129,9 @@ async def test_register_strategy_resource_no_resources(hass: HomeAssistant):
     await async_register_strategy_resource(hass)
 
 
-async def test_cleanup_strategy_resource_removes(
-    hass: HomeAssistant, mock_storage_resources
-):
+async def test_cleanup_strategy_resource_removes(hass: HomeAssistant, mock_storage_resources):
     """Test cleaning up strategy resource."""
-    mock_storage_resources.async_items.return_value = [
-        {"id": "resource_id", "url": STRATEGY_PATH}
-    ]
+    mock_storage_resources.async_items.return_value = [{"id": "resource_id", "url": STRATEGY_PATH}]
     hass.data[LOVELACE_DOMAIN] = MagicMock()
     hass.data[LOVELACE_DOMAIN].resources = mock_storage_resources
 
@@ -160,9 +152,7 @@ async def test_cleanup_strategy_resource_not_auto_registered(
     mock_storage_resources.async_delete_item.assert_not_called()
 
 
-async def test_cleanup_strategy_resource_not_found(
-    hass: HomeAssistant, mock_storage_resources
-):
+async def test_cleanup_strategy_resource_not_found(hass: HomeAssistant, mock_storage_resources):
     """Test cleanup when resource not found."""
     mock_storage_resources.async_items.return_value = []  # No resources
     hass.data[LOVELACE_DOMAIN] = MagicMock()
