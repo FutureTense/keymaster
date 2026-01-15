@@ -1,4 +1,4 @@
-name: Pytest
+name: Python CI
 
 on:
   push:
@@ -25,7 +25,7 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
-    name: Run tests
+    name: Pytest
     strategy:
       matrix:
         python-version:
@@ -41,15 +41,46 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: 📦 Install requirements
-        run: |
-          pip install tox tox-gh-actions
-      - name: 🏃 Test with tox
-        run: tox
-      - name: 📤 Upload coverage to Codecov
-        uses: "actions/upload-artifact@v4"
+        run: pip install -r requirements_test.txt
+      - name: 🏃 Run pytest
+        run: pytest tests --cov=custom_components/keymaster --cov-report=xml
+      - name: 📤 Upload coverage artifact
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-data
-          path: "coverage.xml"
+          path: coverage.xml
+
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint (ruff)
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v4
+      - name: 🛠️ Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 📦 Install requirements
+        run: pip install -r requirements_lint.txt
+      - name: 🧹 Run ruff format check
+        run: ruff format --check custom_components/ tests/
+      - name: 🔍 Run ruff check
+        run: ruff check custom_components/ tests/
+
+  mypy:
+    runs-on: ubuntu-latest
+    name: Type check (mypy)
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v4
+      - name: 🛠️ Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 📦 Install requirements
+        run: pip install -r requirements_lint.txt
+      - name: 🔎 Run mypy
+        run: mypy custom_components/keymaster
 
   coverage:
     runs-on: ubuntu-latest
