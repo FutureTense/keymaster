@@ -1,4 +1,6 @@
-homeassistant
-pyserial
-pyudev
-zwave-js-server-python
+# Development dependencies - includes test and lint
+-r requirements_test.txt
+-r requirements_lint.txt
+
+# Test orchestration for local development
+tox
