@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from homeassistant.config_entries import ConfigEntryDisabler
+
 from custom_components.keymaster import websocket
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
@@ -96,6 +98,38 @@ async def test_ws_list_locks_empty_when_no_entries(hass: HomeAssistant):
     mock_connection.send_result.assert_called_once()
     result = mock_connection.send_result.call_args[0][1]
     assert result == []
+
+
+async def test_ws_list_locks_excludes_disabled_entries(hass: HomeAssistant):
+    """Test that ws_list_locks excludes disabled config entries."""
+
+    enabled_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Enabled Lock",
+        entry_id="enabled_entry",
+        data={CONF_LOCK_NAME: "enabled_lock", CONF_LOCK_ENTITY_ID: "lock.enabled"},
+    )
+    disabled_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Disabled Lock",
+        entry_id="disabled_entry",
+        data={CONF_LOCK_NAME: "disabled_lock", CONF_LOCK_ENTITY_ID: "lock.disabled"},
+        disabled_by=ConfigEntryDisabler.USER,
+    )
+    enabled_entry.add_to_hass(hass)
+    disabled_entry.add_to_hass(hass)
+    mock_connection = _create_mock_connection()
+
+    await websocket.ws_list_locks.__wrapped__(
+        hass,
+        mock_connection,
+        {"id": 1, "type": f"{DOMAIN}/list_locks"},
+    )
+
+    mock_connection.send_result.assert_called_once()
+    result = mock_connection.send_result.call_args[0][1]
+    assert len(result) == 1
+    assert result[0] == {"entry_id": "enabled_entry", "lock_name": "enabled_lock"}
 
 
 # =============================================================================

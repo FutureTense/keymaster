@@ -48,7 +48,7 @@ async def ws_list_locks(
 ) -> None:
     """Handle list locks websocket command.
 
-    Returns a list of all Keymaster config entries with entry_id and lock_name.
+    Returns a list of enabled Keymaster config entries with entry_id and lock_name.
     Used by the dashboard strategy to generate views for each lock.
     """
     locks = [
@@ -57,6 +57,7 @@ async def ws_list_locks(
             "lock_name": entry.data[CONF_LOCK_NAME],
         }
         for entry in hass.config_entries.async_entries(DOMAIN)
+        if not entry.disabled_by
     ]
 
     connection.send_result(msg["id"], locks)
