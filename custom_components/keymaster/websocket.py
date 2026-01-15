@@ -30,8 +30,37 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant) -> None:
     """Set up websocket API for Keymaster."""
+    websocket_api.async_register_command(hass, ws_list_locks)
     websocket_api.async_register_command(hass, ws_get_view_metadata)
     websocket_api.async_register_command(hass, ws_get_section_config)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/list_locks",
+    }
+)
+@websocket_api.async_response
+async def ws_list_locks(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle list locks websocket command.
+
+    Returns a list of enabled Keymaster config entries with entry_id and lock_name.
+    Used by the dashboard strategy to generate views for each lock.
+    """
+    locks = [
+        {
+            "entry_id": entry.entry_id,
+            "lock_name": entry.data[CONF_LOCK_NAME],
+        }
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if not entry.disabled_by
+    ]
+
+    connection.send_result(msg["id"], locks)
 
 
 @websocket_api.websocket_command(

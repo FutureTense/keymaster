@@ -1,24 +1,12 @@
 import { LovelaceViewConfig } from './ha_type_stubs';
 
-export interface KeymasterConfigEntry {
-    data: {
-        lockname: string;  // Note: no underscore, matches Python CONF_LOCK_NAME
-    };
-    disabled_by: string;
-    domain: string;
+/** Lock entry from keymaster/list_locks WebSocket API */
+export interface KeymasterLockEntry {
     entry_id: string;
-    pref_disable_new_entities: boolean;
-    pref_disable_polling: boolean;
-    reason: string | null;
-    source: string;
-    state: string;
-    supports_options: boolean;
-    supports_remove_device: boolean;
-    supports_unload: boolean;
-    title: string;
+    lock_name: string;
 }
 
-export type GetConfigEntriesResponse = KeymasterConfigEntry[];
+export type ListLocksResponse = KeymasterLockEntry[];
 
 export interface KeymasterDashboardStrategyConfig {
     type: 'custom:keymaster';

@@ -6,7 +6,7 @@ import {
     NO_CONFIG_MESSAGE,
     ZERO_WIDTH_SPACE,
 } from './dashboard-strategy';
-import { GetConfigEntriesResponse } from './types';
+import { ListLocksResponse } from './types';
 
 function createMockHass(overrides: Partial<HomeAssistant> = {}): HomeAssistant {
     return {
@@ -16,27 +16,16 @@ function createMockHass(overrides: Partial<HomeAssistant> = {}): HomeAssistant {
     } as unknown as HomeAssistant;
 }
 
-function createMockConfigEntry(lockName: string, entryId: string) {
+function createMockLock(lockName: string, entryId: string) {
     return {
-        data: { lockname: lockName },
-        disabled_by: '',
-        domain: 'keymaster',
         entry_id: entryId,
-        pref_disable_new_entities: false,
-        pref_disable_polling: false,
-        reason: null,
-        source: 'user',
-        state: 'loaded',
-        supports_options: true,
-        supports_remove_device: false,
-        supports_unload: true,
-        title: lockName,
+        lock_name: lockName,
     };
 }
 
 describe('KeymasterDashboardStrategy', () => {
     describe('generate', () => {
-        it('returns error view when no config entries exist', async () => {
+        it('returns error view when no locks exist', async () => {
             const hass = createMockHass({
                 callWS: vi.fn().mockResolvedValue([]),
             });
@@ -55,14 +44,14 @@ describe('KeymasterDashboardStrategy', () => {
         });
 
         it('returns view strategy configs sorted alphabetically by lock name', async () => {
-            const configEntries: GetConfigEntriesResponse = [
-                createMockConfigEntry('Zebra Lock', 'entry_z'),
-                createMockConfigEntry('Alpha Lock', 'entry_a'),
-                createMockConfigEntry('Middle Lock', 'entry_m'),
+            const locks: ListLocksResponse = [
+                createMockLock('Zebra Lock', 'entry_z'),
+                createMockLock('Alpha Lock', 'entry_a'),
+                createMockLock('Middle Lock', 'entry_m'),
             ];
 
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(configEntries),
+                callWS: vi.fn().mockResolvedValue(locks),
             });
 
             const result = await KeymasterDashboardStrategy.generate(
@@ -86,12 +75,12 @@ describe('KeymasterDashboardStrategy', () => {
         });
 
         it('adds placeholder view for single lock (single view hack)', async () => {
-            const configEntries: GetConfigEntriesResponse = [
-                createMockConfigEntry('Only Lock', 'entry_only'),
+            const locks: ListLocksResponse = [
+                createMockLock('Only Lock', 'entry_only'),
             ];
 
             const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(configEntries),
+                callWS: vi.fn().mockResolvedValue(locks),
             });
 
             const result = await KeymasterDashboardStrategy.generate(
@@ -107,46 +96,20 @@ describe('KeymasterDashboardStrategy', () => {
             expect(result.views![1]).toEqual({ title: ZERO_WIDTH_SPACE });
         });
 
-        it('filters out entries with missing or invalid lockname', async () => {
-            const configEntries = [
-                createMockConfigEntry('Valid Lock', 'entry_valid'),
-                { ...createMockConfigEntry('', 'entry_empty'), data: { lockname: '' } },
-                { ...createMockConfigEntry('', 'entry_null'), data: { lockname: null } },
-                { ...createMockConfigEntry('', 'entry_undefined'), data: { lockname: undefined } },
-                { ...createMockConfigEntry('', 'entry_no_data'), data: undefined },
-                createMockConfigEntry('Another Valid', 'entry_valid2'),
-            ] as GetConfigEntriesResponse;
-
-            const hass = createMockHass({
-                callWS: vi.fn().mockResolvedValue(configEntries),
-            });
-
-            const result = await KeymasterDashboardStrategy.generate(
-                { type: 'custom:keymaster' },
-                hass
-            );
-
-            // Should only have 2 valid entries (no placeholder since > 1 view)
-            expect(result.views).toHaveLength(2);
-            expect(result.views![0].title).toBe('Another Valid');
-            expect(result.views![1].title).toBe('Valid Lock');
-        });
-
-        it('only makes one websocket call for config entries', async () => {
-            const configEntries: GetConfigEntriesResponse = [
-                createMockConfigEntry('Lock A', 'entry_a'),
-                createMockConfigEntry('Lock B', 'entry_b'),
+        it('only makes one websocket call', async () => {
+            const locks: ListLocksResponse = [
+                createMockLock('Lock A', 'entry_a'),
+                createMockLock('Lock B', 'entry_b'),
             ];
 
-            const mockCallWS = vi.fn().mockResolvedValue(configEntries);
+            const mockCallWS = vi.fn().mockResolvedValue(locks);
             const hass = createMockHass({ callWS: mockCallWS });
 
             await KeymasterDashboardStrategy.generate({ type: 'custom:keymaster' }, hass);
 
             expect(mockCallWS).toHaveBeenCalledTimes(1);
             expect(mockCallWS).toHaveBeenCalledWith({
-                domain: 'keymaster',
-                type: 'config_entries/get',
+                type: 'keymaster/list_locks',
             });
         });
     });
