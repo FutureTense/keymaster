@@ -310,6 +310,172 @@ def _get_entity_id(
     return entity_id if entity_id else prop
 
 
+# Lovelace Card Generation Helpers
+# =================================
+# These functions build the Lovelace dashboard JSON structure:
+#
+#   View (sections layout)
+#   └── Sections (one per code slot)
+#       └── Grid
+#           ├── Heading card ("Code Slot N")
+#           └── Conditional card (entities list)
+#
+# For child locks, each code slot has two conditional cards:
+#   1. Parent-view card (when override_parent is off) - shows parent's settings
+#   2. Override card (when override_parent is on) - shows child's own settings
+#
+# Entity paths follow the pattern: {domain}.code_slots:{slot}.{key}
+# Parent entities use prefix: parent.{domain}.code_slots:{slot}.{key}
+
+DIVIDER_CARD = {"type": "divider"}
+
+
+def _generate_entity_card_ll_config(
+    code_slot_num: int,
+    domain: str,
+    key: str,
+    name: str,
+    parent: bool = False,
+    type_: str | None = None,
+) -> MutableMapping[str, Any]:
+    """Generate entity configuration for use in Lovelace cards."""
+    prefix = "parent." if parent else ""
+    entity = f"{prefix}{domain}.code_slots:{code_slot_num}.{key}"
+    data: MutableMapping[str, Any] = {
+        "entity": entity,
+        "name": name,
+        "tap_action": {"action": "none"},
+        "hold_action": {"action": "none"},
+        "double_tap_action": {"action": "none"},
+    }
+    if type_:
+        data["type"] = type_
+    return data
+
+
+def _generate_badge_ll_config(
+    entity: str | None,
+    name: str,
+    visibility: bool = False,
+    tap_action: str | None = "none",
+    show_name: bool = False,
+) -> MutableMapping[str, Any]:
+    """Generate Lovelace config for a badge."""
+    data: MutableMapping[str, Any] = {
+        "type": "entity",
+        "show_name": show_name,
+        "color": "",
+    }
+    if tap_action is not None:
+        data["tap_action"] = {"action": tap_action}
+    if show_name:
+        data["name"] = name
+    if entity:
+        data["entity"] = entity
+    if visibility:
+        data["visibility"] = [
+            {
+                "condition": "state",
+                "entity": "switch.autolock_enabled",
+                "state": "on",
+            }
+        ]
+    return data
+
+
+def _generate_conditional_card_ll_config(
+    code_slot_num: int,
+    domain: str,
+    key: str,
+    name: str,
+    conditions: list[MutableMapping[str, Any]],
+    parent: bool = False,
+    type_: str | None = None,
+) -> MutableMapping[str, Any]:
+    """Generate Lovelace config for a `conditional` card."""
+    return {
+        "type": "conditional",
+        "conditions": conditions,
+        "row": _generate_entity_card_ll_config(
+            code_slot_num, domain, key, name, parent=parent, type_=type_
+        ),
+    }
+
+
+def _generate_state_condition(
+    code_slot_num: int,
+    key: str,
+    state: str = "on",
+    parent: bool = False,
+    needs_type: bool = False,
+) -> MutableMapping[str, Any]:
+    """Return the condition for an entity state."""
+    prefix = "parent." if parent else ""
+    data = {
+        "entity": f"{prefix}switch.code_slots:{code_slot_num}.{key}",
+        "state": state,
+    }
+    if needs_type:
+        data["condition"] = "state"
+    return data
+
+
+def _generate_code_slot_conditional_entities_card_ll_config(
+    code_slot_num: int,
+    advanced_date_range: bool,
+    advanced_day_of_week: bool,
+    child: bool = False,
+) -> MutableMapping[str, Any]:
+    """Build the conditional entities card for the code slot."""
+    entities: list[MutableMapping[str, Any]] = [
+        _generate_entity_card_ll_config(code_slot_num, "text", "name", "Name"),
+        _generate_entity_card_ll_config(code_slot_num, "text", "pin", "PIN"),
+        DIVIDER_CARD,
+        _generate_entity_card_ll_config(code_slot_num, "switch", "enabled", "Enabled"),
+        _generate_entity_card_ll_config(code_slot_num, "binary_sensor", "active", "Active"),
+        _generate_entity_card_ll_config(code_slot_num, "sensor", "synced", "Sync Status"),
+        *(
+            (
+                _generate_entity_card_ll_config(
+                    code_slot_num, "switch", "override_parent", "Override Parent"
+                ),
+            )
+            if child
+            else ()
+        ),
+        _generate_entity_card_ll_config(code_slot_num, "switch", "notifications", "Notifications"),
+        DIVIDER_CARD,
+        _generate_entity_card_ll_config(
+            code_slot_num, "switch", "accesslimit_count_enabled", "Limit by Number of Uses"
+        ),
+        _generate_conditional_card_ll_config(
+            code_slot_num,
+            "number",
+            "accesslimit_count",
+            "Uses Remaining",
+            [_generate_state_condition(code_slot_num, "accesslimit_count_enabled")],
+        ),
+        *(_generate_date_range_entities(code_slot_num) if advanced_date_range else ()),
+        *(_generate_dow_entities(code_slot_num) if advanced_day_of_week else ()),
+    ]
+
+    return {
+        "type": "conditional",
+        "conditions": [],
+        "card": {
+            "type": "entities",
+            "show_header_toggle": False,
+            "state_color": True,
+            "entities": entities,
+        },
+    }
+
+
+def _generate_header_ll_config(code_slot_num: int) -> MutableMapping[str, Any]:
+    """Generate Lovelace config for a heading card."""
+    return {"type": "heading", "heading": f"Code Slot {code_slot_num}", "heading_style": "title"}
+
+
 def _generate_code_slot_dict(
     code_slot_num: int,
     advanced_date_range: bool,
@@ -317,172 +483,15 @@ def _generate_code_slot_dict(
     child: bool = False,
 ) -> MutableMapping[str, Any]:
     """Build the dict for the code slot."""
-    code_slot_dict: MutableMapping[str, Any] = {
+    return {
         "type": "grid",
         "cards": [
-            {
-                "type": "heading",
-                "heading": f"Code Slot {code_slot_num}",
-                "heading_style": "title",
-            },
-            {
-                "type": "conditional",
-                "conditions": [],
-                "card": {
-                    "type": "entities",
-                    "show_header_toggle": False,
-                    "state_color": True,
-                    "entities": [
-                        {
-                            "entity": f"text.code_slots:{code_slot_num}.name",
-                            "name": "Name",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "entity": f"text.code_slots:{code_slot_num}.pin",
-                            "name": "PIN",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {"type": "divider"},
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.enabled",
-                            "name": "Enabled",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "entity": f"binary_sensor.code_slots:{code_slot_num}.active",
-                            "name": "Active",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "entity": f"sensor.code_slots:{code_slot_num}.synced",
-                            "name": "Sync Status",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                    ],
-                },
-            },
+            _generate_header_ll_config(code_slot_num),
+            _generate_code_slot_conditional_entities_card_ll_config(
+                code_slot_num, advanced_date_range, advanced_day_of_week, child=child
+            ),
         ],
     }
-    if child:
-        code_slot_dict["cards"][1]["card"]["entities"].append(
-            {
-                "entity": f"switch.code_slots:{code_slot_num}.override_parent",
-                "name": "Override Parent",
-                "tap_action": {"action": "none"},
-                "hold_action": {"action": "none"},
-                "double_tap_action": {"action": "none"},
-            }
-        )
-    code_slot_dict["cards"][1]["card"]["entities"].extend(
-        [
-            {
-                "entity": f"switch.code_slots:{code_slot_num}.notifications",
-                "name": "Notifications",
-                "tap_action": {"action": "none"},
-                "hold_action": {"action": "none"},
-                "double_tap_action": {"action": "none"},
-            },
-            {"type": "divider"},
-            {
-                "entity": f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
-                "name": "Limit by Number of Uses",
-                "tap_action": {"action": "none"},
-                "hold_action": {"action": "none"},
-                "double_tap_action": {"action": "none"},
-            },
-            {
-                "type": "conditional",
-                "conditions": [
-                    {
-                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
-                        "state": "on",
-                    }
-                ],
-                "row": {
-                    "entity": f"number.code_slots:{code_slot_num}.accesslimit_count",
-                    "name": "Uses Remaining",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
-                },
-            },
-        ]
-    )
-    if advanced_date_range:
-        code_slot_dict["cards"][1]["card"]["entities"].extend(
-            [
-                {"type": "divider"},
-                {
-                    "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                    "name": "Limit by Date Range",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                            "state": "on",
-                        }
-                    ],
-                    "row": {
-                        "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
-                        "name": "Date Range Start",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                            "state": "on",
-                        }
-                    ],
-                    "row": {
-                        "entity": f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
-                        "name": "Date Range End",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-            ]
-        )
-    if advanced_day_of_week:
-        code_slot_dict["cards"][1]["card"]["entities"].extend(
-            [
-                {"type": "divider"},
-                {
-                    "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                    "name": "Limit by Day of Week",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
-                },
-            ]
-        )
-        dow_list: list[MutableMapping[str, Any]] = _generate_dow_entities(
-            code_slot_num=code_slot_num
-        )
-        code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
-
-    return code_slot_dict
 
 
 def _generate_lock_badges(
@@ -490,578 +499,206 @@ def _generate_lock_badges(
     door_sensor: str | None = None,
     child: bool = False,
 ) -> list[MutableMapping[str, Any]]:
+    """Generate the Lovelace badges configuration for a keymaster lock."""
     door = door_sensor is not None
-    badges: list[MutableMapping[str, Any]] = [
-        {
-            "type": "entity",
-            "show_name": False,
-            "entity": "sensor.lock_name",
-            "color": "",
-            "tap_action": {"action": "none"},
-        }
+    return [
+        _generate_badge_ll_config(
+            entity, name, visibility=visibility, show_name=show_name, tap_action=tap_action
+        )
+        for entity, name, visibility, show_name, tap_action, condition in (
+            ("sensor.lock_name", "Lock Name", False, False, "none", True),
+            ("sensor.parent_name", "Parent Lock", False, True, "none", child),
+            ("binary_sensor.connected", "Connected", False, False, "none", True),
+            ("switch.lock_notifications", "Lock Notifications", False, True, "toggle", True),
+            ("switch.door_notifications", "Door Notifications", False, True, "toggle", door),
+            (lock_entity, "Lock", False, True, "toggle", True),
+            (door_sensor, "Door", False, True, "none", door),
+            ("switch.autolock_enabled", "Auto Lock", False, True, "toggle", True),
+            ("switch.retry_lock", "Retry Lock", True, True, "toggle", door),
+            ("number.autolock_min_day", "Day Auto Lock", True, True, None, True),
+            ("number.autolock_min_night", "Night Auto Lock", True, True, None, True),
+        )
+        if condition
     ]
-    if child:
-        badges.append(
-            {
-                "type": "entity",
-                "show_name": True,
-                "entity": "sensor.parent_name",
-                "name": "Parent Lock",
-                "color": "",
-                "tap_action": {"action": "none"},
-            }
-        )
-    badges.extend(
-        [
-            {
-                "type": "entity",
-                "show_name": False,
-                "entity": "binary_sensor.connected",
-                "color": "",
-                "tap_action": {"action": "none"},
-            },
-            {
-                "type": "entity",
-                "show_name": True,
-                "entity": "switch.lock_notifications",
-                "color": "",
-                "name": "Lock Notifications",
-                "tap_action": {"action": "toggle"},
-            },
-        ]
-    )
-    if door:
-        badges.append(
-            {
-                "type": "entity",
-                "show_name": True,
-                "entity": "switch.door_notifications",
-                "color": "",
-                "tap_action": {"action": "toggle"},
-                "name": "Door Notifications",
-            }
-        )
-    badges.append(
-        {
-            "type": "entity",
-            "show_name": True,
-            "entity": lock_entity,
-            "name": "Lock",
-            "color": "",
-            "tap_action": {"action": "toggle"},
-        }
-    )
-    if door:
-        badges.append(
-            {
-                "type": "entity",
-                "show_name": True,
-                "entity": door_sensor,
-                "name": "Door",
-                "color": "",
-                "tap_action": {"action": "none"},
-            }
-        )
-    badges.append(
-        {
-            "type": "entity",
-            "show_name": True,
-            "entity": "switch.autolock_enabled",
-            "color": "",
-            "tap_action": {"action": "toggle"},
-            "name": "Auto Lock",
-        },
-    )
-    if door:
-        badges.append(
-            {
-                "type": "entity",
-                "show_name": True,
-                "entity": "switch.retry_lock",
-                "color": "",
-                "tap_action": {"action": "toggle"},
-                "name": "Retry Lock",
-                "visibility": [
-                    {
-                        "condition": "state",
-                        "entity": "switch.autolock_enabled",
-                        "state": "on",
-                    }
-                ],
-            }
-        )
-    badges.extend(
-        [
-            {
-                "type": "entity",
-                "show_name": True,
-                "entity": "number.autolock_min_day",
-                "color": "",
-                "name": "Day Auto Lock",
-                "visibility": [
-                    {
-                        "condition": "state",
-                        "entity": "switch.autolock_enabled",
-                        "state": "on",
-                    }
-                ],
-            },
-            {
-                "type": "entity",
-                "show_name": True,
-                "entity": "number.autolock_min_night",
-                "color": "",
-                "name": "Night Auto Lock",
-                "visibility": [
-                    {
-                        "condition": "state",
-                        "entity": "switch.autolock_enabled",
-                        "state": "on",
-                    }
-                ],
-            },
-        ]
-    )
-    return badges
 
 
-def _generate_dow_entities(code_slot_num: int) -> list[MutableMapping[str, Any]]:
+def _generate_dow_entities(
+    code_slot_num: int, parent: bool = False
+) -> list[MutableMapping[str, Any]]:
     """Build the day of week entities for the code slot."""
-    dow_list: list[MutableMapping[str, Any]] = []
-    for dow_num, dow in enumerate(DAY_NAMES):
-        dow_list.extend(
+    _dow_prefix = "accesslimit_day_of_week"
+    type_ = "simple-entity" if parent else None
+    # Name differs for parent vs non-parent views
+    limit_by_time_name = "Limit by Time" if parent else "Limit by Time of Day"
+    return [
+        *([] if parent else [DIVIDER_CARD]),
+        _generate_entity_card_ll_config(
+            code_slot_num,
+            "switch",
+            f"{_dow_prefix}_enabled",
+            "Limit by Day of Week",
+            parent=parent,
+            type_=type_,
+        ),
+        # Generate conditional cards for each day of week.
+        # num_conditions controls visibility nesting via [:num_conditions] slice:
+        #   1 = show when DOW enabled
+        #   2 = show when DOW enabled AND this day enabled
+        #   3 = show when DOW enabled AND this day enabled AND limit_by_time on
+        *(
+            _generate_conditional_card_ll_config(
+                code_slot_num,
+                domain,
+                f"{_dow_prefix}:{dow_num}.{key}",
+                name,
+                [
+                    _generate_state_condition(
+                        code_slot_num, f"{_dow_prefix}{suffix}", parent=parent
+                    )
+                    for suffix in (
+                        "_enabled",
+                        f":{dow_num}.dow_enabled",
+                        f":{dow_num}.limit_by_time",
+                    )[:num_conditions]
+                ],
+                parent=parent,
+                type_=type_,
+            )
+            for dow_num, dow in enumerate(DAY_NAMES)
+            for domain, key, name, num_conditions in (
+                ("switch", "dow_enabled", dow, 1),
+                ("switch", "limit_by_time", limit_by_time_name, 2),
+                ("switch", "include_exclude", "Include (On)/Exclude (Off) Time", 3),
+                ("time", "time_start", "Start Time", 3),
+                ("time", "time_end", "End Time", 3),
+            )
+        ),
+    ]
+
+
+def _generate_date_range_entities(
+    code_slot_num: int, parent: bool = False
+) -> list[MutableMapping[str, Any]]:
+    """Build the date range entities for the code slot."""
+    type_ = "simple-entity" if parent else None
+    return [
+        *([] if parent else [DIVIDER_CARD]),
+        _generate_entity_card_ll_config(
+            code_slot_num,
+            "switch",
+            "accesslimit_date_range_enabled",
+            "Limit by Date Range",
+            parent=parent,
+            type_=type_,
+        ),
+        _generate_conditional_card_ll_config(
+            code_slot_num,
+            "datetime",
+            "accesslimit_date_range_start",
+            "Date Range Start",
             [
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        }
-                    ],
-                    "row": {
-                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                        "name": f"{dow}",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                            "state": "on",
-                        },
-                    ],
-                    "row": {
-                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
-                        "name": "Limit by Time of Day",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
-                            "state": "on",
-                        },
-                    ],
-                    "row": {
-                        "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.include_exclude",
-                        "name": "Include (On)/Exclude (Off) Time",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
-                            "state": "on",
-                        },
-                    ],
-                    "row": {
-                        "entity": f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_start",
-                        "name": "Start Time",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
-                            "state": "on",
-                        },
-                    ],
-                    "row": {
-                        "entity": f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_end",
-                        "name": "End Time",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-            ]
-        )
-    return dow_list
+                _generate_state_condition(
+                    code_slot_num, "accesslimit_date_range_enabled", parent=parent
+                )
+            ],
+            parent=parent,
+            type_=type_,
+        ),
+        _generate_conditional_card_ll_config(
+            code_slot_num,
+            "datetime",
+            "accesslimit_date_range_end",
+            "Date Range End",
+            [
+                _generate_state_condition(
+                    code_slot_num, "accesslimit_date_range_enabled", parent=parent
+                )
+            ],
+            parent=parent,
+            type_=type_,
+        ),
+    ]
+
+
+def _generate_parent_view_card_ll_config(
+    code_slot_num: int, advanced_date_range: bool, advanced_day_of_week: bool
+) -> MutableMapping[str, Any]:
+    """Build the parent-view conditional card for a child lock code slot.
+
+    Shows parent's settings alongside child's status when override_parent is off.
+    """
+    entities: list[MutableMapping[str, Any]] = [
+        _generate_entity_card_ll_config(
+            code_slot_num, "text", "name", "Name", parent=True, type_="simple-entity"
+        ),
+        _generate_entity_card_ll_config(
+            code_slot_num, "text", "pin", "PIN", parent=True, type_="simple-entity"
+        ),
+        _generate_entity_card_ll_config(
+            code_slot_num, "switch", "enabled", "Enabled", parent=True, type_="simple-entity"
+        ),
+        _generate_entity_card_ll_config(code_slot_num, "binary_sensor", "active", "Active"),
+        _generate_entity_card_ll_config(code_slot_num, "sensor", "synced", "Sync Status"),
+        _generate_entity_card_ll_config(
+            code_slot_num, "switch", "override_parent", "Override Parent"
+        ),
+        _generate_entity_card_ll_config(code_slot_num, "switch", "notifications", "Notifications"),
+        _generate_entity_card_ll_config(
+            code_slot_num,
+            "switch",
+            "accesslimit_count_enabled",
+            "Limit by Number of Uses",
+            parent=True,
+            type_="simple-entity",
+        ),
+        _generate_conditional_card_ll_config(
+            code_slot_num,
+            "number",
+            "accesslimit_count",
+            "Uses Remaining",
+            [_generate_state_condition(code_slot_num, "accesslimit_count_enabled", parent=True)],
+            parent=True,
+            type_="simple-entity",
+        ),
+        *(_generate_date_range_entities(code_slot_num, parent=True) if advanced_date_range else ()),
+        *(_generate_dow_entities(code_slot_num, parent=True) if advanced_day_of_week else ()),
+    ]
+
+    return {
+        "type": "conditional",
+        "conditions": [
+            _generate_state_condition(
+                code_slot_num, "override_parent", state="off", needs_type=True
+            )
+        ],
+        "card": {
+            "type": "entities",
+            "show_header_toggle": False,
+            "state_color": True,
+            "entities": entities,
+        },
+    }
 
 
 def _generate_child_code_slot_dict(
     code_slot_num: int, advanced_date_range: bool, advanced_day_of_week: bool
 ) -> MutableMapping[str, Any]:
     """Build the dict for the code slot of a child keymaster lock."""
-
-    normal_code_slot_dict: MutableMapping[str, Any] = _generate_code_slot_dict(
-        code_slot_num=code_slot_num,
-        advanced_date_range=advanced_date_range,
-        advanced_day_of_week=advanced_day_of_week,
-        child=True,
-    )
-    override_code_slot_dict = normal_code_slot_dict["cards"][1]
-
-    code_slot_dict: MutableMapping[str, Any] = {
+    return {
         "type": "grid",
         "cards": [
-            {
-                "type": "heading",
-                "heading": f"Code Slot {code_slot_num}",
-                "heading_style": "title",
-            },
-            {
-                "type": "conditional",
-                "conditions": [
-                    {
-                        "condition": "state",
-                        "entity": f"switch.code_slots:{code_slot_num}.override_parent",
-                        "state": "off",
-                    }
-                ],
-                "card": {
-                    "type": "entities",
-                    "show_header_toggle": False,
-                    "state_color": True,
-                    "entities": [
-                        {
-                            "type": "simple-entity",
-                            "name": "Name",
-                            "entity": f"parent.text.code_slots:{code_slot_num}.name",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "type": "simple-entity",
-                            "name": "PIN",
-                            "entity": f"parent.text.code_slots:{code_slot_num}.pin",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "type": "simple-entity",
-                            "name": "Enabled",
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.enabled",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "entity": f"binary_sensor.code_slots:{code_slot_num}.active",
-                            "name": "Active",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "entity": f"sensor.code_slots:{code_slot_num}.synced",
-                            "name": "Sync Status",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.override_parent",
-                            "name": "Override Parent",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "entity": f"switch.code_slots:{code_slot_num}.notifications",
-                            "name": "Notifications",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "type": "simple-entity",
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
-                            "name": "Limit by Number of Uses",
-                            "tap_action": {"action": "none"},
-                            "hold_action": {"action": "none"},
-                            "double_tap_action": {"action": "none"},
-                        },
-                        {
-                            "type": "conditional",
-                            "conditions": [
-                                {
-                                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
-                                    "state": "on",
-                                }
-                            ],
-                            "row": {
-                                "type": "simple-entity",
-                                "entity": f"parent.number.code_slots:{code_slot_num}.accesslimit_count",
-                                "name": "Uses Remaining",
-                                "tap_action": {"action": "none"},
-                                "hold_action": {"action": "none"},
-                                "double_tap_action": {"action": "none"},
-                            },
-                        },
-                    ],
-                },
-            },
+            _generate_header_ll_config(code_slot_num),
+            _generate_parent_view_card_ll_config(
+                code_slot_num, advanced_date_range, advanced_day_of_week
+            ),
             {
                 "type": "conditional",
                 "conditions": [
-                    {
-                        "condition": "state",
-                        "entity": f"switch.code_slots:{code_slot_num}.override_parent",
-                        "state": "on",
-                    }
+                    _generate_state_condition(code_slot_num, "override_parent", needs_type=True)
                 ],
-                "card": override_code_slot_dict,
+                "card": _generate_code_slot_conditional_entities_card_ll_config(
+                    code_slot_num, advanced_date_range, advanced_day_of_week, child=True
+                ),
             },
         ],
     }
-
-    if advanced_date_range:
-        code_slot_dict["cards"][1]["card"]["entities"].extend(
-            [
-                {
-                    "type": "simple-entity",
-                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                    "name": "Limit by Date Range",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                            "state": "on",
-                        }
-                    ],
-                    "row": {
-                        "type": "simple-entity",
-                        "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
-                        "name": "Date Range Start",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
-                            "state": "on",
-                        }
-                    ],
-                    "row": {
-                        "type": "simple-entity",
-                        "entity": f"parent.datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
-                        "name": "Date Range End",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-            ]
-        )
-
-    if advanced_day_of_week:
-        code_slot_dict["cards"][1]["card"]["entities"].extend(
-            [
-                {
-                    "type": "simple-entity",
-                    "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                    "name": "Limit by Day of Week",
-                    "tap_action": {"action": "none"},
-                    "hold_action": {"action": "none"},
-                    "double_tap_action": {"action": "none"},
-                },
-            ]
-        )
-        dow_list: list[MutableMapping[str, Any]] = _generate_child_dow_entities(
-            code_slot_num=code_slot_num
-        )
-        code_slot_dict["cards"][1]["card"]["entities"].extend(dow_list)
-    return code_slot_dict
-
-
-def _generate_child_dow_entities(
-    code_slot_num: int,
-) -> list[MutableMapping[str, Any]]:
-    """Build the day of week entities for a child code slot."""
-    dow_list: list[MutableMapping[str, Any]] = []
-    for dow_num, dow in enumerate(DAY_NAMES):
-        dow_list.extend(
-            [
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        }
-                    ],
-                    "row": {
-                        "type": "simple-entity",
-                        "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                        "name": f"{dow}",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                            "state": "on",
-                        },
-                    ],
-                    "row": {
-                        "type": "simple-entity",
-                        "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
-                        "name": "Limit by Time",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
-                            "state": "on",
-                        },
-                    ],
-                    "row": {
-                        "type": "simple-entity",
-                        "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.include_exclude",
-                        "name": "Include (On)/Exclude (Off) Time",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
-                            "state": "on",
-                        },
-                    ],
-                    "row": {
-                        "type": "simple-entity",
-                        "entity": f"parent.time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_start",
-                        "name": "Start Time",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-                {
-                    "type": "conditional",
-                    "conditions": [
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.dow_enabled",
-                            "state": "on",
-                        },
-                        {
-                            "entity": f"parent.switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.limit_by_time",
-                            "state": "on",
-                        },
-                    ],
-                    "row": {
-                        "type": "simple-entity",
-                        "entity": f"parent.time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow_num}.time_end",
-                        "name": "End Time",
-                        "tap_action": {"action": "none"},
-                        "hold_action": {"action": "none"},
-                        "double_tap_action": {"action": "none"},
-                    },
-                },
-            ]
-        )
-    return dow_list
