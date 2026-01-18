@@ -20,6 +20,14 @@ For more information, please see the topic for this package at the [Home
 Assistant Community
 Forum](https://community.home-assistant.io/t/simplified-zwave-keymaster/126765).
 
+## Lovelace Dashboard
+
+Keymaster includes Lovelace strategies that automatically generate dashboards
+for managing your locks. You can create a complete Keymaster dashboard with a
+single line of YAML, or add individual lock views to existing dashboards. See
+the [Lovelace Strategies](https://github.com/FutureTense/keymaster/wiki/Lovelace-Strategies)
+wiki page for setup instructions and configuration options.
+
 ## Installation
 
 Please visit this project's
