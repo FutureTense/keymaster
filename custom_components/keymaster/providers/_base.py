@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -25,9 +25,9 @@ class CodeSlot:
     name: str | None = None
 
 
-# Type alias for lock event callbacks
+# Type alias for lock event callbacks (async)
 # callback(code_slot_num: int, event_label: str, action_code: int | None)
-LockEventCallback = Callable[[int, str, int | None], None]
+LockEventCallback = Callable[[int, str, int | None], Coroutine[Any, Any, None]]
 
 # Type alias for connection state callbacks
 # callback(connected: bool)

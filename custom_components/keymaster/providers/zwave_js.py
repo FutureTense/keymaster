@@ -366,7 +366,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 event_label = event.data.get("event_label", "Unknown Lock Event")
 
             action_code = event.data.get("event")
-            callback(code_slot_num, event_label, action_code)
+            self.hass.async_create_task(
+                callback(code_slot_num, event_label, action_code)
+            )
 
         # Subscribe to Z-Wave JS notification events
         unsub = self.hass.bus.async_listen(
