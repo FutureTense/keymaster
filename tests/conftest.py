@@ -4,12 +4,13 @@ import asyncio
 import copy
 import json
 import logging
-import shutil
 from pathlib import Path
+import shutil
 from typing import Any
 from unittest.mock import DEFAULT, AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_homeassistant_custom_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
@@ -26,12 +27,8 @@ from .common import load_fixture
 @pytest.fixture(autouse=True)
 def cleanup_keymaster_json():
     """Clean up keymaster JSON files before each test to prevent corruption."""
-    import pytest_homeassistant_custom_component
-
     # Find the testing_config directory from the installed package
-    testing_config = (
-        Path(pytest_homeassistant_custom_component.__file__).parent / "testing_config"
-    )
+    testing_config = Path(pytest_homeassistant_custom_component.__file__).parent / "testing_config"
     json_dir = testing_config / "custom_components" / "keymaster" / "json_kmlocks"
     if json_dir.exists():
         shutil.rmtree(json_dir, ignore_errors=True)

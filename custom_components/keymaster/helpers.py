@@ -18,6 +18,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import slugify
 
 from .const import DEFAULT_AUTOLOCK_MIN_DAY, DEFAULT_AUTOLOCK_MIN_NIGHT, DOMAIN
+from .providers import is_platform_supported
 
 if TYPE_CHECKING:
     from .lock import KeymasterLock
@@ -214,10 +215,8 @@ def async_has_supported_provider(
 
     Returns:
         True if the lock platform has a supported provider.
-    """
-    # Import here to avoid circular imports
-    from .providers import is_platform_supported
 
+    """
     if kmlock and kmlock.lock_entity_id:
         return is_platform_supported(hass, kmlock.lock_entity_id)
     if entity_id:
@@ -240,6 +239,7 @@ def async_get_lock_platform(
 
     Returns:
         The platform domain string (e.g., 'zwave_js') or None.
+
     """
     ent_reg = er.async_get(hass)
     lock_entity_id = None

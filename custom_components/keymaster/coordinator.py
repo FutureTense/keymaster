@@ -75,6 +75,12 @@ from .lock import (
 from .lovelace import delete_lovelace
 from .providers import CodeSlot, create_provider
 
+# Conditional import for Z-Wave JS provider (may not be installed)
+try:
+    from .providers.zwave_js import ZWaveJSLockProvider
+except ImportError:
+    ZWaveJSLockProvider = None  # type: ignore[assignment, misc]
+
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
@@ -1576,16 +1582,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             kmlock.lock_config_entry_id = kmlock.provider.lock_config_entry_id
 
         # For backward compatibility, also set the deprecated fields if using Z-Wave JS
-        if kmlock.provider.domain == "zwave_js":
-            # Import here to avoid issues if zwave_js not installed
-            try:
-                from .providers.zwave_js import ZWaveJSLockProvider
-
-                if isinstance(kmlock.provider, ZWaveJSLockProvider):
-                    kmlock.zwave_js_lock_node = kmlock.provider.node
-                    kmlock.zwave_js_lock_device = kmlock.provider.device
-            except ImportError:
-                pass
+        if (
+            kmlock.provider.domain == "zwave_js"
+            and ZWaveJSLockProvider is not None
+            and isinstance(kmlock.provider, ZWaveJSLockProvider)
+        ):
+            kmlock.zwave_js_lock_node = kmlock.provider.node
+            kmlock.zwave_js_lock_device = kmlock.provider.device
 
         _LOGGER.debug(
             "[connect_and_update_lock] %s: Provider connected (platform: %s)",
@@ -1702,17 +1705,20 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         # If in_use is not set, try to refresh from lock via provider
-        if not in_use and usercode is None and kmlock.provider:
-            # Try to get fresh data from provider if it supports it
+        if (
+            not in_use
+            and usercode is None
+            and kmlock.provider
+            and ZWaveJSLockProvider is not None
+            and isinstance(kmlock.provider, ZWaveJSLockProvider)
+        ):
+            # Try to get fresh data from provider
             try:
-                from .providers.zwave_js import ZWaveJSLockProvider
-
-                if isinstance(kmlock.provider, ZWaveJSLockProvider):
-                    refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)
-                    if refreshed:
-                        usercode = refreshed.code
-                        in_use = refreshed.in_use
-            except (ImportError, AttributeError):
+                refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)
+                if refreshed:
+                    usercode = refreshed.code
+                    in_use = refreshed.in_use
+            except AttributeError:
                 pass
 
         # Fix for Schlage masked responses: if slot is not in use (status=0) but

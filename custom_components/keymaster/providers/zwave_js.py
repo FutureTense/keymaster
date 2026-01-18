@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import functools
-import logging
 from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
+import functools
+import logging
 from typing import TYPE_CHECKING, Any
 
 from zwave_js_server.client import Client as ZwaveJSClient
@@ -26,20 +26,17 @@ from zwave_js_server.util.lock import (
 )
 from zwave_js_server.util.node import dump_node_state
 
+from custom_components.keymaster.const import ATTR_NODE_ID, LOCK_ACTIVITY_MAP, LockMethod
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
-from homeassistant.components.zwave_js.const import (
-    ATTR_PARAMETERS,
-    DOMAIN as ZWAVE_JS_DOMAIN,
-)
+from homeassistant.components.zwave_js.const import ATTR_PARAMETERS, DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.const import ATTR_DEVICE_ID
 from homeassistant.core import Event
 from homeassistant.helpers.device_registry import DeviceEntry
 
-from ..const import ATTR_NODE_ID, LOCK_ACTIVITY_MAP, LockMethod
 from ._base import BaseLockProvider, CodeSlot, LockEventCallback
 
 if TYPE_CHECKING:
-    from ..lock import KeymasterLock
+    from custom_components.keymaster.lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -270,11 +267,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         try:
             await set_usercode(self._node, slot_num, code)
-            _LOGGER.debug(
-                "[ZWaveJSProvider] Set usercode on slot %s",
-                slot_num,
-            )
-            return True
         except BaseZwaveJSServerError as e:
             _LOGGER.error(
                 "[ZWaveJSProvider] Failed to set usercode on slot %s: %s: %s",
@@ -283,6 +275,12 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 e,
             )
             return False
+        else:
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Set usercode on slot %s",
+                slot_num,
+            )
+            return True
 
     async def async_clear_usercode(self, slot_num: int) -> bool:
         """Clear user code from a slot."""
@@ -366,9 +364,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 event_label = event.data.get("event_label", "Unknown Lock Event")
 
             action_code = event.data.get("event")
-            self.hass.async_create_task(
-                callback(code_slot_num, event_label, action_code)
-            )
+            self.hass.async_create_task(callback(code_slot_num, event_label, action_code))
 
         # Subscribe to Z-Wave JS notification events
         unsub = self.hass.bus.async_listen(

@@ -9,8 +9,6 @@ import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from custom_components.keymaster.lovelace import (
     async_generate_lovelace,
     delete_lovelace,

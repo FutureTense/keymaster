@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from ._base import BaseLockProvider, CodeSlot, ConnectionCallback, LockEventCallback
-
-if TYPE_CHECKING:
-    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,13 +22,11 @@ def _register_providers() -> None:
 
     Called lazily to avoid import issues at module load time.
     """
-    global PROVIDER_MAP  # noqa: PLW0603
-
     if PROVIDER_MAP:
         return  # Already registered
 
     # Import and register Z-Wave JS provider
-    from .zwave_js import ZWaveJSLockProvider
+    from .zwave_js import ZWaveJSLockProvider  # noqa: PLC0415
 
     PROVIDER_MAP["zwave_js"] = ZWaveJSLockProvider
 
@@ -55,6 +49,7 @@ def get_provider_class_for_lock(
 
     Returns:
         The provider class if supported, None otherwise.
+
     """
     _register_providers()
 
@@ -92,6 +87,7 @@ def create_provider(
 
     Returns:
         A provider instance if supported, None otherwise.
+
     """
     provider_class = get_provider_class_for_lock(hass, lock_entity_id)
 
@@ -119,6 +115,7 @@ def is_platform_supported(hass: HomeAssistant, lock_entity_id: str) -> bool:
 
     Returns:
         True if the platform has a provider, False otherwise.
+
     """
     return get_provider_class_for_lock(hass, lock_entity_id) is not None
 
@@ -128,6 +125,7 @@ def get_supported_platforms() -> list[str]:
 
     Returns:
         List of platform domain strings.
+
     """
     _register_providers()
     return list(PROVIDER_MAP.keys())

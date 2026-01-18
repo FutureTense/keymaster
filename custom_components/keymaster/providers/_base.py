@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 if TYPE_CHECKING:
-    from ..lock import KeymasterLock
+    from custom_components.keymaster.lock import KeymasterLock
 
 
 @dataclass
@@ -96,6 +96,7 @@ class BaseLockProvider(ABC):
             name: Optional name for the code slot
 
         Returns True if successful, False otherwise.
+
         """
 
     @abstractmethod
@@ -106,6 +107,7 @@ class BaseLockProvider(ABC):
             slot_num: The code slot number to clear
 
         Returns True if successful, False otherwise.
+
         """
 
     # === Optional Properties (with defaults) ===
@@ -144,6 +146,7 @@ class BaseLockProvider(ABC):
             callback: Function to call when lock events occur
 
         Returns an unsubscribe function.
+
         """
         return lambda: None  # No-op by default
 
@@ -154,6 +157,7 @@ class BaseLockProvider(ABC):
             callback: Function to call when connection state changes
 
         Returns an unsubscribe function.
+
         """
         return lambda: None  # No-op by default
 
