@@ -2,6 +2,7 @@
 
 import asyncio
 import copy
+from dataclasses import dataclass, field
 import json
 import logging
 from pathlib import Path
@@ -17,11 +18,80 @@ from zwave_js_server.model.node import Node
 from zwave_js_server.model.version import VersionInfo
 
 from custom_components.keymaster.const import NONE_TEXT
+from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
 from homeassistant.components.zwave_js import PLATFORMS
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from .common import load_fixture
+
+
+@dataclass
+class MockProvider(BaseLockProvider):
+    """Mock provider for testing non-provider-specific functionality.
+
+    This provider can be configured to return specific values for testing.
+    """
+
+    # Configurable test values
+    mock_domain: str = "mock"
+    mock_connect_result: bool = True
+    mock_is_connected: bool = True
+    mock_usercodes: list[CodeSlot] = field(default_factory=list)
+    mock_set_result: bool = True
+    mock_clear_result: bool = True
+
+    # Track method calls for assertions
+    set_usercode_calls: list[tuple[int, str, str | None]] = field(default_factory=list)
+    clear_usercode_calls: list[int] = field(default_factory=list)
+
+    @property
+    def domain(self) -> str:
+        """Return the mock domain."""
+        return self.mock_domain
+
+    async def async_connect(self) -> bool:
+        """Return configured connect result."""
+        self._connected = self.mock_connect_result
+        return self.mock_connect_result
+
+    async def async_is_connected(self) -> bool:
+        """Return configured connection status."""
+        return self.mock_is_connected
+
+    async def async_get_usercodes(self) -> list[CodeSlot]:
+        """Return configured usercodes."""
+        return self.mock_usercodes
+
+    async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
+        """Record call and return configured result."""
+        self.set_usercode_calls.append((slot_num, code, name))
+        return self.mock_set_result
+
+    async def async_clear_usercode(self, slot_num: int) -> bool:
+        """Record call and return configured result."""
+        self.clear_usercode_calls.append(slot_num)
+        return self.mock_clear_result
+
+
+@pytest.fixture
+def mock_provider(hass: HomeAssistant) -> MockProvider:
+    """Create a MockProvider for testing."""
+    # Create minimal mock config entry
+    config_entry = MockConfigEntry(
+        domain="keymaster",
+        data={"lock_entity_id": "lock.test_lock"},
+    )
+    config_entry.add_to_hass(hass)
+
+    return MockProvider(
+        hass=hass,
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry=config_entry,
+        device_registry=dr.async_get(hass),
+        entity_registry=er.async_get(hass),
+    )
 
 
 @pytest.fixture(autouse=True)
