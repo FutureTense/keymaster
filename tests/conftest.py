@@ -26,13 +26,19 @@ from .common import load_fixture
 @pytest.fixture(autouse=True)
 def cleanup_keymaster_json():
     """Clean up keymaster JSON files before each test to prevent corruption."""
-    # Find and remove the keymaster testing config directory before each test
-    testing_config_base = Path(__file__).parent.parent / ".venv"
-    if testing_config_base.exists():
-        for json_dir in testing_config_base.rglob("json_kmlocks"):
-            if json_dir.is_dir():
-                shutil.rmtree(json_dir, ignore_errors=True)
+    import pytest_homeassistant_custom_component
+
+    # Find the testing_config directory from the installed package
+    testing_config = (
+        Path(pytest_homeassistant_custom_component.__file__).parent / "testing_config"
+    )
+    json_dir = testing_config / "custom_components" / "keymaster" / "json_kmlocks"
+    if json_dir.exists():
+        shutil.rmtree(json_dir, ignore_errors=True)
     yield
+    # Also clean up after the test
+    if json_dir.exists():
+        shutil.rmtree(json_dir, ignore_errors=True)
 
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
