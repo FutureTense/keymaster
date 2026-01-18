@@ -1,14 +1,21 @@
 """Test keymaster helpers."""
 
+from datetime import datetime as dt, timedelta
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from custom_components.keymaster.const import DOMAIN
 from custom_components.keymaster.helpers import (
     KeymasterTimer,
     Throttle,
+    _async_using,
+    async_get_lock_platform,
+    async_has_supported_provider,
     async_using_zwave_js,
     call_hass_service,
     delete_code_slot_entities,
+    dismiss_persistent_notification,
     send_manual_notification,
     send_persistent_notification,
 )
@@ -445,3 +452,236 @@ def test_async_using_zwave_js_checks(hass):
         mock_kmlock = MagicMock(spec=KeymasterLock)
         mock_kmlock.lock_entity_id = "lock.zwave"
         assert async_using_zwave_js(hass, kmlock=mock_kmlock) is True
+
+
+# Additional tests for missing coverage
+
+
+async def test_keymaster_timer_cancel_elapsed(hass):
+    """Test cancelling a timer that has elapsed."""
+    timer = KeymasterTimer()
+
+    # Create a mock lock
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Start timer
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    # Cancel with timer_elapsed parameter (simulating callback after timer ends)
+    await timer.cancel(timer_elapsed=dt.now())
+
+    assert not timer.is_running
+    assert timer._end_time is None
+
+
+async def test_keymaster_timer_is_running_expired(hass):
+    """Test is_running when timer has already expired."""
+    timer = KeymasterTimer()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Manually set end_time to the past to simulate expired timer
+    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._unsub_events = [MagicMock()]  # Add a mock unsub function
+
+    # Checking is_running should clean up the expired timer
+    assert timer.is_running is False
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+async def test_keymaster_timer_is_setup_expired(hass):
+    """Test is_setup when timer has expired cleans up."""
+    timer = KeymasterTimer()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Manually set end_time to the past
+    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._unsub_events = [MagicMock()]
+
+    # Checking is_setup should clean up the expired timer
+    result = timer.is_setup
+    assert result is True  # Still setup, just expired
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+async def test_keymaster_timer_end_time_expired(hass):
+    """Test end_time when timer has expired returns None."""
+    timer = KeymasterTimer()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Manually set end_time to the past
+    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._unsub_events = [MagicMock()]
+
+    # Getting end_time should clean up and return None
+    result = timer.end_time
+    assert result is None
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+async def test_keymaster_timer_remaining_seconds_expired(hass):
+    """Test remaining_seconds when timer has expired returns None."""
+    timer = KeymasterTimer()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Manually set end_time to the past
+    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._unsub_events = [MagicMock()]
+
+    # Getting remaining_seconds should clean up and return None
+    result = timer.remaining_seconds
+    assert result is None
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+def test_async_using_missing_arguments(hass):
+    """Test _async_using raises TypeError when no arguments provided."""
+    with pytest.raises(TypeError, match="Missing arguments"):
+        _async_using(hass, "zwave_js", None, None)
+
+
+def test_async_using_kmlock_no_entity_id(hass):
+    """Test _async_using returns False when kmlock has no lock_entity_id."""
+    mock_kmlock = MagicMock(spec=KeymasterLock)
+    mock_kmlock.lock_entity_id = None
+
+    mock_registry = MagicMock()
+    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+        result = _async_using(hass, "zwave_js", mock_kmlock, None)
+
+    assert result is False
+
+
+def test_async_has_supported_provider_with_entity_id(hass):
+    """Test async_has_supported_provider with entity_id parameter."""
+    with patch(
+        "custom_components.keymaster.helpers.is_platform_supported",
+        return_value=True,
+    ) as mock_supported:
+        result = async_has_supported_provider(hass, entity_id="lock.test")
+
+    assert result is True
+    mock_supported.assert_called_once_with(hass, "lock.test")
+
+
+def test_async_has_supported_provider_no_args(hass):
+    """Test async_has_supported_provider returns False with no arguments."""
+    result = async_has_supported_provider(hass)
+    assert result is False
+
+
+def test_async_get_lock_platform_with_kmlock(hass):
+    """Test async_get_lock_platform with kmlock parameter."""
+    mock_kmlock = MagicMock(spec=KeymasterLock)
+    mock_kmlock.lock_entity_id = "lock.test"
+
+    mock_entity = MagicMock()
+    mock_entity.platform = "zwave_js"
+
+    mock_registry = MagicMock()
+    mock_registry.async_get.return_value = mock_entity
+
+    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+        result = async_get_lock_platform(hass, kmlock=mock_kmlock)
+
+    assert result == "zwave_js"
+
+
+def test_async_get_lock_platform_with_entity_id(hass):
+    """Test async_get_lock_platform with entity_id parameter."""
+    mock_entity = MagicMock()
+    mock_entity.platform = "zwave_js"
+
+    mock_registry = MagicMock()
+    mock_registry.async_get.return_value = mock_entity
+
+    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+        result = async_get_lock_platform(hass, entity_id="lock.test")
+
+    assert result == "zwave_js"
+
+
+def test_async_get_lock_platform_no_args(hass):
+    """Test async_get_lock_platform returns None with no arguments."""
+    mock_registry = MagicMock()
+
+    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+        result = async_get_lock_platform(hass)
+
+    assert result is None
+
+
+def test_async_get_lock_platform_entity_not_found(hass):
+    """Test async_get_lock_platform returns None when entity not found."""
+    mock_registry = MagicMock()
+    mock_registry.async_get.return_value = None
+
+    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+        result = async_get_lock_platform(hass, entity_id="lock.missing")
+
+    assert result is None
+
+
+async def test_dismiss_persistent_notification(hass):
+    """Test dismissing persistent notification."""
+    with patch(
+        "custom_components.keymaster.helpers.persistent_notification.async_dismiss"
+    ) as mock_dismiss:
+        await dismiss_persistent_notification(hass, "test_notification_id")
+
+    mock_dismiss.assert_called_once_with(hass=hass, notification_id="test_notification_id")

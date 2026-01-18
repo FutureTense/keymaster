@@ -1,12 +1,18 @@
 """Tests for the Coordinator."""
 
+from dataclasses import dataclass, field
+from datetime import datetime as dt, time as dt_time, timedelta
 import random
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.lock import KeymasterLock
+from custom_components.keymaster.lock import (
+    KeymasterCodeSlot,
+    KeymasterCodeSlotDayOfWeek,
+    KeymasterLock,
+)
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
@@ -1378,3 +1384,368 @@ class TestCoordinatorUtilities:
         result = mock_coordinator.sync_get_lock_by_config_entry_id("nonexistent_id")
 
         assert result is None
+
+
+class TestPinEncodeDecode:
+    """Test cases for _encode_pin and _decode_pin static methods."""
+
+    def test_encode_pin_basic(self):
+        """Test encoding a PIN with a unique ID."""
+        pin = "1234"
+        unique_id = "test_entry_123"
+
+        encoded = KeymasterCoordinator._encode_pin(pin, unique_id)
+
+        # Result should be base64 encoded
+        assert encoded is not None
+        assert isinstance(encoded, str)
+        # Should be different from original
+        assert encoded != pin
+
+    def test_decode_pin_basic(self):
+        """Test decoding an encoded PIN."""
+        pin = "1234"
+        unique_id = "test_entry_123"
+
+        encoded = KeymasterCoordinator._encode_pin(pin, unique_id)
+        decoded = KeymasterCoordinator._decode_pin(encoded, unique_id)
+
+        assert decoded == pin
+
+    def test_encode_decode_roundtrip(self):
+        """Test that encode/decode is reversible for various PINs."""
+        test_cases = [
+            ("1234", "entry_1"),
+            ("0000", "entry_2"),
+            ("999999999", "long_entry_id_12345"),
+            ("12345678", "short"),
+        ]
+
+        for pin, unique_id in test_cases:
+            encoded = KeymasterCoordinator._encode_pin(pin, unique_id)
+            decoded = KeymasterCoordinator._decode_pin(encoded, unique_id)
+            assert decoded == pin, f"Failed for pin={pin}, unique_id={unique_id}"
+
+    def test_encode_different_unique_ids_produce_different_results(self):
+        """Test that different unique IDs produce different encodings."""
+        pin = "1234"
+
+        encoded1 = KeymasterCoordinator._encode_pin(pin, "id_1")
+        encoded2 = KeymasterCoordinator._encode_pin(pin, "id_2")
+
+        assert encoded1 != encoded2
+
+
+class TestIsSlotActive:
+    """Test cases for _is_slot_active static method."""
+
+    @pytest.fixture
+    def base_slot(self):
+        """Create a basic enabled and active KeymasterCodeSlot."""
+        return KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            pin="1234",
+            name="Test Slot",
+        )
+
+    async def test_slot_not_enabled_returns_false(self, base_slot):
+        """Test that disabled slot returns False."""
+        base_slot.enabled = False
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is False
+
+    async def test_slot_no_pin_returns_false(self, base_slot):
+        """Test that slot without PIN returns False."""
+        base_slot.pin = None
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is False
+
+    async def test_slot_empty_pin_returns_false(self, base_slot):
+        """Test that slot with empty PIN returns False."""
+        base_slot.pin = ""
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is False
+
+    async def test_slot_basic_enabled_returns_true(self, base_slot):
+        """Test that basic enabled slot with PIN returns True."""
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is True
+
+    async def test_slot_access_count_zero_returns_false(self, base_slot):
+        """Test that slot with access count enabled and zero count returns False."""
+        base_slot.accesslimit_count_enabled = True
+        base_slot.accesslimit_count = 0.0
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is False
+
+    async def test_slot_access_count_positive_returns_true(self, base_slot):
+        """Test that slot with positive access count returns True."""
+        base_slot.accesslimit_count_enabled = True
+        base_slot.accesslimit_count = 5.0
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is True
+
+    async def test_slot_not_keymaster_code_slot_returns_false(self):
+        """Test that non-KeymasterCodeSlot returns False."""
+        result = await KeymasterCoordinator._is_slot_active("not a slot")  # type: ignore[arg-type]
+
+        assert result is False
+
+    async def test_slot_date_range_future_start_returns_false(self, base_slot):
+        """Test that slot with future start date returns False."""
+        base_slot.accesslimit_date_range_enabled = True
+        base_slot.accesslimit_date_range_start = dt.now().astimezone() + timedelta(days=1)
+        base_slot.accesslimit_date_range_end = dt.now().astimezone() + timedelta(days=7)
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is False
+
+    async def test_slot_date_range_past_end_returns_false(self, base_slot):
+        """Test that slot with past end date returns False."""
+        base_slot.accesslimit_date_range_enabled = True
+        base_slot.accesslimit_date_range_start = dt.now().astimezone() - timedelta(days=7)
+        base_slot.accesslimit_date_range_end = dt.now().astimezone() - timedelta(days=1)
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is False
+
+    async def test_slot_date_range_within_returns_true(self, base_slot):
+        """Test that slot within date range returns True."""
+        base_slot.accesslimit_date_range_enabled = True
+        base_slot.accesslimit_date_range_start = dt.now().astimezone() - timedelta(days=1)
+        base_slot.accesslimit_date_range_end = dt.now().astimezone() + timedelta(days=1)
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+
+        assert result is True
+
+
+class TestFileOperations:
+    """Test cases for file operation methods."""
+
+    @pytest.fixture
+    def coordinator_with_paths(self, mock_hass):
+        """Create coordinator with file paths set up."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coord = KeymasterCoordinator(mock_hass)
+            coord.hass = mock_hass
+            coord.kmlocks = {}
+            coord._json_folder = "/test/path/json_kmlocks"
+            coord._json_filename = "keymaster_kmlocks.json"
+            coord._prev_kmlocks_dict = {}
+            return coord
+
+    def test_create_json_folder_success(self, coordinator_with_paths):
+        """Test creating JSON folder successfully."""
+        with patch("pathlib.Path.mkdir") as mock_mkdir:
+            coordinator_with_paths._create_json_folder()
+
+            mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
+
+    def test_create_json_folder_oserror(self, coordinator_with_paths):
+        """Test handling OSError when creating folder."""
+        with patch("pathlib.Path.mkdir", side_effect=OSError("Permission denied")):
+            # Should not raise
+            coordinator_with_paths._create_json_folder()
+
+    def test_delete_json_success(self, coordinator_with_paths):
+        """Test deleting JSON file successfully."""
+        with patch("pathlib.Path.unlink") as mock_unlink:
+            coordinator_with_paths.delete_json()
+
+            mock_unlink.assert_called_once()
+
+    def test_delete_json_file_not_found(self, coordinator_with_paths):
+        """Test handling FileNotFoundError when deleting JSON."""
+        with patch("pathlib.Path.unlink", side_effect=FileNotFoundError()):
+            # Should not raise
+            coordinator_with_paths.delete_json()
+
+    def test_delete_json_permission_error(self, coordinator_with_paths):
+        """Test handling PermissionError when deleting JSON."""
+        with patch("pathlib.Path.unlink", side_effect=PermissionError()):
+            # Should not raise
+            coordinator_with_paths.delete_json()
+
+    def test_write_config_to_json_no_changes(self, coordinator_with_paths):
+        """Test that unchanged config doesn't write to file."""
+        coordinator_with_paths._prev_kmlocks_dict = {}
+
+        result = coordinator_with_paths._write_config_to_json()
+
+        assert result is True  # No write needed
+
+    def test_write_config_to_json_with_changes(self, coordinator_with_paths):
+        """Test writing config to JSON when changed."""
+        mock_lock = Mock()
+        mock_lock.__dataclass_fields__ = {}
+        coordinator_with_paths.kmlocks = {"entry1": mock_lock}
+        # Mock the _kmlocks_to_dict to return a simple dict
+        coordinator_with_paths._kmlocks_to_dict = Mock(
+            return_value={
+                "lock_name": "Test",
+                "keymaster_config_entry_id": "entry1",
+                "code_slots": {},
+            }
+        )
+
+        mock_file = Mock()
+        with patch("pathlib.Path.open", return_value=mock_file):
+            mock_file.__enter__ = Mock(return_value=mock_file)
+            mock_file.__exit__ = Mock(return_value=False)
+
+            with patch("json.dump"):
+                result = coordinator_with_paths._write_config_to_json()
+
+        assert result is True
+
+    def test_write_config_to_json_oserror(self, coordinator_with_paths):
+        """Test handling OSError when writing JSON."""
+        mock_lock = Mock()
+        mock_lock.__dataclass_fields__ = {}
+        coordinator_with_paths.kmlocks = {"entry1": mock_lock}
+        coordinator_with_paths._kmlocks_to_dict = Mock(
+            return_value={"lock_name": "Test", "code_slots": {}}
+        )
+
+        with patch("pathlib.Path.open", side_effect=OSError("Disk full")):
+            result = coordinator_with_paths._write_config_to_json()
+
+        assert result is False
+
+
+class TestDictToKmlocksConversion:
+    """Test cases for _dict_to_kmlocks conversion method."""
+
+    @pytest.fixture
+    def coordinator_for_conversion(self, mock_hass):
+        """Create coordinator for testing conversion."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coord = KeymasterCoordinator(mock_hass)
+            coord.hass = mock_hass
+            return coord
+
+    def test_dict_to_kmlocks_non_dataclass_returns_data(self, coordinator_for_conversion):
+        """Test that non-dataclass data is returned as-is."""
+        result = coordinator_for_conversion._dict_to_kmlocks({"key": "value"}, str)
+
+        assert result == {"key": "value"}
+
+    def test_dict_to_kmlocks_simple_dataclass(self, coordinator_for_conversion):
+        """Test converting a simple dict to dataclass."""
+        data = {
+            "day_of_week_num": 0,
+            "day_of_week_name": "monday",
+            "dow_enabled": True,
+            "limit_by_time": False,
+            "include_exclude": True,
+            "time_start": None,
+            "time_end": None,
+        }
+
+        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlotDayOfWeek)
+
+        assert isinstance(result, KeymasterCodeSlotDayOfWeek)
+        assert result.day_of_week_num == 0
+        assert result.dow_enabled is True
+
+
+class TestKmlocksToDict:
+    """Test cases for _kmlocks_to_dict conversion method."""
+
+    @pytest.fixture
+    def coordinator_for_dict(self, mock_hass):
+        """Create coordinator for testing dict conversion."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coord = KeymasterCoordinator(mock_hass)
+            coord.hass = mock_hass
+            return coord
+
+    def test_kmlocks_to_dict_non_dataclass(self, coordinator_for_dict):
+        """Test that non-dataclass is returned as-is."""
+        result = coordinator_for_dict._kmlocks_to_dict("just a string")
+
+        assert result == "just a string"
+
+    def test_kmlocks_to_dict_with_datetime(self, coordinator_for_dict):
+        """Test conversion of datetime objects to ISO strings."""
+
+        @dataclass
+        class TestClass:
+            timestamp: dt
+
+        instance = TestClass(timestamp=dt(2025, 1, 15, 12, 30, 0))
+
+        result = coordinator_for_dict._kmlocks_to_dict(instance)
+
+        assert isinstance(result, dict)
+        assert result["timestamp"] == "2025-01-15T12:30:00"
+
+    def test_kmlocks_to_dict_with_time(self, coordinator_for_dict):
+        """Test conversion of time objects to ISO strings."""
+
+        @dataclass
+        class TestClass:
+            start_time: dt_time
+
+        instance = TestClass(start_time=dt_time(8, 30, 0))
+
+        result = coordinator_for_dict._kmlocks_to_dict(instance)
+
+        assert isinstance(result, dict)
+        assert result["start_time"] == "08:30:00"
+
+    def test_kmlocks_to_dict_with_nested_list(self, coordinator_for_dict):
+        """Test conversion of dataclass with nested list."""
+
+        @dataclass
+        class Inner:
+            value: int
+
+        @dataclass
+        class Outer:
+            items: list = field(default_factory=list)
+
+        inner1 = Inner(value=1)
+        inner2 = Inner(value=2)
+        instance = Outer(items=[inner1, inner2])
+
+        result = coordinator_for_dict._kmlocks_to_dict(instance)
+
+        assert isinstance(result, dict)
+        assert len(result["items"]) == 2
+        assert result["items"][0]["value"] == 1
+        assert result["items"][1]["value"] == 2
+
+    def test_kmlocks_to_dict_with_nested_dict(self, coordinator_for_dict):
+        """Test conversion of dataclass with nested dict."""
+
+        @dataclass
+        class Inner:
+            name: str
+
+        @dataclass
+        class Outer:
+            slots: dict = field(default_factory=dict)
+
+        instance = Outer(slots={1: Inner(name="slot1"), 2: Inner(name="slot2")})
+
+        result = coordinator_for_dict._kmlocks_to_dict(instance)
+
+        assert isinstance(result, dict)
+        assert result["slots"][1]["name"] == "slot1"
+        assert result["slots"][2]["name"] == "slot2"
