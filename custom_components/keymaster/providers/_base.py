@@ -206,6 +206,24 @@ class BaseLockProvider(ABC):
         """
         return None
 
+    @property
+    def node(self) -> Any:
+        """Get the underlying node object (platform-specific).
+
+        Returns None by default. Override in subclass if applicable.
+        Used for backwards compatibility with zwave_js_lock_node.
+        """
+        return None
+
+    @property
+    def device(self) -> Any:
+        """Get the underlying device object (platform-specific).
+
+        Returns None by default. Override in subclass if applicable.
+        Used for backwards compatibility with zwave_js_lock_device.
+        """
+        return None
+
     def get_device_entry(self) -> dr.DeviceEntry | None:
         """Get the device registry entry for this lock."""
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)

@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any, Union, get_args, get_origin
 
 from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
-from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -157,8 +156,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return {}
 
         for lock in config.values():
-            lock["zwave_js_lock_node"] = None
-            lock["zwave_js_lock_device"] = None
             lock["autolock_timer"] = None
             lock["listeners"] = []
             for kmslot in lock.get("code_slots", {}).values():
@@ -376,8 +373,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             key: self._kmlocks_to_dict(kmlock) for key, kmlock in self.kmlocks.items()
         }
         for lock in config.values():
-            lock.pop("zwave_js_lock_device", None)
-            lock.pop("zwave_js_lock_node", None)
             lock.pop("autolock_timer", None)
             lock.pop("listeners", None)
             for kmslot in lock.get("code_slots", {}).values():
@@ -1576,11 +1571,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if kmlock.provider.lock_config_entry_id:
             kmlock.lock_config_entry_id = kmlock.provider.lock_config_entry_id
 
-        # For backward compatibility, also set the deprecated fields if using Z-Wave JS
-        if kmlock.provider.domain == ZWAVE_JS_DOMAIN:
-            kmlock.zwave_js_lock_node = kmlock.provider.node  # type: ignore[attr-defined]
-            kmlock.zwave_js_lock_device = kmlock.provider.device  # type: ignore[attr-defined]
-
         _LOGGER.debug(
             "[connect_and_update_lock] %s: Provider connected (platform: %s)",
             kmlock.lock_name,
@@ -1696,20 +1686,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         # If in_use is not set, try to refresh from lock via provider
-        if (
-            not in_use
-            and usercode is None
-            and kmlock.provider
-            and kmlock.provider.domain == ZWAVE_JS_DOMAIN
-        ):
-            # Try to get fresh data from provider
-            try:
-                refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)
-                if refreshed:
-                    usercode = refreshed.code
-                    in_use = refreshed.in_use
-            except AttributeError:
-                pass
+        if not in_use and usercode is None and kmlock.provider:
+            refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)
+            if refreshed:
+                usercode = refreshed.code
+                in_use = refreshed.in_use
 
         # Fix for Schlage masked responses: if slot is not in use (status=0) but
         # usercode is masked (e.g., "**********"), treat it as empty
