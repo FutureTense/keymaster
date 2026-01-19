@@ -185,6 +185,7 @@ class BaseLockProvider(ABC):
 
         Returns the CodeSlot if found, None otherwise.
         Override in subclass if supported.
+
         """
         return None
 
@@ -196,6 +197,7 @@ class BaseLockProvider(ABC):
 
         Returns the CodeSlot if found, None otherwise.
         Override in subclass if supported.
+
         """
         return None
 

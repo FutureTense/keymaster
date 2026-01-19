@@ -3,8 +3,6 @@
 from datetime import datetime as dt, timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from custom_components.keymaster.const import DOMAIN
 from custom_components.keymaster.helpers import (
     KeymasterTimer,

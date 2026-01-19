@@ -11,13 +11,14 @@ This script will:
 1. Generate view configs from both branches using the test cases below
 2. Save the outputs to /tmp/<branch>_view_config.json
 3. Report the size difference and whether outputs are functionally equivalent
+
 """
 
 import argparse
 import json
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 # =============================================================================
@@ -213,7 +214,7 @@ def main() -> None:
     output1.write_text(json.dumps(config1, indent=2, sort_keys=True))
     output2.write_text(json.dumps(config2, indent=2, sort_keys=True))
 
-    print(f"\nOutputs saved to:")
+    print("\nOutputs saved to:")
     print(f"  {output1}")
     print(f"  {output2}")
 
