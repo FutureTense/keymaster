@@ -375,6 +375,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         for lock in config.values():
             lock.pop("autolock_timer", None)
             lock.pop("listeners", None)
+            lock.pop("provider", None)
             for kmslot in lock.get("code_slots", {}).values():
                 if isinstance(kmslot.get("pin", None), str):
                     kmslot["pin"] = KeymasterCoordinator._encode_pin(
