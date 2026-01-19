@@ -1704,7 +1704,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             # Try to get fresh data from provider
             try:
-                refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)  # type: ignore[attr-defined]
+                refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)
                 if refreshed:
                     usercode = refreshed.code
                     in_use = refreshed.in_use

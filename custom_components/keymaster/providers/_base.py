@@ -177,6 +177,28 @@ class BaseLockProvider(ABC):
             unsub()
         self._listeners.clear()
 
+    async def async_get_usercode(self, slot_num: int) -> CodeSlot | None:
+        """Get a specific user code from the lock.
+
+        Args:
+            slot_num: The code slot number
+
+        Returns the CodeSlot if found, None otherwise.
+        Override in subclass if supported.
+        """
+        return None
+
+    async def async_get_usercode_from_node(self, slot_num: int) -> CodeSlot | None:
+        """Get a specific user code directly from the lock (forces refresh).
+
+        Args:
+            slot_num: The code slot number
+
+        Returns the CodeSlot if found, None otherwise.
+        Override in subclass if supported.
+        """
+        return None
+
     def get_node_id(self) -> int | None:
         """Get the node ID for this lock (if applicable).
 
