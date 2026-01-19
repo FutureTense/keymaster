@@ -56,7 +56,7 @@ from .const import (
     LockMethod,
     Synced,
 )
-from .exceptions import ZWaveIntegrationNotConfiguredError
+from .exceptions import ProviderNotConfiguredError
 from .helpers import (
     KeymasterTimer,
     Throttle,
@@ -1304,7 +1304,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return True
 
-        raise ZWaveIntegrationNotConfiguredError
+        raise ProviderNotConfiguredError
 
     async def clear_pin_from_lock(
         self,
@@ -1373,7 +1373,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return True
 
-        raise ZWaveIntegrationNotConfiguredError
+        raise ProviderNotConfiguredError
 
     async def reset_lock(self, config_entry_id: str) -> None:
         """Reset all of the keymaster lock settings."""

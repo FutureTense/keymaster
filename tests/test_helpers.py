@@ -9,10 +9,8 @@ from custom_components.keymaster.const import DOMAIN
 from custom_components.keymaster.helpers import (
     KeymasterTimer,
     Throttle,
-    _async_using,
     async_get_lock_platform,
     async_has_supported_provider,
-    async_using_zwave_js,
     call_hass_service,
     delete_code_slot_entities,
     dismiss_persistent_notification,
@@ -421,42 +419,6 @@ async def test_delete_code_slot_entities_handles_errors(hass):
     assert mock_registry.async_remove.call_count == 47
 
 
-def test_async_using_zwave_js_checks(hass):
-    """Test async_using_zwave_js logic."""
-    # Mock Entity Registry
-    mock_registry = MagicMock()
-
-    # Case 1: Entity exists and platform is zwave_js
-    mock_entity_zwave = MagicMock()
-    mock_entity_zwave.platform = "zwave_js"
-
-    # Case 2: Entity exists but platform is something else
-    mock_entity_other = MagicMock()
-    mock_entity_other.platform = "other"
-
-    mock_registry.async_get.side_effect = lambda eid: (
-        mock_entity_zwave
-        if eid == "lock.zwave"
-        else mock_entity_other
-        if eid == "lock.other"
-        else None
-    )
-
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
-        # Test with entity_id
-        assert async_using_zwave_js(hass, entity_id="lock.zwave") is True
-        assert async_using_zwave_js(hass, entity_id="lock.other") is False
-        assert async_using_zwave_js(hass, entity_id="lock.missing") is False
-
-        # Test with kmlock
-        mock_kmlock = MagicMock(spec=KeymasterLock)
-        mock_kmlock.lock_entity_id = "lock.zwave"
-        assert async_using_zwave_js(hass, kmlock=mock_kmlock) is True
-
-
-# Additional tests for missing coverage
-
-
 async def test_keymaster_timer_cancel_elapsed(hass):
     """Test cancelling a timer that has elapsed."""
     timer = KeymasterTimer()
@@ -587,24 +549,6 @@ async def test_keymaster_timer_remaining_seconds_expired(hass):
     assert result is None
     assert timer._end_time is None
     assert timer._unsub_events == []
-
-
-def test_async_using_missing_arguments(hass):
-    """Test _async_using raises TypeError when no arguments provided."""
-    with pytest.raises(TypeError, match="Missing arguments"):
-        _async_using(hass, "zwave_js", None, None)
-
-
-def test_async_using_kmlock_no_entity_id(hass):
-    """Test _async_using returns False when kmlock has no lock_entity_id."""
-    mock_kmlock = MagicMock(spec=KeymasterLock)
-    mock_kmlock.lock_entity_id = None
-
-    mock_registry = MagicMock()
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
-        result = _async_using(hass, "zwave_js", mock_kmlock, None)
-
-    assert result is False
 
 
 def test_async_has_supported_provider_with_entity_id(hass):

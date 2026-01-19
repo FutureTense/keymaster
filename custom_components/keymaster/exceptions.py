@@ -3,24 +3,20 @@
 from homeassistant.exceptions import HomeAssistantError
 
 
-class ZWaveIntegrationNotConfiguredError(HomeAssistantError):
-    """Raised when a zwave integration is not configured."""
+class ProviderNotConfiguredError(HomeAssistantError):
+    """Raised when no lock provider is configured."""
 
     def __str__(self) -> str:
-        """Error string to show when zwave integration is not configured."""
-        return "A Z-Wave integration has not been configured for this Home Assistant instance"
+        """Error string to show when no provider is configured."""
+        return "No lock provider has been configured for this lock"
 
 
 class NoNodeSpecifiedError(HomeAssistantError):
     """Raised when a node was not specified as an input parameter."""
 
 
-class ZWaveNetworkNotReady(HomeAssistantError):
-    """Raised when Z-Wave network is not ready."""
-
-
 class NotFoundError(HomeAssistantError):
-    """Raised when a Z-Wave items is not found."""
+    """Raised when an item is not found."""
 
 
 class NotSupportedError(HomeAssistantError):

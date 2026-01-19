@@ -415,23 +415,6 @@ async def mock_zwavejs_set_usercode():
 
 
 @pytest.fixture
-async def mock_using_zwavejs():
-    """Fixture to mock using_zwavejs in helpers."""
-    with (
-        patch(
-            "custom_components.keymaster.coordinator.async_using_zwave_js",
-            return_value=True,
-        ),
-        patch("custom_components.keymaster.helpers._async_using", return_value=True),
-        patch(
-            "custom_components.keymaster.helpers.async_using_zwave_js",
-            return_value=True,
-        ),
-    ):
-        yield
-
-
-@pytest.fixture
 def mock_async_call_later():
     """Fixture to mock async_call_later to call the callback immediately."""
     with patch("homeassistant.helpers.event.async_call_later") as mock:
