@@ -9,32 +9,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from ._base import BaseLockProvider, CodeSlot, ConnectionCallback, LockEventCallback
+from .zwave_js import ZWaveJSLockProvider
 
 _LOGGER = logging.getLogger(__name__)
 
 # Provider registry - maps platform domain to provider class
-# Import providers here to avoid circular imports
-PROVIDER_MAP: dict[str, type[BaseLockProvider]] = {}
-
-
-def _register_providers() -> None:
-    """Register all available providers.
-
-    Called lazily to avoid import issues at module load time.
-    """
-    if PROVIDER_MAP:
-        return  # Already registered
-
-    # Import and register Z-Wave JS provider
-    from .zwave_js import ZWaveJSLockProvider  # noqa: PLC0415
-
-    PROVIDER_MAP["zwave_js"] = ZWaveJSLockProvider
-
+PROVIDER_MAP: dict[str, type[BaseLockProvider]] = {
+    "zwave_js": ZWaveJSLockProvider,
     # Future providers would be registered here:
-    # from .zha import ZHALockProvider
-    # PROVIDER_MAP["zha"] = ZHALockProvider
-    # from .zigbee2mqtt import Zigbee2MQTTLockProvider
-    # PROVIDER_MAP["mqtt"] = Zigbee2MQTTLockProvider
+    # "zha": ZHALockProvider,
+    # "mqtt": Zigbee2MQTTLockProvider,
+}
 
 
 def get_provider_class_for_lock(
@@ -51,8 +36,6 @@ def get_provider_class_for_lock(
         The provider class if supported, None otherwise.
 
     """
-    _register_providers()
-
     entity_registry = er.async_get(hass)
     entry = entity_registry.async_get(lock_entity_id)
 
@@ -127,7 +110,6 @@ def get_supported_platforms() -> list[str]:
         List of platform domain strings.
 
     """
-    _register_providers()
     return list(PROVIDER_MAP.keys())
 
 

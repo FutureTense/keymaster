@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Union, get_args, get_origin
 
 from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
+from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -74,12 +75,6 @@ from .lock import (
 )
 from .lovelace import delete_lovelace
 from .providers import CodeSlot, create_provider
-
-# Conditional import for Z-Wave JS provider (may not be installed)
-try:
-    from .providers.zwave_js import ZWaveJSLockProvider
-except ImportError:
-    ZWaveJSLockProvider = None  # type: ignore[assignment, misc]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -1582,13 +1577,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             kmlock.lock_config_entry_id = kmlock.provider.lock_config_entry_id
 
         # For backward compatibility, also set the deprecated fields if using Z-Wave JS
-        if (
-            kmlock.provider.domain == "zwave_js"
-            and ZWaveJSLockProvider is not None
-            and isinstance(kmlock.provider, ZWaveJSLockProvider)
-        ):
-            kmlock.zwave_js_lock_node = kmlock.provider.node
-            kmlock.zwave_js_lock_device = kmlock.provider.device
+        if kmlock.provider.domain == ZWAVE_JS_DOMAIN:
+            kmlock.zwave_js_lock_node = kmlock.provider.node  # type: ignore[attr-defined]
+            kmlock.zwave_js_lock_device = kmlock.provider.device  # type: ignore[attr-defined]
 
         _LOGGER.debug(
             "[connect_and_update_lock] %s: Provider connected (platform: %s)",
@@ -1709,12 +1700,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             not in_use
             and usercode is None
             and kmlock.provider
-            and ZWaveJSLockProvider is not None
-            and isinstance(kmlock.provider, ZWaveJSLockProvider)
+            and kmlock.provider.domain == ZWAVE_JS_DOMAIN
         ):
             # Try to get fresh data from provider
             try:
-                refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)
+                refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)  # type: ignore[attr-defined]
                 if refreshed:
                     usercode = refreshed.code
                     in_use = refreshed.in_use
