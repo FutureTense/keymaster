@@ -9,7 +9,6 @@ from custom_components.keymaster.const import DOMAIN
 from custom_components.keymaster.helpers import (
     KeymasterTimer,
     Throttle,
-    async_get_lock_platform,
     async_has_supported_provider,
     call_hass_service,
     delete_code_slot_entities,
@@ -567,58 +566,6 @@ def test_async_has_supported_provider_no_args(hass):
     """Test async_has_supported_provider returns False with no arguments."""
     result = async_has_supported_provider(hass)
     assert result is False
-
-
-def test_async_get_lock_platform_with_kmlock(hass):
-    """Test async_get_lock_platform with kmlock parameter."""
-    mock_kmlock = MagicMock(spec=KeymasterLock)
-    mock_kmlock.lock_entity_id = "lock.test"
-
-    mock_entity = MagicMock()
-    mock_entity.platform = "zwave_js"
-
-    mock_registry = MagicMock()
-    mock_registry.async_get.return_value = mock_entity
-
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
-        result = async_get_lock_platform(hass, kmlock=mock_kmlock)
-
-    assert result == "zwave_js"
-
-
-def test_async_get_lock_platform_with_entity_id(hass):
-    """Test async_get_lock_platform with entity_id parameter."""
-    mock_entity = MagicMock()
-    mock_entity.platform = "zwave_js"
-
-    mock_registry = MagicMock()
-    mock_registry.async_get.return_value = mock_entity
-
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
-        result = async_get_lock_platform(hass, entity_id="lock.test")
-
-    assert result == "zwave_js"
-
-
-def test_async_get_lock_platform_no_args(hass):
-    """Test async_get_lock_platform returns None with no arguments."""
-    mock_registry = MagicMock()
-
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
-        result = async_get_lock_platform(hass)
-
-    assert result is None
-
-
-def test_async_get_lock_platform_entity_not_found(hass):
-    """Test async_get_lock_platform returns None when entity not found."""
-    mock_registry = MagicMock()
-    mock_registry.async_get.return_value = None
-
-    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
-        result = async_get_lock_platform(hass, entity_id="lock.missing")
-
-    assert result is None
 
 
 async def test_dismiss_persistent_notification(hass):

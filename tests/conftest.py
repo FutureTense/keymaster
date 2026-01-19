@@ -181,58 +181,6 @@ def side_effect_get_entities(
     return []
 
 
-@pytest.fixture
-def mock_listdir():
-    """Fixture to mock listdir."""
-    with patch(
-        "os.listdir",
-        return_value=[
-            "testfile.gif",
-            "anotherfakefile.mp4",
-            "lastfile.txt",
-        ],
-    ):
-        yield
-
-
-@pytest.fixture
-def mock_listdir_err():
-    """Fixture to mock listdir."""
-    with patch(
-        "os.listdir",
-        return_value=[],
-    ):
-        yield
-
-
-@pytest.fixture
-def mock_osremove():
-    """Fixture to mock remove file."""
-    with patch("os.remove", return_value=True) as mock_remove:
-        yield mock_remove
-
-
-@pytest.fixture
-def mock_osrmdir():
-    """Fixture to mock remove directory."""
-    with patch("os.rmdir", return_value=True) as mock_rmdir:
-        yield mock_rmdir
-
-
-@pytest.fixture
-def mock_osmakedir():
-    """Fixture to mock makedirs."""
-    with patch("os.makedirs", return_value=True):
-        yield
-
-
-@pytest.fixture
-def mock_os_path_join():
-    """Fixture to mock path join."""
-    with patch("os.path.join"):
-        yield
-
-
 @pytest.fixture(name="lock_schlage_be469_state", scope="package")
 def lock_schlage_be469_state_fixture():
     """Load the schlage lock node state fixture data."""
