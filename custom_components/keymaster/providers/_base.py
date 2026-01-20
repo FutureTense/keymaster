@@ -195,7 +195,8 @@ class BaseLockProvider(ABC):
         """Bypass integration cache and query the device directly.
 
         Only needed for integrations with a caching mechanism (e.g., Z-Wave JS).
-        For integrations without caching, this can return None.
+        Default implementation calls async_get_usercode since integrations
+        without caching don't need special handling.
 
         Args:
             slot_num: The code slot number
@@ -203,7 +204,7 @@ class BaseLockProvider(ABC):
         Returns the CodeSlot if found, None otherwise.
 
         """
-        return None
+        return await self.async_get_usercode(slot_num)
 
     def get_node_id(self) -> int | None:
         """Get the node ID for this lock (if applicable).
