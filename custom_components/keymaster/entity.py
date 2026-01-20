@@ -118,7 +118,9 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         )
         return True
 
-    def _get_x_num(self, property_name: Literal["code_slots", "accesslimit_day_of_week"]) -> None | int:
+    def _get_x_num(
+        self, property_name: Literal["code_slots", "accesslimit_day_of_week"]
+    ) -> None | int:
         """Return the code slot or day of week number from the property string."""
         try:
             slot_str = next(
