@@ -1491,7 +1491,7 @@ class TestIsSlotActive:
     async def test_slot_access_count_positive_returns_true(self, base_slot):
         """Test that slot with positive access count returns True."""
         base_slot.accesslimit_count_enabled = True
-        base_slot.accesslimit_count = 5.0
+        base_slot.accesslimit_count = 5  # Must be int, not float
 
         result = await KeymasterCoordinator._is_slot_active(base_slot)
 
