@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -35,13 +35,14 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self.coordinator: KeymasterCoordinator = entity_description.coordinator
         self._config_entry: ConfigEntry = entity_description.config_entry
         self.entity_description: KeymasterEntityDescription = entity_description
-        self._attr_available = False
         self._property: str = entity_description.key  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
         self._kmlock: KeymasterLock | None = self.coordinator.sync_get_lock_by_config_entry_id(
             self._config_entry.entry_id
         )
-        if self._kmlock:
-            self._attr_name: str | None = f"{self._kmlock.lock_name} {self.entity_description.name}"
+        self._code_slot = self._get_x_num("code_slots")
+        self._day_of_week_num = self._get_x_num("accesslimit_day_of_week")
+
+        self._attr_available = False
         # _LOGGER.debug(
         #     "[Entity init] entity_description.name: %s, name: %s",
         #     self.entity_description.name,
@@ -54,18 +55,14 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         #     self._property,
         #     self.unique_id,
         # )
-        self._code_slot: None | int = None
-        if ".code_slots" in self._property:
-            self._code_slot = self._get_code_slots_num()
-        self._day_of_week_num: None | int = None
-        if "accesslimit_day_of_week" in self._property:
-            self._day_of_week_num = self._get_day_of_week_num()
         self._attr_extra_state_attributes: dict[str, Any] = {}
         self._attr_device_info: DeviceInfo = {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
         }
-        # _LOGGER.debug(f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}")
+        if self._kmlock:
+            self._attr_name: str | None = f"{self._kmlock.lock_name} {self.entity_description.name}"
         super().__init__(self.coordinator, self._attr_unique_id)
+        # _LOGGER.debug(f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}")
 
     @property
     def available(self) -> bool:
@@ -121,27 +118,17 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         )
         return True
 
-    def _get_code_slots_num(self) -> None | int:
-        if ".code_slots" not in self._property:
+    def _get_x_num(self, property_name: Literal["code_slots", "accesslimit_day_of_week"]) -> None | int:
+        """Return the code slot or day of week number from the property string."""
+        try:
+            slot_str = next(
+                part
+                for part in self._property.split(".")
+                if part.startswith(property_name) and ":" in part
+            )
+        except StopIteration:
             return None
-        slots: list[str] = self._property.split(".")
-        for slot in slots:
-            if slot.startswith("code_slots"):
-                if ":" not in slot:
-                    return None
-                return int(slot.split(":")[1])
-        return None
-
-    def _get_day_of_week_num(self) -> None | int:
-        if "accesslimit_day_of_week" not in self._property:
-            return None
-        slots: list[str] = self._property.split(".")
-        for slot in slots:
-            if slot.startswith("accesslimit_day_of_week"):
-                if ":" not in slot:
-                    return None
-                return int(slot.split(":")[1])
-        return None
+        return int(slot_str.split(":")[1])
 
 
 @dataclass(frozen=True, kw_only=True)
