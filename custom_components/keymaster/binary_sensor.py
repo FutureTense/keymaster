@@ -16,7 +16,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .helpers import async_has_supported_provider
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -35,13 +34,12 @@ async def async_setup_entry(
         _LOGGER.error("Lock not found for config entry %s", config_entry.entry_id)
         raise PlatformNotReady
 
-    # Check if lock has a supported provider
-    if not async_has_supported_provider(hass=hass, kmlock=kmlock):
-        _LOGGER.error("No supported provider for lock platform")
-        raise PlatformNotReady
+    # Provider is guaranteed to exist - config flow filters to supported platforms
+    # and coordinator fails setup if provider creation fails
+    assert kmlock.provider is not None
 
     # Add connection status sensor if provider supports it
-    if kmlock.provider and kmlock.provider.supports_connection_status:
+    if kmlock.provider.supports_connection_status:
         entities.append(
             KeymasterBinarySensor(
                 entity_description=KeymasterBinarySensorEntityDescription(

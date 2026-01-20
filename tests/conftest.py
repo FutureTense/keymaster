@@ -396,13 +396,5 @@ async def mock_keymaster_integration(hass, integration):
             "custom_components.keymaster.KeymasterCoordinator._sync_child_locks",
             return_value=True,
         ),
-        patch(
-            "custom_components.keymaster.binary_sensor.async_has_supported_provider",
-            return_value=True,
-        ),
-        patch(
-            "custom_components.keymaster.switch.async_has_supported_provider",
-            return_value=True,
-        ),
     ):
         yield integration

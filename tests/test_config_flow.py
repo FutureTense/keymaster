@@ -219,14 +219,6 @@ async def test_reconfiguration_form(test_user_input, title, final_config_flow_da
             "custom_components.keymaster.KeymasterCoordinator._sync_child_locks",
             return_value=True,
         ),
-        patch(
-            "custom_components.keymaster.binary_sensor.async_has_supported_provider",
-            return_value=True,
-        ),
-        patch(
-            "custom_components.keymaster.switch.async_has_supported_provider",
-            return_value=True,
-        ),
     ):
         entry = MockConfigEntry(
             domain=DOMAIN,

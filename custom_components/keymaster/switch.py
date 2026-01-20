@@ -23,7 +23,6 @@ from .const import (
 )
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .helpers import async_has_supported_provider
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -45,123 +44,117 @@ async def async_setup_entry(
         _LOGGER.error("Lock not found for config entry %s", config_entry.entry_id)
         raise PlatformNotReady
 
-    # Check if lock has a supported provider
-    if async_has_supported_provider(hass=hass, kmlock=kmlock):
-        switch_entities: list[MutableMapping[str, str]] = [
-            {
-                "prop": "switch.autolock_enabled",
-                "name": "Auto Lock",
-                "icon": "mdi:lock-clock",
-            },
-            {
-                "prop": "switch.lock_notifications",
-                "name": "Lock Notifications",
-                "icon": "mdi:lock-alert",
-            },
-        ]
-        if config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID) is not None:
-            switch_entities.extend(
-                [
-                    {
-                        "prop": "switch.door_notifications",
-                        "name": "Door Notifications",
-                        "icon": "mdi:door-closed-lock",
-                    },
-                    {
-                        "prop": "switch.retry_lock",
-                        "name": "Retry Lock",
-                        "icon": "mdi:arrow-u-right-top-bold",
-                    },
-                ]
-            )
-
-        for x in range(
-            config_entry.data[CONF_START],
-            config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-        ):
-            if kmlock and kmlock.parent_name:
-                switch_entities.append(
-                    {
-                        "prop": f"switch.code_slots:{x}.override_parent",
-                        "name": f"Code Slot {x}: Override Parent",
-                        "icon": "mdi:call-split",
-                    }
-                )
-            switch_entities.extend(
-                [
-                    {
-                        "prop": f"switch.code_slots:{x}.enabled",
-                        "name": f"Code Slot {x}: Enabled",
-                        "icon": "mdi:folder-pound",
-                    },
-                    {
-                        "prop": f"switch.code_slots:{x}.notifications",
-                        "name": f"Code Slot {x}: Notifications",
-                        "icon": "mdi:message-lock",
-                    },
-                    {
-                        "prop": f"switch.code_slots:{x}.accesslimit_count_enabled",
-                        "name": f"Code Slot {x}: Limit by Number of Uses",
-                        "icon": "mdi:numeric",
-                    },
-                ]
-            )
-            if config_entry.data.get(CONF_ADVANCED_DATE_RANGE, True):
-                switch_entities.append(
-                    {
-                        "prop": f"switch.code_slots:{x}.accesslimit_date_range_enabled",
-                        "name": f"Code Slot {x}: Use Date Range Limits",
-                        "icon": "mdi:calendar-lock",
-                    },
-                )
-            if config_entry.data.get(CONF_ADVANCED_DAY_OF_WEEK, True):
-                switch_entities.append(
-                    {
-                        "prop": f"switch.code_slots:{x}.accesslimit_day_of_week_enabled",
-                        "name": f"Code Slot {x}: Use Day of Week Limits",
-                        "icon": "mdi:calendar-week",
-                    },
-                )
-                for i, dow in enumerate(DAY_NAMES):
-                    switch_entities.extend(
-                        [
-                            {
-                                "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.dow_enabled",
-                                "name": f"Code Slot {x}: {dow}",
-                                "icon": "mdi:calendar-today",
-                            },
-                            {
-                                "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.include_exclude",
-                                "name": f"Code Slot {x}: {dow} - Include (On)/Exclude (Off) Time",
-                                "icon": "mdi:plus-minus",
-                            },
-                            {
-                                "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.limit_by_time",
-                                "name": f"Code Slot {x}: {dow} - Limit by Time of Day",
-                                "icon": "mdi:timer-lock",
-                            },
-                        ]
-                    )
-        entities.extend(
+    switch_entities: list[MutableMapping[str, str]] = [
+        {
+            "prop": "switch.autolock_enabled",
+            "name": "Auto Lock",
+            "icon": "mdi:lock-clock",
+        },
+        {
+            "prop": "switch.lock_notifications",
+            "name": "Lock Notifications",
+            "icon": "mdi:lock-alert",
+        },
+    ]
+    if config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID) is not None:
+        switch_entities.extend(
             [
-                KeymasterSwitch(
-                    entity_description=KeymasterSwitchEntityDescription(
-                        key=ent["prop"],
-                        name=ent["name"],
-                        icon=ent["icon"],
-                        entity_registry_enabled_default=True,
-                        hass=hass,
-                        config_entry=config_entry,
-                        coordinator=coordinator,
-                    ),
-                )
-                for ent in switch_entities
+                {
+                    "prop": "switch.door_notifications",
+                    "name": "Door Notifications",
+                    "icon": "mdi:door-closed-lock",
+                },
+                {
+                    "prop": "switch.retry_lock",
+                    "name": "Retry Lock",
+                    "icon": "mdi:arrow-u-right-top-bold",
+                },
             ]
         )
 
-    else:
-        _LOGGER.error("No supported provider for lock platform")
-        raise PlatformNotReady
+    for x in range(
+        config_entry.data[CONF_START],
+        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+    ):
+        if kmlock.parent_name:
+            switch_entities.append(
+                {
+                    "prop": f"switch.code_slots:{x}.override_parent",
+                    "name": f"Code Slot {x}: Override Parent",
+                    "icon": "mdi:call-split",
+                }
+            )
+        switch_entities.extend(
+            [
+                {
+                    "prop": f"switch.code_slots:{x}.enabled",
+                    "name": f"Code Slot {x}: Enabled",
+                    "icon": "mdi:folder-pound",
+                },
+                {
+                    "prop": f"switch.code_slots:{x}.notifications",
+                    "name": f"Code Slot {x}: Notifications",
+                    "icon": "mdi:message-lock",
+                },
+                {
+                    "prop": f"switch.code_slots:{x}.accesslimit_count_enabled",
+                    "name": f"Code Slot {x}: Limit by Number of Uses",
+                    "icon": "mdi:numeric",
+                },
+            ]
+        )
+        if config_entry.data.get(CONF_ADVANCED_DATE_RANGE, True):
+            switch_entities.append(
+                {
+                    "prop": f"switch.code_slots:{x}.accesslimit_date_range_enabled",
+                    "name": f"Code Slot {x}: Use Date Range Limits",
+                    "icon": "mdi:calendar-lock",
+                },
+            )
+        if config_entry.data.get(CONF_ADVANCED_DAY_OF_WEEK, True):
+            switch_entities.append(
+                {
+                    "prop": f"switch.code_slots:{x}.accesslimit_day_of_week_enabled",
+                    "name": f"Code Slot {x}: Use Day of Week Limits",
+                    "icon": "mdi:calendar-week",
+                },
+            )
+            for i, dow in enumerate(DAY_NAMES):
+                switch_entities.extend(
+                    [
+                        {
+                            "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.dow_enabled",
+                            "name": f"Code Slot {x}: {dow}",
+                            "icon": "mdi:calendar-today",
+                        },
+                        {
+                            "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.include_exclude",
+                            "name": f"Code Slot {x}: {dow} - Include (On)/Exclude (Off) Time",
+                            "icon": "mdi:plus-minus",
+                        },
+                        {
+                            "prop": f"switch.code_slots:{x}.accesslimit_day_of_week:{i}.limit_by_time",
+                            "name": f"Code Slot {x}: {dow} - Limit by Time of Day",
+                            "icon": "mdi:timer-lock",
+                        },
+                    ]
+                )
+    entities.extend(
+        [
+            KeymasterSwitch(
+                entity_description=KeymasterSwitchEntityDescription(
+                    key=ent["prop"],
+                    name=ent["name"],
+                    icon=ent["icon"],
+                    entity_registry_enabled_default=True,
+                    hass=hass,
+                    config_entry=config_entry,
+                    coordinator=coordinator,
+                ),
+            )
+            for ent in switch_entities
+        ]
+    )
 
     async_add_entities(entities, True)
 
