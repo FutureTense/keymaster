@@ -10,7 +10,7 @@ Example:
 
 This script will:
 1. Generate view configs from both branches using the test cases below
-2. Save the outputs to /tmp/<branch>_view_config.json
+2. Save the outputs to the system temporary directory as <branch>_view_config.json
 3. Report the size difference and whether outputs are functionally equivalent
 
 """
@@ -124,7 +124,8 @@ def deep_equal(obj1: Any, obj2: Any, path: str = "") -> list[str]:
     elif isinstance(obj1, list):
         if len(obj1) != len(obj2):
             diffs.append(f"{path}: list length {len(obj1)} vs {len(obj2)}")
-        for i, (item1, item2) in enumerate(zip(obj1, obj2, strict=False)):
+            return diffs
+        for i, (item1, item2) in enumerate(zip(obj1, obj2, strict=True)):
             diffs.extend(deep_equal(item1, item2, f"{path}[{i}]"))
 
     elif obj1 != obj2:
@@ -140,7 +141,7 @@ def generate_for_branch(branch: str, repo_root: Path) -> tuple[dict, int]:
         capture_output=True,
         text=True,
         cwd=repo_root,
-        check=False,
+        check=True,
     ).stdout.strip()
 
     try:
@@ -176,13 +177,19 @@ def generate_for_branch(branch: str, repo_root: Path) -> tuple[dict, int]:
 
     finally:
         # Restore original branch
-        subprocess.run(
+        restore_result = subprocess.run(
             ["git", "checkout", current_branch],
             capture_output=True,
             text=True,
             cwd=repo_root,
             check=False,
         )
+        if restore_result.returncode != 0:
+            print(
+                f"Warning: Failed to restore original branch '{current_branch}'. "
+                f"Repository may be in unexpected state.",
+                file=sys.stderr,
+            )
 
 
 def main() -> None:
