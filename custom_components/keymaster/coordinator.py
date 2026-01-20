@@ -149,7 +149,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     def _migrate_legacy_json(
         self, json_file: Path, json_folder: str
     ) -> MutableMapping[str, KeymasterLock]:
-        """Load legacy JSON file, clean it up, and return processed data (runs in executor)."""
+        """Load legacy JSON file, clean it up, and return processed data.
+
+        This is a synchronous method that performs file I/O. Must be called
+        via async_add_executor_job.
+        """
         # Load the JSON file
         config: MutableMapping[str, KeymasterLock] = {}
         try:
