@@ -29,10 +29,7 @@ async def async_setup_entry(
     """Create keymaster Number entities."""
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
 
-    entities: list = []
-
-    entities.extend(
-        [
+    entities: list = [
             KeymasterNumber(
                 entity_description=KeymasterNumberEntityDescription(
                     key="number.autolock_min_day",
@@ -66,7 +63,7 @@ async def async_setup_entry(
                 ),
             ),
         ]
-    )
+
     entities.extend(
         [
             KeymasterNumber(
@@ -187,6 +184,9 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
                 self._code_slot,
             )
             return
+        # Convert to int for accesslimit_count (NumberEntity returns float)
+        if self._property.split(".")[-1] == "accesslimit_count":
+            value = int(value)
         if self._set_property_value(value):
             self._attr_native_value = value
             await self.coordinator.async_refresh()
