@@ -111,6 +111,11 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
         )
         self._attr_native_value: float | None = None
 
+    @property
+    def _is_accesslimit_count(self) -> bool:
+        """Return True if this Number is for accesslimit_count."""
+        return self._property.split(".")[-1] == "accesslimit_count"
+
     @callback
     def _handle_coordinator_update(self) -> None:
         # _LOGGER.debug(f"[Number handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
@@ -140,7 +145,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             self.async_write_ha_state()
             return
 
-        if self._property.endswith(".accesslimit_count") and (
+        if self._is_accesslimit_count and (
             not self._kmlock.code_slots
             or not self._code_slot
             or not self._kmlock.code_slots[self._code_slot].accesslimit_count_enabled
@@ -150,8 +155,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             return
 
         if (
-            self._property.endswith(".autolock_min_day")
-            or self._property.endswith(".autolock_min_night")
+            self._property.split(".")[-1].startswith("autolock")
         ) and not self._kmlock.autolock_enabled:
             self._attr_available = False
             self.async_write_ha_state()
@@ -169,7 +173,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             value,
         )
         if (
-            self._property.endswith(".accesslimit_count")
+            self._is_accesslimit_count
             and self._kmlock
             and self._kmlock.parent_name
             and (
@@ -185,7 +189,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             )
             return
         # Convert to int for accesslimit_count (NumberEntity returns float)
-        if self._property.split(".")[-1] == "accesslimit_count":
+        if self._is_accesslimit_count:
             value = int(value)
         if self._set_property_value(value):
             self._attr_native_value = value
