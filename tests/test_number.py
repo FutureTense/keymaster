@@ -442,12 +442,16 @@ async def test_number_entity_async_set_value(hass: HomeAssistant, number_config_
 
     entity = KeymasterNumber(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_refresh and async_write_ha_state (entity not registered)
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh,
+        patch.object(entity, "async_write_ha_state") as mock_write_state,
+    ):
         await entity.async_set_native_value(5)
 
-        # Should update value and call refresh
+        # Should update value, write state immediately, and call refresh
         assert entity._attr_native_value == 5
+        mock_write_state.assert_called_once()
         mock_refresh.assert_called_once()
 
 
@@ -541,8 +545,11 @@ async def test_number_entity_converts_float_to_int_for_accesslimit_count(
 
     entity = KeymasterNumber(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    # Mock coordinator.async_refresh and async_write_ha_state (entity not registered)
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(entity, "async_write_ha_state"),
+    ):
         # Pass a float value (like NumberEntity would from the frontend)
         await entity.async_set_native_value(5.0)
 
