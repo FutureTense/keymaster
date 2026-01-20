@@ -180,6 +180,8 @@ class BaseLockProvider(ABC):
     async def async_get_usercode(self, slot_num: int) -> CodeSlot | None:
         """Get a specific user code from the lock.
 
+        May return cached data if the integration has a caching mechanism.
+
         Args:
             slot_num: The code slot number
 
@@ -190,13 +192,15 @@ class BaseLockProvider(ABC):
         return None
 
     async def async_refresh_usercode(self, slot_num: int) -> CodeSlot | None:
-        """Get a specific user code directly from the lock (forces refresh).
+        """Bypass integration cache and query the device directly.
+
+        Only needed for integrations with a caching mechanism (e.g., Z-Wave JS).
+        For integrations without caching, this can return None.
 
         Args:
             slot_num: The code slot number
 
         Returns the CodeSlot if found, None otherwise.
-        Override in subclass if supported.
 
         """
         return None
