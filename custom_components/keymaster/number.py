@@ -30,39 +30,39 @@ async def async_setup_entry(
     coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
 
     entities: list = [
-            KeymasterNumber(
-                entity_description=KeymasterNumberEntityDescription(
-                    key="number.autolock_min_day",
-                    name="Day Auto Lock",
-                    icon="mdi:timer-lock-outline",
-                    mode=NumberMode.BOX,
-                    native_min_value=1,
-                    native_step=1,
-                    device_class=NumberDeviceClass.DURATION,
-                    native_unit_of_measurement=UnitOfTime.MINUTES,
-                    entity_registry_enabled_default=True,
-                    hass=hass,
-                    config_entry=config_entry,
-                    coordinator=coordinator,
-                ),
+        KeymasterNumber(
+            entity_description=KeymasterNumberEntityDescription(
+                key="number.autolock_min_day",
+                name="Day Auto Lock",
+                icon="mdi:timer-lock-outline",
+                mode=NumberMode.BOX,
+                native_min_value=1,
+                native_step=1,
+                device_class=NumberDeviceClass.DURATION,
+                native_unit_of_measurement=UnitOfTime.MINUTES,
+                entity_registry_enabled_default=True,
+                hass=hass,
+                config_entry=config_entry,
+                coordinator=coordinator,
             ),
-            KeymasterNumber(
-                entity_description=KeymasterNumberEntityDescription(
-                    key="number.autolock_min_night",
-                    name="Night Auto Lock",
-                    icon="mdi:timer-lock",
-                    mode=NumberMode.BOX,
-                    native_min_value=1,
-                    native_step=1,
-                    device_class=NumberDeviceClass.DURATION,
-                    native_unit_of_measurement=UnitOfTime.MINUTES,
-                    entity_registry_enabled_default=True,
-                    hass=hass,
-                    config_entry=config_entry,
-                    coordinator=coordinator,
-                ),
+        ),
+        KeymasterNumber(
+            entity_description=KeymasterNumberEntityDescription(
+                key="number.autolock_min_night",
+                name="Night Auto Lock",
+                icon="mdi:timer-lock",
+                mode=NumberMode.BOX,
+                native_min_value=1,
+                native_step=1,
+                device_class=NumberDeviceClass.DURATION,
+                native_unit_of_measurement=UnitOfTime.MINUTES,
+                entity_registry_enabled_default=True,
+                hass=hass,
+                config_entry=config_entry,
+                coordinator=coordinator,
             ),
-        ]
+        ),
+    ]
 
     entities.extend(
         [

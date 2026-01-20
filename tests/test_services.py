@@ -10,10 +10,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.const import COORDINATOR, DOMAIN
-from custom_components.keymaster.services import (
-    SERVICE_REGENERATE_LOVELACE,
-    async_setup_services,
-)
+from custom_components.keymaster.services import SERVICE_REGENERATE_LOVELACE, async_setup_services
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import CONFIG_DATA

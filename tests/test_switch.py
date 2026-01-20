@@ -20,10 +20,7 @@ from custom_components.keymaster.const import (
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
-from custom_components.keymaster.switch import (
-    KeymasterSwitch,
-    KeymasterSwitchEntityDescription,
-)
+from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
 from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_SWITCH = {
