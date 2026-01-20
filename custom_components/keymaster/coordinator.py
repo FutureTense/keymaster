@@ -201,7 +201,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if kmlocks is None:
             kmlocks = self.kmlocks
 
-        config: MutableMapping = {
+        config: dict[str, Any] = {
             key: self._kmlocks_to_dict(kmlock) for key, kmlock in kmlocks.items()
         }
         for lock in config.values():
@@ -218,7 +218,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if config == self._prev_kmlocks_dict:
             _LOGGER.debug("[save_data] No changes to kmlocks. Not saving.")
             return
-        self._prev_kmlocks_dict = config.copy()
+        self._prev_kmlocks_dict = dict(config)
         await self._store.async_save(config)
         _LOGGER.debug("[save_data] Data saved to storage")
 
