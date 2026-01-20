@@ -133,14 +133,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             config = await self.hass.async_add_executor_job(
                 self._load_legacy_json_file, legacy_json_file
             )
-            if config is not None:
-                # Save to new Store (even if empty - valid state)
+            # Save valid data to new Store before cleanup
+            if config:
                 await self._async_save_data(config)
-                # Delete legacy file and folder
-                await self.hass.async_add_executor_job(
-                    self._cleanup_legacy_files, legacy_json_file, legacy_json_folder
-                )
-                return config
+            # Always clean up legacy file when found (regardless of load success)
+            await self.hass.async_add_executor_job(
+                self._cleanup_legacy_files, legacy_json_file, legacy_json_folder
+            )
+            return config
 
         # Load from Store
         stored_data = await self._store.async_load()
