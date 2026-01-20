@@ -189,7 +189,7 @@ class BaseLockProvider(ABC):
         """
         return None
 
-    async def async_get_usercode_from_node(self, slot_num: int) -> CodeSlot | None:
+    async def async_refresh_usercode(self, slot_num: int) -> CodeSlot | None:
         """Get a specific user code directly from the lock (forces refresh).
 
         Args:

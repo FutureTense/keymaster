@@ -316,7 +316,7 @@ class TestZWaveJSLockProviderUsercodes:
 
     async def test_get_usercode_from_node_no_node(self, zwave_provider):
         """Test get_usercode_from_node returns None when no node."""
-        result = await zwave_provider.async_get_usercode_from_node(1)
+        result = await zwave_provider.async_refresh_usercode(1)
         assert result is None
 
     async def test_get_usercode_from_node_success(self, zwave_provider, mock_zwave_node):
@@ -330,7 +330,7 @@ class TestZWaveJSLockProviderUsercodes:
             new_callable=AsyncMock,
             return_value=mock_slot,
         ):
-            result = await zwave_provider.async_get_usercode_from_node(1)
+            result = await zwave_provider.async_refresh_usercode(1)
 
         assert result is not None
         assert result.code == "9999"

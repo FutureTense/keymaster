@@ -1688,7 +1688,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # If in_use is not set, try to refresh from lock via provider
         if not in_use and usercode is None and kmlock.provider:
-            refreshed = await kmlock.provider.async_get_usercode_from_node(code_slot_num)
+            refreshed = await kmlock.provider.async_refresh_usercode(code_slot_num)
             if refreshed:
                 usercode = refreshed.code
                 in_use = refreshed.in_use
