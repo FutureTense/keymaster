@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: T201
 """Compare Lovelace view config output between two git branches.
 
 Usage:
@@ -9,7 +10,7 @@ Example:
 
 This script will:
 1. Generate view configs from both branches using the test cases below
-2. Save the outputs to /tmp/<branch>_view_config.json
+2. Save the outputs to the system temporary directory as <branch>_view_config.json
 3. Report the size difference and whether outputs are functionally equivalent
 
 """
@@ -19,6 +20,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 # =============================================================================
@@ -72,7 +74,7 @@ TEST_CASES = [
 
 def generate_config_script() -> str:
     """Return the Python code to generate view configs."""
-    return '''
+    return """
 import json
 import sys
 sys.path.insert(0, ".")
@@ -98,14 +100,14 @@ with patch("custom_components.keymaster.lovelace.er"):
         results[name] = result
 
     print(json.dumps(results, indent=2, sort_keys=True))
-'''
+"""
 
 
 def deep_equal(obj1: Any, obj2: Any, path: str = "") -> list[str]:
     """Recursively compare two objects for semantic equality (ignoring key order)."""
     diffs = []
 
-    if type(obj1) != type(obj2):
+    if type(obj1) is not type(obj2):
         diffs.append(f"{path}: type mismatch {type(obj1).__name__} vs {type(obj2).__name__}")
         return diffs
 
@@ -113,11 +115,8 @@ def deep_equal(obj1: Any, obj2: Any, path: str = "") -> list[str]:
         keys1 = set(obj1.keys())
         keys2 = set(obj2.keys())
 
-        for key in sorted(keys1 - keys2):
-            diffs.append(f"{path}.{key}: only in first branch")
-
-        for key in sorted(keys2 - keys1):
-            diffs.append(f"{path}.{key}: only in second branch")
+        diffs.extend(f"{path}.{key}: only in first branch" for key in sorted(keys1 - keys2))
+        diffs.extend(f"{path}.{key}: only in second branch" for key in sorted(keys2 - keys1))
 
         for key in sorted(keys1 & keys2):
             diffs.extend(deep_equal(obj1[key], obj2[key], f"{path}.{key}"))
@@ -125,7 +124,8 @@ def deep_equal(obj1: Any, obj2: Any, path: str = "") -> list[str]:
     elif isinstance(obj1, list):
         if len(obj1) != len(obj2):
             diffs.append(f"{path}: list length {len(obj1)} vs {len(obj2)}")
-        for i, (item1, item2) in enumerate(zip(obj1, obj2)):
+            return diffs
+        for i, (item1, item2) in enumerate(zip(obj1, obj2, strict=True)):
             diffs.extend(deep_equal(item1, item2, f"{path}[{i}]"))
 
     elif obj1 != obj2:
@@ -141,6 +141,7 @@ def generate_for_branch(branch: str, repo_root: Path) -> tuple[dict, int]:
         capture_output=True,
         text=True,
         cwd=repo_root,
+        check=True,
     ).stdout.strip()
 
     try:
@@ -154,15 +155,14 @@ def generate_for_branch(branch: str, repo_root: Path) -> tuple[dict, int]:
         )
 
         # Generate the config
-        script = generate_config_script().replace(
-            "TEST_CASES_PLACEHOLDER", repr(TEST_CASES)
-        )
+        script = generate_config_script().replace("TEST_CASES_PLACEHOLDER", repr(TEST_CASES))
 
         result = subprocess.run(
             [sys.executable, "-c", script],
             capture_output=True,
             text=True,
             cwd=repo_root,
+            check=False,
         )
 
         if result.returncode != 0:
@@ -177,15 +177,23 @@ def generate_for_branch(branch: str, repo_root: Path) -> tuple[dict, int]:
 
     finally:
         # Restore original branch
-        subprocess.run(
+        restore_result = subprocess.run(
             ["git", "checkout", current_branch],
             capture_output=True,
             text=True,
             cwd=repo_root,
+            check=False,
         )
+        if restore_result.returncode != 0:
+            print(
+                f"Warning: Failed to restore original branch '{current_branch}'. "
+                f"Repository may be in unexpected state.",
+                file=sys.stderr,
+            )
 
 
 def main() -> None:
+    """Run the comparison between two git branches."""
     parser = argparse.ArgumentParser(
         description="Compare Lovelace view config output between two git branches."
     )
@@ -194,8 +202,8 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("/tmp"),
-        help="Directory to save output JSON files (default: /tmp)",
+        default=Path(tempfile.gettempdir()),
+        help="Directory to save output JSON files (default: system temp dir)",
     )
     args = parser.parse_args()
 

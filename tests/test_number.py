@@ -498,3 +498,57 @@ async def test_number_entity_child_lock_ignores_change_without_override(
         # Should NOT call refresh because child doesn't override parent
         mock_refresh.assert_not_called()
         assert "not set to override parent. Ignoring change" in caplog.text
+
+
+async def test_number_entity_converts_float_to_int_for_accesslimit_count(
+    hass: HomeAssistant, number_config_entry, coordinator
+):
+    """Test that float values are converted to int when setting accesslimit_count.
+
+    NumberEntity returns float values from the frontend, but accesslimit_count
+    should be stored as an integer in the code slot.
+    """
+    # Create a connected lock with code slot and accesslimit enabled
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=number_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            accesslimit_count_enabled=True,
+            accesslimit_count=10,
+        )
+    }
+    coordinator.kmlocks[number_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterNumberEntityDescription(
+        key="number.code_slots:1.accesslimit_count",
+        name="Code Slot 1: Uses Remaining",
+        icon="mdi:counter",
+        mode=NumberMode.BOX,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=1,
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=number_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterNumber(entity_description=entity_description)
+
+    # Mock coordinator.async_refresh
+    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+        # Pass a float value (like NumberEntity would from the frontend)
+        await entity.async_set_native_value(5.0)
+
+        # Verify the value was converted to int and stored
+        assert entity._attr_native_value == 5
+        assert isinstance(entity._attr_native_value, int)
+        # Also verify the code slot was updated with an int
+        assert kmlock.code_slots[1].accesslimit_count == 5
+        assert isinstance(kmlock.code_slots[1].accesslimit_count, int)

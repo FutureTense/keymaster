@@ -784,9 +784,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     accesslimit_count: int | None = parent_kmlock.code_slots[
                         code_slot_num
                     ].accesslimit_count
-                    if accesslimit_count is not None and accesslimit_count > 0:
+                    if isinstance(accesslimit_count, int) and accesslimit_count > 0:
                         parent_kmlock.code_slots[code_slot_num].accesslimit_count = (
-                            int(accesslimit_count) - 1
+                            accesslimit_count - 1
                         )
             elif kmlock.code_slots[code_slot_num].accesslimit_count_enabled:
                 accesslimit_count = kmlock.code_slots[code_slot_num].accesslimit_count
@@ -1447,7 +1447,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
 
         if kmslot.accesslimit_count_enabled and (
-            not isinstance(kmslot.accesslimit_count, float) or kmslot.accesslimit_count <= 0
+            not isinstance(kmslot.accesslimit_count, int) or kmslot.accesslimit_count <= 0
         ):
             return False
 
