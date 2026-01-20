@@ -10,17 +10,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    CONF_ADVANCED_DAY_OF_WEEK,
-    CONF_SLOTS,
-    CONF_START,
-    COORDINATOR,
-    DAY_NAMES,
-    DOMAIN,
-)
+from .const import CONF_ADVANCED_DAY_OF_WEEK, CONF_SLOTS, CONF_START, COORDINATOR, DAY_NAMES, DOMAIN
 from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
-from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek
+from .lock import KeymasterCodeSlotDayOfWeek
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 

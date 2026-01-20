@@ -34,10 +34,7 @@ from zwave_js_server.util.node import dump_node_state
 
 from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
-from homeassistant.components.zwave_js.const import (
-    ATTR_PARAMETERS,
-    DOMAIN as ZWAVE_JS_DOMAIN,
-)
+from homeassistant.components.zwave_js.const import ATTR_PARAMETERS, DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_DEVICE_ID,
@@ -835,9 +832,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     accesslimit_count: int | None = parent_kmlock.code_slots[
                         code_slot_num
                     ].accesslimit_count
-                    if accesslimit_count is not None and accesslimit_count > 0:
+                    if isinstance(accesslimit_count, int) and accesslimit_count > 0:
                         parent_kmlock.code_slots[code_slot_num].accesslimit_count = (
-                            int(accesslimit_count) - 1
+                            accesslimit_count - 1
                         )
             elif kmlock.code_slots[code_slot_num].accesslimit_count_enabled:
                 accesslimit_count = kmlock.code_slots[code_slot_num].accesslimit_count
@@ -1529,7 +1526,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
 
         if kmslot.accesslimit_count_enabled and (
-            not isinstance(kmslot.accesslimit_count, float) or kmslot.accesslimit_count <= 0
+            not isinstance(kmslot.accesslimit_count, int) or kmslot.accesslimit_count <= 0
         ):
             return False
 

@@ -5,8 +5,6 @@ from unittest.mock import MagicMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.config_entries import ConfigEntryDisabler
-
 from custom_components.keymaster import websocket
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
@@ -20,6 +18,7 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.websocket import async_setup
+from homeassistant.config_entries import ConfigEntryDisabler
 from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
