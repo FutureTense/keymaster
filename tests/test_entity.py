@@ -239,8 +239,8 @@ async def test_entity_set_property_value_with_code_slot(
     assert kmlock.code_slots[1].enabled is True
 
 
-async def test_entity_get_code_slots_num(hass: HomeAssistant, entity_config_entry, coordinator):
-    """Test _get_code_slots_num extracts code slot number correctly."""
+async def test_entity_get_x_num_code_slots(hass: HomeAssistant, entity_config_entry, coordinator):
+    """Test _get_x_num extracts code slot number correctly."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -264,14 +264,14 @@ async def test_entity_get_code_slots_num(hass: HomeAssistant, entity_config_entr
     entity = MockEntity(entity_description=entity_description)
 
     # Get code slot number
-    slot_num = entity._get_code_slots_num()
+    slot_num = entity._get_x_num("code_slots")
     assert slot_num == 5
 
 
-async def test_entity_get_code_slots_num_returns_none_for_non_slot(
+async def test_entity_get_x_num_code_slots_returns_none_for_non_slot(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_code_slots_num returns None for non-slot properties."""
+    """Test _get_x_num returns None for non-slot properties."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -295,12 +295,12 @@ async def test_entity_get_code_slots_num_returns_none_for_non_slot(
     entity = MockEntity(entity_description=entity_description)
 
     # Get code slot number - should be None
-    slot_num = entity._get_code_slots_num()
+    slot_num = entity._get_x_num("code_slots")
     assert slot_num is None
 
 
-async def test_entity_get_day_of_week_num(hass: HomeAssistant, entity_config_entry, coordinator):
-    """Test _get_day_of_week_num extracts day of week number correctly."""
+async def test_entity_get_x_num_day_of_week(hass: HomeAssistant, entity_config_entry, coordinator):
+    """Test _get_x_num extracts day of week number correctly."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -324,14 +324,14 @@ async def test_entity_get_day_of_week_num(hass: HomeAssistant, entity_config_ent
     entity = MockEntity(entity_description=entity_description)
 
     # Get day of week number
-    dow_num = entity._get_day_of_week_num()
+    dow_num = entity._get_x_num("accesslimit_day_of_week")
     assert dow_num == 3
 
 
-async def test_entity_get_day_of_week_num_returns_none_for_non_dow(
+async def test_entity_get_x_num_day_of_week_returns_none_for_non_dow(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_day_of_week_num returns None for non-DOW properties."""
+    """Test _get_x_num returns None for non-DOW properties."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -355,7 +355,7 @@ async def test_entity_get_day_of_week_num_returns_none_for_non_dow(
     entity = MockEntity(entity_description=entity_description)
 
     # Get day of week number - should be None
-    dow_num = entity._get_day_of_week_num()
+    dow_num = entity._get_x_num("accesslimit_day_of_week")
     assert dow_num is None
 
 
@@ -499,10 +499,10 @@ async def test_entity_set_property_value_with_nested_code_slot(
     assert kmlock.code_slots[1].accesslimit_day_of_week[3].dow_enabled is True
 
 
-async def test_entity_get_code_slots_num_with_complex_property(
+async def test_entity_get_x_num_code_slots_with_complex_property(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_code_slots_num with complex nested properties."""
+    """Test _get_x_num with complex nested properties."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -526,7 +526,7 @@ async def test_entity_get_code_slots_num_with_complex_property(
     entity = MockEntity(entity_description=entity_description)
 
     # Should extract code slot number 12
-    slot_num = entity._get_code_slots_num()
+    slot_num = entity._get_x_num("code_slots")
     assert slot_num == 12
 
 
@@ -577,10 +577,10 @@ async def test_entity_set_property_value_with_array_index(
     assert kmlock.code_slots[1].accesslimit_day_of_week[5].dow_enabled is True
 
 
-async def test_entity_get_code_slots_num_without_colon(
+async def test_entity_get_x_num_code_slots_without_colon(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_code_slots_num returns None when code_slots has no colon (line 131)."""
+    """Test _get_x_num returns None when code_slots has no colon."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -605,14 +605,14 @@ async def test_entity_get_code_slots_num_without_colon(
     entity = MockEntity(entity_description=entity_description)
 
     # Should return None since code_slots doesn't have :N notation
-    slot_num = entity._get_code_slots_num()
+    slot_num = entity._get_x_num("code_slots")
     assert slot_num is None
 
 
-async def test_entity_get_day_of_week_num_without_colon(
+async def test_entity_get_x_num_day_of_week_without_colon(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_day_of_week_num returns None when day of week has no colon (line 142)."""
+    """Test _get_x_num returns None when day of week has no colon."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -637,7 +637,7 @@ async def test_entity_get_day_of_week_num_without_colon(
     entity = MockEntity(entity_description=entity_description)
 
     # Should return None since accesslimit_day_of_week doesn't have :N notation
-    dow_num = entity._get_day_of_week_num()
+    dow_num = entity._get_x_num("accesslimit_day_of_week")
     assert dow_num is None
 
 
@@ -684,10 +684,10 @@ async def test_entity_set_property_value_traversing_simple_path(
     assert kmlock.code_slots[1].enabled is True
 
 
-async def test_entity_get_code_slots_num_no_match_in_path(
+async def test_entity_get_x_num_code_slots_no_match_in_path(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_code_slots_num returns None when code_slots in string but not in path (line 133)."""
+    """Test _get_x_num returns None when code_slots in string but not in path."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -712,14 +712,14 @@ async def test_entity_get_code_slots_num_no_match_in_path(
     entity = MockEntity(entity_description=entity_description)
 
     # Should return None since none of the path segments start with "code_slots"
-    slot_num = entity._get_code_slots_num()
+    slot_num = entity._get_x_num("code_slots")
     assert slot_num is None
 
 
-async def test_entity_get_day_of_week_num_no_match_in_path(
+async def test_entity_get_x_num_day_of_week_no_match_in_path(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_day_of_week_num returns None when accesslimit_day_of_week in string but not in path (line 144)."""
+    """Test _get_x_num returns None when accesslimit_day_of_week in string but not in path."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -744,7 +744,7 @@ async def test_entity_get_day_of_week_num_no_match_in_path(
     entity = MockEntity(entity_description=entity_description)
 
     # Should return None since none of the path segments start with "accesslimit_day_of_week"
-    dow_num = entity._get_day_of_week_num()
+    dow_num = entity._get_x_num("accesslimit_day_of_week")
     assert dow_num is None
 
 
@@ -831,10 +831,10 @@ async def test_entity_set_property_value_with_final_array_index(
     assert settings[1] is True
 
 
-async def test_entity_get_code_slots_num_without_colon_in_match(
+async def test_entity_get_x_num_code_slots_without_colon_in_match(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_code_slots_num returns None when code_slots segment lacks colon (line 131)."""
+    """Test _get_x_num returns None when code_slots segment lacks colon."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -859,15 +859,15 @@ async def test_entity_get_code_slots_num_without_colon_in_match(
 
     entity = MockEntity(entity_description=entity_description)
 
-    # Should return None because code_slots doesn't have :N format (line 131)
-    code_slot_num = entity._get_code_slots_num()
+    # Should return None because code_slots doesn't have :N format
+    code_slot_num = entity._get_x_num("code_slots")
     assert code_slot_num is None
 
 
-async def test_entity_get_code_slots_num_no_segment_starts_with_code_slots(
+async def test_entity_get_x_num_code_slots_no_segment_starts_with_code_slots(
     hass: HomeAssistant, entity_config_entry, coordinator
 ):
-    """Test _get_code_slots_num returns None when no segment starts with 'code_slots' (line 133)."""
+    """Test _get_x_num returns None when no segment starts with 'code_slots'."""
 
     kmlock = KeymasterLock(
         lock_name="frontdoor",
@@ -892,6 +892,6 @@ async def test_entity_get_code_slots_num_no_segment_starts_with_code_slots(
 
     entity = MockEntity(entity_description=entity_description)
 
-    # Should return None because no segment starts with "code_slots" (line 133)
-    code_slot_num = entity._get_code_slots_num()
+    # Should return None because no segment starts with "code_slots"
+    code_slot_num = entity._get_x_num("code_slots")
     assert code_slot_num is None
