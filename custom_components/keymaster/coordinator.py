@@ -131,15 +131,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if legacy_json_file.exists():
             _LOGGER.info("[load_data] Found legacy JSON file, migrating to Home Assistant storage")
             config = await self.hass.async_add_executor_job(
-                self._load_legacy_json_file, legacy_json_file
+                self._migrate_legacy_json, legacy_json_file, legacy_json_folder
             )
-            # Save valid data to new Store before cleanup
+            # Save valid data to new Store
             if config:
                 await self._async_save_data(config)
-            # Always clean up legacy file when found (regardless of load success)
-            await self.hass.async_add_executor_job(
-                self._cleanup_legacy_files, legacy_json_file, legacy_json_folder
-            )
             return config
 
         # Load from Store
@@ -150,40 +146,43 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         return self._process_loaded_data(stored_data)
 
-    def _load_legacy_json_file(self, file_path: Path) -> MutableMapping[str, KeymasterLock]:
-        """Load and process the legacy JSON file."""
+    def _migrate_legacy_json(
+        self, json_file: Path, json_folder: str
+    ) -> MutableMapping[str, KeymasterLock]:
+        """Load legacy JSON file, clean it up, and return processed data (runs in executor)."""
+        # Load the JSON file
+        config: MutableMapping[str, KeymasterLock] = {}
         try:
-            with file_path.open(encoding="utf-8") as jsonfile:
-                config = json.load(jsonfile)
+            with json_file.open(encoding="utf-8") as f:
+                config = self._process_loaded_data(json.load(f))
         except (OSError, json.JSONDecodeError) as e:
             _LOGGER.warning(
-                "[load_legacy_json] Error reading legacy JSON file: %s: %s",
+                "[migrate_legacy_json] Error reading legacy JSON file: %s: %s",
                 e.__class__.__qualname__,
                 e,
             )
-            return {}
 
-        return self._process_loaded_data(config)
-
-    def _cleanup_legacy_files(self, json_file: Path, json_folder: str) -> None:
-        """Delete legacy JSON file and folder (runs in executor)."""
+        # Always clean up the legacy file (regardless of load success)
         try:
             json_file.unlink()
-            _LOGGER.info("[load_data] Legacy JSON file migrated and deleted")
+            _LOGGER.info("[migrate_legacy_json] Legacy JSON file deleted")
         except OSError as e:
             _LOGGER.warning(
-                "[load_data] Could not delete legacy JSON file: %s: %s",
+                "[migrate_legacy_json] Could not delete legacy JSON file: %s: %s",
                 e.__class__.__qualname__,
                 e,
             )
-            return
+            return config
 
+        # Try to remove the folder if empty
         try:
             Path(json_folder).rmdir()
-            _LOGGER.debug("[load_data] Legacy JSON folder removed")
+            _LOGGER.debug("[migrate_legacy_json] Legacy JSON folder removed")
         except OSError:
             # Folder not empty or other issue - that's fine
             pass
+
+        return config
 
     def _process_loaded_data(self, config: dict) -> MutableMapping[str, KeymasterLock]:
         """Process loaded config data into KeymasterLock objects."""
