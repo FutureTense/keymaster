@@ -155,8 +155,12 @@ def side_effect_get_entities(
     extra_entities=None,
     exclude_entities=None,
     sort=True,
+    filter_func=None,
 ):
-    """Side effect for get_entities mock."""
+    """Side effect for get_entities mock.
+
+    Note: filter_func is accepted but ignored since we return pre-filtered mock data.
+    """
     if domain == "lock":
         return [
             "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
