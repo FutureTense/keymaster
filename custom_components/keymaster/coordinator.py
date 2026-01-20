@@ -136,21 +136,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if config is not None:
                 # Save to new Store (even if empty - valid state)
                 await self._async_save_data(config)
-                # Delete legacy file
-                try:
-                    await self.hass.async_add_executor_job(legacy_json_file.unlink)
-                    _LOGGER.info("[load_data] Legacy JSON file migrated and deleted")
-                    # Try to remove the folder if empty
-                    await self.hass.async_add_executor_job(
-                        functools.partial(Path(legacy_json_folder).rmdir)
-                    )
-                    _LOGGER.debug("[load_data] Legacy JSON folder removed")
-                except OSError as e:
-                    _LOGGER.warning(
-                        "[load_data] Could not clean up legacy files: %s: %s",
-                        e.__class__.__qualname__,
-                        e,
-                    )
+                # Delete legacy file and folder
+                await self.hass.async_add_executor_job(
+                    self._cleanup_legacy_files, legacy_json_file, legacy_json_folder
+                )
                 return config
 
         # Load from Store
@@ -175,6 +164,26 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return {}
 
         return self._process_loaded_data(config)
+
+    def _cleanup_legacy_files(self, json_file: Path, json_folder: str) -> None:
+        """Delete legacy JSON file and folder (runs in executor)."""
+        try:
+            json_file.unlink()
+            _LOGGER.info("[load_data] Legacy JSON file migrated and deleted")
+        except OSError as e:
+            _LOGGER.warning(
+                "[load_data] Could not delete legacy JSON file: %s: %s",
+                e.__class__.__qualname__,
+                e,
+            )
+            return
+
+        try:
+            Path(json_folder).rmdir()
+            _LOGGER.debug("[load_data] Legacy JSON folder removed")
+        except OSError:
+            # Folder not empty or other issue - that's fine
+            pass
 
     def _process_loaded_data(self, config: dict) -> MutableMapping[str, KeymasterLock]:
         """Process loaded config data into KeymasterLock objects."""
