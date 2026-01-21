@@ -1296,6 +1296,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         kmlock.code_slots[code_slot_num].synced = Synced.ADDING
         self._quick_refresh = True
+        # Immediately notify entities of sync status change
+        self.async_set_updated_data(dict(self.kmlocks))
 
         # Use provider if available
         if kmlock.provider:
@@ -1366,6 +1368,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         kmlock.code_slots[code_slot_num].synced = Synced.DELETING
         self._quick_refresh = True
+        # Immediately notify entities of sync status change
+        self.async_set_updated_data(dict(self.kmlocks))
 
         # Use provider if available
         if kmlock.provider:
