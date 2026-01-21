@@ -788,10 +788,20 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         parent_kmlock.code_slots[code_slot_num].accesslimit_count = (
                             accesslimit_count - 1
                         )
+                        # Immediately notify entities of the count change
+                        self.async_set_updated_data(dict(self.kmlocks))
+                        # Check if slot should be deactivated (e.g., count reached 0)
+                        await self._update_slot(
+                            parent_kmlock, parent_kmlock.code_slots[code_slot_num], code_slot_num
+                        )
             elif kmlock.code_slots[code_slot_num].accesslimit_count_enabled:
                 accesslimit_count = kmlock.code_slots[code_slot_num].accesslimit_count
                 if isinstance(accesslimit_count, int) and accesslimit_count > 0:
                     kmlock.code_slots[code_slot_num].accesslimit_count = accesslimit_count - 1
+                    # Immediately notify entities of the count change
+                    self.async_set_updated_data(dict(self.kmlocks))
+                    # Check if slot should be deactivated (e.g., count reached 0)
+                    await self._update_slot(kmlock, kmlock.code_slots[code_slot_num], code_slot_num)
 
             if kmlock.code_slots[code_slot_num].notifications and not kmlock.lock_notifications:
                 if kmlock.code_slots[code_slot_num].name:
