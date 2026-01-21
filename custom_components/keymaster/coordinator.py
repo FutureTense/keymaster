@@ -1315,6 +1315,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 code_slot_num,
                 pin,
             )
+            kmlock.code_slots[code_slot_num].synced = Synced.SYNCED
+            self.async_set_updated_data(dict(self.kmlocks))
             return True
 
         raise ProviderNotConfiguredError
@@ -1386,6 +1388,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock.lock_name,
                 code_slot_num,
             )
+            kmlock.code_slots[code_slot_num].synced = Synced.DISCONNECTED
+            self.async_set_updated_data(dict(self.kmlocks))
             return True
 
         raise ProviderNotConfiguredError
