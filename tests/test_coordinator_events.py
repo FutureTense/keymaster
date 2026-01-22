@@ -1,17 +1,12 @@
 """Tests for KeymasterCoordinator event handling."""
 
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.keymaster.const import LockMethod
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
-from custom_components.keymaster.providers._base import LockActivity
 from homeassistant.components.lock.const import LockState
-
-_LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -43,15 +38,9 @@ def mock_lock():
     lock.lock_entity_id = "lock.test_lock"
     lock.keymaster_config_entry_id = "test_entry"
 
-    # Setup provider mock (replaces Z-Wave specific mocks)
+    # Setup provider mock
     lock.provider = MagicMock()
     lock.provider.supports_push_updates = True
-    # Mock get_activity_for_sensor_event to return Keypad Lock activity for alarm_type 18
-    lock.provider.get_activity_for_sensor_event.return_value = LockActivity(
-        name="Keypad Lock",
-        action=LockState.LOCKED,
-        method=LockMethod.KEYPAD,
-    )
 
     # Default state
     lock.lock_state = LockState.UNLOCKED

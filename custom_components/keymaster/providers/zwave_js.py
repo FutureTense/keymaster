@@ -37,13 +37,23 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
-from ._base import BaseLockProvider, CodeSlot, LockActivity, LockEventCallback
+from ._base import BaseLockProvider, CodeSlot, LockEventCallback
 from .const import ACCESS_CONTROL, ALARM_TYPE, UNKNOWN
 
 if TYPE_CHECKING:
     from custom_components.keymaster.lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class LockActivity:
+    """Z-Wave specific representation of a lock activity/event."""
+
+    name: str
+    action: str  # LockState value (locked, unlocked, jammed, etc.)
+    method: str | None = None  # LockMethod value (keypad, manual, rf, etc.)
+
 
 # Z-Wave specific activity map for translating sensor events to lock activities
 # Maps alarm_type (Kwikset), access_control (Schlage), and zwavejs_event values
