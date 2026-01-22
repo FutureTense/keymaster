@@ -25,6 +25,15 @@ class CodeSlot:
     name: str | None = None
 
 
+@dataclass
+class LockActivity:
+    """Platform-agnostic representation of a lock activity/event."""
+
+    name: str
+    action: str  # LockState value (locked, unlocked, jammed, etc.)
+    method: str | None = None  # LockMethod value (keypad, manual, rf, etc.)
+
+
 # Type alias for lock event callbacks (async)
 # callback(code_slot_num: int, event_label: str, action_code: int | None)
 LockEventCallback = Callable[[int, str, int | None], Coroutine[Any, Any, None]]
@@ -140,6 +149,16 @@ class BaseLockProvider(ABC):
         self, kmlock: KeymasterLock, callback: LockEventCallback
     ) -> Callable[[], None]:
         """Subscribe to lock/unlock events.
+
+        Override this method to enable real-time push updates for lock events.
+        When implemented, the provider should call the callback with event details
+        whenever a lock/unlock event occurs.
+
+        Providers that support sensor-based event detection (e.g., Z-Wave alarm_type
+        or access_control sensors) can also implement `get_activity_for_sensor_event()`
+        as an opt-in method to translate platform-specific sensor values to
+        LockActivity objects. This is NOT part of the base interface since sensor
+        concepts vary by platform.
 
         Args:
             kmlock: The KeymasterLock instance

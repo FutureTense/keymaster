@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.keymaster.const import LockMethod
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
+from custom_components.keymaster.providers._base import LockActivity
 from homeassistant.components.lock.const import LockState
-from homeassistant.core import Event
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +46,12 @@ def mock_lock():
     # Setup provider mock (replaces Z-Wave specific mocks)
     lock.provider = MagicMock()
     lock.provider.supports_push_updates = True
+    # Mock get_activity_for_sensor_event to return Keypad Lock activity for alarm_type 18
+    lock.provider.get_activity_for_sensor_event.return_value = LockActivity(
+        name="Keypad Lock",
+        action=LockState.LOCKED,
+        method=LockMethod.KEYPAD,
+    )
 
     # Default state
     lock.lock_state = LockState.UNLOCKED
@@ -111,29 +118,6 @@ async def test_handle_provider_lock_event_unknown_state(hass, mock_coordinator, 
     # Neither lock nor unlock should be called for unknown states
     mock_coordinator._lock_locked.assert_not_called()
     mock_coordinator._lock_unlocked.assert_not_called()
-
-
-async def test_handle_lock_state_change_entity(hass, mock_coordinator, mock_lock):
-    """Test handling a state change from an entity (polling/generic)."""
-    event_data = {
-        "entity_id": "lock.test_lock",
-        "old_state": MagicMock(state=LockState.UNLOCKED),
-        "new_state": MagicMock(state=LockState.LOCKED),
-    }
-    event = Event("state_changed", event_data)
-
-    # Set alarm sensor states in the state machine
-    hass.states.async_set("sensor.test_alarm_level", "1")
-    # Set alarm_type to 18 (Keypad Lock) so it matches an entry in LOCK_ACTIVITY_MAP
-    hass.states.async_set("sensor.test_alarm_type", "18")
-
-    await mock_coordinator._handle_lock_state_change(mock_lock, event)
-
-    mock_coordinator._lock_locked.assert_called_once()
-    args, kwargs = mock_coordinator._lock_locked.call_args
-    assert kwargs["source"] == "entity_state"
-    # Should use label from map based on alarm_type 18
-    assert kwargs["event_label"] == "Keypad Lock"
 
 
 @pytest.fixture

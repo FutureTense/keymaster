@@ -406,20 +406,50 @@ class TestZWaveJSLockProviderEventSubscription:
     """Test ZWaveJSLockProvider event subscription."""
 
     def test_subscribe_lock_events(self, zwave_provider, mock_zwave_node):
-        """Test subscribe_lock_events registers listener."""
+        """Test subscribe_lock_events registers listener for notification events."""
         zwave_provider._node = mock_zwave_node
         mock_device = MagicMock()
         mock_device.id = "device_123"
         zwave_provider._device = mock_device
 
+        # Create mock kmlock without alarm sensors (only notification events)
         mock_kmlock = MagicMock()
+        mock_kmlock.alarm_level_or_user_code_entity_id = None
+        mock_kmlock.alarm_type_or_access_control_entity_id = None
         mock_callback = AsyncMock()
 
         unsub = zwave_provider.subscribe_lock_events(mock_kmlock, mock_callback)
 
         assert unsub is not None
         zwave_provider.hass.bus.async_listen.assert_called_once()
+        # Only notification event listener when no alarm sensors configured
         assert len(zwave_provider._listeners) == 1
+
+    def test_subscribe_lock_events_with_alarm_sensors(self, zwave_provider, mock_zwave_node):
+        """Test subscribe_lock_events also subscribes to state changes when alarm sensors are configured."""
+        zwave_provider._node = mock_zwave_node
+        mock_device = MagicMock()
+        mock_device.id = "device_123"
+        zwave_provider._device = mock_device
+
+        # Create mock kmlock WITH alarm sensors
+        mock_kmlock = MagicMock()
+        mock_kmlock.lock_entity_id = "lock.test_lock"
+        mock_kmlock.alarm_level_or_user_code_entity_id = "sensor.test_alarm_level"
+        mock_kmlock.alarm_type_or_access_control_entity_id = "sensor.test_alarm_type"
+        mock_callback = AsyncMock()
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event"
+        ) as mock_track:
+            mock_track.return_value = MagicMock()
+            unsub = zwave_provider.subscribe_lock_events(mock_kmlock, mock_callback)
+
+        assert unsub is not None
+        zwave_provider.hass.bus.async_listen.assert_called_once()
+        mock_track.assert_called_once()
+        # Both notification event and state change listeners
+        assert len(zwave_provider._listeners) == 2
 
 
 class TestZWaveJSLockProviderDiagnostics:

@@ -217,18 +217,14 @@ def subscribe_connection_events(
 Add the provider to the registry in `providers/__init__.py`:
 
 ```python
-def _register_providers() -> None:
-    """Register all available providers."""
-    global PROVIDER_MAP
+# Add import at the top with other provider imports
+from .zha import ZHALockProvider
 
-    if PROVIDER_MAP:
-        return
-
-    from .zwave_js import ZWaveJSLockProvider
-    from .zha import ZHALockProvider  # Add import
-
-    PROVIDER_MAP["zwave_js"] = ZWaveJSLockProvider
-    PROVIDER_MAP["zha"] = ZHALockProvider  # Add registration
+# Add to PROVIDER_MAP (module-level dict)
+PROVIDER_MAP: dict[str, type[BaseLockProvider]] = {
+    "zwave_js": ZWaveJSLockProvider,
+    "zha": ZHALockProvider,  # Add your provider here
+}
 ```
 
 ### Step 5: Update Dependencies (if needed)

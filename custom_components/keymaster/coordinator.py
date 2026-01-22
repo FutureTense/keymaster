@@ -25,18 +25,14 @@ from homeassistant.const import (
     STATE_OFF,
     STATE_ON,
     STATE_OPEN,
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
 )
 from homeassistant.core import CoreState, Event, EventStateChangedData, HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.util import dt as dt_util, slugify
+from homeassistant.util import slugify
 
 from .const import (
-    ACCESS_CONTROL,
-    ALARM_TYPE,
     ATTR_ACTION_CODE,
     ATTR_ACTION_TEXT,
     ATTR_CODE_SLOT,
@@ -47,13 +43,10 @@ from .const import (
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
-    LOCK_ACTIVITY_MAP,
-    LOCK_STATE_MAP,
     QUICK_REFRESH_SECONDS,
     SYNC_STATUS_THRESHOLD,
     THROTTLE_SECONDS,
     VERSION,
-    LockMethod,
     Synced,
 )
 from .exceptions import ProviderNotConfiguredError
@@ -468,128 +461,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 new_state,
             )
 
-    async def _handle_lock_state_change(
-        self,
-        kmlock: KeymasterLock,
-        event: Event[EventStateChangedData],
-    ) -> None:
-        """Track state changes to lock entities."""
-        _LOGGER.debug("[handle_lock_state_change] %s: event: %s", kmlock.lock_name, event)
-        if not event:
-            return
-
-        changed_entity: str = event.data["entity_id"]
-
-        # Don't do anything if the changed entity is not this lock
-        if changed_entity != kmlock.lock_entity_id:
-            return
-
-        old_state: str | None = None
-        if temp_old_state := event.data.get("old_state"):
-            old_state = temp_old_state.state
-        new_state: str | None = None
-        if temp_new_state := event.data.get("new_state"):
-            new_state = temp_new_state.state
-
-        # Determine action type to set appropriate action text using ACTION_MAP
-        action_type: str = ""
-        if kmlock.alarm_type_or_access_control_entity_id and (
-            ALARM_TYPE in kmlock.alarm_type_or_access_control_entity_id
-            or ALARM_TYPE.replace("_", "") in kmlock.alarm_type_or_access_control_entity_id
-        ):
-            action_type = ALARM_TYPE
-        elif kmlock.alarm_type_or_access_control_entity_id and (
-            ACCESS_CONTROL in kmlock.alarm_type_or_access_control_entity_id
-            or ACCESS_CONTROL.replace("_", "") in kmlock.alarm_type_or_access_control_entity_id
-        ):
-            action_type = ACCESS_CONTROL
-
-        # Get alarm_level/usercode and alarm_type/access_control states
-        alarm_level_state = None
-        if kmlock.alarm_level_or_user_code_entity_id:
-            alarm_level_state = self.hass.states.get(kmlock.alarm_level_or_user_code_entity_id)
-        alarm_level_value: int | None = (
-            int(alarm_level_state.state)
-            if alarm_level_state
-            and alarm_level_state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}
-            else None
-        )
-        alarm_type_state = None
-        if kmlock.alarm_type_or_access_control_entity_id:
-            alarm_type_state = self.hass.states.get(kmlock.alarm_type_or_access_control_entity_id)
-        alarm_type_value: int | None = (
-            int(alarm_type_state.state)
-            if alarm_type_state and alarm_type_state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}
-            else None
-        )
-
-        _LOGGER.debug(
-            "[handle_lock_state_change] %s: action_type: %s, alarm_level_value: %s, alarm_type_value: %s",
-            kmlock.lock_name,
-            action_type,
-            alarm_level_value,
-            alarm_type_value,
-        )
-
-        # Bail out if we can't use the sensors to provide a meaningful message
-        if alarm_level_value is None or alarm_type_value is None:
-            return
-
-        # If lock has changed state but alarm_type/access_control state hasn't changed
-        # in a while set action_value to RF lock/unlock
-        if (
-            alarm_level_state is not None
-            and alarm_type_state is not None
-            and new_state
-            and int(alarm_level_state.state) == 0
-            and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
-            > timedelta(seconds=5)
-            and action_type in LOCK_STATE_MAP
-        ):
-            alarm_type_value = LOCK_STATE_MAP[action_type][new_state]
-
-        action: MutableMapping[str, Any] | None = None
-        for activity in LOCK_ACTIVITY_MAP:
-            if activity.get(action_type) == alarm_type_value:
-                action = activity
-                break
-        if action:
-            event_label = action.get("name", "Unknown Lock Event")
-            if action.get("method") != LockMethod.KEYPAD:
-                alarm_level_value = 0
-        else:
-            event_label = "Unknown Lock Event"
-
-        _LOGGER.debug(
-            "[handle_lock_state_change] %s: old_state: %s, new_state: %s",
-            kmlock.lock_name,
-            old_state,
-            new_state,
-        )
-        if old_state not in {LockState.LOCKED, LockState.UNLOCKED}:
-            _LOGGER.debug("[handle_lock_state_change] %s: Ignoring state change", kmlock.lock_name)
-        elif new_state == LockState.UNLOCKED:
-            await self._lock_unlocked(
-                kmlock=kmlock,
-                code_slot_num=alarm_level_value,  # TODO: Test this out more, not sure this is correct
-                source="entity_state",
-                event_label=event_label,
-                action_code=alarm_type_value,
-            )
-        elif new_state == LockState.LOCKED:
-            await self._lock_locked(
-                kmlock=kmlock,
-                source="entity_state",
-                event_label=event_label,
-                action_code=alarm_type_value,
-            )
-        else:
-            _LOGGER.debug(
-                "[handle_lock_state_change] %s: Unknown lock state: %s",
-                kmlock.lock_name,
-                new_state,
-            )
-
     async def _handle_door_state_change(
         self,
         kmlock: KeymasterLock,
@@ -661,25 +532,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     hass=self.hass,
                     entity_ids=kmlock.door_sensor_entity_id,
                     action=functools.partial(self._handle_door_state_change, kmlock),
-                )
-            )
-
-        # Check if we need to check alarm type/alarm level sensors, in which case
-        # we need to listen for lock state changes
-        if (
-            kmlock.alarm_level_or_user_code_entity_id is not None
-            and kmlock.alarm_type_or_access_control_entity_id is not None
-        ):
-            # Listen to lock state changes so we can fire an event
-            _LOGGER.debug(
-                "[create_listeners] %s: Creating handle_lock_state_change listener",
-                kmlock.lock_name,
-            )
-            kmlock.listeners.append(
-                async_track_state_change_event(
-                    hass=self.hass,
-                    entity_ids=kmlock.lock_entity_id,
-                    action=functools.partial(self._handle_lock_state_change, kmlock),
                 )
             )
 
@@ -1595,6 +1447,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             kmlock.lock_name,
             kmlock.provider.domain,
         )
+
+        # Re-register event listeners now that provider is connected
+        # This is necessary for locks restored from JSON where _update_listeners
+        # was called before the provider existed
+        if kmlock.provider.supports_push_updates:
+            await self._update_listeners(kmlock)
+
         return True
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -1704,8 +1563,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not kmlock.code_slots or code_slot_num not in kmlock.code_slots:
             return
 
-        # If in_use is not set, try to refresh from lock via provider
-        if not in_use and usercode is None and kmlock.provider:
+        # Refresh from lock if slot claims to have a code but we don't have the value
+        # (e.g., masked responses where in_use=True but code is None or non-numeric)
+        if in_use and (usercode is None or not usercode.isdigit()) and kmlock.provider:
             refreshed = await kmlock.provider.async_refresh_usercode(code_slot_num)
             if refreshed:
                 usercode = refreshed.code

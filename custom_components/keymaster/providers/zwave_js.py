@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
+from datetime import timedelta
 import functools
 import logging
 from typing import TYPE_CHECKING, Any
@@ -26,19 +27,256 @@ from zwave_js_server.util.lock import (
 )
 from zwave_js_server.util.node import dump_node_state
 
-from custom_components.keymaster.const import ATTR_NODE_ID, LOCK_ACTIVITY_MAP, LockMethod
+from custom_components.keymaster.const import ATTR_NODE_ID, LockMethod
+from homeassistant.components.lock import LockState
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 from homeassistant.components.zwave_js.const import ATTR_PARAMETERS, DOMAIN as ZWAVE_JS_DOMAIN
-from homeassistant.const import ATTR_DEVICE_ID
-from homeassistant.core import Event
+from homeassistant.const import ATTR_DEVICE_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import Event, EventStateChangedData
 from homeassistant.helpers.device_registry import DeviceEntry
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.util import dt as dt_util
 
-from ._base import BaseLockProvider, CodeSlot, LockEventCallback
+from ._base import BaseLockProvider, CodeSlot, LockActivity, LockEventCallback
+from .const import ACCESS_CONTROL, ALARM_TYPE, UNKNOWN
 
 if TYPE_CHECKING:
     from custom_components.keymaster.lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
+
+# Z-Wave specific activity map for translating sensor events to lock activities
+# Maps alarm_type (Kwikset), access_control (Schlage), and zwavejs_event values
+ZWAVE_ACTIVITY_MAP: list[MutableMapping[str, Any]] = [
+    {
+        "name": "Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": UNKNOWN,
+        "alarm_type": 9,
+        "access_control": 11,
+        "zwavejs_event": 11,
+    },
+    {
+        "name": "Keypad Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 17,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "Manual Lock",
+        "action": LockState.LOCKED,
+        "method": LockMethod.MANUAL,
+        "alarm_type": 21,
+        "access_control": 1,
+        "zwavejs_event": 1,
+    },
+    {
+        "name": "Manual Unlock",
+        "action": LockState.UNLOCKED,
+        "method": LockMethod.MANUAL,
+        "alarm_type": 22,
+        "access_control": 2,
+        "zwavejs_event": 2,
+    },
+    {
+        "name": "RF Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": LockMethod.RF,
+        "alarm_type": 23,
+        "access_control": 8,
+        "zwavejs_event": 8,
+    },
+    {
+        "name": "RF Lock",
+        "action": LockState.LOCKED,
+        "method": LockMethod.RF,
+        "alarm_type": 24,
+        "access_control": 3,
+        "zwavejs_event": 3,
+    },
+    {
+        "name": "RF Unlock",
+        "action": LockState.UNLOCKED,
+        "method": LockMethod.RF,
+        "alarm_type": 25,
+        "access_control": 4,
+        "zwavejs_event": 4,
+    },
+    {
+        "name": "Auto Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": LockMethod.AUTO,
+        "alarm_type": 26,
+        "access_control": 10,
+        "zwavejs_event": 10,
+    },
+    {
+        "name": "Auto Lock",
+        "action": LockState.LOCKED,
+        "method": LockMethod.AUTO,
+        "alarm_type": 27,
+        "access_control": 9,
+        "zwavejs_event": 9,
+    },
+    {
+        "name": "All User Codes Deleted",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 32,
+        "access_control": 12,
+        "zwavejs_event": 12,
+    },
+    {
+        "name": "Bad Code Entered",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 161,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "Battery Low",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 167,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "Battery Critical",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 168,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "Battery Too Low To Operate Lock",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 169,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "Keypad Action",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 16,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "Keypad Lock",
+        "action": LockState.LOCKED,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 18,
+        "access_control": 5,
+        "zwavejs_event": 5,
+    },
+    {
+        "name": "Keypad Unlock",
+        "action": LockState.UNLOCKED,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 19,
+        "access_control": 6,
+        "zwavejs_event": 6,
+    },
+    {
+        "name": "User Code Attempt Outside of Schedule",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 162,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "User Code Deleted",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 33,
+        "access_control": 13,
+        "zwavejs_event": 13,
+    },
+    {
+        "name": "User Code Changed",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 112,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "Duplicate User Code",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": 113,
+        "access_control": 15,
+        "zwavejs_event": 15,
+    },
+    {
+        "name": "No Status Reported",
+        "action": UNKNOWN,
+        "method": UNKNOWN,
+        "alarm_type": 0,
+        "access_control": UNKNOWN,
+        "zwavejs_event": UNKNOWN,
+    },
+    {
+        "name": "Manual Lock Jammed",
+        "action": LockState.JAMMED,
+        "method": LockMethod.MANUAL,
+        "alarm_type": UNKNOWN,
+        "access_control": 7,
+        "zwavejs_event": 7,
+    },
+    {
+        "name": "Keypad Temporarily Disabled",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 16,
+        "zwavejs_event": 16,
+    },
+    {
+        "name": "Keypad Busy",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 17,
+        "zwavejs_event": 17,
+    },
+    {
+        "name": "New User Code Added",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 14,
+        "zwavejs_event": 14,
+    },
+    {
+        "name": "New Program Code Entered",
+        "action": UNKNOWN,
+        "method": LockMethod.KEYPAD,
+        "alarm_type": UNKNOWN,
+        "access_control": 18,
+        "zwavejs_event": 18,
+    },
+]
+
+# Map lock state to expected sensor values (for fallback when sensor is stale)
+ZWAVE_STATE_MAP: MutableMapping[str, MutableMapping[str, int]] = {
+    ALARM_TYPE: {
+        LockState.LOCKED: 24,
+        LockState.UNLOCKED: 25,
+    },
+    ACCESS_CONTROL: {
+        LockState.LOCKED: 3,
+        LockState.UNLOCKED: 4,
+    },
+}
 
 
 @dataclass
@@ -322,12 +560,75 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         return True
 
+    def get_activity_for_sensor_event(
+        self,
+        sensor_entity_id: str | None,
+        sensor_value: int,
+        lock_state: str | None = None,
+    ) -> LockActivity | None:
+        """Translate a Z-Wave sensor event to a LockActivity.
+
+        This is a Z-Wave specific opt-in method not defined in BaseLockProvider.
+        It translates alarm_type (Kwikset) or access_control (Schlage) sensor
+        values to platform-agnostic LockActivity objects. The coordinator checks
+        for this method's existence before calling it.
+
+        Args:
+            sensor_entity_id: Entity ID of alarm_type or access_control sensor
+            sensor_value: The numeric value from the sensor
+            lock_state: Current lock state (for fallback when sensor is stale)
+
+        Returns:
+            LockActivity if recognized, None otherwise.
+
+        """
+        # Determine sensor type from entity ID
+        action_type: str | None = None
+        if sensor_entity_id:
+            entity_id_lower = sensor_entity_id.lower()
+            if "alarm_type" in entity_id_lower or "alarmtype" in entity_id_lower:
+                action_type = ALARM_TYPE
+            elif "access_control" in entity_id_lower or "accesscontrol" in entity_id_lower:
+                action_type = ACCESS_CONTROL
+
+        if not action_type:
+            return None
+
+        # Handle stale sensor: if lock_state provided and sensor hasn't updated,
+        # infer the expected sensor value from lock state
+        effective_value = sensor_value
+        if lock_state and action_type in ZWAVE_STATE_MAP:
+            state_map = ZWAVE_STATE_MAP[action_type]
+            if lock_state in state_map:
+                # Use the inferred value if sensor seems stale
+                effective_value = state_map[lock_state]
+
+        # Look up activity by sensor type and value
+        for activity in ZWAVE_ACTIVITY_MAP:
+            if activity.get(action_type) == effective_value:
+                return LockActivity(
+                    name=activity.get("name", "Unknown Lock Event"),
+                    action=activity.get("action", UNKNOWN),
+                    method=activity.get("method"),
+                )
+
+        return None
+
     def subscribe_lock_events(
         self, kmlock: KeymasterLock, callback: LockEventCallback
     ) -> Callable[[], None]:
-        """Subscribe to Z-Wave JS notification events for lock/unlock."""
+        """Subscribe to Z-Wave JS lock events.
 
-        async def handle_zwave_event(event: Event) -> None:
+        This subscribes to two event sources:
+        1. Z-Wave JS notification events (direct from the Z-Wave network)
+        2. Lock entity state changes with alarm sensor correlation (fallback for
+           locks that don't fire notification events reliably)
+
+        Both mechanisms will call the callback with event details.
+        """
+        unsub_list: list[Callable[[], None]] = []
+
+        async def handle_zwave_notification_event(event: Event) -> None:
             """Handle Z-Wave JS notification event."""
             if not self._node or not self._device:
                 return
@@ -343,14 +644,13 @@ class ZWaveJSLockProvider(BaseLockProvider):
             code_slot_num: int = params.get("userId", 0)
 
             # Parse lock activity from event
-            event_label = "Unknown Lock Event"
             if (
                 event.data.get("command_class") == 113
                 and event.data.get("type") == 6
                 and event.data.get("event")
             ):
                 action: MutableMapping[str, Any] | None = None
-                for activity in LOCK_ACTIVITY_MAP:
+                for activity in ZWAVE_ACTIVITY_MAP:
                     if activity.get("zwavejs_event") == event.data.get("event"):
                         action = activity
                         break
@@ -366,13 +666,110 @@ class ZWaveJSLockProvider(BaseLockProvider):
             action_code = event.data.get("event")
             self.hass.async_create_task(callback(code_slot_num, event_label, action_code))
 
+        async def handle_lock_state_change(event: Event[EventStateChangedData]) -> None:
+            """Handle lock entity state change with alarm sensor correlation.
+
+            This is a fallback mechanism for Z-Wave locks that have alarm_type or
+            access_control sensors but don't reliably fire notification events.
+            """
+            if not event:
+                return
+
+            changed_entity: str = event.data["entity_id"]
+            if changed_entity != kmlock.lock_entity_id:
+                return
+
+            old_state: str | None = None
+            if temp_old_state := event.data.get("old_state"):
+                old_state = temp_old_state.state
+            new_state: str | None = None
+            if temp_new_state := event.data.get("new_state"):
+                new_state = temp_new_state.state
+
+            # Only process transitions from locked/unlocked states
+            if old_state not in {LockState.LOCKED, LockState.UNLOCKED}:
+                return
+
+            # Get alarm sensor states
+            alarm_level_state = None
+            if kmlock.alarm_level_or_user_code_entity_id:
+                alarm_level_state = self.hass.states.get(kmlock.alarm_level_or_user_code_entity_id)
+            alarm_level_value: int | None = (
+                int(alarm_level_state.state)
+                if alarm_level_state
+                and alarm_level_state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}
+                else None
+            )
+
+            alarm_type_state = None
+            if kmlock.alarm_type_or_access_control_entity_id:
+                alarm_type_state = self.hass.states.get(
+                    kmlock.alarm_type_or_access_control_entity_id
+                )
+            alarm_type_value: int | None = (
+                int(alarm_type_state.state)
+                if alarm_type_state
+                and alarm_type_state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}
+                else None
+            )
+
+            # Bail out if we can't use the sensors
+            if alarm_level_value is None or alarm_type_value is None:
+                return
+
+            # Check if sensor is stale (hasn't changed in >5 seconds)
+            sensor_is_stale = (
+                alarm_level_state is not None
+                and alarm_type_state is not None
+                and new_state
+                and int(alarm_level_state.state) == 0
+                and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
+                > timedelta(seconds=5)
+            )
+
+            # Translate sensor event to activity
+            activity = self.get_activity_for_sensor_event(
+                sensor_entity_id=kmlock.alarm_type_or_access_control_entity_id,
+                sensor_value=alarm_type_value,
+                lock_state=new_state if sensor_is_stale else None,
+            )
+
+            if activity:
+                event_label = activity.name
+                code_slot_num = alarm_level_value if activity.method == LockMethod.KEYPAD else 0
+            else:
+                event_label = "Unknown Lock Event"
+                code_slot_num = 0
+
+            self.hass.async_create_task(callback(code_slot_num, event_label, alarm_type_value))
+
         # Subscribe to Z-Wave JS notification events
-        unsub = self.hass.bus.async_listen(
+        unsub_notification = self.hass.bus.async_listen(
             ZWAVE_JS_NOTIFICATION_EVENT,
-            functools.partial(handle_zwave_event),
+            functools.partial(handle_zwave_notification_event),
         )
-        self._listeners.append(unsub)
-        return unsub
+        unsub_list.append(unsub_notification)
+        self._listeners.append(unsub_notification)
+
+        # Subscribe to lock state changes if alarm sensors are configured
+        if (
+            kmlock.alarm_level_or_user_code_entity_id is not None
+            and kmlock.alarm_type_or_access_control_entity_id is not None
+        ):
+            unsub_state = async_track_state_change_event(
+                hass=self.hass,
+                entity_ids=kmlock.lock_entity_id,
+                action=functools.partial(handle_lock_state_change),
+            )
+            unsub_list.append(unsub_state)
+            self._listeners.append(unsub_state)
+
+        def unsubscribe_all() -> None:
+            """Unsubscribe from all event sources."""
+            for unsub in unsub_list:
+                unsub()
+
+        return unsubscribe_all
 
     def get_node_id(self) -> int | None:
         """Get the Z-Wave node ID."""
