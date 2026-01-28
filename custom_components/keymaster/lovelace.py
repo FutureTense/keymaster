@@ -62,18 +62,12 @@ def generate_section_config(
 
     Returns the section configuration as a dict (for WebSocket/strategy use).
     """
-    if parent_config_entry_id:
-        code_slot_dict: MutableMapping[str, Any] = _generate_child_code_slot_dict(
-            code_slot_num=slot_num,
-            advanced_date_range=advanced_date_range,
-            advanced_day_of_week=advanced_day_of_week,
-        )
-    else:
-        code_slot_dict = _generate_code_slot_dict(
-            code_slot_num=slot_num,
-            advanced_date_range=advanced_date_range,
-            advanced_day_of_week=advanced_day_of_week,
-        )
+    generate_dict_func = _generate_child_code_slot_dict if parent_config_entry_id else _generate_code_slot_dict
+    code_slot_dict: MutableMapping[str, Any] = generate_dict_func(
+        code_slot_num=slot_num,
+        advanced_date_range=advanced_date_range,
+        advanced_day_of_week=advanced_day_of_week,
+    )
 
     mapped_section: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = (
         _map_property_to_entity_id(
@@ -457,6 +451,10 @@ def _generate_code_slot_conditional_entities_card_ll_config(
         ),
         *(_generate_date_range_entities(code_slot_num) if advanced_date_range else ()),
         *(_generate_dow_entities(code_slot_num) if advanced_day_of_week else ()),
+        DIVIDER_CARD,
+        _generate_entity_card_ll_config(
+            code_slot_num, "button", "reset", "Reset Slot"
+        ),
     ]
 
     return {
