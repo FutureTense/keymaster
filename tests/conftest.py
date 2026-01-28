@@ -2,23 +2,111 @@
 
 import asyncio
 import copy
+from dataclasses import dataclass, field
 import json
 import logging
+from pathlib import Path
+import shutil
 from typing import Any
 from unittest.mock import DEFAULT, AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_homeassistant_custom_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.model.version import VersionInfo
 
 from custom_components.keymaster.const import NONE_TEXT
+from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
 from homeassistant.components.zwave_js import PLATFORMS
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from .common import load_fixture
+
+
+@dataclass
+class MockProvider(BaseLockProvider):
+    """Mock provider for testing non-provider-specific functionality.
+
+    This provider can be configured to return specific values for testing.
+    """
+
+    # Configurable test values
+    mock_domain: str = "mock"
+    mock_connect_result: bool = True
+    mock_is_connected: bool = True
+    mock_usercodes: list[CodeSlot] = field(default_factory=list)
+    mock_set_result: bool = True
+    mock_clear_result: bool = True
+
+    # Track method calls for assertions
+    set_usercode_calls: list[tuple[int, str, str | None]] = field(default_factory=list)
+    clear_usercode_calls: list[int] = field(default_factory=list)
+
+    @property
+    def domain(self) -> str:
+        """Return the mock domain."""
+        return self.mock_domain
+
+    async def async_connect(self) -> bool:
+        """Return configured connect result."""
+        self._connected = self.mock_connect_result
+        return self.mock_connect_result
+
+    async def async_is_connected(self) -> bool:
+        """Return configured connection status."""
+        return self.mock_is_connected
+
+    async def async_get_usercodes(self) -> list[CodeSlot]:
+        """Return configured usercodes."""
+        return self.mock_usercodes
+
+    async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
+        """Record call and return configured result."""
+        self.set_usercode_calls.append((slot_num, code, name))
+        return self.mock_set_result
+
+    async def async_clear_usercode(self, slot_num: int) -> bool:
+        """Record call and return configured result."""
+        self.clear_usercode_calls.append(slot_num)
+        return self.mock_clear_result
+
+
+@pytest.fixture
+def mock_provider(hass: HomeAssistant) -> MockProvider:
+    """Create a MockProvider for testing."""
+    # Create minimal mock config entry
+    config_entry = MockConfigEntry(
+        domain="keymaster",
+        data={"lock_entity_id": "lock.test_lock"},
+    )
+    config_entry.add_to_hass(hass)
+
+    return MockProvider(
+        hass=hass,
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry=config_entry,
+        device_registry=dr.async_get(hass),
+        entity_registry=er.async_get(hass),
+    )
+
+
+@pytest.fixture(autouse=True)
+def cleanup_keymaster_json():
+    """Clean up keymaster JSON files before each test to prevent corruption."""
+    # Find the testing_config directory from the installed package
+    testing_config = Path(pytest_homeassistant_custom_component.__file__).parent / "testing_config"
+    json_dir = testing_config / "custom_components" / "keymaster" / "json_kmlocks"
+    if json_dir.exists():
+        shutil.rmtree(json_dir, ignore_errors=True)
+    yield
+    # Also clean up after the test
+    if json_dir.exists():
+        shutil.rmtree(json_dir, ignore_errors=True)
+
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -67,8 +155,12 @@ def side_effect_get_entities(
     extra_entities=None,
     exclude_entities=None,
     sort=True,
+    filter_func=None,
 ):
-    """Side effect for get_entities mock."""
+    """Side effect for get_entities mock.
+
+    Note: filter_func is accepted but ignored since we return pre-filtered mock data.
+    """
     if domain == "lock":
         return [
             "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
@@ -91,58 +183,6 @@ def side_effect_get_entities(
             NONE_TEXT,
         ]
     return []
-
-
-@pytest.fixture
-def mock_listdir():
-    """Fixture to mock listdir."""
-    with patch(
-        "os.listdir",
-        return_value=[
-            "testfile.gif",
-            "anotherfakefile.mp4",
-            "lastfile.txt",
-        ],
-    ):
-        yield
-
-
-@pytest.fixture
-def mock_listdir_err():
-    """Fixture to mock listdir."""
-    with patch(
-        "os.listdir",
-        return_value=[],
-    ):
-        yield
-
-
-@pytest.fixture
-def mock_osremove():
-    """Fixture to mock remove file."""
-    with patch("os.remove", return_value=True) as mock_remove:
-        yield mock_remove
-
-
-@pytest.fixture
-def mock_osrmdir():
-    """Fixture to mock remove directory."""
-    with patch("os.rmdir", return_value=True) as mock_rmdir:
-        yield mock_rmdir
-
-
-@pytest.fixture
-def mock_osmakedir():
-    """Fixture to mock makedirs."""
-    with patch("os.makedirs", return_value=True):
-        yield
-
-
-@pytest.fixture
-def mock_os_path_join():
-    """Fixture to mock path join."""
-    with patch("os.path.join"):
-        yield
 
 
 @pytest.fixture(name="lock_schlage_be469_state", scope="package")
@@ -327,23 +367,6 @@ async def mock_zwavejs_set_usercode():
 
 
 @pytest.fixture
-async def mock_using_zwavejs():
-    """Fixture to mock using_zwavejs in helpers."""
-    with (
-        patch(
-            "custom_components.keymaster.coordinator.async_using_zwave_js",
-            return_value=True,
-        ),
-        patch("custom_components.keymaster.helpers._async_using", return_value=True),
-        patch(
-            "custom_components.keymaster.helpers.async_using_zwave_js",
-            return_value=True,
-        ),
-    ):
-        yield
-
-
-@pytest.fixture
 def mock_async_call_later():
     """Fixture to mock async_call_later to call the callback immediately."""
     with patch("homeassistant.helpers.event.async_call_later") as mock:
@@ -359,7 +382,7 @@ def mock_async_call_later():
 
 @pytest.fixture(name="keymaster_integration")
 async def mock_keymaster_integration(hass, integration):
-    """Fixture to bypass zwavejs checks. Depends on integration fixture for zwave_js."""
+    """Fixture to bypass provider checks. Depends on integration fixture for zwave_js."""
     with (
         patch(
             "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock",
@@ -371,10 +394,6 @@ async def mock_keymaster_integration(hass, integration):
         ),
         patch(
             "custom_components.keymaster.KeymasterCoordinator._sync_child_locks",
-            return_value=True,
-        ),
-        patch(
-            "custom_components.keymaster.binary_sensor.async_using_zwave_js",
             return_value=True,
         ),
     ):

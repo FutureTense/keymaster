@@ -25,6 +25,7 @@ def test_type_lookup_consistency():
         "zwave_js_lock_device",
         "autolock_timer",
         "lock_config_entry_id",  # Often set dynamically or handled separately
+        "provider",  # Provider instance, not serializable
     }
 
     # Verify that significant fields are present in the lookup map.

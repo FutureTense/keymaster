@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
-from homeassistant.components.zwave_js.const import DOMAIN as ZWAVE_JS_DOMAIN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers import entity_registry as er, sun
@@ -18,11 +17,11 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import slugify
 
 from .const import DEFAULT_AUTOLOCK_MIN_DAY, DEFAULT_AUTOLOCK_MIN_NIGHT, DOMAIN
+from .providers import is_platform_supported
 
 if TYPE_CHECKING:
     from .lock import KeymasterLock
 
-ZWAVE_JS_SUPPORTED = True
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
@@ -160,40 +159,27 @@ class KeymasterTimer:
 
 
 @callback
-def _async_using(
-    hass: HomeAssistant,
-    domain: str,
-    kmlock: KeymasterLock | None,
-    entity_id: str | None,
-) -> bool:
-    """Evaluate if device is using specified integration logic."""
-    if not (kmlock or entity_id):
-        raise TypeError("Missing arguments")
-    ent_reg = er.async_get(hass)
-    if kmlock and kmlock.lock_entity_id:
-        entity = ent_reg.async_get(kmlock.lock_entity_id)
-    elif entity_id:
-        entity = ent_reg.async_get(entity_id)
-    else:
-        return False
-    if not entity:
-        return False
-    return bool(entity) and bool(entity.platform == domain)
-
-
-@callback
-def async_using_zwave_js(
+def async_has_supported_provider(
     hass: HomeAssistant,
     kmlock: KeymasterLock | None = None,
     entity_id: str | None = None,
 ) -> bool:
-    """Return whether the zwave_js integration is configured."""
-    return ZWAVE_JS_SUPPORTED and _async_using(
-        hass=hass,
-        domain=ZWAVE_JS_DOMAIN,
-        kmlock=kmlock,
-        entity_id=entity_id,
-    )
+    """Return whether the lock has a supported provider.
+
+    Args:
+        hass: Home Assistant instance
+        kmlock: KeymasterLock instance (optional)
+        entity_id: Lock entity ID (optional)
+
+    Returns:
+        True if the lock platform has a supported provider.
+
+    """
+    if kmlock and kmlock.lock_entity_id:
+        return is_platform_supported(hass, kmlock.lock_entity_id)
+    if entity_id:
+        return is_platform_supported(hass, entity_id)
+    return False
 
 
 async def delete_code_slot_entities(

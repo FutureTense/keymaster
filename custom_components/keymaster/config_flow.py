@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import Callable, MutableMapping
 import logging
 from typing import Any
 
@@ -39,6 +39,7 @@ from .const import (
     NONE_TEXT,
 )
 from .coordinator import KeymasterCoordinator
+from .providers import is_platform_supported
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -155,13 +156,31 @@ def _get_entities(
     extra_entities: list[str] | None = None,
     exclude_entities: list[str] | None = None,
     sort: bool = True,
+    filter_func: Callable[[HomeAssistant, str], bool] | None = None,
 ) -> list[str]:
+    """Get entities from a domain with optional filtering.
+
+    Args:
+        hass: Home Assistant instance
+        domain: Entity domain (e.g., "lock", "sensor")
+        search: Only include entities whose ID contains one of these strings
+        extra_entities: Additional entity IDs to append to results
+        exclude_entities: Entity IDs to remove from results
+        sort: Whether to sort the results alphabetically
+        filter_func: Optional callback(hass, entity_id) -> bool to filter entities.
+            Entity is included only if filter_func returns True.
+
+    """
     data: list[str] = []
     if domain not in hass.data:
         return extra_entities or []
 
     for entity in hass.data[domain].entities:
+        # Skip if search terms provided and entity ID doesn't contain any of them
         if search is not None and not any(map(entity.entity_id.__contains__, search)):
+            continue
+        # Skip if filter function provided and it returns False for this entity
+        if filter_func is not None and not filter_func(hass, entity.entity_id):
             continue
         data.append(entity.entity_id)
 
@@ -220,6 +239,7 @@ def _get_schema(
         hass=hass,
         domain=LOCK_DOMAIN,
         exclude_entities=_get_locks_in_use(hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)),
+        filter_func=is_platform_supported,
     )
     if not lock_entities:
         if flow is not None:

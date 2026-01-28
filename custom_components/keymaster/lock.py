@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
 from datetime import datetime as dt, time as dt_time
-
-from zwave_js_server.model.node import Node as ZwaveJSNode
-
-from homeassistant.helpers.device_registry import DeviceEntry
+from typing import TYPE_CHECKING
 
 from .const import Synced
 from .helpers import KeymasterTimer
+
+if TYPE_CHECKING:
+    from .providers import BaseLockProvider
 
 
 @dataclass
@@ -60,8 +60,8 @@ class KeymasterLock:
     alarm_type_or_access_control_entity_id: str | None = None
     door_sensor_entity_id: str | None = None
     connected: bool = False
-    zwave_js_lock_node: ZwaveJSNode | None = None
-    zwave_js_lock_device: DeviceEntry | None = None
+    # Provider abstraction
+    provider: BaseLockProvider | None = None
     number_of_code_slots: int | None = None
     starting_code_slot: int = 1
     code_slots: MutableMapping[int, KeymasterCodeSlot] | None = None
@@ -92,8 +92,6 @@ keymasterlock_type_lookup: MutableMapping[str, type] = {
     "alarm_type_or_access_control_entity_id": str,
     "door_sensor_entity_id": str,
     "connected": bool,
-    # "zwave_js_lock_node": ZwaveJSNode,
-    # "zwave_js_lock_device": DeviceEntry,
     "number_of_code_slots": int,
     "starting_code_slot": int,
     "code_slots": MutableMapping[int, KeymasterCodeSlot],
