@@ -134,7 +134,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self._migrate_legacy_json, legacy_json_file, legacy_json_folder
             )
             # Save valid data to new Store
-            if config:
+            if config is not None:
                 await self._async_save_data(config)
             return config
 
@@ -221,6 +221,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             lock.pop("zwave_js_lock_node", None)
             lock.pop("autolock_timer", None)
             lock.pop("listeners", None)
+            lock.pop("provider", None)
             for kmslot in lock.get("code_slots", {}).values():
                 if isinstance(kmslot.get("pin", None), str):
                     kmslot["pin"] = KeymasterCoordinator._encode_pin(
