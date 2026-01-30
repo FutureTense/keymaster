@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime as dt, time as dt_time, timedelta
+import json
 import random
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -1655,3 +1656,306 @@ class TestKmlocksToDict:
         assert isinstance(result, dict)
         assert result["slots"][1]["name"] == "slot1"
         assert result["slots"][2]["name"] == "slot2"
+
+
+class TestStorageAndMigration:
+    """Test cases for Home Assistant Store persistence and legacy JSON migration."""
+
+    @pytest.fixture
+    def coordinator_for_storage(self, mock_hass):
+        """Create coordinator with mocked storage for testing."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coord = KeymasterCoordinator(mock_hass)
+            coord.hass = mock_hass
+            coord.kmlocks = {}
+            coord._prev_kmlocks_dict = {}
+            coord._store = AsyncMock()
+            return coord
+
+    @pytest.fixture
+    def sample_lock_dict(self):
+        """Return a sample lock dictionary for testing."""
+        return {
+            "entry1": {
+                "lock_name": "Front Door",
+                "lock_entity_id": "lock.front_door",
+                "keymaster_config_entry_id": "entry1",
+                "parent_config_entry_id": None,
+                "parent_name": None,
+                "child_config_entry_ids": [],
+                "alarm_type_or_access_control_sensor": None,
+                "alarm_level_or_user_code_sensor": None,
+                "door_sensor_entity_id": None,
+                "code_slots": {
+                    "1": {
+                        "number": 1,
+                        "name": "User 1",
+                        "enabled": True,
+                        "pin": "1234",
+                    }
+                },
+            }
+        }
+
+    # Tests for _async_load_data
+
+    @pytest.mark.asyncio
+    async def test_load_data_from_empty_store(self, coordinator_for_storage):
+        """Test loading data when Store is empty returns empty dict."""
+        coordinator_for_storage._store.async_load = AsyncMock(return_value=None)
+        coordinator_for_storage.hass.config.path = Mock(
+            return_value="/fake/path/custom_components/keymaster/json_kmlocks"
+        )
+
+        with patch("pathlib.Path.exists", return_value=False):
+            result = await coordinator_for_storage._async_load_data()
+
+        assert result == {}
+        coordinator_for_storage._store.async_load.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_load_data_from_store_with_data(self, coordinator_for_storage, sample_lock_dict):
+        """Test loading data from Store with existing data."""
+        coordinator_for_storage._store.async_load = AsyncMock(return_value=sample_lock_dict)
+        coordinator_for_storage.hass.config.path = Mock(
+            return_value="/fake/path/custom_components/keymaster/json_kmlocks"
+        )
+
+        with patch("pathlib.Path.exists", return_value=False):
+            result = await coordinator_for_storage._async_load_data()
+
+        assert "entry1" in result
+        assert isinstance(result["entry1"], KeymasterLock)
+        assert result["entry1"].lock_name == "Front Door"
+
+    # Tests for _async_save_data
+
+    @pytest.mark.asyncio
+    async def test_save_data_skips_when_unchanged(self, coordinator_for_storage):
+        """Test that save is skipped when data hasn't changed."""
+        coordinator_for_storage._prev_kmlocks_dict = {}
+        coordinator_for_storage.kmlocks = {}
+
+        await coordinator_for_storage._async_save_data()
+
+        coordinator_for_storage._store.async_save.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_save_data_saves_when_changed(self, coordinator_for_storage):
+        """Test that data is saved when it has changed."""
+        coordinator_for_storage._prev_kmlocks_dict = {}
+        lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry1",
+            code_slots={},
+        )
+        coordinator_for_storage.kmlocks = {"entry1": lock}
+
+        await coordinator_for_storage._async_save_data()
+
+        coordinator_for_storage._store.async_save.assert_called_once()
+        saved_data = coordinator_for_storage._store.async_save.call_args[0][0]
+        assert "entry1" in saved_data
+        assert saved_data["entry1"]["lock_name"] == "Test Lock"
+
+    @pytest.mark.asyncio
+    async def test_save_data_excludes_non_serializable_fields(self, coordinator_for_storage):
+        """Test that non-serializable fields are excluded from saved data."""
+        coordinator_for_storage._prev_kmlocks_dict = {}
+        lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry1",
+            code_slots={},
+            autolock_timer=Mock(),  # Non-serializable
+            listeners=[Mock()],  # Non-serializable
+            provider=Mock(),  # Non-serializable
+        )
+        coordinator_for_storage.kmlocks = {"entry1": lock}
+
+        await coordinator_for_storage._async_save_data()
+
+        saved_data = coordinator_for_storage._store.async_save.call_args[0][0]
+        assert "autolock_timer" not in saved_data["entry1"]
+        assert "listeners" not in saved_data["entry1"]
+        assert "provider" not in saved_data["entry1"]
+
+    @pytest.mark.asyncio
+    async def test_save_data_encodes_pins(self, coordinator_for_storage):
+        """Test that PINs are encoded before saving."""
+        coordinator_for_storage._prev_kmlocks_dict = {}
+        lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry1",
+            code_slots={
+                1: KeymasterCodeSlot(number=1, pin="1234"),
+            },
+        )
+        coordinator_for_storage.kmlocks = {"entry1": lock}
+
+        await coordinator_for_storage._async_save_data()
+
+        saved_data = coordinator_for_storage._store.async_save.call_args[0][0]
+        saved_pin = saved_data["entry1"]["code_slots"][1]["pin"]
+        # PIN should be encoded (base64), not plain text
+        assert saved_pin != "1234"
+        assert saved_pin is not None
+
+    # Tests for async_remove_data
+
+    @pytest.mark.asyncio
+    async def test_remove_data(self, coordinator_for_storage):
+        """Test removing stored data."""
+        await coordinator_for_storage.async_remove_data()
+
+        coordinator_for_storage._store.async_remove.assert_called_once()
+
+    # Tests for _migrate_legacy_json
+
+    def test_migrate_legacy_json_success(self, coordinator_for_storage, sample_lock_dict, tmp_path):
+        """Test successful migration of legacy JSON file."""
+        # Create a temporary JSON file
+        json_folder = tmp_path / "json_kmlocks"
+        json_folder.mkdir()
+        json_file = json_folder / "keymaster_kmlocks.json"
+
+        with json_file.open("w") as f:
+            json.dump(sample_lock_dict, f)
+
+        result = coordinator_for_storage._migrate_legacy_json(json_file, str(json_folder))
+
+        # File should be deleted
+        assert not json_file.exists()
+        # Folder should be deleted (it's empty)
+        assert not json_folder.exists()
+        # Data should be returned
+        assert "entry1" in result
+        assert isinstance(result["entry1"], KeymasterLock)
+
+    def test_migrate_legacy_json_empty_file(self, coordinator_for_storage, tmp_path):
+        """Test migration of empty legacy JSON file."""
+        json_folder = tmp_path / "json_kmlocks"
+        json_folder.mkdir()
+        json_file = json_folder / "keymaster_kmlocks.json"
+
+        with json_file.open("w") as f:
+            json.dump({}, f)
+
+        result = coordinator_for_storage._migrate_legacy_json(json_file, str(json_folder))
+
+        # File should be deleted
+        assert not json_file.exists()
+        # Empty dict is valid result
+        assert result == {}
+
+    def test_migrate_legacy_json_invalid_json(self, coordinator_for_storage, tmp_path):
+        """Test migration handles invalid JSON gracefully."""
+        json_folder = tmp_path / "json_kmlocks"
+        json_folder.mkdir()
+        json_file = json_folder / "keymaster_kmlocks.json"
+
+        with json_file.open("w") as f:
+            f.write("not valid json {{{")
+
+        result = coordinator_for_storage._migrate_legacy_json(json_file, str(json_folder))
+
+        # File should still be deleted
+        assert not json_file.exists()
+        # Empty dict returned on error
+        assert result == {}
+
+    def test_migrate_legacy_json_folder_not_deleted_if_not_empty(
+        self, coordinator_for_storage, tmp_path
+    ):
+        """Test that folder is not deleted if it contains other files."""
+        json_folder = tmp_path / "json_kmlocks"
+        json_folder.mkdir()
+        json_file = json_folder / "keymaster_kmlocks.json"
+        other_file = json_folder / "other_file.txt"
+
+        with json_file.open("w") as f:
+            json.dump({}, f)
+        other_file.write_text("some content")
+
+        coordinator_for_storage._migrate_legacy_json(json_file, str(json_folder))
+
+        # JSON file should be deleted
+        assert not json_file.exists()
+        # Folder should NOT be deleted (has other files)
+        assert json_folder.exists()
+        assert other_file.exists()
+
+    # Tests for _process_loaded_data
+
+    def test_process_loaded_data_decodes_pins(self, coordinator_for_storage):
+        """Test that encoded PINs are decoded when loading."""
+        # Encode a PIN the same way _async_save_data would
+        encoded_pin = KeymasterCoordinator._encode_pin("1234", "entry1")
+
+        config = {
+            "entry1": {
+                "lock_name": "Test Lock",
+                "lock_entity_id": "lock.test",
+                "keymaster_config_entry_id": "entry1",
+                "code_slots": {
+                    "1": {
+                        "number": 1,
+                        "pin": encoded_pin,
+                    }
+                },
+            }
+        }
+
+        result = coordinator_for_storage._process_loaded_data(config)
+
+        assert result["entry1"].code_slots[1].pin == "1234"
+
+    def test_process_loaded_data_adds_runtime_fields(self, coordinator_for_storage):
+        """Test that runtime fields are initialized when loading."""
+        config = {
+            "entry1": {
+                "lock_name": "Test Lock",
+                "lock_entity_id": "lock.test",
+                "keymaster_config_entry_id": "entry1",
+                "code_slots": {},
+            }
+        }
+
+        result = coordinator_for_storage._process_loaded_data(config)
+
+        assert result["entry1"].autolock_timer is None
+        assert result["entry1"].listeners == []
+
+    # Integration test: save and reload cycle
+
+    @pytest.mark.asyncio
+    async def test_save_and_reload_cycle(self, coordinator_for_storage):
+        """Test that data survives a save/reload cycle correctly."""
+        # Create a lock with a PIN
+        original_lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry1",
+            code_slots={
+                1: KeymasterCodeSlot(number=1, name="User 1", pin="5678", enabled=True),
+            },
+        )
+        coordinator_for_storage.kmlocks = {"entry1": original_lock}
+        coordinator_for_storage._prev_kmlocks_dict = {}
+
+        # Save the data
+        await coordinator_for_storage._async_save_data()
+
+        # Get what was saved
+        saved_data = coordinator_for_storage._store.async_save.call_args[0][0]
+
+        # Simulate reload by processing the saved data
+        reloaded = coordinator_for_storage._process_loaded_data(saved_data)
+
+        # Verify the data matches
+        assert reloaded["entry1"].lock_name == "Test Lock"
+        assert reloaded["entry1"].code_slots[1].name == "User 1"
+        assert reloaded["entry1"].code_slots[1].pin == "5678"
+        assert reloaded["entry1"].code_slots[1].enabled is True
