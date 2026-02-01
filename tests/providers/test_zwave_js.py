@@ -401,6 +401,42 @@ class TestZWaveJSLockProviderUsercodes:
 
         assert result is False
 
+    async def test_clear_usercode_schlage_bug_length_4(self, zwave_provider, mock_zwave_node):
+        """Test clear_usercode returns True when the returned value is 0000. Tests Schlage Bug."""
+        zwave_provider._node = mock_zwave_node
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                return_value={"usercode": "0000"},
+            ),
+        ):
+            result = await zwave_provider.async_clear_usercode(1)
+
+        assert result is True
+
+    async def test_clear_usercode_schlage_bug_length_6(self, zwave_provider, mock_zwave_node):
+        """Test clear_usercode returns True when the returned value is 000000. Tests Schlage Bug."""
+        zwave_provider._node = mock_zwave_node
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                return_value={"usercode": "000000"},
+            ),
+        ):
+            result = await zwave_provider.async_clear_usercode(1)
+
+        assert result is True
+
 
 class TestZWaveJSLockProviderEventSubscription:
     """Test ZWaveJSLockProvider event subscription."""

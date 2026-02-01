@@ -554,8 +554,11 @@ class ZWaveJSLockProvider(BaseLockProvider):
         # Verify the code was cleared
         try:
             usercode = get_usercode(self._node, slot_num)
-            # Treat both "" and "0000" as cleared (Schlage BE469 firmware bug workaround)
-            if usercode[ZWAVEJS_ATTR_USERCODE] not in ("", "0000"):
+            # Treat both "" and full string of "0" as cleared (Schlage BE469 firmware bug workaround)
+            if not (
+                usercode[ZWAVEJS_ATTR_USERCODE] == ""
+                or all(char == "0" for char in usercode[ZWAVEJS_ATTR_USERCODE])
+            ):
                 _LOGGER.debug(
                     "[ZWaveJSProvider] Slot %s not yet cleared, will retry",
                     slot_num,
