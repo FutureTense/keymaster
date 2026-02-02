@@ -1600,9 +1600,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 usercode = refreshed.code
                 in_use = refreshed.in_use
 
-        # Fix for Schlage and Yale masked responses: if slot is not in use (status=0)
-        # but usercode is masked (e.g., "**********" for Schlage, "0000" for Yale),
-        # treat it as empty
+        # Fix for Schlage masked responses: if slot is not in use (status=0) but
+        # usercode is masked (e.g., "**********" or "0000000000"), treat it as empty
         for mask_char in ("*", "0"):
             if (
                 not in_use
