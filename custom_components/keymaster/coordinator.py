@@ -1601,16 +1601,17 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 in_use = refreshed.in_use
 
         # Fix for Schlage and Yale masked responses: if slot is not in use (status=0)
-        # but usercode is masked (e.g., "**********" for Schalge, "0000" for Yale),
+        # but usercode is masked (e.g., "**********" for Schlage, "0000" for Yale),
         # treat it as empty
         for mask_char in ("*", "0"):
             if (
                 not in_use
                 and usercode
-                and usercode != km_code_slot.pin
                 and usercode == mask_char * len(usercode)
+                and usercode != km_code_slot.pin  # Make sure PIN isn't set to e.g. 0000
             ):
                 usercode = ""
+                break
 
         await self._sync_pin(kmlock, code_slot_num, usercode or "")
 
