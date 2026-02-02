@@ -87,13 +87,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     """Set up is called when Home Assistant is loading our component."""
     updated_config = config_entry.data.copy()
 
-    for prop in [
+    for prop in (
         CONF_PARENT,
         CONF_NOTIFY_SCRIPT_NAME,
         CONF_DOOR_SENSOR_ENTITY_ID,
         CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
         CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    ]:
+    ):
         if config_entry.data.get(prop) in {
             NONE_TEXT,
             "sensor.fake",

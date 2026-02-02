@@ -538,10 +538,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         try:
             await clear_usercode(self._node, slot_num)
-            _LOGGER.debug(
-                "[ZWaveJSProvider] Cleared usercode on slot %s",
-                slot_num,
-            )
         except BaseZwaveJSServerError as e:
             _LOGGER.error(
                 "[ZWaveJSProvider] Failed to clear usercode on slot %s: %s: %s",
@@ -550,19 +546,15 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 e,
             )
             return False
+        else:
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Cleared usercode on slot %s",
+                slot_num,
+            )
 
         # Verify the code was cleared
         try:
             usercode = get_usercode(self._node, slot_num)
-            # Treat both "" and full string of "0" as cleared (Schlage BE469 firmware bug workaround)
-            if not (
-                usercode[ZWAVEJS_ATTR_USERCODE] == ""
-                or all(char == "0" for char in usercode[ZWAVEJS_ATTR_USERCODE])
-            ):
-                _LOGGER.debug(
-                    "[ZWaveJSProvider] Slot %s not yet cleared, will retry",
-                    slot_num,
-                )
         except BaseZwaveJSServerError as e:
             _LOGGER.error(
                 "[ZWaveJSProvider] Failed to verify clear on slot %s: %s: %s",
@@ -570,6 +562,18 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 e.__class__.__qualname__,
                 e,
             )
+            return False
+
+        # Treat both "" and full string of "0" as cleared (Schlage BE469 firmware bug workaround)
+        if not (
+            usercode[ZWAVEJS_ATTR_USERCODE] == ""
+            or all(char == "0" for char in usercode[ZWAVEJS_ATTR_USERCODE])
+        ):
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Slot %s not yet cleared, will retry",
+                slot_num,
+            )
+            return False
 
         return True
 
