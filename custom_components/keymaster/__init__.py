@@ -268,7 +268,7 @@ async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
 
     if len(coordinator.data) == 0:
         _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")
-        await hass.async_add_executor_job(coordinator.delete_json)
+        await coordinator.async_remove_data()
         await coordinator.async_shutdown()
         hass.data.pop(DOMAIN, None)
 

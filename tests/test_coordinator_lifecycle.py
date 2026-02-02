@@ -85,7 +85,7 @@ async def test_delete_lock(hass, mock_coordinator, mock_lock):
     # Mock file operations
     with (
         patch("custom_components.keymaster.coordinator.delete_lovelace"),
-        patch.object(mock_coordinator, "_write_config_to_json"),
+        patch.object(mock_coordinator, "_async_save_data"),
     ):
         # Call private method directly as it's usually called via callback
         await mock_coordinator._delete_lock(mock_lock, None)

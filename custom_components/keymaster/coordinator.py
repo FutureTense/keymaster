@@ -29,6 +29,7 @@ from homeassistant.const import (
 from homeassistant.core import CoreState, Event, EventStateChangedData, HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 
@@ -70,6 +71,9 @@ from .providers import CodeSlot, create_provider
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
+STORAGE_VERSION = 1
+STORAGE_KEY = f"{DOMAIN}.locks"
+
 
 class KeymasterCoordinator(DataUpdateCoordinator):
     """Coordinator to manage keymaster locks."""
@@ -93,8 +97,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=60),
             config_entry=None,
         )
-        self._json_folder: str = self.hass.config.path("custom_components", DOMAIN, "json_kmlocks")
-        self._json_filename: str = f"{DOMAIN}_kmlocks.json"
+        self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
 
     async def initial_setup(self) -> None:
         """Trigger the initial async_setup."""
@@ -106,9 +109,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             VERSION,
             ISSUE_URL,
         )
-        await self.hass.async_add_executor_job(self._create_json_folder)
 
-        imported_config = await self.hass.async_add_executor_job(self._get_dict_from_json_file)
+        imported_config = await self._async_load_data()
 
         _LOGGER.debug("[async_setup] Imported %s keymaster locks", len(imported_config))
         self.kmlocks = imported_config
@@ -120,34 +122,74 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._initial_setup_done_event.set()
         await self._verify_lock_configuration()
 
-    def _create_json_folder(self) -> None:
-        _LOGGER.debug("[create_json_folder] json_kmlocks Location: %s", self._json_folder)
+    async def _async_load_data(self) -> MutableMapping[str, KeymasterLock]:
+        """Load data from Store, migrating from legacy JSON file if needed."""
+        # Check for legacy JSON file and migrate if it exists
+        legacy_json_folder = self.hass.config.path("custom_components", DOMAIN, "json_kmlocks")
+        legacy_json_file = Path(legacy_json_folder) / f"{DOMAIN}_kmlocks.json"
 
-        try:
-            Path(self._json_folder).mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            _LOGGER.warning(
-                "[Coordinator] OSError creating folder for JSON kmlocks file. %s: %s",
-                e.__class__.__qualname__,
-                e,
+        if legacy_json_file.exists():
+            _LOGGER.info("[load_data] Found legacy JSON file, migrating to Home Assistant storage")
+            config = await self.hass.async_add_executor_job(
+                self._migrate_legacy_json, legacy_json_file, legacy_json_folder
             )
+            # Save valid data to new Store
+            if config is not None:
+                await self._async_save_data(config)
+            return config
 
-    def _get_dict_from_json_file(self) -> MutableMapping:
-        config: MutableMapping = {}
-        try:
-            file_path: Path = Path(self._json_folder) / self._json_filename
-            with file_path.open(encoding="utf-8") as jsonfile:
-                config = json.load(jsonfile)
-
-        except OSError as e:
-            _LOGGER.debug(
-                "[get_dict_from_json_file] No JSON file to import (%s). %s: %s",
-                self._json_filename,
-                e.__class__.__qualname__,
-                e,
-            )
+        # Load from Store
+        stored_data = await self._store.async_load()
+        if not stored_data:
+            _LOGGER.debug("[load_data] No stored data found")
             return {}
 
+        return self._process_loaded_data(stored_data)
+
+    def _migrate_legacy_json(
+        self, json_file: Path, json_folder: str
+    ) -> MutableMapping[str, KeymasterLock]:
+        """Load legacy JSON file, clean it up, and return processed data.
+
+        This is a synchronous method that performs file I/O. Must be called
+        via async_add_executor_job.
+        """
+        # Load the JSON file
+        config: MutableMapping[str, KeymasterLock] = {}
+        try:
+            with json_file.open(encoding="utf-8") as f:
+                config = self._process_loaded_data(json.load(f))
+        except (OSError, json.JSONDecodeError) as e:
+            _LOGGER.warning(
+                "[migrate_legacy_json] Error reading legacy JSON file: %s: %s",
+                e.__class__.__qualname__,
+                e,
+            )
+
+        # Always clean up the legacy file (regardless of load success)
+        try:
+            json_file.unlink()
+            _LOGGER.info("[migrate_legacy_json] Legacy JSON file deleted")
+        except OSError as e:
+            _LOGGER.warning(
+                "[migrate_legacy_json] Could not delete legacy JSON file: %s: %s",
+                e.__class__.__qualname__,
+                e,
+            )
+            return config
+
+        # Try to remove the folder if empty
+        try:
+            Path(json_folder).rmdir()
+            _LOGGER.debug("[migrate_legacy_json] Legacy JSON folder removed")
+        except OSError:
+            # Folder not empty or other issue - that's fine
+            pass
+
+        return config
+
+    def _process_loaded_data(self, config: dict) -> MutableMapping[str, KeymasterLock]:
+        """Process loaded config data into KeymasterLock objects."""
         for lock in config.values():
             lock["autolock_timer"] = None
             lock["listeners"] = []
@@ -157,13 +199,46 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         kmslot["pin"], lock["keymaster_config_entry_id"]
                     )
 
-        # _LOGGER.debug(f"[get_dict_from_json_file] Imported JSON: {config}")
         kmlocks: MutableMapping = {
             key: self._dict_to_kmlocks(value, KeymasterLock) for key, value in config.items()
         }
 
-        _LOGGER.debug("[get_dict_from_json_file] Imported kmlocks: %s", kmlocks)
+        _LOGGER.debug("[load_data] Loaded kmlocks: %s", kmlocks)
         return kmlocks
+
+    async def _async_save_data(
+        self, kmlocks: MutableMapping[str, KeymasterLock] | None = None
+    ) -> None:
+        """Save data to Store."""
+        if kmlocks is None:
+            kmlocks = self.kmlocks
+
+        config: dict[str, Any] = {
+            key: self._kmlocks_to_dict(kmlock) for key, kmlock in kmlocks.items()
+        }
+        for lock in config.values():
+            lock.pop("zwave_js_lock_device", None)
+            lock.pop("zwave_js_lock_node", None)
+            lock.pop("autolock_timer", None)
+            lock.pop("listeners", None)
+            lock.pop("provider", None)
+            for kmslot in lock.get("code_slots", {}).values():
+                if isinstance(kmslot.get("pin", None), str):
+                    kmslot["pin"] = KeymasterCoordinator._encode_pin(
+                        kmslot["pin"], lock["keymaster_config_entry_id"]
+                    )
+
+        if config == self._prev_kmlocks_dict:
+            _LOGGER.debug("[save_data] No changes to kmlocks. Not saving.")
+            return
+        self._prev_kmlocks_dict = dict(config)
+        await self._store.async_save(config)
+        _LOGGER.debug("[save_data] Data saved to storage")
+
+    async def async_remove_data(self) -> None:
+        """Remove stored data."""
+        await self._store.async_remove()
+        _LOGGER.debug("[remove_data] Stored data removed")
 
     async def _verify_lock_configuration(self) -> None:
         """Verify lock configuration and update as needed."""
@@ -344,56 +419,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     result[field_name] = field_value
             return result
         return instance
-
-    def delete_json(self) -> None:
-        """Delete the JSON config file."""
-        file = Path(self._json_folder) / self._json_filename
-
-        try:
-            file.unlink()
-        except (FileNotFoundError, PermissionError) as e:
-            _LOGGER.debug(
-                "Unable to delete JSON config (%s). %s: %s",
-                self._json_filename,
-                e.__class__.__qualname__,
-                e,
-            )
-            return
-        _LOGGER.debug("JSON config file deleted: %s", self._json_filename)
-
-    def _write_config_to_json(self) -> bool:
-        config: MutableMapping = {
-            key: self._kmlocks_to_dict(kmlock) for key, kmlock in self.kmlocks.items()
-        }
-        for lock in config.values():
-            lock.pop("autolock_timer", None)
-            lock.pop("listeners", None)
-            lock.pop("provider", None)
-            for kmslot in lock.get("code_slots", {}).values():
-                if isinstance(kmslot.get("pin", None), str):
-                    kmslot["pin"] = KeymasterCoordinator._encode_pin(
-                        kmslot["pin"], lock["keymaster_config_entry_id"]
-                    )
-
-        # _LOGGER.debug(f"[write_config_to_json] Dict to Save: {config}")
-        if config == self._prev_kmlocks_dict:
-            _LOGGER.debug("[write_config_to_json] No changes to kmlocks. Not updating JSON file")
-            return True
-        self._prev_kmlocks_dict = config
-        try:
-            file_path: Path = Path(self._json_folder) / self._json_filename
-            with file_path.open(mode="w", encoding="utf-8") as jsonfile:
-                json.dump(config, jsonfile)
-        except OSError as e:
-            _LOGGER.debug(
-                "OSError writing kmlocks to JSON (%s). %s: %s",
-                self._json_filename,
-                e.__class__.__qualname__,
-                e,
-            )
-            return False
-        _LOGGER.debug("[write_config_to_json] JSON File Updated")
-        return True
 
     async def _rebuild_lock_relationships(self) -> None:
         for keymaster_config_entry_id, kmlock in self.kmlocks.items():
@@ -1031,7 +1056,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
         await self._rebuild_lock_relationships()
-        await self.hass.async_add_executor_job(self._write_config_to_json)
+        await self._async_save_data()
         await self.async_refresh()
         return
 
@@ -1479,7 +1504,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             await self._update_door_and_lock_state(trigger_actions_if_changed=True)
 
         # Write updated config to JSON
-        await self.hass.async_add_executor_job(self._write_config_to_json)
+        await self._async_save_data()
 
         # Schedule next refresh if needed
         await self._schedule_quick_refresh_if_needed()
