@@ -565,7 +565,8 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return False
 
         # Treat both "" and full string of "0" as cleared (Schlage BE469 firmware bug workaround)
-        if usercode[ZWAVEJS_ATTR_USERCODE] not in ("", "0" * len(usercode[ZWAVEJS_ATTR_USERCODE])):
+        code_value = usercode.get(ZWAVEJS_ATTR_USERCODE) or ""
+        if code_value not in ("", "0" * len(code_value)):
             _LOGGER.debug(
                 "[ZWaveJSProvider] Slot %s not yet cleared, will retry",
                 slot_num,
