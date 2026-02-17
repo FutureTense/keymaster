@@ -300,7 +300,7 @@ def _migrate_2to3_delete_folder(absolute_path: Path, *relative_paths: str) -> No
 
 async def _migrate_2to3_reload_package_platforms(hass: HomeAssistant) -> bool:
     """Reload package platforms to pick up any changes to package files."""
-    for domain in [
+    for domain in (
         AUTO_DOMAIN,
         IN_BOOL_DOMAIN,
         IN_DT_DOMAIN,
@@ -309,7 +309,7 @@ async def _migrate_2to3_reload_package_platforms(hass: HomeAssistant) -> bool:
         SCRIPT_DOMAIN,
         TEMPLATE_DOMAIN,
         TIMER_DOMAIN,
-    ]:
+    ):
         if hass.services.has_service(domain=domain, service=SERVICE_RELOAD):
             await hass.services.async_call(domain=domain, service=SERVICE_RELOAD, blocking=True)
         else:

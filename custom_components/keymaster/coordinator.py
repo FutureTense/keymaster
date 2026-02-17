@@ -1582,24 +1582,35 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def _sync_usercode(self, kmlock: KeymasterLock, usercode_slot: CodeSlot) -> None:
         """Sync a usercode from the lock."""
         code_slot_num: int = usercode_slot.slot_num
+        km_code_slot: KeymasterCodeSlot | None = None
+        if kmlock.code_slots:
+            km_code_slot = kmlock.code_slots.get(code_slot_num)
         usercode: str | None = usercode_slot.code
         in_use: bool = usercode_slot.in_use
 
-        if not kmlock.code_slots or code_slot_num not in kmlock.code_slots:
+        if not km_code_slot:
             return
 
         # Refresh from lock if slot claims to have a code but we don't have the value
-        # (e.g., masked responses where in_use=True but code is None or non-numeric)
-        if in_use and (usercode is None or not usercode.isdigit()) and kmlock.provider:
+        # (e.g., masked responses where in_use=True but code is None or all one
+        # character)
+        if kmlock.provider and in_use and (usercode is None or len(set(usercode)) == 1):
             refreshed = await kmlock.provider.async_refresh_usercode(code_slot_num)
             if refreshed:
                 usercode = refreshed.code
                 in_use = refreshed.in_use
 
         # Fix for Schlage masked responses: if slot is not in use (status=0) but
-        # usercode is masked (e.g., "**********"), treat it as empty
-        if not in_use and usercode and not usercode.isdigit():
-            usercode = ""
+        # usercode is masked (e.g., "**********" or "0000000000"), treat it as empty
+        for mask_char in ("*", "0"):
+            if (
+                not in_use
+                and usercode
+                and usercode == mask_char * len(usercode)
+                and usercode != km_code_slot.pin  # Make sure PIN isn't set to e.g. 0000
+            ):
+                usercode = ""
+                break
 
         await self._sync_pin(kmlock, code_slot_num, usercode or "")
 
@@ -1718,7 +1729,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             prev_enabled = child_kmlock.code_slots[code_slot_num].enabled
             prev_active = child_kmlock.code_slots[code_slot_num].active
 
-            for attr in [
+            for attr in (
                 "enabled",
                 "name",
                 "active",
@@ -1729,7 +1740,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 "accesslimit_date_range_start",
                 "accesslimit_date_range_end",
                 "accesslimit_day_of_week_enabled",
-            ]:
+            ):
                 if hasattr(kmslot, attr):
                     setattr(
                         child_kmlock.code_slots[code_slot_num],
