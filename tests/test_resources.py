@@ -120,6 +120,25 @@ async def test_register_strategy_resource_yaml_mode_warning(
     assert STRATEGY_PATH in caplog.text
 
 
+async def test_register_strategy_resource_yaml_mode_already_exists(
+    hass: HomeAssistant, mock_yaml_resources, caplog
+):
+    """Test no error when resource already exists in YAML mode (no 'id' field)."""
+    mock_yaml_resources.async_items.return_value = [
+        {"url": "/local/other.js", "type": "module"},
+        {"url": STRATEGY_PATH, "type": "module"},
+    ]
+    hass.data[LOVELACE_DOMAIN] = MagicMock()
+    hass.data[LOVELACE_DOMAIN].resources = mock_yaml_resources
+    hass.data[DOMAIN] = {}
+
+    with caplog.at_level(logging.DEBUG):
+        await async_register_strategy_resource(hass)
+
+    assert "already registered" in caplog.text
+    assert "YAML mode" not in caplog.text
+
+
 async def test_register_strategy_resource_no_resources(hass: HomeAssistant):
     """Test registering when no resources available."""
     # No lovelace domain

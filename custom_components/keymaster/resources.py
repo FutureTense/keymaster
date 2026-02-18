@@ -38,30 +38,28 @@ async def async_register_strategy_resource(hass: HomeAssistant) -> None:
         _LOGGER.debug("Manually loaded resources")
         resources.loaded = True
 
-    try:
-        res_id = next(
-            data[CONF_ID] for data in resources.async_items() if data[CONF_URL] == STRATEGY_PATH
-        )
-    except StopIteration:
-        if isinstance(resources, ResourceYAMLCollection):
-            _LOGGER.warning(
-                "Strategy module can't automatically be registered because this "
-                "Home Assistant instance is running in YAML mode for resources. "
-                "Please add a new entry in the list under the resources key in "
-                'the lovelace section of your config as follows:\n  - url: "%s"'
-                "\n    type: module",
-                STRATEGY_PATH,
-            )
-            return
+    already_registered = any(data[CONF_URL] == STRATEGY_PATH for data in resources.async_items())
 
-        data = await resources.async_create_item(
-            {CONF_RESOURCE_TYPE_WS: "module", CONF_URL: STRATEGY_PATH}
-        )
-        _LOGGER.debug("Registered strategy module (resource ID %s)", data[CONF_ID])
-        hass.data[DOMAIN]["resources"] = True
+    if already_registered:
+        _LOGGER.debug("Strategy module already registered")
         return
 
-    _LOGGER.debug("Strategy module already registered with resource ID %s", res_id)
+    if isinstance(resources, ResourceYAMLCollection):
+        _LOGGER.warning(
+            "Strategy module can't automatically be registered because this "
+            "Home Assistant instance is running in YAML mode for resources. "
+            "Please add a new entry in the list under the resources key in "
+            'the lovelace section of your config as follows:\n  - url: "%s"'
+            "\n    type: module",
+            STRATEGY_PATH,
+        )
+        return
+
+    data = await resources.async_create_item(
+        {CONF_RESOURCE_TYPE_WS: "module", CONF_URL: STRATEGY_PATH}
+    )
+    _LOGGER.debug("Registered strategy module (resource ID %s)", data[CONF_ID])
+    hass.data[DOMAIN]["resources"] = True
 
 
 async def async_cleanup_strategy_resource(hass: HomeAssistant, hass_data: dict[str, Any]) -> None:
