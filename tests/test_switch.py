@@ -16,6 +16,8 @@ from custom_components.keymaster.const import (
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
+    DEFAULT_AUTOLOCK_MIN_DAY,
+    DEFAULT_AUTOLOCK_MIN_NIGHT,
     DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
@@ -147,6 +149,61 @@ async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, co
         # Should update state and call refresh
         assert entity._attr_is_on is True
         mock_refresh.assert_called_once()
+
+    # Defaults should be set on first enable
+    assert kmlock.autolock_min_day == DEFAULT_AUTOLOCK_MIN_DAY
+    assert kmlock.autolock_min_night == DEFAULT_AUTOLOCK_MIN_NIGHT
+
+
+async def test_switch_autolock_user_values_persist_after_disable_reenable(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test that user-modified autolock values persist through a disable/re-enable cycle."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.autolock_enabled = False
+    coordinator.kmlocks[switch_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.autolock_enabled",
+        name="Auto Lock",
+        icon="mdi:lock-clock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSwitch(entity_description=entity_description)
+    entity._attr_is_on = False
+
+    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+        # First enable — defaults should be populated
+        await entity.async_turn_on()
+        assert kmlock.autolock_min_day == DEFAULT_AUTOLOCK_MIN_DAY
+        assert kmlock.autolock_min_night == DEFAULT_AUTOLOCK_MIN_NIGHT
+
+        # Simulate user changing the values
+        kmlock.autolock_min_day = 30
+        kmlock.autolock_min_night = 10
+
+        # Disable autolock
+        await entity.async_turn_off()
+        assert kmlock.autolock_enabled is False
+        # Values should still be present after disable
+        assert kmlock.autolock_min_day == 30
+        assert kmlock.autolock_min_night == 10
+
+        # Re-enable — user values must NOT be overridden
+        await entity.async_turn_on()
+        assert kmlock.autolock_enabled is True
+        assert kmlock.autolock_min_day == 30
+        assert kmlock.autolock_min_night == 10
 
 
 async def test_switch_async_turn_off(hass: HomeAssistant, switch_config_entry, coordinator):
