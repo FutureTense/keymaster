@@ -24,8 +24,8 @@ jobs:
       - name: Set version number
         if: ${{ github.event_name == 'release' }}
         run: |
-          sed -i '/VERSION = /c\VERSION = "${{ steps.get_version.outputs.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
-          sed -i '/version/c\  \"version\": \"${{ steps.get_version.outputs.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
+          sed -i '/VERSION = /c\VERSION = "${{ env.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
+          sed -i '/version/c\  \"version\": \"${{ env.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
       - name: Set version number
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
