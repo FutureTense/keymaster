@@ -17,33 +17,27 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      # Grabs the release tag, OR falls back to the manual input tag if the release tag is null
       - name: Get Version
         id: get_version
-        if: ${{ github.event_name == 'release' }}
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> "$GITHUB_ENV"
+        run: echo "VERSION=${{ github.event.release.tag_name || inputs.tags }}" >> "$GITHUB_ENV"
+
+      # Updates the files with the unified VERSION variable
       - name: Set version number
-        if: ${{ github.event_name == 'release' }}
         run: |
           sed -i '/VERSION = /c\VERSION = "${{ env.VERSION }}"' ${{ github.workspace }}/custom_components/keymaster/const.py
           sed -i '/version/c\  \"version\": \"${{ env.VERSION }}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
-      - name: Set version number
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          sed -i '/VERSION = /c\VERSION = "${{inputs.tags}}"' ${{ github.workspace }}/custom_components/keymaster/const.py
-          sed -i '/version/c\  \"version\": \"${{inputs.tags}}\"' ${{ github.workspace }}/custom_components/keymaster/manifest.json
-      # Pack the keymaster dir as a zip and upload to the release
+
+      # Pack the keymaster dir as a zip
       - name: ZIP Keymaster Dir
         run: |
           cd ${{ github.workspace }}/custom_components/keymaster
           zip keymaster.zip -r ./
+
+      # Upload to the release using the unified VERSION variable
       - name: 📤 Upload zip to release
-        if: ${{ github.event_name == 'release' }}
-        uses: softprops/action-gh-release@v0.1.15
+        uses: softprops/action-gh-release@v2
         with:
           files: ${{ github.workspace }}/custom_components/keymaster/keymaster.zip
-      - name: 📤 Upload zip to release
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: softprops/action-gh-release@v0.1.15
-        with:
-          files: ${{ github.workspace }}/custom_components/keymaster/keymaster.zip
-          tag_name: ${{inputs.tags}}
+          tag_name: ${{ env.VERSION }}
