@@ -1,151 +1,576 @@
-""" Test keymaster helpers """
+"""Test keymaster helpers."""
 
-from unittest.mock import patch
+from datetime import datetime as dt, timedelta
+from unittest.mock import MagicMock, patch
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-from zwave_js_server.event import Event
-
-from custom_components.keymaster.const import (
-    ATTR_ACTION_TEXT,
-    ATTR_CODE_SLOT,
-    ATTR_CODE_SLOT_NAME,
-    ATTR_NAME,
-    DOMAIN,
-    EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+from custom_components.keymaster.const import DOMAIN
+from custom_components.keymaster.helpers import (
+    KeymasterTimer,
+    Throttle,
+    async_has_supported_provider,
+    call_hass_service,
+    delete_code_slot_entities,
+    dismiss_persistent_notification,
+    send_manual_notification,
+    send_persistent_notification,
 )
-from custom_components.keymaster.helpers import delete_lock_and_base_folder
-from homeassistant.const import (
-    ATTR_STATE,
-    EVENT_HOMEASSISTANT_STARTED,
-    STATE_LOCKED,
-    STATE_UNLOCKED,
-)
-
-from .common import async_capture_events
-from .const import CONFIG_DATA, CONFIG_DATA_910
-
-SCHLAGE_BE469_LOCK_ENTITY = "lock.touchscreen_deadbolt_current_lock_mode"
-KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
+from custom_components.keymaster.lock import KeymasterLock
+from homeassistant.helpers import entity_registry as er
+from homeassistant.util import slugify
 
 
-async def test_delete_lock_and_base_folder(hass, mock_osrmdir, mock_osremove):
-    """Test delete_lock_and_base_folder"""
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+# Test Throttle class
+def test_throttle_init():
+    """Test Throttle initialization."""
+    throttle = Throttle()
+    assert throttle._cooldowns == {}
+
+
+def test_throttle_first_call_allowed():
+    """Test that first call is always allowed."""
+    throttle = Throttle()
+    assert throttle.is_allowed("test_func", "key1", 5) is True
+
+
+def test_throttle_second_call_blocked():
+    """Test that second call within cooldown is blocked."""
+    throttle = Throttle()
+    assert throttle.is_allowed("test_func", "key1", 5) is True
+    assert throttle.is_allowed("test_func", "key1", 5) is False
+
+
+def test_throttle_different_keys():
+    """Test that different keys don't interfere."""
+    throttle = Throttle()
+    assert throttle.is_allowed("test_func", "key1", 5) is True
+    assert throttle.is_allowed("test_func", "key2", 5) is True
+
+
+def test_throttle_cooldown_expires():
+    """Test that cooldown expires after time passes."""
+    throttle = Throttle()
+
+    # Mock time to control cooldown
+    with patch("custom_components.keymaster.helpers.time.time") as mock_time:
+        mock_time.return_value = 100.0
+        assert throttle.is_allowed("test_func", "key1", 5) is True
+
+        # Still in cooldown
+        mock_time.return_value = 104.0
+        assert throttle.is_allowed("test_func", "key1", 5) is False
+
+        # Cooldown expired
+        mock_time.return_value = 105.0
+        assert throttle.is_allowed("test_func", "key1", 5) is True
+
+
+# Test service helpers
+async def test_call_hass_service_success(hass):
+    """Test calling a hass service successfully."""
+    # Register a test service
+    calls = []
+
+    async def test_service(call):
+        calls.append(call)
+
+    hass.services.async_register("light", "turn_on", test_service)
+
+    await call_hass_service(
+        hass,
+        "light",
+        "turn_on",
+        service_data={"brightness": 255},
+        target={"entity_id": "light.test"},
     )
 
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    delete_lock_and_base_folder(hass, entry)
-
-    assert mock_osrmdir.called
-    assert mock_osremove.called
+    assert len(calls) == 1
+    assert calls[0].data["brightness"] == 255
 
 
-async def test_delete_lock_and_base_folder_error(
-    hass, mock_osrmdir, mock_osremove, mock_listdir_err
-):
-    """Test delete_lock_and_base_folder"""
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=2
+async def test_call_hass_service_not_found(hass):
+    """Test calling a non-existent hass service."""
+    # Should not raise exception, just log warning
+    await call_hass_service(hass, "test", "nonexistent")
+    # If we get here without exception, test passes
+
+
+async def test_send_manual_notification(hass):
+    """Test sending manual notification."""
+    calls = []
+
+    async def test_script(call):
+        calls.append(call)
+
+    hass.services.async_register("script", "test_notify", test_script)
+
+    await send_manual_notification(
+        hass,
+        script_name="test_notify",
+        message="Test message",
+        title="Test title",
     )
 
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    delete_lock_and_base_folder(hass, entry)
-
-    assert mock_osrmdir.called_once
+    assert len(calls) == 1
+    assert calls[0].data["title"] == "Test title"
+    assert calls[0].data["message"] == "Test message"
 
 
-async def test_handle_state_change_zwave_js(
-    hass, client, lock_kwikset_910, integration
-):
-    """Test handle_state_change with zwave_js"""
-    # Make sure the lock loaded
-    node = lock_kwikset_910
-    state = hass.states.get(KWIKSET_910_LOCK_ENTITY)
-    assert state
-    assert state.state == STATE_LOCKED
+async def test_send_manual_notification_no_script(hass):
+    """Test sending manual notification without script name."""
+    # Should return early without calling service
+    await send_manual_notification(hass, script_name=None, message="Test")
+    # If we get here, test passes
 
-    events = async_capture_events(hass, EVENT_KEYMASTER_LOCK_STATE_CHANGED)
-    events_js = async_capture_events(hass, "zwave_js_notification")
 
-    # Load the integration
-    config_entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=2
+async def test_send_persistent_notification(hass):
+    """Test sending persistent notification."""
+    with patch(
+        "custom_components.keymaster.helpers.persistent_notification.async_create"
+    ) as mock_create:
+        await send_persistent_notification(
+            hass,
+            message="Test message",
+            title="Test title",
+            notification_id="test_id",
+        )
+
+    mock_create.assert_called_once()
+
+
+async def test_delete_code_slot_entities(hass):
+    """Test deleting code slot entities."""
+    entity_registry = er.async_get(hass)
+    config_entry_id = "test_config_entry"
+    code_slot_num = 1
+
+    # Create some entities to delete
+    entity_registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        f"{config_entry_id}_binary_sensor_code_slots_{code_slot_num}_active",
+        suggested_object_id=f"code_slots_{code_slot_num}_active",
     )
-    config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(config_entry.entry_id)
-    await hass.async_block_till_done()
 
-    # Fire the event
-    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
-    await hass.async_block_till_done()
+    # Delete entities
+    await delete_code_slot_entities(hass, config_entry_id, code_slot_num)
 
-    # Reload zwave_js
-    assert await hass.config_entries.async_reload(integration.entry_id)
-    await hass.async_block_till_done()
+    # Verify it didn't crash
+    assert True
 
-    assert "zwave_js" in hass.config.components
 
-    # Test locked update from value updated event
-    event = Event(
-        type="value updated",
-        data={
-            "source": "node",
-            "event": "value updated",
-            "nodeId": 14,
-            "args": {
-                "commandClassName": "Door Lock",
-                "commandClass": 98,
-                "endpoint": 0,
-                "property": "currentMode",
-                "newValue": 0,
-                "prevValue": 255,
-                "propertyName": "currentMode",
-            },
-        },
+# KeymasterTimer tests
+async def test_keymaster_timer_init():
+    """Test KeymasterTimer initialization."""
+    timer = KeymasterTimer()
+    assert timer.hass is None
+    assert timer._unsub_events == []
+    assert timer._kmlock is None
+    assert timer._call_action is None
+    assert timer._end_time is None
+    assert not timer.is_setup
+    assert not timer.is_running
+
+
+async def test_keymaster_timer_setup(hass):
+    """Test KeymasterTimer setup."""
+    timer = KeymasterTimer()
+
+    # Create a mock lock
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
     )
-    node.receive_event(event)
-    assert hass.states.get(KWIKSET_910_LOCK_ENTITY).state == STATE_UNLOCKED
-    client.async_send_command.reset_mock()
+    kmlock.autolock_min_day = 5
+    kmlock.autolock_min_night = 10
 
-    # Fire zwave_js event
-    event = Event(
-        type="notification",
-        data={
-            "source": "node",
-            "event": "notification",
-            "nodeId": 14,
-            "ccId": 113,
-            "args": {
-                "type": 6,
-                "event": 5,
-                "label": "Access Control",
-                "eventLabel": "Keypad unlock operation",
-                "parameters": {"userId": 3},
-            },
-        },
+    # Create a mock callback
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    assert timer.hass is hass
+    assert timer._kmlock is kmlock
+    assert timer._call_action is mock_callback
+    assert timer.is_setup
+
+
+async def test_keymaster_timer_start_not_setup(hass, caplog):
+    """Test starting timer when not setup."""
+    timer = KeymasterTimer()
+
+    result = await timer.start()
+
+    assert result is False
+    assert "[KeymasterTimer] Cannot start timer as timer not setup" in caplog.text
+
+
+async def test_keymaster_timer_start_day(hass):
+    """Test starting timer during day."""
+    timer = KeymasterTimer()
+
+    # Create a mock lock
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
     )
-    node.receive_event(event)
-    # wait for the event
-    await hass.async_block_till_done()
+    kmlock.autolock_min_day = 5
+    kmlock.autolock_min_night = 10
 
-    assert len(events) == 1
-    assert len(events_js) == 1
-    assert events[0].data[ATTR_NAME] == "frontdoor"
-    assert events[0].data[ATTR_STATE] == "unlocked"
-    assert events[0].data[ATTR_ACTION_TEXT] == "Keypad unlock operation"
-    assert events[0].data[ATTR_CODE_SLOT] == 3
-    assert events[0].data[ATTR_CODE_SLOT_NAME] == ""
+    # Create a mock callback
+    async def mock_callback(*args):
+        pass
 
-    assert events_js[0].data["type"] == 6
-    assert events_js[0].data["event"] == 5
-    assert events_js[0].data["home_id"] == client.driver.controller.home_id
-    assert events_js[0].data["node_id"] == 14
-    assert events_js[0].data["event_label"] == "Keypad unlock operation"
-    assert events_js[0].data["parameters"]["userId"] == 3
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Mock sun.is_up to return True (daytime)
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        result = await timer.start()
+
+    assert result is True
+    assert timer._end_time is not None
+    assert len(timer._unsub_events) == 2  # Timer callback + cancel callback
+    assert timer.is_running
+    assert timer._end_time is not None  # Should still be set after checking is_running
+
+
+async def test_keymaster_timer_start_night(hass):
+    """Test starting timer during night."""
+    timer = KeymasterTimer()
+
+    # Create a mock lock
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+    kmlock.autolock_min_night = 10
+
+    # Create a mock callback
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Mock sun.is_up to return False (nighttime)
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=False):
+        result = await timer.start()
+
+    assert result is True
+    assert timer._end_time is not None
+    assert len(timer._unsub_events) == 2  # Timer callback + cancel callback
+    assert timer.is_running
+    assert timer._end_time is not None  # Should still be set after checking is_running
+
+
+async def test_keymaster_timer_restart(hass):
+    """Test restarting an already running timer."""
+    timer = KeymasterTimer()
+
+    # Create a mock lock
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    # Create a mock callback
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Start timer first time
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        result1 = await timer.start()
+
+    assert result1 is True
+    assert len(timer._unsub_events) == 2
+
+    # Start timer again - should cancel previous and restart
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        result2 = await timer.start()
+
+    assert result2 is True
+    assert len(timer._unsub_events) == 2  # Old callbacks cancelled, new ones added
+
+
+async def test_keymaster_timer_cancel(hass):
+    """Test cancelling a timer."""
+    timer = KeymasterTimer()
+
+    # Create a mock lock
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    # Create a mock callback
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Start timer
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    assert timer._end_time is not None
+    assert timer.is_running
+
+    # Cancel timer
+    await timer.cancel()
+
+    assert not timer.is_running
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+async def test_keymaster_timer_properties(hass):
+    """Test KeymasterTimer properties."""
+    timer = KeymasterTimer()
+
+    # Create a mock lock
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    # Create a mock callback
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Before starting
+    assert timer.is_setup
+    assert not timer.is_running
+    assert timer.end_time is None
+    assert timer.remaining_seconds is None
+
+    # Start timer
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    # After starting
+    assert timer.is_running
+    assert timer.end_time is not None
+    assert timer.remaining_seconds is not None
+    assert timer.remaining_seconds > 0  # Time remaining (positive because end_time is in future)
+
+
+async def test_delete_code_slot_entities_removes_all(hass):
+    """Test that delete_code_slot_entities attempts to remove all expected entities."""
+    config_entry_id = "entry_123"
+    code_slot_num = 5
+
+    mock_registry = MagicMock()
+    # We want to track calls to async_remove
+    mock_registry.async_remove = MagicMock()
+
+    # Mock async_get_entity_id to return a fake ID for every query,
+    # ensuring we try to delete everything.
+    def mock_get_entity_id(domain, platform, unique_id):
+        return f"{domain}.{unique_id}"
+
+    mock_registry.async_get_entity_id.side_effect = mock_get_entity_id
+
+    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+        await delete_code_slot_entities(hass, config_entry_id, code_slot_num)
+
+    # Check count.
+    # properties list has 12 items.
+    # dow loop has 7 days * 5 props = 35 items.
+    # Total 47 removals expected.
+    assert mock_registry.async_remove.call_count == 47
+
+    # Verify a sample call with Correct SLUGIFICATION
+    # The code does: unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}"
+    prop = f"text.code_slots:{code_slot_num}.pin"
+    expected_unique_id_pin = f"{config_entry_id}_{slugify(prop)}"
+
+    # We expect the registry to have been queried for this
+    mock_registry.async_get_entity_id.assert_any_call(
+        domain="text", platform=DOMAIN, unique_id=expected_unique_id_pin
+    )
+
+
+async def test_delete_code_slot_entities_handles_errors(hass):
+    """Test that deletion errors are logged but don't stop the process."""
+    mock_registry = MagicMock()
+    mock_registry.async_get_entity_id.return_value = "entity.test"
+    mock_registry.async_remove.side_effect = KeyError("Entity not found")  # Simulate error
+
+    with patch("custom_components.keymaster.helpers.er.async_get", return_value=mock_registry):
+        await delete_code_slot_entities(hass, "entry", 1)
+
+    # Should finish without raising exception and try to remove all
+    assert mock_registry.async_remove.call_count == 47
+
+
+async def test_keymaster_timer_cancel_elapsed(hass):
+    """Test cancelling a timer that has elapsed."""
+    timer = KeymasterTimer()
+
+    # Create a mock lock
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Start timer
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    # Cancel with timer_elapsed parameter (simulating callback after timer ends)
+    await timer.cancel(timer_elapsed=dt.now())
+
+    assert not timer.is_running
+    assert timer._end_time is None
+
+
+async def test_keymaster_timer_is_running_expired(hass):
+    """Test is_running when timer has already expired."""
+    timer = KeymasterTimer()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Manually set end_time to the past to simulate expired timer
+    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._unsub_events = [MagicMock()]  # Add a mock unsub function
+
+    # Checking is_running should clean up the expired timer
+    assert timer.is_running is False
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+async def test_keymaster_timer_is_setup_expired(hass):
+    """Test is_setup when timer has expired cleans up."""
+    timer = KeymasterTimer()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Manually set end_time to the past
+    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._unsub_events = [MagicMock()]
+
+    # Checking is_setup should clean up the expired timer
+    result = timer.is_setup
+    assert result is True  # Still setup, just expired
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+async def test_keymaster_timer_end_time_expired(hass):
+    """Test end_time when timer has expired returns None."""
+    timer = KeymasterTimer()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Manually set end_time to the past
+    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._unsub_events = [MagicMock()]
+
+    # Getting end_time should clean up and return None
+    result = timer.end_time
+    assert result is None
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+async def test_keymaster_timer_remaining_seconds_expired(hass):
+    """Test remaining_seconds when timer has expired returns None."""
+    timer = KeymasterTimer()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    async def mock_callback(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_callback)
+
+    # Manually set end_time to the past
+    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._unsub_events = [MagicMock()]
+
+    # Getting remaining_seconds should clean up and return None
+    result = timer.remaining_seconds
+    assert result is None
+    assert timer._end_time is None
+    assert timer._unsub_events == []
+
+
+def test_async_has_supported_provider_with_entity_id(hass):
+    """Test async_has_supported_provider with entity_id parameter."""
+    with patch(
+        "custom_components.keymaster.helpers.is_platform_supported",
+        return_value=True,
+    ) as mock_supported:
+        result = async_has_supported_provider(hass, entity_id="lock.test")
+
+    assert result is True
+    mock_supported.assert_called_once_with(hass, "lock.test")
+
+
+def test_async_has_supported_provider_no_args(hass):
+    """Test async_has_supported_provider returns False with no arguments."""
+    result = async_has_supported_provider(hass)
+    assert result is False
+
+
+async def test_dismiss_persistent_notification(hass):
+    """Test dismissing persistent notification."""
+    with patch(
+        "custom_components.keymaster.helpers.persistent_notification.async_dismiss"
+    ) as mock_dismiss:
+        await dismiss_persistent_notification(hass, "test_notification_id")
+
+    mock_dismiss.assert_called_once_with(hass=hass, notification_id="test_notification_id")

@@ -3,6 +3,7 @@
   "name": "keymaster",
   "after_dependencies": [
     "automation",
+    "http",
     "input_boolean",
     "input_datetime",
     "input_number",
@@ -14,7 +15,7 @@
     "zwave",
     "zwave_js"
   ],
-  "codeowners": ["@FutureTense", "@firstof9", "@raman325"],  
+  "codeowners": ["@FutureTense", "@firstof9", "@raman325"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/FutureTense/keymaster",

@@ -1,0 +1,172 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 Andrew Grimberg <tykeal@bardicgrove.org>
+
+ci:
+  autofix_commit_msg: |
+    Chore: pre-commit.ci automated linting tools update
+
+    Signed-off-by: pre-commit-ci[bot] <pre-commit-ci[bot]@pre-commit.ci>
+
+    Changes in this pull request are as follows:
+  autoupdate_commit_msg: |
+    Chore: pre-commit.ci automated linting tools update
+
+    Signed-off-by: pre-commit-ci[bot] <pre-commit-ci[bot]@pre-commit.ci>
+
+    Changes in this pull request are as follows:
+
+exclude: |
+  (?x)(
+      ^docs\/conf.py|
+      ^dco-signoffs/|
+      ^tests/resources
+  )
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b # frozen: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-ast
+      - id: check-builtin-literals
+      - id: check-case-conflict
+      - id: check-docstring-first
+      - id: check-executables-have-shebangs
+      - id: check-illegal-windows-names
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+      - id: check-symlinks
+      - id: check-toml
+      - id: check-vcs-permalinks
+      - id: check-xml
+      - id: check-yaml
+      - id: debug-statements
+      - id: destroyed-symlinks
+      - id: detect-aws-credentials
+        args: ["--allow-missing-credentials"]
+      # - id: double-quote-string-fixer
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: fix-byte-order-marker
+      - id: forbid-new-submodules
+      - id: forbid-submodules
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      #- id: name-tests-test
+      #  args: ["--pytest-test-first"]
+      # Disabled; TOX lint will otherwise fail
+      - id: no-commit-to-branch
+        args:
+          - --branch=main
+      # - id: pretty-format-json
+      - id: requirements-txt-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: 192ad822316c3a22fb3d3cc8aa6eafa0b8488360  # frozen: v0.45.0
+    hooks:
+      - id: markdownlint
+        args: ["--fix"]
+
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: acc9d9de6369b76d22cb4167029d2035e8730b98 # frozen: v0.19.1
+    hooks:
+      - id: gitlint
+        # args: ["-c body-max-line-length=120", "-c title-max-length=120"]
+
+  - repo: https://github.com/openstack/bashate
+    rev: 5798d24d571676fc407e81df574c1ef57b520f23 # frozen: 2.1.1
+    hooks:
+      - id: bashate
+        args: ["--ignore=E006,E011"]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: a23f6b85d0fdd5bb9d564e2579e678033debbdff # frozen: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ["-x"] # Check external files
+
+  - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
+    rev: a185be0fd5b45112845b700d91b81050c75579e2 # frozen: v1.7.7.23
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: 79a6b2b1392eaf49cdd32ac4f14be1a809bbd8f7 # frozen: v1.37.1
+    hooks:
+      - id: yamllint
+        types: [yaml]
+        args:
+          [
+            "-d",
+            "{rules: {line-length: {max: 100}}, ignore-from-file: [.gitignore],}",
+          ]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 73b0f6d59bbfcb75e17a4653d581c9dfaca13969  # frozen: v0.12.5
+    hooks:
+      - id: ruff-check
+        args: [--fix, --exit-non-zero-on-fix, --config=pyproject.toml]
+      - id: ruff-format
+
+  #- repo: https://github.com/fsfe/reuse-tool
+  #  rev: 60dfc6b2ad9e1f3eabfbcf3a0dc202ee89dc5a00 # frozen: v5.0.2
+  #  hooks:
+  #    - id: reuse
+
+  - repo: local
+    hooks:
+      - id: mypy-cache
+        name: "create mypy cache"
+        language: system
+        pass_filenames: false
+        entry: bash -c 'if [ ! -d .mypy_cache ]; then mkdir .mypy_cache; fi; exit 0'
+
+  #- repo: https://github.com/abravalheri/validate-pyproject
+  #  rev: 78f5e0f104cfa803d0597eaa924b4de3becd3e3e # frozen: v0.24.1
+  #  hooks:
+  #    - id: validate-pyproject
+  #      # Optional extra validations from SchemaStore:
+  #      additional_dependencies: ["validate-pyproject-schema-store[all]"]
+
+  #- repo: https://github.com/btford/write-good
+  #  rev: ab66ce10136dfad5146e69e70f82a3efac8842c1 # frozen: v1.0.8
+  #  hooks:
+  #    - id: write-good
+  #      files: "\\.(rst|md|markdown|mdown|mkdn)$"
+
+  # Check for misspellings in documentation files
+  - repo: https://github.com/codespell-project/codespell
+    rev: 63c8f8312b7559622c0d82815639671ae42132ac # frozen: v2.4.1
+    hooks:
+      - id: codespell
+
+  # Automatically upgrade Python syntax for newer versions
+  # - repo: https://github.com/asottile/pyupgrade
+  #   rev: v3.15.0
+  #   hooks:
+  #     - id: pyupgrade
+  #       args: ['--py37-plus']
+
+  #- repo: https://github.com/econchick/interrogate
+  #  rev: a6268877efd41a21197445cc04cbf28f9c6facba # frozen: 1.7.0
+  #  hooks:
+  #    - id: interrogate
+  #      args: [-vv, --fail-under=100]
+  #      additional_dependencies:
+  #        - setuptools
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: 850d8bf806620ef89a99381c5cf5ea2c1ea826dd  # frozen: v1.17.0
+    hooks:
+      - id: mypy
+        verbose: true
+        args: ["--show-error-codes", "--install-types", "--non-interactive"]
+        additional_dependencies:
+          - "pytest"
+          - "types-pexpect"
+          - "types-pygments"
+          - "types-pytz"
+          - "types-requests"

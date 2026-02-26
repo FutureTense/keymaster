@@ -1,2841 +1,3292 @@
 {
-    "nodeId": 14,
-    "index": 0,
-    "status": 4,
-    "ready": true,
-    "deviceClass": {
-      "basic": {
-        "key": 4,
-        "label": "Routing Slave"
-      },
-      "generic": {
-        "key": 64,
-        "label": "Entry Control"
-      },
-      "specific": {
-        "key": 3,
-        "label": "Secure Keypad Door Lock"
-      },
-      "mandatorySupportedCCs": [
-        32,
-        98,
-        99,
-        114,
-        152,
-        134
-      ],
-      "mandatoryControlledCCs": []
-    },
-    "isListening": false,
-    "isFrequentListening": true,
-    "isControllerNode": false,
-    "isRouting": true,
-    "maxBaudRate": 40000,
-    "isSecure": true,
-    "version": 4,
-    "isBeaming": true,
+  "nodeId": 14,
+  "index": 0,
+  "status": 4,
+  "ready": true,
+  "isListening": false,
+  "isRouting": true,
+  "isSecure": true,
+  "manufacturerId": 144,
+  "productId": 1,
+  "productType": 1,
+  "firmwareVersion": "3.33",
+  "name": "Garage Door",
+  "location": "**REDACTED**",
+  "deviceConfig": {
+    "filename": "/usr/src/app/store/.config-db/devices/0x0090/910.json",
+    "isEmbedded": true,
+    "manufacturer": "Kwikset",
     "manufacturerId": 144,
-    "productId": 1,
-    "productType": 1,
-    "firmwareVersion": "3.33",
-    "deviceConfig": {
-      "filename": "/usr/src/app/node_modules/@zwave-js/config/config/devices/0x0090/910.json",
-      "manufacturerId": 144,
-      "manufacturer": "Kwikset",
-      "label": "910",
-      "description": "Smart Code with Home Connect Technology",
-      "devices": [
-        {
-          "productType": "0x0001",
-          "productId": "0x0001"
-        },
-        {
-          "productType": "0x0001",
-          "productId": "0x0236"
-        },
-        {
-          "productType": "0x0003",
-          "productId": "0x0238"
-        }
-      ],
-      "firmwareVersion": {
-        "min": "0.0",
-        "max": "255.255"
+    "label": "910",
+    "description": "Smart Code with Home Connect Technology",
+    "devices": [
+      {
+        "productType": 1,
+        "productId": 1
       },
-      "associations": {},
-      "paramInformation": {
-        "_map": {}
+      {
+        "productType": 1,
+        "productId": 566
+      },
+      {
+        "productType": 3,
+        "productId": 568
+      },
+      {
+        "productType": 3,
+        "productId": 0
+      }
+    ],
+    "firmwareVersion": {
+      "min": "0.0",
+      "max": "255.255"
+    },
+    "preferred": false,
+    "associations": {},
+    "paramInformation": {
+      "_map": {}
+    },
+    "compat": {
+      "alarmMapping": [
+        {
+          "from": {
+            "alarmType": 0
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 0
+          }
+        },
+        {
+          "from": {
+            "alarmType": 9
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 11
+          }
+        },
+        {
+          "from": {
+            "alarmType": 19
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 6,
+            "eventParameters": {
+              "userId": "alarmLevel"
+            }
+          }
+        },
+        {
+          "from": {
+            "alarmType": 18
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 5,
+            "eventParameters": {
+              "userId": "alarmLevel"
+            }
+          }
+        },
+        {
+          "from": {
+            "alarmType": 21
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 1
+          }
+        },
+        {
+          "from": {
+            "alarmType": 22
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 2
+          }
+        },
+        {
+          "from": {
+            "alarmType": 23
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 8
+          }
+        },
+        {
+          "from": {
+            "alarmType": 24
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 3
+          }
+        },
+        {
+          "from": {
+            "alarmType": 25
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 4
+          }
+        },
+        {
+          "from": {
+            "alarmType": 26
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 10
+          }
+        },
+        {
+          "from": {
+            "alarmType": 27
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 9
+          }
+        },
+        {
+          "from": {
+            "alarmType": 32
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 12
+          }
+        },
+        {
+          "from": {
+            "alarmType": 33
+          },
+          "to": {
+            "notificationType": 6,
+            "notificationEvent": 13,
+            "eventParameters": {
+              "userId": "alarmLevel"
+            }
+          }
+        },
+        {
+          "from": {
+            "alarmType": 167
+          },
+          "to": {
+            "notificationType": 8,
+            "notificationEvent": 14,
+            "eventParameters": {
+              "batteryLevel": "alarmLevel"
+            }
+          }
+        },
+        {
+          "from": {
+            "alarmType": 168
+          },
+          "to": {
+            "notificationType": 8,
+            "notificationEvent": 15,
+            "eventParameters": {
+              "batteryLevel": "alarmLevel"
+            }
+          }
+        }
+      ]
+    },
+    "metadata": {
+      "inclusion": "Press button A on the lock interior one time. The red LED will illuminate when the lock enters Add Mode.",
+      "exclusion": "Press button A on the lock interior once. The red LED will illuminate when the lock enters Remove mode.",
+      "reset": "1. Remove the battery pack.\n2. Press and HOLD the Program button while reinserting the battery pack.\n3. Keep holding the button for 30 seconds until the lock beeps and the status LED flashes red.\n4. Press the Program button once more. The status LED will flash green and red several times.",
+      "manual": "https://products.z-wavealliance.org/ProductManual/File?folder=&filename=MarketCertificationFiles/2239/Install_Guide_910_02_27_2017.pdf"
+    }
+  },
+  "label": "910",
+  "interviewAttempts": 0,
+  "endpoints": [
+    {
+      "nodeId": 23,
+      "index": 0,
+      "deviceClass": {
+        "basic": {
+          "key": 4,
+          "label": "Routing End Node"
+        },
+        "generic": {
+          "key": 64,
+          "label": "Entry Control"
+        },
+        "specific": {
+          "key": 3,
+          "label": "Secure Keypad Door Lock"
+        }
+      },
+      "commandClasses": [
+        {
+          "id": 152,
+          "name": "Security",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 114,
+          "name": "Manufacturer Specific",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 134,
+          "name": "Version",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 128,
+          "name": "Battery",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 112,
+          "name": "Configuration",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 133,
+          "name": "Association",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 113,
+          "name": "Notification",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 98,
+          "name": "Door Lock",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 117,
+          "name": "Protection",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 99,
+          "name": "User Code",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 78,
+          "name": "Schedule Entry Lock",
+          "version": 2,
+          "isSecure": true
+        },
+        {
+          "id": 76,
+          "name": "Door Lock Logging",
+          "version": 1,
+          "isSecure": true
+        },
+        {
+          "id": 139,
+          "name": "Time Parameters",
+          "version": 1,
+          "isSecure": true
+        }
+      ]
+    }
+  ],
+  "values": [
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "insideHandlesCanOpenDoorConfiguration",
+      "propertyName": "insideHandlesCanOpenDoorConfiguration",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "any",
+        "readable": true,
+        "writeable": true,
+        "label": "Which inside handles can open the door (configuration)",
+        "stateful": true,
+        "secret": false
+      },
+      "value": [
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "outsideHandlesCanOpenDoorConfiguration",
+      "propertyName": "outsideHandlesCanOpenDoorConfiguration",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "any",
+        "readable": true,
+        "writeable": true,
+        "label": "Which outside handles can open the door (configuration)",
+        "stateful": true,
+        "secret": false
+      },
+      "value": [
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "operationType",
+      "propertyName": "operationType",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "Lock operation type",
+        "min": 0,
+        "max": 255,
+        "states": {
+          "1": "Constant",
+          "2": "Timed"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "insideHandlesCanOpenDoor",
+      "propertyName": "insideHandlesCanOpenDoor",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "any",
+        "readable": true,
+        "writeable": false,
+        "label": "Which inside handles can open the door (actual status)",
+        "stateful": true,
+        "secret": false
+      },
+      "value": [
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "outsideHandlesCanOpenDoor",
+      "propertyName": "outsideHandlesCanOpenDoor",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "any",
+        "readable": true,
+        "writeable": false,
+        "label": "Which outside handles can open the door (actual status)",
+        "stateful": true,
+        "secret": false
+      },
+      "value": [
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "currentMode",
+      "propertyName": "currentMode",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Current lock mode",
+        "min": 0,
+        "max": 255,
+        "states": {
+          "0": "Unsecured",
+          "1": "UnsecuredWithTimeout",
+          "16": "InsideUnsecured",
+          "17": "InsideUnsecuredWithTimeout",
+          "32": "OutsideUnsecured",
+          "33": "OutsideUnsecuredWithTimeout",
+          "254": "Unknown",
+          "255": "Secured"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "doorStatus",
+      "propertyName": "doorStatus",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "any",
+        "readable": true,
+        "writeable": false,
+        "label": "Current status of the door",
+        "stateful": true,
+        "secret": false
+      },
+      "value": "open"
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "boltStatus",
+      "propertyName": "boltStatus",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "any",
+        "readable": true,
+        "writeable": false,
+        "label": "Current status of the bolt",
+        "stateful": true,
+        "secret": false
+      },
+      "value": "locked"
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "latchStatus",
+      "propertyName": "latchStatus",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "any",
+        "readable": true,
+        "writeable": false,
+        "label": "Current status of the latch",
+        "stateful": true,
+        "secret": false
+      },
+      "value": "open"
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "targetMode",
+      "propertyName": "targetMode",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "Target lock mode",
+        "min": 0,
+        "max": 255,
+        "states": {
+          "0": "Unsecured",
+          "1": "UnsecuredWithTimeout",
+          "16": "InsideUnsecured",
+          "17": "InsideUnsecuredWithTimeout",
+          "32": "OutsideUnsecured",
+          "33": "OutsideUnsecuredWithTimeout",
+          "254": "Unknown",
+          "255": "Secured"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 255
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "lockTimeoutConfiguration",
+      "propertyName": "lockTimeoutConfiguration",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "Duration of timed mode in seconds",
+        "min": 0,
+        "max": 65535,
+        "stateful": true,
+        "secret": false
       }
     },
-    "label": "910",
-    "neighbors": [
-      1,
-      6,
-      8,
-      9,
-      10,
-      11,
-      15,
-      16,
-      17,
-      18,
-      19,
-      20,
-      21,
-      22,
-      23,
-      26,
-      27,
-      28,
-      29,
-      32,
-      33,
-      36,
-      37,
-      38,
-      41,
-      42
-    ],
-    "interviewAttempts": 1,
-    "interviewStage": 7,
-    "commandClasses": [
-      {
-        "id": 98,
-        "name": "Door Lock",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 99,
-        "name": "User Code",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 112,
-        "name": "Configuration",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 113,
-        "name": "Notification",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 114,
-        "name": "Manufacturer Specific",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 117,
-        "name": "Protection",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 128,
-        "name": "Battery",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 133,
-        "name": "Association",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 134,
-        "name": "Version",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 139,
-        "name": "Time Parameters",
-        "version": 1,
-        "isSecure": true
-      },
-      {
-        "id": 152,
-        "name": "Security",
-        "version": 1,
-        "isSecure": true
+    {
+      "endpoint": 0,
+      "commandClass": 98,
+      "commandClassName": "Door Lock",
+      "property": "lockTimeout",
+      "propertyName": "lockTimeout",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Seconds until lock mode times out",
+        "min": 0,
+        "max": 65535,
+        "stateful": true,
+        "secret": false
       }
-    ],
-    "endpoints": [
-      {
-        "nodeId": 14,
-        "index": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 1,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "1",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (1)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 1,
+      "propertyName": "userCode",
+      "propertyKeyName": "1",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (1)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": "**REDACTED**"
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 2,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "2",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (2)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 2,
+      "propertyName": "userCode",
+      "propertyKeyName": "2",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (2)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": "**REDACTED**"
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 3,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "3",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (3)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 3,
+      "propertyName": "userCode",
+      "propertyKeyName": "3",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (3)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": "**REDACTED**"
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 4,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "4",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (4)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 4,
+      "propertyName": "userCode",
+      "propertyKeyName": "4",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (4)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": "**REDACTED**"
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 5,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "5",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (5)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 5,
+      "propertyName": "userCode",
+      "propertyKeyName": "5",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (5)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 6,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "6",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (6)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 6,
+      "propertyName": "userCode",
+      "propertyKeyName": "6",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (6)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 7,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "7",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (7)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 7,
+      "propertyName": "userCode",
+      "propertyKeyName": "7",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (7)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 8,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "8",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (8)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 8,
+      "propertyName": "userCode",
+      "propertyKeyName": "8",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (8)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 9,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "9",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (9)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 9,
+      "propertyName": "userCode",
+      "propertyKeyName": "9",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (9)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 10,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "10",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (10)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 10,
+      "propertyName": "userCode",
+      "propertyKeyName": "10",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (10)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 11,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "11",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (11)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 11,
+      "propertyName": "userCode",
+      "propertyKeyName": "11",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (11)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 12,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "12",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (12)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 12,
+      "propertyName": "userCode",
+      "propertyKeyName": "12",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (12)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 13,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "13",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (13)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 13,
+      "propertyName": "userCode",
+      "propertyKeyName": "13",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (13)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 14,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "14",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (14)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 14,
+      "propertyName": "userCode",
+      "propertyKeyName": "14",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (14)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 15,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "15",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (15)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 15,
+      "propertyName": "userCode",
+      "propertyKeyName": "15",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (15)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 16,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "16",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (16)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 16,
+      "propertyName": "userCode",
+      "propertyKeyName": "16",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (16)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 17,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "17",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (17)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 17,
+      "propertyName": "userCode",
+      "propertyKeyName": "17",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (17)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 18,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "18",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (18)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 18,
+      "propertyName": "userCode",
+      "propertyKeyName": "18",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (18)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 19,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "19",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (19)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 19,
+      "propertyName": "userCode",
+      "propertyKeyName": "19",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (19)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 20,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "20",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (20)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 20,
+      "propertyName": "userCode",
+      "propertyKeyName": "20",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (20)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 21,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "21",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (21)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 21,
+      "propertyName": "userCode",
+      "propertyKeyName": "21",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (21)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 22,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "22",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (22)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 22,
+      "propertyName": "userCode",
+      "propertyKeyName": "22",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (22)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 23,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "23",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (23)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 23,
+      "propertyName": "userCode",
+      "propertyKeyName": "23",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (23)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 24,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "24",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (24)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 24,
+      "propertyName": "userCode",
+      "propertyKeyName": "24",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (24)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 25,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "25",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (25)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 25,
+      "propertyName": "userCode",
+      "propertyKeyName": "25",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (25)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 26,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "26",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (26)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 26,
+      "propertyName": "userCode",
+      "propertyKeyName": "26",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (26)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 27,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "27",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (27)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 27,
+      "propertyName": "userCode",
+      "propertyKeyName": "27",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (27)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 28,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "28",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (28)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 28,
+      "propertyName": "userCode",
+      "propertyKeyName": "28",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (28)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 29,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "29",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (29)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 29,
+      "propertyName": "userCode",
+      "propertyKeyName": "29",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (29)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userIdStatus",
+      "propertyKey": 30,
+      "propertyName": "userIdStatus",
+      "propertyKeyName": "30",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "User ID status (30)",
+        "states": {
+          "0": "Available",
+          "1": "Enabled",
+          "2": "Disabled"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 99,
+      "commandClassName": "User Code",
+      "property": "userCode",
+      "propertyKey": 30,
+      "propertyName": "userCode",
+      "propertyKeyName": "30",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": true,
+        "label": "User Code (30)",
+        "minLength": 4,
+        "maxLength": 10,
+        "stateful": true,
+        "secret": true
+      },
+      "value": ""
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 1,
+      "propertyName": "User Code 1 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 1 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 2,
+      "propertyName": "User Code 2 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 2 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 3,
+      "propertyName": "User Code 3 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 3 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 4,
+      "propertyName": "User Code 4 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 4 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 5,
+      "propertyName": "User Code 5 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 5 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 6,
+      "propertyName": "User Code 6 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 6 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 7,
+      "propertyName": "User Code 7 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 7 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 8,
+      "propertyName": "User Code 8 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 8 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 9,
+      "propertyName": "User Code 9 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 9 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 10,
+      "propertyName": "User Code 10 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 10 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 11,
+      "propertyName": "User Code 11 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 11 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 12,
+      "propertyName": "User Code 12 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 12 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 13,
+      "propertyName": "User Code 13 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 13 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 14,
+      "propertyName": "User Code 14 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 14 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 15,
+      "propertyName": "User Code 15 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 15 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 16,
+      "propertyName": "User Code 16 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 16 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 17,
+      "propertyName": "User Code 17 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 17 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 18,
+      "propertyName": "User Code 18 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 18 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 19,
+      "propertyName": "User Code 19 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 19 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 20,
+      "propertyName": "User Code 20 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 20 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 21,
+      "propertyName": "User Code 21 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 21 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 22,
+      "propertyName": "User Code 22 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 22 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 23,
+      "propertyName": "User Code 23 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 23 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 24,
+      "propertyName": "User Code 24 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 24 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 25,
+      "propertyName": "User Code 25 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 25 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 26,
+      "propertyName": "User Code 26 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 26 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 27,
+      "propertyName": "User Code 27 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 27 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 28,
+      "propertyName": "User Code 28 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 28 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 29,
+      "propertyName": "User Code 29 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 29 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 30,
+      "propertyName": "User Code 30 Type",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
+        "label": "User Code 30 Type",
+        "default": 1,
+        "min": 1,
+        "max": 4,
+        "states": {
+          "1": "Owner",
+          "3": "Guest",
+          "4": "Worker"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 31,
+      "propertyKey": 1,
+      "propertyName": "Dipswitch setting: Lock Status LED",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "description": "State of the Lock Status LED dipswitch on the rear panel of the door lock.",
+        "label": "Dipswitch setting: Lock Status LED",
+        "default": 0,
+        "min": 0,
+        "max": 1,
+        "states": {
+          "0": "Disabled",
+          "1": "Enabled"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 31,
+      "propertyKey": 2,
+      "propertyName": "Dipswitch setting: Autolock",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "description": "State of the Autolock dipswitch on the rear panel of the door lock.",
+        "label": "Dipswitch setting: Autolock",
+        "default": 0,
+        "min": 0,
+        "max": 1,
+        "states": {
+          "0": "Disabled",
+          "1": "Enabled"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 31,
+      "propertyKey": 4,
+      "propertyName": "Dipswitch setting: Buzzer",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "description": "State of the Buzzer dipswitch on the rear panel of the door lock.",
+        "label": "Dipswitch setting: Buzzer",
+        "default": 0,
+        "min": 0,
+        "max": 1,
+        "states": {
+          "0": "Disabled",
+          "1": "Enabled"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 31,
+      "propertyKey": 8,
+      "propertyName": "Dipswitch setting: Secure Screen",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "description": "State of the Secure Screen dipswitch on the rear panel of the door lock.",
+        "label": "Dipswitch setting: Secure Screen",
+        "default": 0,
+        "min": 0,
+        "max": 1,
+        "states": {
+          "0": "Disabled",
+          "1": "Enabled"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 33,
+      "propertyName": "SKU Number (First 4 Bytes)",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "SKU Number (First 4 Bytes)",
+        "default": 0,
+        "min": 0,
+        "max": 4294967295,
+        "valueSize": 4,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 538976288
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 34,
+      "propertyName": "SKU Number (Last 4 Bytes)",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "SKU Number (Last 4 Bytes)",
+        "default": 0,
+        "min": 0,
+        "max": 4294967295,
+        "valueSize": 4,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
+      },
+      "value": 538976288
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 112,
+      "commandClassName": "Configuration",
+      "property": 40,
+      "propertyName": "Reset to Default",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": false,
+        "writeable": true,
+        "description": "Force Factory Reset",
+        "label": "Reset to Default",
+        "default": 0,
+        "min": 0,
+        "max": 1,
+        "states": {
+          "0": "Normal Operation",
+          "1": "Factory Reset"
+        },
+        "valueSize": 1,
+        "format": 1,
+        "allowManualEntry": false,
+        "isFromConfig": true
       }
-    ],
-    "values": [
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "currentMode",
-        "propertyName": "currentMode",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "min": 0,
-          "max": 255,
-          "label": "Current lock mode",
-          "states": {
-            "0": "Unsecured",
-            "1": "UnsecuredWithTimeout",
-            "16": "InsideUnsecured",
-            "17": "InsideUnsecuredWithTimeout",
-            "32": "OutsideUnsecured",
-            "33": "OutsideUnsecuredWithTimeout",
-            "254": "Unknown",
-            "255": "Secured"
-          }
-        },
-        "value": 255
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "targetMode",
-        "propertyName": "targetMode",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "min": 0,
-          "max": 255,
-          "label": "Target lock mode",
-          "states": {
-            "0": "Unsecured",
-            "1": "UnsecuredWithTimeout",
-            "16": "InsideUnsecured",
-            "17": "InsideUnsecuredWithTimeout",
-            "32": "OutsideUnsecured",
-            "33": "OutsideUnsecuredWithTimeout",
-            "254": "Unknown",
-            "255": "Secured"
-          }
-        },
-        "value": 255
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "outsideHandlesCanOpenDoor",
-        "propertyName": "outsideHandlesCanOpenDoor",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": false,
-          "label": "Which outside handles can open the door (actual status)"
-        },
-        "value": [
-          false,
-          false,
-          false,
-          false
-        ]
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "insideHandlesCanOpenDoor",
-        "propertyName": "insideHandlesCanOpenDoor",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": false,
-          "label": "Which inside handles can open the door (actual status)"
-        },
-        "value": [
-          false,
-          false,
-          false,
-          false
-        ]
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "latchStatus",
-        "propertyName": "latchStatus",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": false,
-          "label": "The current status of the latch"
-        },
-        "value": "open"
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "boltStatus",
-        "propertyName": "boltStatus",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": false,
-          "label": "The current status of the bolt"
-        },
-        "value": "locked"
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "doorStatus",
-        "propertyName": "doorStatus",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": false,
-          "label": "The current status of the door"
-        },
-        "value": "open"
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "lockTimeout",
-        "propertyName": "lockTimeout",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "label": "Seconds until lock mode times out"
-        }
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "operationType",
-        "propertyName": "operationType",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "min": 0,
-          "max": 255,
-          "label": "Lock operation type",
-          "states": {
-            "1": "Constant",
-            "2": "Timed"
-          }
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "outsideHandlesCanOpenDoorConfiguration",
-        "propertyName": "outsideHandlesCanOpenDoorConfiguration",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": true,
-          "label": "Which outside handles can open the door (configuration)"
-        },
-        "value": [
-          false,
-          false,
-          false,
-          false
-        ]
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "insideHandlesCanOpenDoorConfiguration",
-        "propertyName": "insideHandlesCanOpenDoorConfiguration",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": true,
-          "label": "Which inside handles can open the door (configuration)"
-        },
-        "value": [
-          false,
-          false,
-          false,
-          false
-        ]
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 98,
-        "commandClassName": "Door Lock",
-        "property": "lockTimeoutConfiguration",
-        "propertyName": "lockTimeoutConfiguration",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "min": 0,
-          "max": 65535,
-          "label": "Duration of timed mode in seconds"
-        }
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 1,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "1",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (1)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 1,
-        "propertyName": "userCode",
-        "propertyKeyName": "1",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (1)"
-        },
-        "value": "123456"
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 2,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "2",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (2)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 2,
-        "propertyName": "userCode",
-        "propertyKeyName": "2",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (2)"
-        },
-        "value": "******"
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 3,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "3",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (3)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 3,
-        "propertyName": "userCode",
-        "propertyKeyName": "3",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (3)"
-        },
-        "value": "76145"
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 4,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "4",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (4)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 4,
-        "propertyName": "userCode",
-        "propertyKeyName": "4",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (4)"
-        },
-        "value": "3610"
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 5,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "5",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (5)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 5,
-        "propertyName": "userCode",
-        "propertyKeyName": "5",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (5)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 6,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "6",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (6)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 6,
-        "propertyName": "userCode",
-        "propertyKeyName": "6",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (6)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 7,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "7",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (7)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 7,
-        "propertyName": "userCode",
-        "propertyKeyName": "7",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (7)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 8,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "8",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (8)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 8,
-        "propertyName": "userCode",
-        "propertyKeyName": "8",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (8)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 9,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "9",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (9)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 9,
-        "propertyName": "userCode",
-        "propertyKeyName": "9",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (9)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 10,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "10",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (10)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 10,
-        "propertyName": "userCode",
-        "propertyKeyName": "10",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (10)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 12,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "12",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (12)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 12,
-        "propertyName": "userCode",
-        "propertyKeyName": "12",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (12)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 13,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "13",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (13)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 13,
-        "propertyName": "userCode",
-        "propertyKeyName": "13",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (13)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 14,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "14",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (14)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 14,
-        "propertyName": "userCode",
-        "propertyKeyName": "14",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (14)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 15,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "15",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (15)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 15,
-        "propertyName": "userCode",
-        "propertyKeyName": "15",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (15)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 16,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "16",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (16)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 16,
-        "propertyName": "userCode",
-        "propertyKeyName": "16",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (16)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 17,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "17",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (17)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 17,
-        "propertyName": "userCode",
-        "propertyKeyName": "17",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (17)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 18,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "18",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (18)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 18,
-        "propertyName": "userCode",
-        "propertyKeyName": "18",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (18)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 19,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "19",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (19)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 19,
-        "propertyName": "userCode",
-        "propertyKeyName": "19",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (19)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 20,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "20",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (20)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 20,
-        "propertyName": "userCode",
-        "propertyKeyName": "20",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (20)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 21,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "21",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (21)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 21,
-        "propertyName": "userCode",
-        "propertyKeyName": "21",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (21)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 22,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "22",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (22)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 22,
-        "propertyName": "userCode",
-        "propertyKeyName": "22",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (22)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 23,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "23",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (23)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 23,
-        "propertyName": "userCode",
-        "propertyKeyName": "23",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (23)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 24,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "24",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (24)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 24,
-        "propertyName": "userCode",
-        "propertyKeyName": "24",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (24)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 25,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "25",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (25)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 25,
-        "propertyName": "userCode",
-        "propertyKeyName": "25",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (25)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 26,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "26",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (26)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 26,
-        "propertyName": "userCode",
-        "propertyKeyName": "26",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (26)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 27,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "27",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (27)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 27,
-        "propertyName": "userCode",
-        "propertyKeyName": "27",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (27)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 28,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "28",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (28)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 28,
-        "propertyName": "userCode",
-        "propertyKeyName": "28",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (28)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 29,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "29",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (29)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 29,
-        "propertyName": "userCode",
-        "propertyKeyName": "29",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (29)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 30,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "30",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (30)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 30,
-        "propertyName": "userCode",
-        "propertyKeyName": "30",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (30)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userIdStatus",
-        "propertyKey": 11,
-        "propertyName": "userIdStatus",
-        "propertyKeyName": "11",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "User ID status (11)",
-          "states": {
-            "0": "Available",
-            "1": "Enabled",
-            "2": "Disabled"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 99,
-        "commandClassName": "User Code",
-        "property": "userCode",
-        "propertyKey": 11,
-        "propertyName": "userCode",
-        "propertyKeyName": "11",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "string",
-          "readable": true,
-          "writeable": true,
-          "minLength": 4,
-          "maxLength": 10,
-          "label": "User Code (11)"
-        },
-        "value": ""
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 1,
-        "propertyName": "User Code 1 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 1 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 2,
-        "propertyName": "User Code 2 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 2 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 3,
-        "propertyName": "User Code 3 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 3 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 4,
-        "propertyName": "User Code 4 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 4 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 5,
-        "propertyName": "User Code 5 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 5 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 6,
-        "propertyName": "User Code 6 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 6 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 7,
-        "propertyName": "User Code 7 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 7 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 8,
-        "propertyName": "User Code 8 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 8 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 9,
-        "propertyName": "User Code 9 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 9 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 10,
-        "propertyName": "User Code 10 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 10 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 11,
-        "propertyName": "User Code 11 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 11 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 12,
-        "propertyName": "User Code 12 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 12 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 13,
-        "propertyName": "User Code 13 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 13 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 14,
-        "propertyName": "User Code 14 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 14 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 15,
-        "propertyName": "User Code 15 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 15 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 16,
-        "propertyName": "User Code 16 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 16 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 17,
-        "propertyName": "User Code 17 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 17 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 18,
-        "propertyName": "User Code 18 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 18 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 19,
-        "propertyName": "User Code 19 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 19 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 21,
-        "propertyName": "User Code 21 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 21 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 22,
-        "propertyName": "User Code 22 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 22 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 23,
-        "propertyName": "User Code 23 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 23 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 24,
-        "propertyName": "User Code 24 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 24 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 25,
-        "propertyName": "User Code 25 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 25 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 26,
-        "propertyName": "User Code 26 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 26 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 27,
-        "propertyName": "User Code 27 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 27 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 28,
-        "propertyName": "User Code 28 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 28 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 29,
-        "propertyName": "User Code 29 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 29 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 30,
-        "propertyName": "User Code 30 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 30 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 33,
-        "propertyName": "SKU Number (First 4 Bytes)",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 4,
-          "min": 0,
-          "max": 0,
-          "default": 0,
-          "format": 1,
-          "allowManualEntry": true,
-          "label": "SKU Number (First 4 Bytes)",
-          "isFromConfig": true
-        },
-        "value": 538976288
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 34,
-        "propertyName": "SKU Number (Last 4 Bytes)",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 4,
-          "min": 0,
-          "max": 0,
-          "default": 0,
-          "format": 1,
-          "allowManualEntry": true,
-          "label": "SKU Number (Last 4 Bytes)",
-          "isFromConfig": true
-        },
-        "value": 538976288
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 31,
-        "propertyKey": 1,
-        "propertyName": "Dipswitch setting: Lock Status LED",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "valueSize": 1,
-          "min": 0,
-          "max": 1,
-          "default": 0,
-          "format": 1,
-          "allowManualEntry": true,
-          "label": "Dipswitch setting: Lock Status LED",
-          "description": "State of the Lock Status LED dipswitch on the rear panel of the door lock.",
-          "isFromConfig": true
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 31,
-        "propertyKey": 2,
-        "propertyName": "Dipswitch setting: Autolock",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "valueSize": 1,
-          "min": 0,
-          "max": 1,
-          "default": 0,
-          "format": 1,
-          "allowManualEntry": true,
-          "label": "Dipswitch setting: Autolock",
-          "description": "State of the Autolock dipswitch on the rear panel of the door lock.",
-          "isFromConfig": true
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 31,
-        "propertyKey": 4,
-        "propertyName": "Dipswitch setting: Buzzer",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "valueSize": 1,
-          "min": 0,
-          "max": 1,
-          "default": 0,
-          "format": 1,
-          "allowManualEntry": true,
-          "label": "Dipswitch setting: Buzzer",
-          "description": "State of the Buzzer dipswitch on the rear panel of the door lock.",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 31,
-        "propertyKey": 8,
-        "propertyName": "Dipswitch setting: Secure Screen",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "valueSize": 1,
-          "min": 0,
-          "max": 1,
-          "default": 0,
-          "format": 1,
-          "allowManualEntry": true,
-          "label": "Dipswitch setting: Secure Screen",
-          "description": "State of the Secure Screen dipswitch on the rear panel of the door lock.",
-          "isFromConfig": true
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 20,
-        "propertyName": "User Code 20 Type",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 1,
-          "max": 4,
-          "default": 1,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "1": "Owner",
-            "3": "Guest",
-            "4": "Worker"
-          },
-          "label": "User Code 20 Type",
-          "description": "Guests and Workers will require schedules attached to them in order for those types to be assigned",
-          "isFromConfig": true
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 112,
-        "commandClassName": "Configuration",
-        "property": 40,
-        "propertyName": "Reset to Default",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": false,
-          "writeable": true,
-          "valueSize": 1,
-          "min": 0,
-          "max": 1,
-          "default": 0,
-          "format": 1,
-          "allowManualEntry": false,
-          "states": {
-            "0": "Normal Operation",
-            "1": "Factory Reset"
-          },
-          "label": "Reset to Default",
-          "description": "Force Factory Reset",
-          "isFromConfig": true
-        }
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 113,
-        "commandClassName": "Notification",
-        "property": "alarmType",
-        "propertyName": "alarmType",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "min": 0,
-          "max": 255,
-          "label": "Alarm Type"
-        },
-        "value": 21
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 113,
-        "commandClassName": "Notification",
-        "property": "alarmLevel",
-        "propertyName": "alarmLevel",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "min": 0,
-          "max": 255,
-          "label": "Alarm Level"
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 114,
-        "commandClassName": "Manufacturer Specific",
-        "property": "manufacturerId",
-        "propertyName": "manufacturerId",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "min": 0,
-          "max": 65535,
-          "label": "Manufacturer ID"
-        },
-        "value": 144
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 114,
-        "commandClassName": "Manufacturer Specific",
-        "property": "productType",
-        "propertyName": "productType",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "min": 0,
-          "max": 65535,
-          "label": "Product type"
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 114,
-        "commandClassName": "Manufacturer Specific",
-        "property": "productId",
-        "propertyName": "productId",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "min": 0,
-          "max": 65535,
-          "label": "Product ID"
-        },
-        "value": 1
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 117,
-        "commandClassName": "Protection",
-        "property": "local",
-        "propertyName": "local",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": true,
-          "label": "Local protection state",
-          "states": {
-            "0": "Unprotected",
-            "1": "ProtectedBySequence",
-            "2": "NoOperationPossible"
-          }
-        },
-        "value": 0
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 128,
-        "commandClassName": "Battery",
-        "property": "level",
-        "propertyName": "level",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "number",
-          "readable": true,
-          "writeable": false,
-          "min": 0,
-          "max": 100,
-          "unit": "%",
-          "label": "Battery level"
-        },
-        "value": 40
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 128,
-        "commandClassName": "Battery",
-        "property": "isLow",
-        "propertyName": "isLow",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "boolean",
-          "readable": true,
-          "writeable": false,
-          "label": "Low battery level"
-        },
-        "value": false
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 134,
-        "commandClassName": "Version",
-        "property": "libraryType",
-        "propertyName": "libraryType",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": false,
-          "label": "Library type"
-        },
-        "value": 6
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 134,
-        "commandClassName": "Version",
-        "property": "protocolVersion",
-        "propertyName": "protocolVersion",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": false,
-          "label": "Z-Wave protocol version"
-        },
-        "value": "3.52"
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 134,
-        "commandClassName": "Version",
-        "property": "firmwareVersions",
-        "propertyName": "firmwareVersions",
-        "ccVersion": 1,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": false,
-          "label": "Z-Wave chip firmware versions"
-        },
-        "value": [
-          "3.33"
-        ]
-      },
-      {
-        "endpoint": 0,
-        "commandClass": 139,
-        "commandClassName": "Time Parameters",
-        "property": "dateAndTime",
-        "propertyName": "dateAndTime",
-        "ccVersion": 0,
-        "metadata": {
-          "type": "any",
-          "readable": true,
-          "writeable": true
-        }
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 113,
+      "commandClassName": "Notification",
+      "property": "Access Control",
+      "propertyKey": "Lock state",
+      "propertyName": "Access Control",
+      "propertyKeyName": "Lock state",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Lock state",
+        "ccSpecific": {
+          "notificationType": 6
+        },
+        "min": 0,
+        "max": 255,
+        "states": {
+          "0": "idle",
+          "11": "Lock jammed"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 113,
+      "commandClassName": "Notification",
+      "property": "Power Management",
+      "propertyKey": "Battery level status",
+      "propertyName": "Power Management",
+      "propertyKeyName": "Battery level status",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Battery level status",
+        "ccSpecific": {
+          "notificationType": 8
+        },
+        "min": 0,
+        "max": 255,
+        "states": {
+          "0": "idle",
+          "14": "Charge battery soon",
+          "15": "Charge battery now"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 113,
+      "commandClassName": "Notification",
+      "property": "alarmType",
+      "propertyName": "alarmType",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Alarm Type",
+        "min": 0,
+        "max": 255,
+        "stateful": true,
+        "secret": false
+      },
+      "value": 22
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 113,
+      "commandClassName": "Notification",
+      "property": "alarmLevel",
+      "propertyName": "alarmLevel",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Alarm Level",
+        "min": 0,
+        "max": 255,
+        "stateful": true,
+        "secret": false
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 114,
+      "commandClassName": "Manufacturer Specific",
+      "property": "productId",
+      "propertyName": "productId",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Product ID",
+        "min": 0,
+        "max": 65535,
+        "stateful": true,
+        "secret": false
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 114,
+      "commandClassName": "Manufacturer Specific",
+      "property": "productType",
+      "propertyName": "productType",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Product type",
+        "min": 0,
+        "max": 65535,
+        "stateful": true,
+        "secret": false
+      },
+      "value": 1
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 114,
+      "commandClassName": "Manufacturer Specific",
+      "property": "manufacturerId",
+      "propertyName": "manufacturerId",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Manufacturer ID",
+        "min": 0,
+        "max": 65535,
+        "stateful": true,
+        "secret": false
+      },
+      "value": 144
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 117,
+      "commandClassName": "Protection",
+      "property": "local",
+      "propertyName": "local",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": true,
+        "label": "Local protection state",
+        "states": {
+          "0": "Unprotected",
+          "1": "ProtectedBySequence",
+          "2": "NoOperationPossible"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 0
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 128,
+      "commandClassName": "Battery",
+      "property": "isLow",
+      "propertyName": "isLow",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "boolean",
+        "readable": true,
+        "writeable": false,
+        "label": "Low battery level",
+        "stateful": true,
+        "secret": false
+      },
+      "value": false
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 128,
+      "commandClassName": "Battery",
+      "property": "level",
+      "propertyName": "level",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Battery level",
+        "min": 0,
+        "max": 100,
+        "unit": "%",
+        "stateful": true,
+        "secret": false
+      },
+      "value": 60
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 134,
+      "commandClassName": "Version",
+      "property": "firmwareVersions",
+      "propertyName": "firmwareVersions",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string[]",
+        "readable": true,
+        "writeable": false,
+        "label": "Z-Wave chip firmware versions",
+        "stateful": true,
+        "secret": false
+      },
+      "value": [
+        "3.33"
+      ]
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 134,
+      "commandClassName": "Version",
+      "property": "protocolVersion",
+      "propertyName": "protocolVersion",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "string",
+        "readable": true,
+        "writeable": false,
+        "label": "Z-Wave protocol version",
+        "stateful": true,
+        "secret": false
+      },
+      "value": "3.52"
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 134,
+      "commandClassName": "Version",
+      "property": "libraryType",
+      "propertyName": "libraryType",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "number",
+        "readable": true,
+        "writeable": false,
+        "label": "Library type",
+        "states": {
+          "0": "Unknown",
+          "1": "Static Controller",
+          "2": "Controller",
+          "3": "Enhanced Slave",
+          "4": "Slave",
+          "5": "Installer",
+          "6": "Routing Slave",
+          "7": "Bridge Controller",
+          "8": "Device under Test",
+          "9": "N/A",
+          "10": "AV Remote",
+          "11": "AV Device"
+        },
+        "stateful": true,
+        "secret": false
+      },
+      "value": 6
+    },
+    {
+      "endpoint": 0,
+      "commandClass": 139,
+      "commandClassName": "Time Parameters",
+      "property": "dateAndTime",
+      "propertyName": "dateAndTime",
+      "ccVersion": 1,
+      "metadata": {
+        "type": "any",
+        "readable": true,
+        "writeable": true,
+        "label": "Date and Time",
+        "stateful": true,
+        "secret": false
       }
-    ]
-  }
+    }
+  ],
+  "isFrequentListening": "1000ms",
+  "maxDataRate": 40000,
+  "supportedDataRates": [
+    40000
+  ],
+  "protocolVersion": 3,
+  "supportsBeaming": true,
+  "supportsSecurity": false,
+  "nodeType": 1,
+  "deviceClass": {
+    "basic": {
+      "key": 4,
+      "label": "Routing End Node"
+    },
+    "generic": {
+      "key": 64,
+      "label": "Entry Control"
+    },
+    "specific": {
+      "key": 3,
+      "label": "Secure Keypad Door Lock"
+    }
+  },
+  "interviewStage": "Complete",
+  "deviceDatabaseUrl": "https://devices.zwave-js.io/?jumpTo=0x0090:0x0001:0x0001:3.33",
+  "statistics": {
+    "commandsTX": 47,
+    "commandsRX": 72,
+    "commandsDroppedRX": 18,
+    "commandsDroppedTX": 0,
+    "timeoutResponse": 0,
+    "rtt": 1921.1,
+    "lastSeen": "2025-08-10T18:48:07.913Z",
+    "rssi": -85,
+    "lwr": {
+      "protocolDataRate": 2,
+      "repeaters": [
+        4
+      ],
+      "rssi": -84,
+      "repeaterRSSI": [
+        127
+      ]
+    },
+    "nlwr": {
+      "protocolDataRate": 2,
+      "repeaters": [],
+      "rssi": -90,
+      "repeaterRSSI": []
+    }
+  },
+  "highestSecurityClass": 7,
+  "isControllerNode": false,
+  "keepAwake": false,
+  "lastSeen": "2025-08-10T18:48:07.913Z",
+  "protocol": 0
+}

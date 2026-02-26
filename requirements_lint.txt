@@ -1,0 +1,6 @@
+# Lint dependencies for ruff, mypy, and pylint
+mypy
+pylint
+pylint-per-file-ignores
+ruff
+types-PyYAML

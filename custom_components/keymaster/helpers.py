@@ -1,426 +1,329 @@
 """Helpers for keymaster."""
 
-import asyncio
-from datetime import timedelta
+from __future__ import annotations
+
+from collections.abc import Callable, MutableMapping
+from datetime import datetime as dt, timedelta
 import logging
-import os
-from typing import Dict, List, Optional, Tuple
+import time
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.automation import DOMAIN as AUTO_DOMAIN
-from homeassistant.components.input_boolean import DOMAIN as IN_BOOL_DOMAIN
-from homeassistant.components.input_datetime import DOMAIN as IN_DT_DOMAIN
-from homeassistant.components.input_number import DOMAIN as IN_NUM_DOMAIN
-from homeassistant.components.input_text import DOMAIN as IN_TXT_DOMAIN
+from homeassistant.components import persistent_notification
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
-from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
-from homeassistant.components.timer import DOMAIN as TIMER_DOMAIN
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_DEVICE_ID,
-    ATTR_ENTITY_ID,
-    ATTR_STATE,
-    SERVICE_RELOAD,
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
-)
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceNotFound
-from homeassistant.helpers.device_registry import async_get as async_get_device_registry
-from homeassistant.helpers.entity_registry import (
-    EntityRegistry,
-    async_get as async_get_entity_registry,
-)
-from homeassistant.util import dt as dt_util
+from homeassistant.helpers import entity_registry as er, sun
+from homeassistant.helpers.event import async_call_later
+from homeassistant.util import slugify
 
-from .const import (
-    ACCESS_CONTROL,
-    ACTION_MAP,
-    ALARM_TYPE,
-    ATTR_ACTION_CODE,
-    ATTR_ACTION_TEXT,
-    ATTR_CODE_SLOT_NAME,
-    ATTR_NAME,
-    ATTR_NOTIFICATION_SOURCE,
-    CHILD_LOCKS,
-    CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-    CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    CONF_LOCK_ENTITY_ID,
-    CONF_LOCK_NAME,
-    CONF_PARENT,
-    CONF_PATH,
-    CONF_SENSOR_NAME,
-    CONF_SLOTS,
-    CONF_START,
-    DOMAIN,
-    EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-    LOCK_STATE_MAP,
-    PRIMARY_LOCK,
-)
-from .lock import KeymasterLock
+from .const import DEFAULT_AUTOLOCK_MIN_DAY, DEFAULT_AUTOLOCK_MIN_NIGHT, DOMAIN
+from .providers import is_platform_supported
 
-zwave_js_supported = True
+if TYPE_CHECKING:
+    from .lock import KeymasterLock
 
-try:
-    from zwave_js_server.const.command_class.lock import ATTR_CODE_SLOT
-
-    from homeassistant.components.zwave_js.const import (
-        ATTR_EVENT_LABEL,
-        ATTR_NODE_ID,
-        ATTR_PARAMETERS,
-        DATA_CLIENT as ZWAVE_JS_DATA_CLIENT,
-        DOMAIN as ZWAVE_JS_DOMAIN,
-    )
-except (ModuleNotFoundError, ImportError):
-    zwave_js_supported = False
-    ATTR_CODE_SLOT = "code_slot"
-    from .const import ATTR_NODE_ID
-
-_LOGGER = logging.getLogger(__name__)
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-@callback
-def _async_using(
-    domain: str,
-    lock: Optional[KeymasterLock],
-    entity_id: Optional[str],
-    ent_reg: Optional[EntityRegistry],
-) -> bool:
-    """Base function for using_<zwave integration> logic."""
-    if not (lock or (entity_id and ent_reg)):
-        raise Exception("Missing arguments")
+class Throttle:
+    """Class to prevent functions from being called multiple times."""
 
-    if lock:
-        entity = lock.ent_reg.async_get(lock.lock_entity_id)
-    else:
-        entity = ent_reg.async_get(entity_id)
+    def __init__(self) -> None:
+        """Initialize Throttle class."""
+        self._cooldowns: MutableMapping = {}  # Nested dictionary: {function_name: {key: last_called_time}}
 
-    return entity and entity.platform == domain
+    def is_allowed(self, func_name: str, key: str, cooldown_seconds: int) -> bool:
+        """Check if function is allowed to run or not."""
+        current_time = time.time()
+        if func_name not in self._cooldowns:
+            self._cooldowns[func_name] = {}
 
-
-@callback
-def async_using_zwave_js(
-    lock: KeymasterLock = None, entity_id: str = None, ent_reg: EntityRegistry = None
-) -> bool:
-    """Returns whether the zwave_js integration is configured."""
-    return zwave_js_supported and _async_using(
-        ZWAVE_JS_DOMAIN, lock, entity_id, ent_reg
-    )
+        last_called = self._cooldowns[func_name].get(key, 0)
+        if current_time - last_called >= cooldown_seconds:
+            self._cooldowns[func_name][key] = current_time
+            return True
+        return False
 
 
-def get_code_slots_list(data: Dict[str, int]) -> List[int]:
-    """Get list of code slots."""
-    return list(range(data[CONF_START], data[CONF_START] + data[CONF_SLOTS]))
+class KeymasterTimer:
+    """Timer to use in keymaster."""
 
+    def __init__(self) -> None:
+        """Initialize the keymaster Timer."""
+        self.hass: HomeAssistant | None = None
+        self._unsub_events: list[Callable] = []
+        self._kmlock: KeymasterLock | None = None
+        self._call_action: Callable | None = None
+        self._end_time: dt | None = None
 
-async def generate_keymaster_locks(
-    hass: HomeAssistant, config_entry: ConfigEntry
-) -> Tuple[KeymasterLock, List[KeymasterLock]]:
-    """Generate primary and child keymaster locks from config entry."""
-    ent_reg = async_get_entity_registry(hass)
-    primary_lock = KeymasterLock(
-        config_entry.data[CONF_LOCK_NAME],
-        config_entry.data[CONF_LOCK_ENTITY_ID],
-        config_entry.data.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
-        config_entry.data.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
-        ent_reg,
-        door_sensor_entity_id=config_entry.data[CONF_SENSOR_NAME],
-        parent=config_entry.data[CONF_PARENT],
-    )
-    child_locks = [
-        KeymasterLock(
-            lock_name,
-            lock[CONF_LOCK_ENTITY_ID],
-            lock.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
-            lock.get(CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID),
-            ent_reg,
-        )
-        for lock_name, lock in config_entry.data.get(CHILD_LOCKS, {}).items()
-    ]
+    async def setup(
+        self, hass: HomeAssistant, kmlock: KeymasterLock, call_action: Callable
+    ) -> None:
+        """Create fields for the keymaster Timer."""
+        self.hass = hass
+        self._kmlock = kmlock
+        self._call_action = call_action
 
-    return primary_lock, child_locks
-
-
-async def async_update_zwave_js_nodes_and_devices(
-    hass: HomeAssistant,
-    entry_id: str,
-    primary_lock: KeymasterLock,
-    child_locks: List[KeymasterLock],
-) -> None:
-    """Update Z-Wave JS nodes and devices."""
-    try:
-        zwave_entry = hass.config_entries.async_get_entry(entry_id)
-        client = zwave_entry.runtime_data[ZWAVE_JS_DATA_CLIENT]
-    except:
-        _LOGGER.exception("Can't access Z-Wave JS client.")
-        return
-    ent_reg = async_get_entity_registry(hass)
-    dev_reg = async_get_device_registry(hass)
-    for lock in [primary_lock, *child_locks]:
-        lock_ent_reg_entry = ent_reg.async_get(lock.lock_entity_id)
-        if not lock_ent_reg_entry:
-            continue
-        lock_dev_reg_entry = dev_reg.async_get(lock_ent_reg_entry.device_id)
-        if not lock_dev_reg_entry:
-            continue
-        node_id: int = 0
-        for identifier in lock_dev_reg_entry.identifiers:
-            if identifier[0] == ZWAVE_JS_DOMAIN:
-                node_id = int(identifier[1].split("-")[1])
-
-        lock.zwave_js_lock_node = client.driver.controller.nodes[node_id]
-        lock.zwave_js_lock_device = lock_dev_reg_entry
-
-
-def output_to_file_from_template(
-    input_path: str,
-    input_filename: str,
-    output_path: str,
-    output_filename: str,
-    replacements_dict: Dict[str, str],
-    write_mode: str,
-) -> None:
-    """Generate file output from input templates while replacing string references."""
-    _LOGGER.debug("Starting generation of %s from %s", output_filename, input_filename)
-    with open(os.path.join(input_path, input_filename), "r") as infile, open(
-        os.path.join(output_path, output_filename), write_mode
-    ) as outfile:
-        for line in infile:
-            for src, target in replacements_dict.items():
-                line = line.replace(src, target)
-            outfile.write(line)
-    _LOGGER.debug("Completed generation of %s from %s", output_filename, input_filename)
-
-
-def delete_lock_and_base_folder(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    """Delete packages folder for lock and base keymaster folder if empty."""
-    base_path = os.path.join(hass.config.path(), config_entry.data[CONF_PATH])
-    lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-
-    delete_folder(base_path, lock.lock_name)
-    if not os.listdir(base_path):
-        os.rmdir(base_path)
-
-
-def delete_folder(absolute_path: str, *relative_paths: str) -> None:
-    """Recursively delete folder and all children files and folders (depth first)."""
-    path = os.path.join(absolute_path, *relative_paths)
-    if os.path.isfile(path):
-        os.remove(path)
-    else:
-        for file_or_dir in os.listdir(path):
-            delete_folder(path, file_or_dir)
-        os.rmdir(path)
-
-
-def handle_zwave_js_event(hass: HomeAssistant, config_entry: ConfigEntry, evt: Event):
-    """Handle Z-Wave JS event."""
-    primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
-        CHILD_LOCKS
-    ]
-
-    for lock in [primary_lock, *child_locks]:
-        # Try to find the lock that we are getting an event for, skipping
-        # ones that don't match
-        if (
-            not lock.zwave_js_lock_node
-            or not lock.zwave_js_lock_device
-            or evt.data[ATTR_NODE_ID] != lock.zwave_js_lock_node.node_id
-            or evt.data[ATTR_DEVICE_ID] != lock.zwave_js_lock_device.id
-        ):
-            continue
-
-        # Get lock state to provide as part of event data
-        lock_state = hass.states.get(lock.lock_entity_id)
-
-        params = evt.data.get(ATTR_PARAMETERS) or {}
-        code_slot = params.get("userId", 0)
-
-        # Lookup name for usercode
-        code_slot_name_state = (
-            hass.states.get(f"input_text.{lock.lock_name}_name_{code_slot}")
-            if code_slot and code_slot != 0
-            else None
-        )
-
-        hass.bus.fire(
-            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-            event_data={
-                ATTR_NOTIFICATION_SOURCE: "event",
-                ATTR_NAME: lock.lock_name,
-                ATTR_ENTITY_ID: lock.lock_entity_id,
-                ATTR_STATE: lock_state.state if lock_state else "",
-                ATTR_ACTION_TEXT: evt.data.get(ATTR_EVENT_LABEL),
-                ATTR_CODE_SLOT: code_slot or 0,
-                ATTR_CODE_SLOT_NAME: (
-                    code_slot_name_state.state
-                    if code_slot_name_state is not None
-                    else ""
-                ),
-            },
-        )
-        return
-
-
-@callback
-def handle_state_change(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    changed_entity: str,
-    event: Event[EventStateChangedData] | None = None,
-) -> None:
-    """Listener to track state changes to lock entities."""
-    if not event:
-        return
-
-    primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-    child_locks: List[KeymasterLock] = hass.data[DOMAIN][config_entry.entry_id][
-        CHILD_LOCKS
-    ]
-    new_state = event.data["new_state"]
-
-    for lock in [primary_lock, *child_locks]:
-        # Don't do anything if the changed entity is not this lock
-        if changed_entity != lock.lock_entity_id:
-            continue
-
-        # Determine action type to set appropriate action text using ACTION_MAP
-        action_type = ""
-        if lock.alarm_type_or_access_control_entity_id and (
-            ALARM_TYPE in lock.alarm_type_or_access_control_entity_id
-            or ALARM_TYPE.replace("_", "")
-            in lock.alarm_type_or_access_control_entity_id
-        ):
-            action_type = ALARM_TYPE
-        if (
-            lock.alarm_type_or_access_control_entity_id
-            and ACCESS_CONTROL in lock.alarm_type_or_access_control_entity_id
-        ):
-            action_type = ACCESS_CONTROL
-
-        # Get alarm_level/usercode and alarm_type/access_control  states
-        alarm_level_state = hass.states.get(lock.alarm_level_or_user_code_entity_id)
-        alarm_level_value = (
-            int(alarm_level_state.state)
-            if alarm_level_state
-            and alarm_level_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
-            else None
-        )
-
-        alarm_type_state = hass.states.get(lock.alarm_type_or_access_control_entity_id)
-        alarm_type_value = (
-            int(alarm_type_state.state)
-            if alarm_type_state
-            and alarm_type_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
-            else None
-        )
-
-        # Bail out if we can't use the sensors to provide a meaningful message
-        if alarm_level_value is None or alarm_type_value is None:
-            return
-
-        # If lock has changed state but alarm_type/access_control state hasn't changed
-        # in a while set action_value to RF lock/unlock
-        if (
-            alarm_level_state is not None
-            and int(alarm_level_state.state) == 0
-            and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
-            > timedelta(seconds=5)
-            and action_type in LOCK_STATE_MAP
-        ):
-            alarm_type_value = LOCK_STATE_MAP[action_type][new_state.state]
-
-        # Lookup action text based on alarm type value
-        action_text = (
-            ACTION_MAP.get(action_type, {}).get(
-                alarm_type_value, "Unknown Alarm Type Value"
-            )
-            if alarm_type_value is not None
-            else None
-        )
-
-        # Lookup name for usercode
-        code_slot_name_state = hass.states.get(
-            f"input_text.{lock.lock_name}_name_{alarm_level_value}"
-        )
-
-        # Fire state change event
-        hass.bus.fire(
-            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-            event_data={
-                ATTR_NOTIFICATION_SOURCE: "entity_state",
-                ATTR_NAME: lock.lock_name,
-                ATTR_ENTITY_ID: lock.lock_entity_id,
-                ATTR_STATE: new_state.state,
-                ATTR_ACTION_CODE: alarm_type_value,
-                ATTR_ACTION_TEXT: action_text,
-                ATTR_CODE_SLOT: alarm_level_value or 0,
-                ATTR_CODE_SLOT_NAME: (
-                    code_slot_name_state.state
-                    if code_slot_name_state is not None
-                    else ""
-                ),
-            },
-        )
-        return
-
-
-def reset_code_slot_if_pin_unknown(
-    hass, lock_name: str, code_slots: int, start_from: int
-) -> None:
-    """
-    Reset a code slot if the PIN is unknown.
-
-    Used when a code slot is first generated so we can give all input helpers
-    an initial state.
-    """
-    return asyncio.run_coroutine_threadsafe(
-        async_reset_code_slot_if_pin_unknown(hass, lock_name, code_slots, start_from),
-        hass.loop,
-    ).result()
-
-
-async def async_reset_code_slot_if_pin_unknown(
-    hass, lock_name: str, code_slots: int, start_from: int
-) -> None:
-    """
-    Reset a code slot if the PIN is unknown.
-
-    Used when a code slot is first generated so we can give all input helpers
-    an initial state.
-    """
-    for x in range(start_from, start_from + code_slots):
-        pin_state = hass.states.get(f"input_text.{lock_name}_pin_{x}")
-        if pin_state and pin_state.state == STATE_UNKNOWN:
-            await hass.services.async_call(
-                "script",
-                f"keymaster_{lock_name}_reset_codeslot",
-                {ATTR_CODE_SLOT: x},
-                blocking=True,
-            )
-
-
-def reload_package_platforms(hass: HomeAssistant) -> bool:
-    """Reload package platforms to pick up any changes to package files."""
-    return asyncio.run_coroutine_threadsafe(
-        async_reload_package_platforms(hass), hass.loop
-    ).result()
-
-
-async def async_reload_package_platforms(hass: HomeAssistant) -> bool:
-    """Reload package platforms to pick up any changes to package files."""
-    for domain in [
-        AUTO_DOMAIN,
-        IN_BOOL_DOMAIN,
-        IN_DT_DOMAIN,
-        IN_NUM_DOMAIN,
-        IN_TXT_DOMAIN,
-        SCRIPT_DOMAIN,
-        TEMPLATE_DOMAIN,
-        TIMER_DOMAIN,
-    ]:
-        try:
-            await hass.services.async_call(domain, SERVICE_RELOAD, blocking=True)
-        except ServiceNotFound:
+    async def start(self) -> bool:
+        """Start a timer."""
+        if not self.hass or not self._kmlock or not self._call_action:
+            _LOGGER.error("[KeymasterTimer] Cannot start timer as timer not setup")
             return False
-    return True
+
+        if isinstance(self._end_time, dt) and isinstance(self._unsub_events, list):
+            # Already running so reset and restart timer
+            for unsub in self._unsub_events:
+                unsub()
+            self._unsub_events = []
+
+        if sun.is_up(self.hass):
+            delay: int = (self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY) * 60
+        else:
+            delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
+        self._end_time = dt.now().astimezone() + timedelta(seconds=delay)
+        _LOGGER.debug(
+            "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
+            int(delay),
+            self._end_time,
+        )
+        self._unsub_events.append(
+            async_call_later(hass=self.hass, delay=delay, action=self._call_action)
+        )
+        self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=self.cancel))
+        return True
+
+    async def cancel(self, timer_elapsed: dt | None = None) -> None:
+        """Cancel a timer."""
+        if timer_elapsed:
+            _LOGGER.debug("[KeymasterTimer] Timer elapsed")
+        else:
+            _LOGGER.debug("[KeymasterTimer] Cancelling auto-lock timer")
+        if isinstance(self._unsub_events, list):
+            for unsub in self._unsub_events:
+                unsub()
+            self._unsub_events = []
+        self._end_time = None
+
+    @property
+    def is_running(self) -> bool:
+        """Return if the timer is running."""
+        if not self._end_time:
+            return False
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
+            if isinstance(self._unsub_events, list):
+                for unsub in self._unsub_events:
+                    unsub()
+                self._unsub_events = []
+            self._end_time = None
+            return False
+        return True
+
+    @property
+    def is_setup(self) -> bool:
+        """Return if the timer has been initially setup."""
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
+            if isinstance(self._unsub_events, list):
+                for unsub in self._unsub_events:
+                    unsub()
+                self._unsub_events = []
+            self._end_time = None
+        return bool(self.hass and self._kmlock and self._call_action)
+
+    @property
+    def end_time(self) -> dt | None:
+        """Returns when the timer will end."""
+        if not self._end_time:
+            return None
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
+            if isinstance(self._unsub_events, list):
+                for unsub in self._unsub_events:
+                    unsub()
+                self._unsub_events = []
+            self._end_time = None
+            return None
+        return self._end_time
+
+    @property
+    def remaining_seconds(self) -> int | None:
+        """Return the seconds until the timer ends."""
+        if not self._end_time:
+            return None
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
+            if isinstance(self._unsub_events, list):
+                for unsub in self._unsub_events:
+                    unsub()
+                self._unsub_events = []
+            self._end_time = None
+            return None
+        return round((self._end_time - dt.now().astimezone()).total_seconds())
+
+
+@callback
+def async_has_supported_provider(
+    hass: HomeAssistant,
+    kmlock: KeymasterLock | None = None,
+    entity_id: str | None = None,
+) -> bool:
+    """Return whether the lock has a supported provider.
+
+    Args:
+        hass: Home Assistant instance
+        kmlock: KeymasterLock instance (optional)
+        entity_id: Lock entity ID (optional)
+
+    Returns:
+        True if the lock platform has a supported provider.
+
+    """
+    if kmlock and kmlock.lock_entity_id:
+        return is_platform_supported(hass, kmlock.lock_entity_id)
+    if entity_id:
+        return is_platform_supported(hass, entity_id)
+    return False
+
+
+async def delete_code_slot_entities(
+    hass: HomeAssistant, keymaster_config_entry_id: str, code_slot_num: int
+) -> None:
+    """Delete no longer used code slots after update."""
+    _LOGGER.debug(
+        "[delete_code_slot_entities] Deleting code slot %s entities from config_entry_id: %s",
+        code_slot_num,
+        keymaster_config_entry_id,
+    )
+    entity_registry = er.async_get(hass)
+    # entities = er.async_entries_for_config_entry(
+    #     entity_registry, keymaster_config_entry_id
+    # )
+    # _LOGGER.debug(f"[delete_code_slot_entities] entities: {entities}")
+    properties: list = [
+        f"binary_sensor.code_slots:{code_slot_num}.active",
+        f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_start",
+        f"datetime.code_slots:{code_slot_num}.accesslimit_date_range_end",
+        f"number.code_slots:{code_slot_num}.accesslimit_count",
+        f"switch.code_slots:{code_slot_num}.override_parent",
+        f"switch.code_slots:{code_slot_num}.enabled",
+        f"switch.code_slots:{code_slot_num}.notifications",
+        f"switch.code_slots:{code_slot_num}.accesslimit_date_range_enabled",
+        f"switch.code_slots:{code_slot_num}.accesslimit_count_enabled",
+        f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week_enabled",
+        f"text.code_slots:{code_slot_num}.name",
+        f"text.code_slots:{code_slot_num}.pin",
+    ]
+    for prop in properties:
+        entity_id: str | None = entity_registry.async_get_entity_id(
+            domain=prop.split(".", maxsplit=1)[0],
+            platform=DOMAIN,
+            unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
+        )
+        if entity_id:
+            try:
+                entity_registry.async_remove(entity_id)
+                _LOGGER.debug("[delete_code_slot_entities] Removed entity: %s", entity_id)
+            except (KeyError, ValueError) as e:
+                _LOGGER.warning(
+                    "Error removing entity: %s. %s: %s",
+                    entity_id,
+                    e.__class__.__qualname__,
+                    e,
+                )
+        else:
+            _LOGGER.debug("[delete_code_slot_entities] No entity_id found for %s", prop)
+
+    for dow in range(7):
+        dow_prop: list = [
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.dow_enabled",
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.include_exclude",
+            f"switch.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.limit_by_time",
+            f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.time_start",
+            f"time.code_slots:{code_slot_num}.accesslimit_day_of_week:{dow}.time_end",
+        ]
+        for prop in dow_prop:
+            entity_id = entity_registry.async_get_entity_id(
+                domain=prop.split(".", maxsplit=1)[0],
+                platform=DOMAIN,
+                unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
+            )
+            if entity_id:
+                try:
+                    entity_registry.async_remove(entity_id)
+                    _LOGGER.debug("[delete_code_slot_entities] Removed entity: %s", entity_id)
+                except (KeyError, ValueError) as e:
+                    _LOGGER.warning(
+                        "Error removing entity: %s. %s: %s",
+                        entity_id,
+                        e.__class__.__qualname__,
+                        e,
+                    )
+            else:
+                _LOGGER.debug("[delete_code_slot_entities] No entity_id found for %s", prop)
+
+
+async def call_hass_service(
+    hass: HomeAssistant,
+    domain: str,
+    service: str,
+    service_data: dict[str, Any] | None = None,
+    target: dict[str, Any] | None = None,
+) -> None:
+    """Call a hass service and log a failure on an error."""
+    _LOGGER.debug(
+        "[call_hass_service] service: %s.%s, target: %s, service_data: %s",
+        domain,
+        service,
+        target,
+        service_data,
+    )
+
+    try:
+        await hass.services.async_call(domain, service, service_data=service_data, target=target)
+    except ServiceNotFound:
+        _LOGGER.warning("Action Not Found: %s.%s", domain, service)
+
+
+async def send_manual_notification(
+    hass: HomeAssistant,
+    script_name: str | None,
+    message: str | None,
+    title: str | None = None,
+) -> None:
+    """Send a manual notification to notify script."""
+    _LOGGER.debug(
+        "[send_manual_notification] script: %s.%s, title: %s, message: %s",
+        SCRIPT_DOMAIN,
+        script_name,
+        title,
+        message,
+    )
+    if not script_name:
+        return
+    await call_hass_service(
+        hass=hass,
+        domain=SCRIPT_DOMAIN,
+        service=script_name,
+        service_data={"title": title, "message": message},
+    )
+
+
+async def send_persistent_notification(
+    hass: HomeAssistant,
+    message: str,
+    title: str | None = None,
+    notification_id: str | None = None,
+) -> None:
+    """Send a persistent notification."""
+    _LOGGER.debug(
+        "[send_persistent_notification] title: %s, message: %s, notification_id: %s",
+        title,
+        message,
+        notification_id,
+    )
+    persistent_notification.async_create(
+        hass=hass, message=message, title=title, notification_id=notification_id
+    )
+
+
+async def dismiss_persistent_notification(hass: HomeAssistant, notification_id: str) -> None:
+    """Clear or dismisss a persistent notification."""
+    _LOGGER.debug("[dismiss_persistent_notification] notification_id: %s", notification_id)
+    persistent_notification.async_dismiss(hass=hass, notification_id=notification_id)

@@ -1,13 +1,17 @@
 {
   "config": {
+    "abort": {
+        "reconfigure_successful": "Reconfigure Successful",
+        "no_locks": "No lock devices found. Make sure the lock device is added to the Z-Wave network first, then try again."
+    },
     "error": {
-      "invalid_path": "Vennligst oppbevar bildene i en annen katalog.",
-      "same_name": "Name already in use",
-      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
+      "same_name": "Name already in use"
     },
     "step": {
       "user": {
         "data": {
+          "advanced_date_range": "Aktiver avansert datointervall‑funksjon",
+          "advanced_day_of_week": "Aktiver avansert ukedag‑funksjon",
           "alarm_level_or_user_code_entity_id": "Brukerkodesensor (fra lås)",
           "alarm_type_or_access_control_entity_id": "Tilgangskontrollsensor (fra lås)",
           "lock_entity_id": "Velg lås",
@@ -15,25 +19,20 @@
           "start_from": "Start fra kodespor #",
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
-          "packages_path": "Sti til pakkekatalog",
-          "child_locks_file": "Path to child locks file",
-          "parent": "Select parent lock",          
+          "parent": "Select parent lock",
+          "notify_script": "Notification Script",
           "hide_pins": "Hide PINs in UI?"
         },
+        "data_description": {
+          "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
+        },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
-        "title": "KeyMaster"
-      }
-    }
-  },
-  "options": {
-    "error": {
-      "invalid_path": "Vennligst oppbevar bildene i en annen katalog.",
-      "same_name": "Name already in use",
-      "invalid_child_locks_file": "Problem with child locks file, refer to logs for more information"
-    },
-    "step": {
-      "init": {
+        "title": "keymaster"
+      },
+      "reconfigure": {
         "data": {
+          "advanced_date_range": "Aktiver avansert datointervall‑funksjon",
+          "advanced_day_of_week": "Aktiver avansert ukedag‑funksjon",
           "alarm_level_or_user_code_entity_id": "Brukerkodesensor (fra lås)",
           "alarm_type_or_access_control_entity_id": "Tilgangskontrollsensor (fra lås)",
           "lock_entity_id": "Velg lås",
@@ -41,13 +40,15 @@
           "start_from": "Start fra kodespor #",
           "sensorname": "Dørsensor",
           "lockname": "Låsnavn (dvs. frontdør)",
-          "packages_path": "Sti til pakkekatalog",
-          "child_locks_file": "Path to child locks file",
-          "parent": "Select parent lock",          
+          "parent": "Select parent lock",
+          "notify_script": "Notification Script",
           "hide_pins": "Hide PINs in UI?"
         },
+        "data_description": {
+          "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
+        },
         "description": "Velg låsen du vil sette opp og kodesporene du vil opprette.",
-        "title": "KeyMaster"
+        "title": "keymaster"
       }
     }
   }

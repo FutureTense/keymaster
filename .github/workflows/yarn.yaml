@@ -1,0 +1,68 @@
+---
+name: Yarn lint and build
+
+on:
+  push:
+    branches: [beta, main]
+    paths:
+      - "**.js"
+      - "**.ts"
+      - "lovelace_strategy/**"
+      - ".eslintrc.cjs"
+      - "package.json"
+      - "rollup.config.js"
+      - "tsconfig.json"
+  pull_request:
+    branches: [beta, main]
+    paths:
+      - "**.js"
+      - "**.ts"
+      - "lovelace_strategy/**"
+      - ".eslintrc.cjs"
+      - "package.json"
+      - "rollup.config.js"
+      - "tsconfig.json"
+
+jobs:
+  yarn:
+    name: Yarn lint and build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version:
+          - "lts/iron"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Set up Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install
+        run: yarn install
+      - name: Lint
+        run: |
+          yarn lint:fix
+      - name: Check for changes from lint
+        id: change_lint
+        run: echo "changed=$(git status --porcelain | wc -l)" >> $GITHUB_OUTPUT
+      - name: Check if clean from lint
+        if: steps.change_lint.outputs.changed != 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+              core.setFailed('Repo is dirty after lint! TypeScript files have linting issues that were auto-fixed. Run yarn lint:fix locally before pushing changes.')
+      - name: Build
+        run: |
+          yarn build
+      - name: Check for changes from build
+        id: change_build
+        run: echo "changed=$(git status --porcelain | wc -l)" >> $GITHUB_OUTPUT
+      - name: Check if clean from build
+        if: steps.change_build.outputs.changed != 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+              core.setFailed('Repo is dirty after build! The generated JavaScript in custom_components/keymaster/www/generated/ does not match the TypeScript source. Run yarn build locally before pushing changes.')

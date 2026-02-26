@@ -1,3 +1,9 @@
+# Summary
+<!--
+  Please include a summary of the change and which issue is fixed or linked.
+  Please also include relevant motivation and context.
+-->
+
 ## Breaking change
 <!--
   If your PR contains a breaking change for existing users, it is important
@@ -7,20 +13,18 @@
   Note: Remove this section if this PR is NOT a breaking change.
 -->
 
-
 ## Proposed change
-<!-- 
+<!--
   Describe the big picture of your changes here to communicate to the
   maintainers why we should accept this pull request. If it fixes a bug
   or resolves a feature request, be sure to link to that issue in the
   additional information section.
 -->
 
-
 ## Type of change
 <!--
   What type of change does your PR introduce?
-  NOTE: Please, check only 1! box! 
+  NOTE: Please, check only 1! box!
   If your PR requires multiple boxes to be checked, you'll most likely need to
   split it into multiple PRs. This makes things easier and faster to code review.
 -->
@@ -38,4 +42,4 @@
 -->
 
 - This PR fixes or closes issue: fixes #
-- This PR is related to issue: 
+- This PR is related to issue:

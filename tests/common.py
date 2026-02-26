@@ -1,22 +1,23 @@
 """Helpers for tests."""
 
 import asyncio
+from datetime import datetime
 import functools as ft
-import os
+from pathlib import Path
 import time
+from typing import Any
 from unittest.mock import patch
 
-from datetime import datetime
 from homeassistant import core as ha
 from homeassistant.core import HomeAssistant
 from homeassistant.util.async_ import run_callback_threadsafe
-import homeassistant.util.dt as date_util
+import homeassistant.util.dt as dt_util
 
 
 def load_fixture(filename):
     """Load a fixture."""
-    path = os.path.join(os.path.dirname(__file__), "json", filename)
-    with open(path, encoding="utf-8") as fptr:
+    path = Path(__file__).parent / "json" / filename
+    with path.open(encoding="utf-8") as fptr:
         return fptr.read()
 
 
@@ -43,22 +44,23 @@ def threadsafe_callback_factory(func):
     def threadsafe(*args, **kwargs):
         """Call func threadsafe."""
         hass = args[0]
-        return run_callback_threadsafe(
-            hass.loop, ft.partial(func, *args, **kwargs)
-        ).result()
+        return run_callback_threadsafe(hass.loop, ft.partial(func, *args, **kwargs)).result()
 
     return threadsafe
 
 
 @ha.callback
 def async_fire_time_changed(
-    hass: HomeAssistant, datetime_: datetime = None, fire_all: bool = False
+    hass: HomeAssistant, datetime_: datetime | None = None, fire_all: bool = False
 ) -> None:
     """Fire a time changed event."""
     if datetime_ is None:
-        datetime_ = date_util.utcnow()
+        datetime_ = dt_util.utcnow()
 
-    for task in list(hass.loop._scheduled):
+    # Access the event loop's internal scheduled tasks
+    # This is intentional for test time manipulation - the attribute exists at runtime
+    scheduled_tasks: list[Any] = getattr(hass.loop, "_scheduled", [])
+    for task in list(scheduled_tasks):
         if not isinstance(task, asyncio.TimerHandle):
             continue
         if task.cancelled():
@@ -70,8 +72,9 @@ def async_fire_time_changed(
         if fire_all or mock_seconds_into_future >= future_seconds:
             with patch(
                 "homeassistant.helpers.event.time_tracker_utcnow",
-                return_value=date_util.as_utc(datetime_),
+                return_value=dt_util.as_utc(datetime_),
             ):
+                # Access the private _run method on TimerHandle for test time manipulation
                 task._run()
                 task.cancel()
 

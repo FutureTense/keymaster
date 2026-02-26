@@ -1,340 +1,224 @@
 """keymaster Integration."""
 
+from __future__ import annotations
+
 import asyncio
-from datetime import timedelta
+from collections.abc import MutableMapping
+from datetime import datetime as dt, timedelta
 import functools
 import logging
-from typing import Any, Dict, List, Optional, Union
+from pathlib import Path
 
-import voluptuous as vol
-
-from homeassistant.components.persistent_notification import async_create, async_dismiss
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_ENTITY_ID,
-    EVENT_HOMEASSISTANT_STARTED,
-    STATE_ON,
-)
-from homeassistant.core import CoreState, Event, HomeAssistant, ServiceCall
-from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.entity_registry import (
-    EntityRegistry,
-    async_get as async_get_entity_registry,
-)
-from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.helpers.typing import ConfigType
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import slugify
+from homeassistant.core import HomeAssistant
+from homeassistant.core_config import Config
+from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers.event import async_call_later
 
-from .binary_sensor import generate_binary_sensor_name
 from .const import (
-    ATTR_CODE_SLOT,
-    ATTR_NAME,
-    ATTR_USER_CODE,
-    CHILD_LOCKS,
+    CONF_ADVANCED_DATE_RANGE,
+    CONF_ADVANCED_DAY_OF_WEEK,
     CONF_ALARM_LEVEL,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_CHILD_LOCKS_FILE,
+    CONF_DOOR_SENSOR_ENTITY_ID,
     CONF_ENTITY_ID,
-    CONF_GENERATE,
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
+    CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
-    CONF_PATH,
+    CONF_PARENT_ENTRY_ID,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
+    DAY_NAMES,
+    DEFAULT_ADVANCED_DATE_RANGE,
+    DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_HIDE_PINS,
     DOMAIN,
-    INTEGRATION,
-    ISSUE_URL,
+    NONE_TEXT,
     PLATFORMS,
-    PRIMARY_LOCK,
-    UNSUB_LISTENERS,
-    VERSION,
+    STRATEGY_FILENAME,
+    STRATEGY_PATH,
 )
-from .exceptions import (
-    NoNodeSpecifiedError,
-    NotFoundError as NativeNotFoundError,
-    NotSupportedError as NativeNotSupportedError,
-    ZWaveIntegrationNotConfiguredError,
-    ZWaveNetworkNotReady,
-)
-from .helpers import (
-    async_reload_package_platforms,
-    async_reset_code_slot_if_pin_unknown,
-    async_using_zwave_js,
-    delete_folder,
-    delete_lock_and_base_folder,
-    generate_keymaster_locks,
-    get_code_slots_list,
-    handle_state_change,
-    handle_zwave_js_event,
-)
-from .lock import KeymasterLock
-from .services import (
-    add_code,
-    clear_code,
-    generate_package_files,
-    init_child_locks,
-    refresh_codes,
-)
+from .coordinator import KeymasterCoordinator
+from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
+from .lovelace import async_generate_lovelace
+from .migrate import migrate_2to3
+from .resources import async_cleanup_strategy_resource, async_register_strategy_resource
+from .services import async_setup_services
+from .websocket import async_setup as async_websocket_setup
 
-try:
-    from zwave_js_server.const.command_class.lock import ATTR_IN_USE, ATTR_USERCODE
-    from zwave_js_server.model.node import Node as ZwaveJSNode
-    from zwave_js_server.util.lock import get_usercode_from_node, get_usercodes
-
-    from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
-except (ModuleNotFoundError, ImportError):
-    pass
-
-_LOGGER = logging.getLogger(__name__)
-
-SERVICE_GENERATE_PACKAGE = "generate_package"
-SERVICE_ADD_CODE = "add_code"
-SERVICE_CLEAR_CODE = "clear_code"
-SERVICE_REFRESH_CODES = "refresh_codes"
-
-SET_USERCODE = "set_usercode"
-CLEAR_USERCODE = "clear_usercode"
+_LOGGER: logging.Logger = logging.getLogger(__name__)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def homeassistant_started_listener(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    locks_to_watch: List[KeymasterLock],  # pylint: disable-next=unused-argument
-    evt: Event = None,
-):
-    """Start tracking state changes after HomeAssistant has started."""
-    # Listen to lock state changes so we can fire an event
-    hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-        async_track_state_change_event(
-            hass,
-            [lock.lock_entity_id for lock in locks_to_watch],
-            functools.partial(handle_state_change, hass, config_entry),
-        )
+async def async_setup(hass: HomeAssistant, config: Config) -> bool:
+    """Set up integration."""
+    hass.data.setdefault(DOMAIN, {"resources": False})
+
+    # Expose strategy javascript
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                STRATEGY_PATH,
+                str(Path(__file__).parent / "www" / "generated" / STRATEGY_FILENAME),
+                False,
+            )
+        ]
     )
+    _LOGGER.debug("Exposed strategy module at %s", STRATEGY_PATH)
 
+    await async_register_strategy_resource(hass)
 
-async def async_setup(  # pylint: disable-next=unused-argument
-    hass: HomeAssistant, config: ConfigType
-) -> bool:
-    """Disallow configuration via YAML."""
+    # Set up websocket API
+    await async_websocket_setup(hass)
+    _LOGGER.debug("Finished setting up websocket API")
+
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up is called when Home Assistant is loading our component."""
-    hass.data.setdefault(DOMAIN, {})
-    _LOGGER.info(
-        "Version %s is starting, if you have any issues please report them here: %s",
-        VERSION,
-        ISSUE_URL,
-    )
-    should_generate_package = config_entry.data.get(CONF_GENERATE)
-
     updated_config = config_entry.data.copy()
 
-    # pop CONF_GENERATE if it is in data
-    updated_config.pop(CONF_GENERATE, None)
+    for prop in (
+        CONF_PARENT,
+        CONF_NOTIFY_SCRIPT_NAME,
+        CONF_DOOR_SENSOR_ENTITY_ID,
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
+    ):
+        if config_entry.data.get(prop) in {
+            NONE_TEXT,
+            "sensor.fake",
+            "binary_sensor.fake",
+        }:
+            updated_config[prop] = None
 
-    # If CONF_PATH is absolute, make it relative. This can be removed in the future,
-    # it is only needed for entries that are being migrated from using the old absolute
-    # path
-    config_path = hass.config.path()
-    if config_entry.data[CONF_PATH].startswith(config_path):
-        num_chars_config_path = len(config_path)
-        updated_config[CONF_PATH] = updated_config[CONF_PATH][num_chars_config_path:]
-        # Remove leading slashes
-        updated_config[CONF_PATH] = updated_config[CONF_PATH].lstrip("/").lstrip("\\")
+    if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
+        updated_config[CONF_PARENT_ENTRY_ID] = None
 
-    if "parent" not in config_entry.data.keys():
-        updated_config[CONF_PARENT] = None
-    elif config_entry.data[CONF_PARENT] == "(none)":
-        updated_config[CONF_PARENT] = None
+    if updated_config.get(CONF_PARENT) is None:
+        updated_config[CONF_PARENT_ENTRY_ID] = None
+    elif updated_config.get(CONF_PARENT_ENTRY_ID) is None:
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            if updated_config.get(CONF_PARENT) == entry.data.get(CONF_LOCK_NAME):
+                updated_config[CONF_PARENT_ENTRY_ID] = entry.entry_id
+                break
+
+    if not updated_config.get(CONF_NOTIFY_SCRIPT_NAME):
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = (
+            f"keymaster_{updated_config.get(CONF_LOCK_NAME)}_manual_notify"
+        )
+    elif isinstance(updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str) and updated_config[
+        CONF_NOTIFY_SCRIPT_NAME
+    ].startswith("script."):
+        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[CONF_NOTIFY_SCRIPT_NAME].split(
+            ".", maxsplit=1
+        )[1]
 
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
 
-    config_entry.add_update_listener(update_listener)
+    # _LOGGER.debug(f"[init async_setup_entry] updated config_entry.data: {config_entry.data}")
 
-    primary_lock, child_locks = await generate_keymaster_locks(hass, config_entry)
+    await async_setup_services(hass)
 
-    hass.data[DOMAIN][config_entry.entry_id] = {
-        PRIMARY_LOCK: primary_lock,
-        CHILD_LOCKS: child_locks,
-        UNSUB_LISTENERS: [],
-    }
-    coordinator = LockUsercodeUpdateCoordinator(
-        hass, config_entry, async_get_entity_registry(hass)
-    )
-    hass.data[DOMAIN][config_entry.entry_id][COORDINATOR] = coordinator
+    if COORDINATOR not in hass.data[DOMAIN]:
+        coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
+        hass.data[DOMAIN][COORDINATOR] = coordinator
+        await coordinator.initial_setup()
+        await coordinator.async_refresh()
+        if not coordinator.last_update_success:
+            raise ConfigEntryNotReady from coordinator.last_exception
+    else:
+        coordinator = hass.data[DOMAIN][COORDINATOR]
 
-    # Button Press
-    async def _refresh_codes(service: ServiceCall) -> None:
-        """Refresh lock codes."""
-        _LOGGER.debug("Refresh Codes service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        instance_id = 1
-        await refresh_codes(hass, entity_id, instance_id)
+    device_registry = dr.async_get(hass)
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_REFRESH_CODES,
-        _refresh_codes,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-            }
-        ),
-    )
+    via_device: tuple[str, str] | None = None
+    if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
+        via_device = (DOMAIN, parent_entry_id)
 
-    # Add code
-    async def _add_code(service: ServiceCall) -> None:
-        """Set a user code."""
-        _LOGGER.debug("Add Code service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        code_slot = service.data[ATTR_CODE_SLOT]
-        usercode = service.data[ATTR_USER_CODE]
-        await add_code(hass, entity_id, code_slot, usercode)
+    # _LOGGER.debug(
+    #     f"[init async_setup_entry] name: {config_entry.data.get(CONF_LOCK_NAME)}, "
+    #     f"parent_name: {config_entry.data.get(CONF_PARENT)}, "
+    #     f"parent_entry_id: {config_entry.data.get(CONF_PARENT_ENTRY_ID)}, "
+    #     f"via_device: {via_device}"
+    # )
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_ADD_CODE,
-        _add_code,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
-                vol.Required(ATTR_USER_CODE): vol.Coerce(str),
-            }
-        ),
+    device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={(DOMAIN, config_entry.entry_id)},
+        name=config_entry.data.get(CONF_LOCK_NAME),
+        configuration_url="https://github.com/FutureTense/keymaster",
+        via_device=via_device,
     )
 
-    # Clear code
-    async def _clear_code(service: ServiceCall) -> None:
-        """Clear a user code."""
-        _LOGGER.debug("Clear Code service: %s", service)
-        entity_id = service.data[ATTR_ENTITY_ID]
-        code_slot = service.data[ATTR_CODE_SLOT]
-        await clear_code(hass, entity_id, code_slot)
+    # _LOGGER.debug(f"[init async_setup_entry] device: {device}")
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_CLEAR_CODE,
-        _clear_code,
-        schema=vol.Schema(
-            {
-                vol.Required(ATTR_ENTITY_ID): vol.Coerce(str),
-                vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
-            }
-        ),
-    )
-
-    # Generate package files
-    def _generate_package(service: ServiceCall) -> None:
-        """Generate the package files."""
-        _LOGGER.debug("DEBUG: %s", service)
-        name = service.data[ATTR_NAME]
-        generate_package_files(hass, name)
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_GENERATE_PACKAGE,
-        _generate_package,
-        schema=vol.Schema({vol.Optional(ATTR_NAME): vol.Coerce(str)}),
-    )
-
-    await async_reset_code_slot_if_pin_unknown(
-        hass,
-        primary_lock.lock_name,
-        config_entry.data[CONF_SLOTS],
+    code_slots: MutableMapping[int, KeymasterCodeSlot] = {}
+    for x in range(
         config_entry.data[CONF_START],
+        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
+    ):
+        dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
+        for i, dow in enumerate(DAY_NAMES):
+            dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
+        code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
+
+    kmlock = KeymasterLock(
+        lock_name=config_entry.data[CONF_LOCK_NAME],
+        lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
+        keymaster_config_entry_id=config_entry.entry_id,
+        alarm_level_or_user_code_entity_id=config_entry.data.get(
+            CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
+        ),
+        alarm_type_or_access_control_entity_id=config_entry.data.get(
+            CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
+        ),
+        door_sensor_entity_id=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
+        number_of_code_slots=config_entry.data[CONF_SLOTS],
+        starting_code_slot=config_entry.data[CONF_START],
+        code_slots=code_slots,
+        parent_name=config_entry.data.get(CONF_PARENT),
+        parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+        notify_script_name=config_entry.data.get(CONF_NOTIFY_SCRIPT_NAME),
     )
+
+    try:
+        await coordinator.add_lock(kmlock=kmlock)
+    except asyncio.exceptions.CancelledError as e:
+        _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+    await async_generate_lovelace(
+        hass=hass,
+        kmlock_name=config_entry.data[CONF_LOCK_NAME],
+        keymaster_config_entry_id=config_entry.entry_id,
+        parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+        code_slot_start=config_entry.data[CONF_START],
+        code_slots=config_entry.data[CONF_SLOTS],
+        lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
+        advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
+        advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
+        door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
+    )
 
-    # if the use turned on the bool generate the files
-    if should_generate_package:
-        servicedata = {"lockname": primary_lock.lock_name}
-        await hass.services.async_call(
-            DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata, blocking=True
-        )
-
-    if async_using_zwave_js(lock=primary_lock):
-        # Listen to Z-Wave JS events so we can fire our own events
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            hass.bus.async_listen(
-                ZWAVE_JS_NOTIFICATION_EVENT,
-                functools.partial(handle_zwave_js_event, hass, config_entry),
-            )
-        )
-
-    # Check if we need to check alarm type/alarm level sensors, in which case
-    # we need to listen for lock state changes
-    locks_to_watch = []
-    for lock in [primary_lock, *child_locks]:
-        if lock.alarm_level_or_user_code_entity_id not in (
-            None,
-            "sensor.fake",
-        ) and lock.alarm_type_or_access_control_entity_id not in (None, "sensor.fake"):
-            locks_to_watch.append(lock)
-
-    if locks_to_watch:
-        if hass.state == CoreState.running:
-            await homeassistant_started_listener(hass, config_entry, locks_to_watch)
-        else:
-            hass.bus.async_listen_once(
-                EVENT_HOMEASSISTANT_STARTED,
-                functools.partial(
-                    homeassistant_started_listener, hass, config_entry, locks_to_watch
-                ),
-            )
-
-    if primary_lock.parent is not None:
-        await init_child_locks(
-            hass,
-            config_entry.data[CONF_START],
-            config_entry.data[CONF_SLOTS],
-            config_entry.data[CONF_LOCK_NAME],
-        )
-
-    await system_health_check(hass, config_entry)
     return True
-
-
-async def system_health_check(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    """Update system health check data."""
-    primary_lock = hass.data[DOMAIN][config_entry.entry_id][PRIMARY_LOCK]
-
-    if async_using_zwave_js(lock=primary_lock):
-        hass.data[DOMAIN][INTEGRATION] = "zwave_js"
-    else:
-        hass.data[DOMAIN][INTEGRATION] = "unknown"
-
-    hass.data[DOMAIN]["network_sensor"] = slugify(f"{primary_lock.lock_name}: Network")
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
-    lockname = config_entry.data[CONF_LOCK_NAME]
-    notification_id = f"{DOMAIN}_{lockname}_unload"
-    async_create(
-        hass,
-        (
-            f"Removing `{lockname}` and all of the files that were generated for "
-            "it. This may take some time so don't panic. This message will "
-            "automatically clear when removal is complete."
-        ),
-        title=f"{DOMAIN.title()} - Removing `{lockname}`",
-        notification_id=notification_id,
-    )
-
-    unload_ok = all(
+    lockname: str = config_entry.data[CONF_LOCK_NAME]
+    _LOGGER.info("Unloading %s", lockname)
+    unload_ok: bool = all(
         await asyncio.gather(
             *[
                 hass.config_entries.async_forward_entry_unload(config_entry, platform)
@@ -343,26 +227,50 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         )
     )
 
-    if unload_ok:
-        # Remove all package files and the base folder if needed
-        await hass.async_add_executor_job(
-            delete_lock_and_base_folder, hass, config_entry
+    if unload_ok and DOMAIN in hass.data and COORDINATOR in hass.data[DOMAIN]:
+        coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+        await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id)
+
+        if coordinator.count_locks_not_pending_delete == 0:
+            _LOGGER.debug(
+                "[async_unload_entry] Possibly empty coordinator. Will evaluate for removal at %s",
+                dt.now().astimezone() + timedelta(seconds=20),
+            )
+            async_call_later(
+                hass=hass,
+                delay=20,
+                action=functools.partial(delete_coordinator, hass),
+            )
+
+    # Clean up strategy resource if no other keymaster entries need it
+    remaining_entries = [
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.entry_id != config_entry.entry_id
+    ]
+    if not remaining_entries:
+        _LOGGER.debug(
+            "[async_unload_entry] Last keymaster entry unloaded, cleaning up strategy resource"
         )
-
-        await async_reload_package_platforms(hass)
-
-        # Unsubscribe to any listeners
-        for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(
-            UNSUB_LISTENERS, []
-        ):
-            unsub_listener()
-        hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
-
-        hass.data[DOMAIN].pop(config_entry.entry_id)
-
-    async_dismiss(hass, notification_id)
+        hass_data = hass.data.get(DOMAIN, {})
+        await async_cleanup_strategy_resource(hass, hass_data)
 
     return unload_ok
+
+
+async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
+    """Delete the coordinator if no more kmlock entities exist."""
+    # _LOGGER.debug("[delete_coordinator] Triggered")
+    hass_data = hass.data.get(DOMAIN, {})
+    coordinator: KeymasterCoordinator | None = hass_data.get(COORDINATOR)
+    if coordinator is None:
+        return
+
+    if len(coordinator.data) == 0:
+        _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")
+        await coordinator.async_remove_data()
+        await coordinator.async_shutdown()
+        hass.data.pop(DOMAIN, None)
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -375,9 +283,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         data = config_entry.data.copy()
 
         data[CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID] = data.pop(CONF_ALARM_LEVEL, None)
-        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(
-            CONF_ALARM_TYPE, None
-        )
+        data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = data.pop(CONF_ALARM_TYPE, None)
         data[CONF_LOCK_ENTITY_ID] = data.pop(CONF_ENTITY_ID)
         if CONF_HIDE_PINS not in data:
             data[CONF_HIDE_PINS] = DEFAULT_HIDE_PINS
@@ -387,229 +293,26 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         config_entry.version = 2
         _LOGGER.debug("Migration to version %s complete", config_entry.version)
 
+    # 2 -> 3: Migrate to integrated functions
+    if version == 2:
+        _LOGGER.debug("Migrating from config version %s", version)
+        if not await migrate_2to3(hass=hass, config_entry=config_entry):
+            return False
+        _LOGGER.debug("Migration to version %s complete", config_entry.version)
+
+    # 3 -> 4: Advanced features are enabled by default
+    if version == 3:
+        _LOGGER.debug("Migrating from version %s", version)
+
+        data = config_entry.data.copy()
+
+        data[CONF_ADVANCED_DATE_RANGE] = data.get(
+            CONF_ADVANCED_DATE_RANGE, DEFAULT_ADVANCED_DATE_RANGE
+        )
+        data[CONF_ADVANCED_DAY_OF_WEEK] = data.get(
+            CONF_ADVANCED_DAY_OF_WEEK, DEFAULT_ADVANCED_DAY_OF_WEEK
+        )
+        hass.config_entries.async_update_entry(entry=config_entry, data=data, version=4)
+        _LOGGER.debug("Migration to version %s complete", config_entry.version)
+
     return True
-
-
-async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    """Update listener."""
-    # No need to update if the options match the data
-    if not config_entry.options:
-        return
-
-    # If the path has changed delete the old base folder, otherwise if the lock name
-    # has changed only delete the old lock folder
-    if config_entry.options[CONF_PATH] != config_entry.data[CONF_PATH]:
-        await hass.async_add_executor_job(
-            delete_folder, hass.config.path(), config_entry.data[CONF_PATH]
-        )
-    elif config_entry.options[CONF_LOCK_NAME] != config_entry.data[CONF_LOCK_NAME]:
-        await hass.async_add_executor_job(
-            delete_folder,
-            hass.config.path(),
-            config_entry.data[CONF_PATH],
-            config_entry.data[CONF_LOCK_NAME],
-        )
-
-    old_slots = get_code_slots_list(config_entry.data)
-    new_slots = get_code_slots_list(config_entry.options)
-
-    new_data = config_entry.options.copy()
-    new_data.pop(CONF_GENERATE, None)
-
-    hass.config_entries.async_update_entry(
-        entry=config_entry,
-        unique_id=config_entry.options[CONF_LOCK_NAME],
-        data=new_data,
-        options={},
-    )
-
-    primary_lock, child_locks = await generate_keymaster_locks(hass, config_entry)
-
-    hass.data[DOMAIN][config_entry.entry_id].update(
-        {
-            PRIMARY_LOCK: primary_lock,
-            CHILD_LOCKS: child_locks,
-        }
-    )
-    servicedata = {"lockname": primary_lock.lock_name}
-    await hass.services.async_call(
-        DOMAIN, SERVICE_GENERATE_PACKAGE, servicedata, blocking=True
-    )
-
-    if old_slots != new_slots:
-        async_dispatcher_send(
-            hass,
-            f"{DOMAIN}_{config_entry.entry_id}_code_slots_changed",
-            old_slots,
-            new_slots,
-        )
-
-    # Unsubscribe to any listeners so we can create new ones
-    for unsub_listener in hass.data[DOMAIN][config_entry.entry_id].get(
-        UNSUB_LISTENERS, []
-    ):
-        unsub_listener()
-    hass.data[DOMAIN][config_entry.entry_id].get(UNSUB_LISTENERS, []).clear()
-
-    if async_using_zwave_js(lock=primary_lock):
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            hass.bus.async_listen(
-                ZWAVE_JS_NOTIFICATION_EVENT,
-                functools.partial(handle_zwave_js_event, hass, config_entry),
-            )
-        )
-        return
-
-    # We only get here if we are not using zwave_js
-
-    # Check if alarm type/alarm level sensors are specified, in which case
-    # we need to listen for lock state changes and derive the action from those
-    # sensors
-    locks_to_watch = []
-    for lock in [primary_lock, *child_locks]:
-        if lock.alarm_level_or_user_code_entity_id not in (
-            None,
-            "sensor.fake",
-        ) and lock.alarm_type_or_access_control_entity_id not in (None, "sensor.fake"):
-            locks_to_watch.append(lock)
-
-    if locks_to_watch:
-        # Create new listeners for lock state changes
-        hass.data[DOMAIN][config_entry.entry_id][UNSUB_LISTENERS].append(
-            async_track_state_change_event(
-                hass,
-                [lock.lock_entity_id for lock in locks_to_watch],
-                functools.partial(handle_state_change, hass, config_entry),
-            )
-        )
-
-
-class LockUsercodeUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage usercode updates."""
-
-    def __init__(
-        self, hass: HomeAssistant, config_entry: ConfigEntry, ent_reg: EntityRegistry
-    ) -> None:
-        self._primary_lock: KeymasterLock = hass.data[DOMAIN][config_entry.entry_id][
-            PRIMARY_LOCK
-        ]
-        self._child_locks: List[KeymasterLock] = hass.data[DOMAIN][
-            config_entry.entry_id
-        ][CHILD_LOCKS]
-        self.config_entry = config_entry
-        self.ent_reg = ent_reg
-        self.network_sensor = None
-        self.slots = None
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=DOMAIN,
-            update_interval=timedelta(seconds=5),
-            update_method=self.async_update_usercodes,
-        )
-        self.data = {}
-
-    def _invalid_code(self, code_slot):
-        """Return the PIN slot value as we are unable to read the slot value
-        from the lock."""
-
-        _LOGGER.debug("Work around code in use.")
-        # This is a fail safe and should not be needing to return ""
-        data = ""
-
-        # Build data from entities
-        active_binary_sensor = (
-            f"binary_sensor.active_{self._primary_lock.lock_name}_{code_slot}"
-        )
-        active = self.hass.states.get(active_binary_sensor)
-        pin_data = f"input_text.{self._primary_lock.lock_name}_pin_{code_slot}"
-        pin = self.hass.states.get(pin_data)
-
-        # If slot is enabled return the PIN
-        if active is not None and pin is not None:
-            if active.state == "on" and pin.state.isnumeric():
-                _LOGGER.debug("Utilizing BE469 work around code.")
-                data = pin.state
-            else:
-                _LOGGER.debug("Utilizing FE599 work around code.")
-                data = ""
-
-        return data
-
-    async def async_update_usercodes(self) -> Dict[Union[str, int], Any]:
-        """Wrapper to update usercodes."""
-        self.slots = get_code_slots_list(self.config_entry.data)
-        if not self.network_sensor:
-            self.network_sensor = self.ent_reg.async_get_entity_id(
-                "binary_sensor",
-                DOMAIN,
-                slugify(generate_binary_sensor_name(self._primary_lock.lock_name)),
-            )
-        if self.network_sensor is None:
-            raise UpdateFailed
-        try:
-            network_ready = self.hass.states.get(self.network_sensor)
-            if not network_ready:
-                # We may need to get a new entity ID
-                self.network_sensor = None
-                raise ZWaveNetworkNotReady
-
-            if network_ready.state != STATE_ON:
-                raise ZWaveNetworkNotReady
-
-            return await self._async_update()
-        except (
-            NativeNotFoundError,
-            NativeNotSupportedError,
-            NoNodeSpecifiedError,
-            ZWaveIntegrationNotConfiguredError,
-            ZWaveNetworkNotReady,
-        ) as err:
-            # We can silently fail if we've never been able to retrieve data
-            if not self.data:
-                return {}
-            raise UpdateFailed from err
-
-    async def _async_update(self) -> Dict[Union[str, int], Any]:
-        """Update usercodes."""
-        # loop to get user code data from entity_id node
-        data = {CONF_LOCK_ENTITY_ID: self._primary_lock.lock_entity_id}
-
-        # # make button call
-        # servicedata = {"entity_id": self._entity_id}
-        # await self.hass.services.async_call(
-        #    DOMAIN, SERVICE_REFRESH_CODES, servicedata
-        # )
-
-        if async_using_zwave_js(lock=self._primary_lock):
-            node: ZwaveJSNode = self._primary_lock.zwave_js_lock_node
-            if node is None:
-                raise NativeNotFoundError
-            code_slot = 1
-
-            for slot in get_usercodes(node):
-                code_slot = int(slot[ATTR_CODE_SLOT])
-                usercode: Optional[str] = slot[ATTR_USERCODE]
-                in_use: Optional[bool] = slot[ATTR_IN_USE]
-                # Retrieve code slots that haven't been populated yet
-                if in_use is None and code_slot in self.slots:
-                    usercode_resp = await get_usercode_from_node(node, code_slot)
-                    usercode = slot[ATTR_USERCODE] = usercode_resp[ATTR_USERCODE]
-                    in_use = slot[ATTR_IN_USE] = usercode_resp[ATTR_IN_USE]
-                if not in_use:
-                    _LOGGER.debug("DEBUG: Code slot %s not enabled", code_slot)
-                    data[code_slot] = ""
-                elif usercode and "*" in str(usercode):
-                    _LOGGER.debug(
-                        "DEBUG: Ignoring code slot with * in value for code slot %s",
-                        code_slot,
-                    )
-                    data[code_slot] = self._invalid_code(code_slot)
-                else:
-                    _LOGGER.debug("DEBUG: Code slot %s value: %s", code_slot, usercode)
-                    data[code_slot] = usercode
-
-        else:
-            raise ZWaveIntegrationNotConfiguredError
-
-        return data
