@@ -19,6 +19,8 @@ from .const import (
     CONF_START,
     COORDINATOR,
     DAY_NAMES,
+    DEFAULT_AUTOLOCK_MIN_DAY,
+    DEFAULT_AUTOLOCK_MIN_NIGHT,
     DOMAIN,
 )
 from .coordinator import KeymasterCoordinator
@@ -285,6 +287,11 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
 
         if self._set_property_value(True):
             self._attr_is_on = True
+            if self._property == "switch.autolock_enabled" and self._kmlock:
+                if self._kmlock.autolock_min_day is None:
+                    self._kmlock.autolock_min_day = DEFAULT_AUTOLOCK_MIN_DAY
+                if self._kmlock.autolock_min_night is None:
+                    self._kmlock.autolock_min_night = DEFAULT_AUTOLOCK_MIN_NIGHT
             if (
                 self._property.endswith(".enabled")
                 and self._kmlock
