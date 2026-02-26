@@ -251,6 +251,73 @@ async def test_generate_view_config_badges_no_door(hass: HomeAssistant):
     # Door notifications should NOT be present
     assert not any(b.get("name") == "Door Notifications" for b in badges)
 
+    # Battery badge should NOT be present (no battery entity on mock device)
+    assert not any(b.get("name") == "Battery" for b in badges)
+
+
+async def test_generate_view_config_badges_with_battery(hass: HomeAssistant):
+    """Test badges when lock device has a battery sensor."""
+    mock_registry = _create_mock_registry()
+
+    with (
+        patch(
+            "custom_components.keymaster.lovelace.er.async_get",
+            return_value=mock_registry,
+        ),
+        patch(
+            "custom_components.keymaster.lovelace._find_battery_entity",
+            return_value="sensor.frontdoor_battery",
+        ),
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="frontdoor",
+            keymaster_config_entry_id="test_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.frontdoor",
+            advanced_date_range=False,
+            advanced_day_of_week=False,
+        )
+
+    badges = view["badges"]
+
+    # Battery badge should be present
+    assert any(
+        b.get("entity") == "sensor.frontdoor_battery" and b.get("name") == "Battery" for b in badges
+    )
+
+
+async def test_generate_view_config_badges_without_battery(hass: HomeAssistant):
+    """Test badges when lock device has no battery sensor."""
+    mock_registry = _create_mock_registry()
+
+    with (
+        patch(
+            "custom_components.keymaster.lovelace.er.async_get",
+            return_value=mock_registry,
+        ),
+        patch(
+            "custom_components.keymaster.lovelace._find_battery_entity",
+            return_value=None,
+        ),
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="frontdoor",
+            keymaster_config_entry_id="test_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.frontdoor",
+            advanced_date_range=False,
+            advanced_day_of_week=False,
+        )
+
+    badges = view["badges"]
+
+    # Battery badge should NOT be present
+    assert not any(b.get("name") == "Battery" for b in badges)
+
 
 async def test_generate_view_config_badges_with_door(hass: HomeAssistant):
     """Test badges when door sensor is configured."""
