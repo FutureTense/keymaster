@@ -21,9 +21,16 @@ declare global {
 }
 
 // Primary registrations (custom:keymaster)
-customElements.define('ll-strategy-dashboard-keymaster', KeymasterDashboardStrategy);
-customElements.define('ll-strategy-view-keymaster', KeymasterViewStrategy);
-customElements.define('ll-strategy-section-keymaster', KeymasterSectionStrategy);
+// Guards prevent errors if the script is loaded more than once.
+if (!customElements.get('ll-strategy-dashboard-keymaster')) {
+    customElements.define('ll-strategy-dashboard-keymaster', KeymasterDashboardStrategy);
+}
+if (!customElements.get('ll-strategy-view-keymaster')) {
+    customElements.define('ll-strategy-view-keymaster', KeymasterViewStrategy);
+}
+if (!customElements.get('ll-strategy-section-keymaster')) {
+    customElements.define('ll-strategy-section-keymaster', KeymasterSectionStrategy);
+}
 
 // Alias registrations (custom:keymaster-dashboard, custom:keymaster-view, custom:keymaster-section)
 // Each alias needs a unique constructor — customElements.define() rejects reused constructors.
