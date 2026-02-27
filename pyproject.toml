@@ -625,3 +625,4 @@ property-decorators = ["propcache.cached_property"]
 
 [tool.codespell]
 ignore-words-list = "hass"
+skip = "custom_components/keymaster/www/generated"
