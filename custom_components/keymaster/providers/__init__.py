@@ -10,13 +10,19 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from ._base import BaseLockProvider, CodeSlot, ConnectionCallback, LockEventCallback
 from .akuvox import AkuvoxLockProvider
+from .schlage import SchlageLockProvider
 from .zwave_js import ZWaveJSLockProvider
 
 _LOGGER = logging.getLogger(__name__)
 
-# Provider registry - maps platform domain to provider class
+# Provider registry - maps platform domain to provider class.
+# The entity-registry lookup in get_provider_class_for_lock() ensures a
+# provider is only instantiated when a lock entity with the matching
+# platform exists, which requires the corresponding integration to be
+# configured in Home Assistant.
 PROVIDER_MAP: dict[str, type[BaseLockProvider]] = {
     "local_akuvox": AkuvoxLockProvider,
+    "schlage": SchlageLockProvider,
     "zwave_js": ZWaveJSLockProvider,
 }
 
