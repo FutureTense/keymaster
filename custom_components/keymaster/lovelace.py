@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN, SensorDeviceClass
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import slugify
@@ -36,7 +36,7 @@ def _find_battery_entity(hass: HomeAssistant, lock_entity_id: str) -> str | None
 
     for entry in er.async_entries_for_device(entity_registry, device_entry.id):
         if (
-            entry.domain == "sensor"
+            entry.domain == SENSOR_DOMAIN
             and entry.original_device_class == SensorDeviceClass.BATTERY
             and not entry.disabled
         ):
@@ -330,7 +330,7 @@ def _get_entity_id(
             unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
         )
     # If not found in registry, assume it's already a complete entity ID
-    return entity_id if entity_id else prop
+    return entity_id or prop
 
 
 # Lovelace Card Generation Helpers
