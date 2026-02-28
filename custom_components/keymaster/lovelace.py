@@ -10,13 +10,39 @@ from typing import Any
 
 import yaml
 
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN, SensorDeviceClass
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import slugify
 
 from .const import DAY_NAMES, DOMAIN
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+@callback
+def _find_battery_entity(hass: HomeAssistant, lock_entity_id: str) -> str | None:
+    """Find a battery sensor entity on the same device as the lock."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    lock_entry = entity_registry.async_get(lock_entity_id)
+    if not lock_entry or not lock_entry.device_id:
+        return None
+
+    device_entry = device_registry.async_get(lock_entry.device_id)
+    if not device_entry:
+        return None
+
+    for entry in er.async_entries_for_device(entity_registry, device_entry.id):
+        if (
+            entry.domain == SENSOR_DOMAIN
+            and entry.original_device_class == SensorDeviceClass.BATTERY
+            and not entry.disabled
+        ):
+            return entry.entity_id
+
+    return None
 
 
 @callback
@@ -34,6 +60,7 @@ def generate_badges_config(
     badges_list: list[MutableMapping[str, Any]] = _generate_lock_badges(
         lock_entity=lock_entity,
         door_sensor=door_sensor,
+        battery_entity=_find_battery_entity(hass, lock_entity),
         child=bool(parent_config_entry_id),
     )
     mapped_badges_list: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = (
@@ -303,7 +330,7 @@ def _get_entity_id(
             unique_id=f"{keymaster_config_entry_id}_{slugify(prop)}",
         )
     # If not found in registry, assume it's already a complete entity ID
-    return entity_id if entity_id else prop
+    return entity_id or prop
 
 
 # Lovelace Card Generation Helpers
@@ -495,10 +522,12 @@ def _generate_code_slot_dict(
 def _generate_lock_badges(
     lock_entity: str,
     door_sensor: str | None = None,
+    battery_entity: str | None = None,
     child: bool = False,
 ) -> list[MutableMapping[str, Any]]:
     """Generate the Lovelace badges configuration for a keymaster lock."""
     door = door_sensor is not None
+    battery = battery_entity is not None
     return [
         _generate_badge_ll_config(
             entity, name, visibility=visibility, show_name=show_name, tap_action=tap_action
@@ -511,6 +540,7 @@ def _generate_lock_badges(
             ("switch.door_notifications", "Door Notifications", False, True, "toggle", door),
             (lock_entity, "Lock", False, True, "toggle", True),
             (door_sensor, "Door", False, True, "none", door),
+            (battery_entity, "Battery", False, True, "none", battery),
             ("switch.autolock_enabled", "Auto Lock", False, True, "toggle", True),
             ("switch.retry_lock", "Retry Lock", True, True, "toggle", door),
             ("number.autolock_min_day", "Day Auto Lock", True, True, None, True),

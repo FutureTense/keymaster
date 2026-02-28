@@ -9,12 +9,17 @@ import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.keymaster.lovelace import (
+    _find_battery_entity,
     async_generate_lovelace,
     delete_lovelace,
     generate_view_config,
 )
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -250,6 +255,246 @@ async def test_generate_view_config_badges_no_door(hass: HomeAssistant):
 
     # Door notifications should NOT be present
     assert not any(b.get("name") == "Door Notifications" for b in badges)
+
+    # Battery badge should NOT be present (no battery entity on mock device)
+    assert not any(b.get("name") == "Battery" for b in badges)
+
+
+async def test_generate_view_config_badges_with_battery(hass: HomeAssistant):
+    """Test badges when lock device has a battery sensor."""
+    mock_registry = _create_mock_registry()
+
+    with (
+        patch(
+            "custom_components.keymaster.lovelace.er.async_get",
+            return_value=mock_registry,
+        ),
+        patch(
+            "custom_components.keymaster.lovelace._find_battery_entity",
+            return_value="sensor.frontdoor_battery",
+        ),
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="frontdoor",
+            keymaster_config_entry_id="test_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.frontdoor",
+            advanced_date_range=False,
+            advanced_day_of_week=False,
+        )
+
+    badges = view["badges"]
+
+    # Battery badge should be present
+    assert any(
+        b.get("entity") == "sensor.frontdoor_battery" and b.get("name") == "Battery" for b in badges
+    )
+
+
+async def test_generate_view_config_badges_without_battery(hass: HomeAssistant):
+    """Test badges when lock device has no battery sensor."""
+    mock_registry = _create_mock_registry()
+
+    with (
+        patch(
+            "custom_components.keymaster.lovelace.er.async_get",
+            return_value=mock_registry,
+        ),
+        patch(
+            "custom_components.keymaster.lovelace._find_battery_entity",
+            return_value=None,
+        ),
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="frontdoor",
+            keymaster_config_entry_id="test_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.frontdoor",
+            advanced_date_range=False,
+            advanced_day_of_week=False,
+        )
+
+    badges = view["badges"]
+
+    # Battery badge should NOT be present
+    assert not any(b.get("name") == "Battery" for b in badges)
+
+
+# ---------------------------------------------------------------------------
+# _find_battery_entity direct tests (real registry lookups)
+# ---------------------------------------------------------------------------
+
+
+async def test_find_battery_entity_returns_battery_sensor(hass: HomeAssistant):
+    """Test that _find_battery_entity finds a battery sensor on the same device."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    config_entry = MockConfigEntry(domain="zwave_js", data={})
+    config_entry.add_to_hass(hass)
+
+    device = device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={("zwave_js", "lock_device")},
+        name="Front Door Lock",
+    )
+
+    entity_registry.async_get_or_create(
+        "lock",
+        "zwave_js",
+        "lock_front_door",
+        config_entry=config_entry,
+        device_id=device.id,
+        suggested_object_id="front_door",
+    )
+
+    entity_registry.async_get_or_create(
+        "sensor",
+        "zwave_js",
+        "battery_front_door",
+        config_entry=config_entry,
+        device_id=device.id,
+        original_device_class=SensorDeviceClass.BATTERY,
+        suggested_object_id="front_door_battery",
+    )
+
+    result = _find_battery_entity(hass, "lock.front_door")
+    assert result == "sensor.front_door_battery"
+
+
+async def test_find_battery_entity_no_battery_sensor(hass: HomeAssistant):
+    """Test that _find_battery_entity returns None when no battery sensor exists."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    config_entry = MockConfigEntry(domain="zwave_js", data={})
+    config_entry.add_to_hass(hass)
+
+    device = device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={("zwave_js", "lock_device_no_bat")},
+        name="Back Door Lock",
+    )
+
+    entity_registry.async_get_or_create(
+        "lock",
+        "zwave_js",
+        "lock_back_door",
+        config_entry=config_entry,
+        device_id=device.id,
+        suggested_object_id="back_door",
+    )
+
+    result = _find_battery_entity(hass, "lock.back_door")
+    assert result is None
+
+
+async def test_find_battery_entity_skips_disabled_sensor(hass: HomeAssistant):
+    """Test that _find_battery_entity ignores disabled battery sensors."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    config_entry = MockConfigEntry(domain="zwave_js", data={})
+    config_entry.add_to_hass(hass)
+
+    device = device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={("zwave_js", "lock_device_disabled")},
+        name="Garage Lock",
+    )
+
+    entity_registry.async_get_or_create(
+        "lock",
+        "zwave_js",
+        "lock_garage",
+        config_entry=config_entry,
+        device_id=device.id,
+        suggested_object_id="garage",
+    )
+
+    battery_entry = entity_registry.async_get_or_create(
+        "sensor",
+        "zwave_js",
+        "battery_garage",
+        config_entry=config_entry,
+        device_id=device.id,
+        original_device_class=SensorDeviceClass.BATTERY,
+        suggested_object_id="garage_battery",
+    )
+
+    entity_registry.async_update_entity(
+        battery_entry.entity_id,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+
+    result = _find_battery_entity(hass, "lock.garage")
+    assert result is None
+
+
+async def test_find_battery_entity_lock_not_in_registry(hass: HomeAssistant):
+    """Test that _find_battery_entity returns None for unknown lock entity."""
+    result = _find_battery_entity(hass, "lock.nonexistent")
+    assert result is None
+
+
+async def test_find_battery_entity_lock_no_device(hass: HomeAssistant):
+    """Test that _find_battery_entity returns None when lock has no device."""
+    entity_registry = er.async_get(hass)
+
+    config_entry = MockConfigEntry(domain="zwave_js", data={})
+    config_entry.add_to_hass(hass)
+
+    entity_registry.async_get_or_create(
+        "lock",
+        "zwave_js",
+        "lock_orphan",
+        config_entry=config_entry,
+        suggested_object_id="orphan",
+    )
+
+    result = _find_battery_entity(hass, "lock.orphan")
+    assert result is None
+
+
+async def test_find_battery_entity_ignores_non_battery_sensors(hass: HomeAssistant):
+    """Test that _find_battery_entity ignores sensors that aren't battery class."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    config_entry = MockConfigEntry(domain="zwave_js", data={})
+    config_entry.add_to_hass(hass)
+
+    device = device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={("zwave_js", "lock_device_temp")},
+        name="Side Door Lock",
+    )
+
+    entity_registry.async_get_or_create(
+        "lock",
+        "zwave_js",
+        "lock_side_door",
+        config_entry=config_entry,
+        device_id=device.id,
+        suggested_object_id="side_door",
+    )
+
+    entity_registry.async_get_or_create(
+        "sensor",
+        "zwave_js",
+        "temperature_side_door",
+        config_entry=config_entry,
+        device_id=device.id,
+        original_device_class=SensorDeviceClass.TEMPERATURE,
+        suggested_object_id="side_door_temperature",
+    )
+
+    result = _find_battery_entity(hass, "lock.side_door")
+    assert result is None
 
 
 async def test_generate_view_config_badges_with_door(hass: HomeAssistant):
