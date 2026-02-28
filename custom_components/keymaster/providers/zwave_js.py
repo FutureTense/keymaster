@@ -15,6 +15,7 @@ from zwave_js_server.const.command_class.lock import (
     ATTR_IN_USE as ZWAVEJS_ATTR_IN_USE,
     ATTR_USERCODE as ZWAVEJS_ATTR_USERCODE,
 )
+from zwave_js_server.const import NodeStatus
 from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
 from zwave_js_server.model.node import Node as ZwaveJSNode
 from zwave_js_server.util.lock import (
@@ -298,6 +299,25 @@ class ZWaveJSLockProvider(BaseLockProvider):
     _device: DeviceEntry | None = field(default=None, init=False, repr=False)
     _client: ZwaveJSClient | None = field(default=None, init=False, repr=False)
 
+    def _is_node_alive(self) -> bool:
+        """Check if the Z-Wave node is alive (not dead).
+
+        Returns False only for dead nodes. Asleep nodes (battery devices)
+        are considered alive since they wake periodically.
+        """
+        if not self._node:
+            return False
+        try:
+            if self._node.status == NodeStatus.DEAD:
+                _LOGGER.debug(
+                    "[ZWaveJSProvider] Node %s is dead, skipping command",
+                    self._node.node_id,
+                )
+                return False
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
     @property
     def domain(self) -> str:
         """Return the integration domain."""
@@ -408,6 +428,14 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return False
 
+        # Check if node is alive before declaring connected
+        if not self._is_node_alive():
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Node %s exists but is dead, not connecting",
+                node_id,
+            )
+            return False
+
         self._connected = True
         _LOGGER.debug(
             "[ZWaveJSProvider] Connected to lock %s (node %s)",
@@ -426,6 +454,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             and self._client.driver
             and self._client.driver.controller
             and self._node
+            and self._is_node_alive()
         )
 
         # Update cached state
@@ -436,6 +465,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         """Get all user codes from the Z-Wave JS lock."""
         if not self._node:
             _LOGGER.error("[ZWaveJSProvider] No node available for get_usercodes")
+            return []
+
+        if not self._is_node_alive():
             return []
 
         try:
@@ -491,6 +523,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         if not self._node:
             return None
 
+        if not self._is_node_alive():
+            return None
+
         try:
             zw_slot: ZwaveJSCodeSlot = await get_usercode_from_node(self._node, slot_num)
             return CodeSlot(
@@ -511,6 +546,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         """Set user code on a slot."""
         if not self._node:
             _LOGGER.error("[ZWaveJSProvider] No node available for set_usercode")
+            return False
+
+        if not self._is_node_alive():
             return False
 
         try:
@@ -534,6 +572,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         """Clear user code from a slot."""
         if not self._node:
             _LOGGER.error("[ZWaveJSProvider] No node available for clear_usercode")
+            return False
+
+        if not self._is_node_alive():
             return False
 
         try:

@@ -40,6 +40,9 @@ from .const import (
     ATTR_CODE_SLOT_NAME,
     ATTR_NAME,
     ATTR_NOTIFICATION_SOURCE,
+    BACKOFF_FAILURE_THRESHOLD,
+    BACKOFF_INITIAL_SECONDS,
+    BACKOFF_MAX_SECONDS,
     DAY_NAMES,
     DOMAIN,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
@@ -89,6 +92,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._sync_status_counter: int = 0
         self._quick_refresh: bool = False
         self._cancel_quick_refresh: Callable | None = None
+        self._consecutive_failures: dict[str, int] = {}
+        self._next_retry_time: dict[str, dt] = {}
 
         super().__init__(
             hass,
@@ -1525,15 +1530,58 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not isinstance(kmlock, KeymasterLock):
             return
 
+        # Check backoff — skip this lock if we are in a backoff period
+        if keymaster_config_entry_id in self._next_retry_time:
+            if dt.now().astimezone() < self._next_retry_time[keymaster_config_entry_id]:
+                _LOGGER.debug(
+                    "[Coordinator] %s: Skipping update (backing off until %s)",
+                    kmlock.lock_name,
+                    self._next_retry_time[keymaster_config_entry_id],
+                )
+                return
+            # Backoff period expired, clear it and retry
+            del self._next_retry_time[keymaster_config_entry_id]
+
         await self._connect_and_update_lock(kmlock=kmlock)
 
         if not kmlock.connected:
-            _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
+            # Track consecutive failures and apply exponential backoff
+            failures = self._consecutive_failures.get(keymaster_config_entry_id, 0) + 1
+            self._consecutive_failures[keymaster_config_entry_id] = failures
+            if failures >= BACKOFF_FAILURE_THRESHOLD:
+                exponent = failures - BACKOFF_FAILURE_THRESHOLD
+                backoff_secs = min(
+                    BACKOFF_INITIAL_SECONDS * (2 ** exponent),
+                    BACKOFF_MAX_SECONDS,
+                )
+                self._next_retry_time[keymaster_config_entry_id] = (
+                    dt.now().astimezone() + timedelta(seconds=backoff_secs)
+                )
+                _LOGGER.warning(
+                    "[Coordinator] %s: %d consecutive connection failures, "
+                    "backing off for %d seconds",
+                    kmlock.lock_name,
+                    failures,
+                    backoff_secs,
+                )
+            else:
+                _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
             return
 
         if not kmlock.provider:
             _LOGGER.error("[Coordinator] %s: No provider available", kmlock.lock_name)
             return
+
+        # Connection successful — reset backoff counters
+        if keymaster_config_entry_id in self._consecutive_failures:
+            if self._consecutive_failures[keymaster_config_entry_id] > 0:
+                _LOGGER.info(
+                    "[Coordinator] %s: Lock reconnected after %d failures",
+                    kmlock.lock_name,
+                    self._consecutive_failures[keymaster_config_entry_id],
+                )
+            del self._consecutive_failures[keymaster_config_entry_id]
+        self._next_retry_time.pop(keymaster_config_entry_id, None)
 
         # Get usercodes via provider
         usercodes: list[CodeSlot] = await kmlock.provider.async_get_usercodes()
