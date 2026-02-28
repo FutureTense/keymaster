@@ -366,6 +366,47 @@ async def test_find_battery_entity_returns_battery_sensor(hass: HomeAssistant):
     assert result == "sensor.front_door_battery"
 
 
+async def test_find_battery_entity_user_overridden_device_class(hass: HomeAssistant):
+    """Test that _find_battery_entity finds sensor with user-overridden device_class."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    config_entry = MockConfigEntry(domain="zwave_js", data={})
+    config_entry.add_to_hass(hass)
+
+    device = device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={("zwave_js", "lock_device_override")},
+        name="Front Door Lock Override",
+    )
+
+    entity_registry.async_get_or_create(
+        "lock",
+        "zwave_js",
+        "lock_front_door_override",
+        config_entry=config_entry,
+        device_id=device.id,
+        suggested_object_id="front_door_override",
+    )
+
+    battery_entry = entity_registry.async_get_or_create(
+        "sensor",
+        "zwave_js",
+        "battery_front_door_override",
+        config_entry=config_entry,
+        device_id=device.id,
+        suggested_object_id="front_door_override_battery",
+    )
+
+    entity_registry.async_update_entity(
+        battery_entry.entity_id,
+        device_class=SensorDeviceClass.BATTERY,
+    )
+
+    result = _find_battery_entity(hass, "lock.front_door_override")
+    assert result == "sensor.front_door_override_battery"
+
+
 async def test_find_battery_entity_no_battery_sensor(hass: HomeAssistant):
     """Test that _find_battery_entity returns None when no battery sensor exists."""
     entity_registry = er.async_get(hass)
