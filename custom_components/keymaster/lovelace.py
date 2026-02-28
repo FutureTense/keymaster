@@ -37,7 +37,7 @@ def _find_battery_entity(hass: HomeAssistant, lock_entity_id: str) -> str | None
     for entry in er.async_entries_for_device(entity_registry, device_entry.id):
         if (
             entry.domain == SENSOR_DOMAIN
-            and entry.original_device_class == SensorDeviceClass.BATTERY
+            and (entry.device_class or entry.original_device_class) == SensorDeviceClass.BATTERY
             and not entry.disabled
         ):
             return entry.entity_id
