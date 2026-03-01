@@ -236,7 +236,7 @@ async def test_async_setup_entry_with_parent_lock(hass: HomeAssistant):
     child_lock.parent_name = "parentlock"
     child_lock.keymaster_config_entry_id = config_entry.entry_id
 
-    coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=child_lock)
+    setattr(coordinator, "get_lock_by_config_entry_id", AsyncMock(return_value=child_lock))
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][COORDINATOR] = coordinator

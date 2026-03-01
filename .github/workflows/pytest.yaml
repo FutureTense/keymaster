@@ -30,6 +30,7 @@ jobs:
       matrix:
         python-version:
           - "3.13"
+          - "3.14"
 
     steps:
       - name: 📥 Checkout the repository
@@ -43,7 +44,7 @@ jobs:
       - name: 🚀 Install uv
         uses: astral-sh/setup-uv@v5
       - name: 📦 Install requirements
-        run: uv pip install --system -r requirements_test.txt
+        run: uv pip install --system ".[test]"
       - name: 🏃 Run pytest
         run: pytest tests --cov=custom_components/keymaster --cov-report=xml
       - name: 📤 Upload coverage artifact
@@ -65,7 +66,7 @@ jobs:
       - name: 🚀 Install uv
         uses: astral-sh/setup-uv@v5
       - name: 📦 Install requirements
-        run: uv pip install --system -r requirements_lint.txt
+        run: uv pip install --system ".[lint]"
       - name: 🧹 Run ruff format check
         run: ruff format --check custom_components/ tests/
       - name: 🔍 Run ruff check
@@ -84,7 +85,7 @@ jobs:
       - name: 🚀 Install uv
         uses: astral-sh/setup-uv@v5
       - name: 📦 Install requirements
-        run: uv pip install --system -r requirements_lint.txt
+        run: uv pip install --system ".[lint]"
       - name: 🔎 Run mypy
         run: mypy custom_components/keymaster
 

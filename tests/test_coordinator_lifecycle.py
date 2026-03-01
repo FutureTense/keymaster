@@ -16,11 +16,11 @@ def mock_coordinator(hass):
     """Create a coordinator instance with mocked internals."""
     coordinator = KeymasterCoordinator(hass)
     # Mock internal methods to isolate lifecycle logic
-    coordinator._rebuild_lock_relationships = AsyncMock()
-    coordinator._update_door_and_lock_state = AsyncMock()
-    coordinator._update_listeners = AsyncMock()
-    coordinator._setup_timer = AsyncMock()
-    coordinator.async_refresh = AsyncMock()
+    setattr(coordinator, "_rebuild_lock_relationships", AsyncMock())
+    setattr(coordinator, "_update_door_and_lock_state", AsyncMock())
+    setattr(coordinator, "_update_listeners", AsyncMock())
+    setattr(coordinator, "_setup_timer", AsyncMock())
+    setattr(coordinator, "async_refresh", AsyncMock())
     coordinator._initial_setup_done_event.set()  # Don't block
     return coordinator
 
@@ -58,7 +58,7 @@ async def test_add_lock_existing_update(mock_coordinator, mock_lock):
     """Test adding a lock that already exists (update)."""
     # Pre-populate
     mock_coordinator.kmlocks["test_entry"] = mock_lock
-    mock_coordinator._update_lock = AsyncMock()
+    setattr(mock_coordinator, "_update_lock", AsyncMock())
 
     # Call with update=True
     await mock_coordinator.add_lock(mock_lock, update=True)
@@ -69,7 +69,7 @@ async def test_add_lock_existing_update(mock_coordinator, mock_lock):
 async def test_add_lock_existing_no_update(mock_coordinator, mock_lock):
     """Test adding a lock that exists without update flag."""
     mock_coordinator.kmlocks["test_entry"] = mock_lock
-    mock_coordinator._update_lock = AsyncMock()
+    setattr(mock_coordinator, "_update_lock", AsyncMock())
 
     await mock_coordinator.add_lock(mock_lock, update=False)
 

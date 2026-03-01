@@ -25,8 +25,8 @@ def mock_coordinator(hass):
     coord._throttle.is_allowed.return_value = True
 
     # Mock the action methods we want to verify calls to
-    coord._lock_locked = AsyncMock()
-    coord._lock_unlocked = AsyncMock()
+    setattr(coord, "_lock_locked", AsyncMock())
+    setattr(coord, "_lock_unlocked", AsyncMock())
     return coord
 
 

@@ -28,8 +28,8 @@ def mock_coordinator(mock_hass):
         coordinator.kmlocks = {}
         coordinator._quick_refresh = False
         # Mock the PIN operations
-        coordinator.set_pin_on_lock = AsyncMock()
-        coordinator.clear_pin_from_lock = AsyncMock()
+        setattr(coordinator, "set_pin_on_lock", AsyncMock())
+        setattr(coordinator, "clear_pin_from_lock", AsyncMock())
         return coordinator
 
 

@@ -28,7 +28,7 @@ def validate_lock_relationship_invariants(
     Returns list of violation messages. Empty list = all invariants hold.
     This helper would have caught the KeyError bug immediately.
     """
-    violations = []
+    violations: list[str] = []
 
     # Invariant 1: Every child_id in any parent's list must exist in kmlocks
     violations.extend(

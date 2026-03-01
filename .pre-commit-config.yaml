@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 Andrew Grimberg <tykeal@bardicgrove.org>
 
+default_stages: [pre-commit, pre-push]
+
 ci:
   autofix_commit_msg: |
     Chore: pre-commit.ci automated linting tools update

@@ -1,10 +1,49 @@
+[project]
+name = "keymaster"
+version = "0.0.0"
+description = "Keymaster Home Assistant Integration"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "FutureTense" },
+]
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-homeassistant-custom-component",
+    "aiohttp_cors",
+    "aiousbwatcher",
+    "asyncio_mqtt",
+    "homeassistant",
+    "pydispatcher",
+    "pyserial",
+    "pyudev",
+    "zeroconf",
+    "zwave-js-server-python",
+]
+lint = [
+    "mypy",
+    "pylint",
+    "pylint-per-file-ignores",
+    "ruff",
+    "types-PyYAML",
+]
+dev = [
+    "keymaster[test]",
+    "keymaster[lint]",
+]
+
 [tool.coverage.report]
 show_missing = true
 fail_under = 80
 
 [tool.mypy]
 platform = "linux"
-python_version = "3.13"
+python_version = "3.14"
 follow_imports = "silent"
 ignore_missing_imports = true
 exclude = ["ha-core/"]
@@ -372,7 +411,7 @@ line-length = 100
 indent-width = 4
 fix = true
 force-exclude = true
-target-version = "py313"
+target-version = "py314"
 required-version = ">=0.8.0"
 exclude = ["ha-core"]
 
@@ -626,3 +665,6 @@ property-decorators = ["propcache.cached_property"]
 [tool.codespell]
 ignore-words-list = "hass"
 skip = "custom_components/keymaster/www/generated"
+
+[tool.setuptools.packages.find]
+include = ["custom_components*"]
