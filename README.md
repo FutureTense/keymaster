@@ -33,3 +33,39 @@ wiki page for setup instructions and configuration options.
 Please visit this project's
 [Wiki](https://github.com/FutureTense/keymaster/wiki) for the latest
 installation and update procedure.
+
+## Development
+
+This project uses [uv](https://github.com/astral-sh/uv) for dependency management.
+
+### Local Setup
+
+1. Install `uv` if you haven't already.
+2. Clone the repository and navigate to the project directory.
+3. Create a virtual environment and install dependencies:
+
+   ```bash
+   uv sync --all-extras
+   ```
+
+4. Install pre-commit hooks:
+
+   ```bash
+   uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+   ```
+
+### Running Tests
+
+Run the full test suite with coverage:
+
+```bash
+uv run pytest tests --cov=custom_components/keymaster --cov-report=term-missing
+```
+
+### Linting and Formatting
+
+Run all quality checks via pre-commit:
+
+```bash
+uv run pre-commit run --all-files
+```

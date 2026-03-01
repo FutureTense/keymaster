@@ -46,7 +46,7 @@ platform = "linux"
 python_version = "3.14"
 follow_imports = "silent"
 ignore_missing_imports = true
-exclude = ["ha-core/"]
+exclude = ["ha-core/", "build/"]
 check_untyped_defs = true
 disable_error_code = ["annotation-unchecked", "import-not-found", "import-untyped", "call-arg", "literal-required"]
 disallow_incomplete_defs = false
@@ -668,3 +668,11 @@ skip = "custom_components/keymaster/www/generated"
 
 [tool.setuptools.packages.find]
 include = ["custom_components*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov>=6.0.0",
+    "pytest-homeassistant-custom-component>=0.13.205",
+]

@@ -4,11 +4,13 @@ This guide explains how to add support for new lock platforms in keymaster.
 
 ## Overview
 
-Keymaster uses a provider abstraction to support multiple lock platforms. Each provider implements the `BaseLockProvider` interface to handle platform-specific operations like setting/clearing user codes and subscribing to lock events.
+Keymaster uses a provider abstraction to support multiple lock platforms. Each
+provider implements the `BaseLockProvider` interface to handle platform-specific
+operations like setting/clearing user codes and subscribing to lock events.
 
 ## Architecture
 
-```
+```text
 providers/
 ├── __init__.py      # Registry and factory functions
 ├── _base.py         # BaseLockProvider ABC and CodeSlot dataclass
@@ -239,10 +241,12 @@ If the platform requires additional dependencies, add them to `manifest.json`:
 
 ## Provider Capabilities Summary
 
+<!-- markdownlint-disable MD013 -->
 | Capability | Property | Description |
 |------------|----------|-------------|
-| Push Updates | `supports_push_updates` | Real-time lock/unlock events |
-| Connection Status | `supports_connection_status` | Lock online/offline status |
+| Push Updates | `supports_push_updates` | Real-time lock/unlock events with code slot detection |
+| Connection Status | `supports_connection_status` | Lock online/offline tracking |
+<!-- markdownlint-enable MD013 -->
 
 ## Testing Your Provider
 
