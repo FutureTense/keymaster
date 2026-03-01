@@ -428,13 +428,14 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return False
 
-        # Check if node is alive before declaring connected
+        # Warn if node is dead, but connect anyway for cached data access.
+        # The backoff mechanism handles repeated failures at the coordinator level.
         if not self._is_node_alive():
             _LOGGER.warning(
-                "[ZWaveJSProvider] Node %s exists but is dead, not connecting",
+                "[ZWaveJSProvider] Node %s is currently dead, "
+                "connecting anyway (cached data may still be available)",
                 node_id,
             )
-            return False
 
         self._connected = True
         _LOGGER.debug(
@@ -454,7 +455,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
             and self._client.driver
             and self._client.driver.controller
             and self._node
-            and self._is_node_alive()
         )
 
         # Update cached state
@@ -465,9 +465,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
         """Get all user codes from the Z-Wave JS lock."""
         if not self._node:
             _LOGGER.error("[ZWaveJSProvider] No node available for get_usercodes")
-            return []
-
-        if not self._is_node_alive():
             return []
 
         try:
