@@ -110,7 +110,7 @@ def cleanup_keymaster_json():
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
-pytest_plugins = "pytest_homeassistant_custom_component"  # pylint: disable=invalid-name
+pytest_plugins = "pytest_homeassistant_custom_component"
 
 
 @pytest.fixture(autouse=True)

@@ -30,6 +30,7 @@ jobs:
       matrix:
         python-version:
           - "3.13"
+          - "3.14"
 
     steps:
       - name: 📥 Checkout the repository
@@ -47,6 +48,7 @@ jobs:
       - name: 🏃 Run pytest
         run: pytest tests --cov=custom_components/keymaster --cov-report=xml
       - name: 📤 Upload coverage artifact
+        if: matrix.python-version == '3.14'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-data
@@ -61,7 +63,7 @@ jobs:
       - name: 🛠️ Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - name: 🚀 Install uv
         uses: astral-sh/setup-uv@v5
       - name: 📦 Install requirements
@@ -80,7 +82,7 @@ jobs:
       - name: 🛠️ Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - name: 🚀 Install uv
         uses: astral-sh/setup-uv@v5
       - name: 📦 Install requirements
