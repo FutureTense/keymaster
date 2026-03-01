@@ -458,7 +458,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             result.append(
                 CodeSlot(
                     slot_num=slot_num,
-                    code=usercode if usercode else None,
+                    code=usercode or None,
                     in_use=bool(in_use) if in_use is not None else False,
                 )
             )
