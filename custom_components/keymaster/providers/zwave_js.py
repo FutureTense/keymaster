@@ -10,12 +10,12 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from zwave_js_server.client import Client as ZwaveJSClient
+from zwave_js_server.const import NodeStatus
 from zwave_js_server.const.command_class.lock import (
     ATTR_CODE_SLOT as ZWAVEJS_ATTR_CODE_SLOT,
     ATTR_IN_USE as ZWAVEJS_ATTR_IN_USE,
     ATTR_USERCODE as ZWAVEJS_ATTR_USERCODE,
 )
-from zwave_js_server.const import NodeStatus
 from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
 from zwave_js_server.model.node import Node as ZwaveJSNode
 from zwave_js_server.util.lock import (
@@ -314,9 +314,10 @@ class ZWaveJSLockProvider(BaseLockProvider):
                     self._node.node_id,
                 )
                 return False
-            return True
         except Exception:  # noqa: BLE001
             return False
+        else:
+            return True
 
     @property
     def domain(self) -> str:
@@ -487,7 +488,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             result.append(
                 CodeSlot(
                     slot_num=slot_num,
-                    code=usercode if usercode else None,
+                    code=usercode or None,
                     in_use=bool(in_use) if in_use is not None else False,
                 )
             )

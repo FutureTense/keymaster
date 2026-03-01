@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from custom_components.keymaster.const import BACKOFF_FAILURE_THRESHOLD, BACKOFF_MAX_SECONDS
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
@@ -1959,3 +1960,173 @@ class TestStorageAndMigration:
         assert reloaded["entry1"].code_slots[1].name == "User 1"
         assert reloaded["entry1"].code_slots[1].pin == "5678"
         assert reloaded["entry1"].code_slots[1].enabled is True
+
+
+class TestUpdateLockDataBackoff:
+    """Test exponential backoff for failed lock connections in _update_lock_data."""
+
+    @pytest.fixture
+    def backoff_coordinator(self, mock_hass):
+        """Create a coordinator with backoff attributes initialized."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._consecutive_failures = {}
+            coordinator._next_retry_time = {}
+            return coordinator
+
+    @pytest.fixture
+    def disconnected_lock(self):
+        """Create a mock lock that fails to connect."""
+        lock = Mock(spec=KeymasterLock)
+        lock.keymaster_config_entry_id = "test_entry"
+        lock.lock_name = "Test Lock"
+        lock.connected = False
+        lock.provider = None
+        return lock
+
+    @pytest.fixture
+    def connected_lock(self):
+        """Create a mock lock that connects successfully."""
+        lock = Mock(spec=KeymasterLock)
+        lock.keymaster_config_entry_id = "test_entry"
+        lock.lock_name = "Test Lock"
+        lock.connected = True
+        lock.provider = AsyncMock()
+        lock.provider.async_get_usercodes = AsyncMock(return_value=[])
+        lock.code_slots = {}
+        return lock
+
+    async def test_tracks_consecutive_failures(self, backoff_coordinator, disconnected_lock):
+        """Test failure counter increments on each failed connection."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        setattr(
+            backoff_coordinator,
+            "get_lock_by_config_entry_id",
+            AsyncMock(return_value=disconnected_lock),
+        )
+        setattr(backoff_coordinator, "_connect_and_update_lock", AsyncMock())
+
+        # Act — two consecutive failures
+        await backoff_coordinator._update_lock_data(entry_id)
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert
+        assert backoff_coordinator._consecutive_failures[entry_id] == 2
+
+    async def test_backoff_activates_after_threshold(self, backoff_coordinator, disconnected_lock):
+        """Test backoff engages after BACKOFF_FAILURE_THRESHOLD consecutive failures."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        setattr(
+            backoff_coordinator,
+            "get_lock_by_config_entry_id",
+            AsyncMock(return_value=disconnected_lock),
+        )
+        setattr(backoff_coordinator, "_connect_and_update_lock", AsyncMock())
+
+        # Act — reach the threshold
+        for _ in range(BACKOFF_FAILURE_THRESHOLD):
+            await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — backoff should now be set
+        assert entry_id in backoff_coordinator._next_retry_time
+        assert backoff_coordinator._next_retry_time[entry_id] > dt.now().astimezone()
+
+    async def test_skips_update_during_backoff(self, backoff_coordinator, disconnected_lock):
+        """Test _update_lock_data returns early when in backoff period."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        setattr(
+            backoff_coordinator,
+            "get_lock_by_config_entry_id",
+            AsyncMock(return_value=disconnected_lock),
+        )
+        mock_connect = AsyncMock()
+        setattr(backoff_coordinator, "_connect_and_update_lock", mock_connect)
+
+        # Set a backoff time far in the future
+        backoff_coordinator._next_retry_time[entry_id] = dt.now().astimezone() + timedelta(hours=1)
+
+        # Act
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — _connect_and_update_lock should NOT have been called
+        mock_connect.assert_not_called()
+
+    async def test_retries_after_backoff_expires(self, backoff_coordinator, disconnected_lock):
+        """Test _update_lock_data retries when backoff period has expired."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        setattr(
+            backoff_coordinator,
+            "get_lock_by_config_entry_id",
+            AsyncMock(return_value=disconnected_lock),
+        )
+        mock_connect = AsyncMock()
+        setattr(backoff_coordinator, "_connect_and_update_lock", mock_connect)
+
+        # Set backoff in the past
+        backoff_coordinator._next_retry_time[entry_id] = dt.now().astimezone() - timedelta(
+            seconds=1
+        )
+
+        # Act
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — _connect_and_update_lock SHOULD have been called
+        mock_connect.assert_called_once()
+
+    async def test_resets_counters_on_success(self, backoff_coordinator, connected_lock):
+        """Test failure and backoff counters reset after successful connection."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: connected_lock}
+        setattr(
+            backoff_coordinator,
+            "get_lock_by_config_entry_id",
+            AsyncMock(return_value=connected_lock),
+        )
+        setattr(backoff_coordinator, "_connect_and_update_lock", AsyncMock())
+        setattr(backoff_coordinator, "_update_code_slots", AsyncMock())
+
+        # Simulate prior failures whose backoff has already expired
+        backoff_coordinator._consecutive_failures[entry_id] = 5
+        backoff_coordinator._next_retry_time[entry_id] = dt.now().astimezone() - timedelta(
+            seconds=1
+        )
+
+        # Act
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — counters should be cleared
+        assert entry_id not in backoff_coordinator._consecutive_failures
+        assert entry_id not in backoff_coordinator._next_retry_time
+
+    async def test_backoff_caps_at_max(self, backoff_coordinator, disconnected_lock):
+        """Test backoff duration does not exceed BACKOFF_MAX_SECONDS."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        setattr(
+            backoff_coordinator,
+            "get_lock_by_config_entry_id",
+            AsyncMock(return_value=disconnected_lock),
+        )
+        setattr(backoff_coordinator, "_connect_and_update_lock", AsyncMock())
+
+        # Simulate many prior failures (well past where 2^n would exceed max)
+        backoff_coordinator._consecutive_failures[entry_id] = 50
+
+        # Act
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — backoff should be capped at BACKOFF_MAX_SECONDS
+        expected_max = dt.now().astimezone() + timedelta(seconds=BACKOFF_MAX_SECONDS + 1)
+        assert backoff_coordinator._next_retry_time[entry_id] < expected_max

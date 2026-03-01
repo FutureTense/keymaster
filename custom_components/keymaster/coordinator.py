@@ -1551,7 +1551,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if failures >= BACKOFF_FAILURE_THRESHOLD:
                 exponent = failures - BACKOFF_FAILURE_THRESHOLD
                 backoff_secs = min(
-                    BACKOFF_INITIAL_SECONDS * (2 ** exponent),
+                    BACKOFF_INITIAL_SECONDS * (2**exponent),
                     BACKOFF_MAX_SECONDS,
                 )
                 self._next_retry_time[keymaster_config_entry_id] = (
