@@ -48,6 +48,7 @@ jobs:
       - name: 🏃 Run pytest
         run: pytest tests --cov=custom_components/keymaster --cov-report=xml
       - name: 📤 Upload coverage artifact
+        if: matrix.python-version == '3.14'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-data
