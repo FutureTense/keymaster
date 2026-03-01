@@ -477,7 +477,7 @@ class TestZWaveJSLockProviderEventSubscription:
         mock_callback = AsyncMock()
 
         with patch(
-            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event"
+            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event",
         ) as mock_track:
             mock_track.return_value = MagicMock()
             unsub = zwave_provider.subscribe_lock_events(mock_kmlock, mock_callback)
@@ -635,7 +635,12 @@ class TestZWaveJSIntegration:
     """Integration tests for Z-Wave JS provider with actual zwave_js fixtures."""
 
     async def test_zwave_js_notification_event(
-        self, hass, client, lock_kwikset_910, integration, keymaster_integration
+        self,
+        hass,
+        client,
+        lock_kwikset_910,
+        integration,
+        keymaster_integration,
     ):
         """Test handling Z-Wave JS notification events.
 
@@ -659,7 +664,10 @@ class TestZWaveJSIntegration:
 
         # Load the keymaster integration
         config_entry = MockConfigEntry(
-            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=3
+            domain=DOMAIN,
+            title="frontdoor",
+            data=CONFIG_DATA_910,
+            version=3,
         )
         config_entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(config_entry.entry_id)
@@ -750,7 +758,7 @@ class TestZWaveJSLockProviderDeadNode:
     def test_is_node_alive_handles_exception(self, zwave_provider, mock_zwave_node):
         """Test _is_node_alive returns False when status check raises."""
         type(mock_zwave_node).status = property(
-            lambda self: (_ for _ in ()).throw(RuntimeError("node gone"))
+            lambda self: (_ for _ in ()).throw(RuntimeError("node gone")),
         )
         zwave_provider._node = mock_zwave_node
 
@@ -799,7 +807,10 @@ class TestZWaveJSLockProviderDeadNode:
         mock_clear.assert_not_called()
 
     async def test_connect_warns_when_dead_but_proceeds(
-        self, zwave_provider, mock_zwave_client, mock_zwave_node
+        self,
+        zwave_provider,
+        mock_zwave_client,
+        mock_zwave_node,
     ):
         """Test async_connect succeeds with warning when node is dead."""
         mock_zwave_node.status = NodeStatus.DEAD

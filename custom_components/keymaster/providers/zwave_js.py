@@ -319,6 +319,15 @@ class ZWaveJSLockProvider(BaseLockProvider):
         else:
             return True
 
+    async def async_ping_node(self) -> bool:
+        """Ping the Z-Wave node to check if it is responsive."""
+        if not self._node:
+            return False
+        try:
+            return await self._node.async_ping()
+        except Exception:  # noqa: BLE001
+            return False
+
     @property
     def domain(self) -> str:
         """Return the integration domain."""
@@ -455,7 +464,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             self._client.connected
             and self._client.driver
             and self._client.driver.controller
-            and self._node
+            and self._node,
         )
 
         # Update cached state
@@ -490,7 +499,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
                     slot_num=slot_num,
                     code=usercode or None,
                     in_use=bool(in_use) if in_use is not None else False,
-                )
+                ),
             )
 
         return result
@@ -669,7 +678,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         return None
 
     def subscribe_lock_events(
-        self, kmlock: KeymasterLock, callback: LockEventCallback
+        self,
+        kmlock: KeymasterLock,
+        callback: LockEventCallback,
     ) -> Callable[[], None]:
         """Subscribe to Z-Wave JS lock events.
 
@@ -758,7 +769,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             alarm_type_state = None
             if kmlock.alarm_type_or_access_control_entity_id:
                 alarm_type_state = self.hass.states.get(
-                    kmlock.alarm_type_or_access_control_entity_id
+                    kmlock.alarm_type_or_access_control_entity_id,
                 )
             alarm_type_value: int | None = (
                 int(alarm_type_state.state)
@@ -847,6 +858,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 "node_id": self.get_node_id(),
                 "node_status": self.get_node_status(),
                 "lock_config_entry_id": self.lock_config_entry_id,
-            }
+            },
         )
         return data
