@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from zwave_js_server.const import NodeStatus
 from zwave_js_server.event import Event
 from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
 
@@ -476,7 +477,7 @@ class TestZWaveJSLockProviderEventSubscription:
         mock_callback = AsyncMock()
 
         with patch(
-            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event"
+            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event",
         ) as mock_track:
             mock_track.return_value = MagicMock()
             unsub = zwave_provider.subscribe_lock_events(mock_kmlock, mock_callback)
@@ -634,7 +635,12 @@ class TestZWaveJSIntegration:
     """Integration tests for Z-Wave JS provider with actual zwave_js fixtures."""
 
     async def test_zwave_js_notification_event(
-        self, hass, client, lock_kwikset_910, integration, keymaster_integration
+        self,
+        hass,
+        client,
+        lock_kwikset_910,
+        integration,
+        keymaster_integration,
     ):
         """Test handling Z-Wave JS notification events.
 
@@ -658,7 +664,10 @@ class TestZWaveJSIntegration:
 
         # Load the keymaster integration
         config_entry = MockConfigEntry(
-            domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=3
+            domain=DOMAIN,
+            title="frontdoor",
+            data=CONFIG_DATA_910,
+            version=3,
         )
         config_entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(config_entry.entry_id)
@@ -721,3 +730,107 @@ class TestZWaveJSIntegration:
         assert events_js[0].data["node_id"] == 14
         assert events_js[0].data["event_label"] == "Keypad unlock operation"
         assert events_js[0].data["parameters"]["userId"] == 3
+
+
+class TestZWaveJSLockProviderDeadNode:
+    """Test ZWaveJSLockProvider dead node detection and command gating."""
+
+    def test_is_node_alive_returns_true_when_alive(self, zwave_provider, mock_zwave_node):
+        """Test _is_node_alive returns True when node status is alive."""
+        mock_zwave_node.status = NodeStatus.ALIVE
+        zwave_provider._node = mock_zwave_node
+
+        assert zwave_provider._is_node_alive() is True
+
+    def test_is_node_alive_returns_false_when_dead(self, zwave_provider, mock_zwave_node):
+        """Test _is_node_alive returns False when node status is dead."""
+        mock_zwave_node.status = NodeStatus.DEAD
+        zwave_provider._node = mock_zwave_node
+
+        assert zwave_provider._is_node_alive() is False
+
+    def test_is_node_alive_returns_false_when_no_node(self, zwave_provider):
+        """Test _is_node_alive returns False when node is None."""
+        zwave_provider._node = None
+
+        assert zwave_provider._is_node_alive() is False
+
+    def test_is_node_alive_handles_exception(self, zwave_provider, mock_zwave_node):
+        """Test _is_node_alive returns False when status check raises."""
+        type(mock_zwave_node).status = property(
+            lambda self: (_ for _ in ()).throw(RuntimeError("node gone")),
+        )
+        zwave_provider._node = mock_zwave_node
+
+        assert zwave_provider._is_node_alive() is False
+
+    async def test_refresh_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node):
+        """Test async_refresh_usercode returns None without Z-Wave call when dead."""
+        mock_zwave_node.status = NodeStatus.DEAD
+        zwave_provider._node = mock_zwave_node
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.get_usercode_from_node",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            result = await zwave_provider.async_refresh_usercode(1)
+
+        assert result is None
+        mock_get.assert_not_called()
+
+    async def test_set_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node):
+        """Test async_set_usercode returns False without Z-Wave call when dead."""
+        mock_zwave_node.status = NodeStatus.DEAD
+        zwave_provider._node = mock_zwave_node
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.set_usercode",
+            new_callable=AsyncMock,
+        ) as mock_set:
+            result = await zwave_provider.async_set_usercode(1, "1234")
+
+        assert result is False
+        mock_set.assert_not_called()
+
+    async def test_clear_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node):
+        """Test async_clear_usercode returns False without Z-Wave call when dead."""
+        mock_zwave_node.status = NodeStatus.DEAD
+        zwave_provider._node = mock_zwave_node
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.clear_usercode",
+            new_callable=AsyncMock,
+        ) as mock_clear:
+            result = await zwave_provider.async_clear_usercode(1)
+
+        assert result is False
+        mock_clear.assert_not_called()
+
+    async def test_connect_warns_when_dead_but_proceeds(
+        self,
+        zwave_provider,
+        mock_zwave_client,
+        mock_zwave_node,
+    ):
+        """Test async_connect succeeds with warning when node is dead."""
+        mock_zwave_node.status = NodeStatus.DEAD
+
+        mock_entity = MagicMock()
+        mock_entity.config_entry_id = "zwave_entry_id"
+        mock_entity.device_id = "device_id"
+        zwave_provider.entity_registry.async_get.return_value = mock_entity
+
+        mock_zwave_entry = MagicMock()
+        mock_zwave_entry.runtime_data = MagicMock()
+        mock_zwave_entry.runtime_data.client = mock_zwave_client
+        zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
+
+        mock_device = MagicMock()
+        mock_device.identifiers = {("zwave_js", "12345-14")}
+        mock_device.id = "device_id"
+        zwave_provider.device_registry.async_get.return_value = mock_device
+
+        result = await zwave_provider.async_connect()
+
+        assert result is True
+        assert zwave_provider.node is mock_zwave_node

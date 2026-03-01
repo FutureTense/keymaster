@@ -10,6 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from zwave_js_server.client import Client as ZwaveJSClient
+from zwave_js_server.const import NodeStatus
 from zwave_js_server.const.command_class.lock import (
     ATTR_CODE_SLOT as ZWAVEJS_ATTR_CODE_SLOT,
     ATTR_IN_USE as ZWAVEJS_ATTR_IN_USE,
@@ -298,6 +299,35 @@ class ZWaveJSLockProvider(BaseLockProvider):
     _device: DeviceEntry | None = field(default=None, init=False, repr=False)
     _client: ZwaveJSClient | None = field(default=None, init=False, repr=False)
 
+    def _is_node_alive(self) -> bool:
+        """Check if the Z-Wave node is alive (not dead).
+
+        Returns False only for dead nodes. Asleep nodes (battery devices)
+        are considered alive since they wake periodically.
+        """
+        if not self._node:
+            return False
+        try:
+            if self._node.status == NodeStatus.DEAD:
+                _LOGGER.debug(
+                    "[ZWaveJSProvider] Node %s is dead, skipping command",
+                    self._node.node_id,
+                )
+                return False
+        except Exception:  # noqa: BLE001
+            return False
+        else:
+            return True
+
+    async def async_ping_node(self) -> bool:
+        """Ping the Z-Wave node to check if it is responsive."""
+        if not self._node:
+            return False
+        try:
+            return await self._node.async_ping()
+        except Exception:  # noqa: BLE001
+            return False
+
     @property
     def domain(self) -> str:
         """Return the integration domain."""
@@ -408,6 +438,15 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return False
 
+        # Warn if node is dead, but connect anyway for cached data access.
+        # The backoff mechanism handles repeated failures at the coordinator level.
+        if not self._is_node_alive():
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Node %s is currently dead, "
+                "connecting anyway (cached data may still be available)",
+                node_id,
+            )
+
         self._connected = True
         _LOGGER.debug(
             "[ZWaveJSProvider] Connected to lock %s (node %s)",
@@ -425,7 +464,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             self._client.connected
             and self._client.driver
             and self._client.driver.controller
-            and self._node
+            and self._node,
         )
 
         # Update cached state
@@ -458,9 +497,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
             result.append(
                 CodeSlot(
                     slot_num=slot_num,
-                    code=usercode if usercode else None,
+                    code=usercode or None,
                     in_use=bool(in_use) if in_use is not None else False,
-                )
+                ),
             )
 
         return result
@@ -491,6 +530,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         if not self._node:
             return None
 
+        if not self._is_node_alive():
+            return None
+
         try:
             zw_slot: ZwaveJSCodeSlot = await get_usercode_from_node(self._node, slot_num)
             return CodeSlot(
@@ -511,6 +553,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         """Set user code on a slot."""
         if not self._node:
             _LOGGER.error("[ZWaveJSProvider] No node available for set_usercode")
+            return False
+
+        if not self._is_node_alive():
             return False
 
         try:
@@ -534,6 +579,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         """Clear user code from a slot."""
         if not self._node:
             _LOGGER.error("[ZWaveJSProvider] No node available for clear_usercode")
+            return False
+
+        if not self._is_node_alive():
             return False
 
         try:
@@ -630,7 +678,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         return None
 
     def subscribe_lock_events(
-        self, kmlock: KeymasterLock, callback: LockEventCallback
+        self,
+        kmlock: KeymasterLock,
+        callback: LockEventCallback,
     ) -> Callable[[], None]:
         """Subscribe to Z-Wave JS lock events.
 
@@ -719,7 +769,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             alarm_type_state = None
             if kmlock.alarm_type_or_access_control_entity_id:
                 alarm_type_state = self.hass.states.get(
-                    kmlock.alarm_type_or_access_control_entity_id
+                    kmlock.alarm_type_or_access_control_entity_id,
                 )
             alarm_type_value: int | None = (
                 int(alarm_type_state.state)
@@ -808,6 +858,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 "node_id": self.get_node_id(),
                 "node_status": self.get_node_status(),
                 "lock_config_entry_id": self.lock_config_entry_id,
-            }
+            },
         )
         return data
