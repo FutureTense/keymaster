@@ -3,26 +3,26 @@ tag-template: "v$RESOLVED_VERSION"
 change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
 sort-direction: ascending
 categories:
-  - title: ":boom: Breaking Change :boom:"
+  - title: "💥 Breaking Change 💥"
     labels:
       - "breaking-change"
-  - title: ":zap: Enhancements :zap:"
+  - title: "⚡ Enhancements ⚡"
     labels:
       - "enhancement"
-  - title: ":sparkles: New Features :sparkles:"
+  - title: "✨ New Features ✨"
     labels:
       - "feature"
-  - title: ":bug: Bug Fixes :bug:"
+  - title: "🐛 Bug Fixes 🐛"
     labels:
       - "fix"
       - "bugfix"
       - "bug"
-  - title: ":wrench: Maintenance :wrench:"
+  - title: "🔧 Maintenance 🔧"
     labels:
       - "chore"
       - "repo"
       - "maintenance"
-  - title: ":mortar_board: Code Quality :mortar_board:"
+  - title: "🎓 Code Quality 🎓"
     labels:
       - "code-quality"
 # yamllint disable rule:line-length
