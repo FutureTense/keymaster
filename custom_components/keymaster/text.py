@@ -164,4 +164,24 @@ class KeymasterText(KeymasterEntity, TextEntity):
             return
         if self._set_property_value(value):
             self._attr_native_value = value
+            # When the slot name changes, re-push the code to the lock so the
+            # provider can update the name on the device (e.g., Schlage tag).
+            slot_pin: str | None = None
+            code_slot: int | None = self._code_slot
+            if (
+                self._property.endswith(".name")
+                and self._kmlock
+                and code_slot
+                and self._kmlock.code_slots
+                and code_slot in self._kmlock.code_slots
+                and self._kmlock.code_slots[code_slot].active
+            ):
+                slot_pin = self._kmlock.code_slots[code_slot].pin
+            if slot_pin and code_slot:
+                await self.coordinator.set_pin_on_lock(
+                    config_entry_id=self._config_entry.entry_id,
+                    code_slot_num=code_slot,
+                    pin=slot_pin,
+                    override=True,
+                )
             await self.coordinator.async_refresh()

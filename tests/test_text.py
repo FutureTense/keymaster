@@ -372,6 +372,127 @@ async def test_text_entity_invalid_pin_ignored(
         mock_clear_pin.assert_not_called()
 
 
+async def test_text_entity_name_change_repushes_code(
+    hass: HomeAssistant, text_config_entry, coordinator
+):
+    """Test that renaming a slot re-pushes the code to the lock."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Old Name", pin="1234", active=True, enabled=True)
+    }
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:1.name",
+        name="Code Slot 1: Name",
+        icon="mdi:form-textbox-lock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+
+    with (
+        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+    ):
+        await entity.async_set_value("New Name")
+
+        # Name should be updated locally
+        assert kmlock.code_slots[1].name == "New Name"
+        # Code should be re-pushed to lock with the new name
+        mock_set_pin.assert_called_once_with(
+            config_entry_id=text_config_entry.entry_id,
+            code_slot_num=1,
+            pin="1234",
+            override=True,
+        )
+
+
+async def test_text_entity_name_change_no_repush_without_pin(
+    hass: HomeAssistant, text_config_entry, coordinator
+):
+    """Test that renaming a slot without a PIN does not re-push."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Old Name", pin=None, active=True, enabled=True)
+    }
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:1.name",
+        name="Code Slot 1: Name",
+        icon="mdi:form-textbox-lock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+
+    with (
+        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+    ):
+        await entity.async_set_value("New Name")
+
+        assert kmlock.code_slots[1].name == "New Name"
+        mock_set_pin.assert_not_called()
+
+
+async def test_text_entity_name_change_no_repush_when_inactive(
+    hass: HomeAssistant, text_config_entry, coordinator
+):
+    """Test that renaming an inactive slot does not re-push."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Old Name", pin="1234", active=False, enabled=True)
+    }
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:1.name",
+        name="Code Slot 1: Name",
+        icon="mdi:form-textbox-lock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+
+    with (
+        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+    ):
+        await entity.async_set_value("New Name")
+
+        assert kmlock.code_slots[1].name == "New Name"
+        mock_set_pin.assert_not_called()
+
+
 async def test_text_entity_child_lock_ignores_name_change_without_override(
     hass: HomeAssistant, text_config_entry, coordinator, caplog
 ):
