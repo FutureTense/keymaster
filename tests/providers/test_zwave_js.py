@@ -834,3 +834,43 @@ class TestZWaveJSLockProviderDeadNode:
 
         assert result is True
         assert zwave_provider.node is mock_zwave_node
+
+
+class TestZWaveJSLockProviderPingNode:
+    """Test ZWaveJSLockProvider async_ping_node method."""
+
+    async def test_ping_node_returns_false_when_no_node(self, zwave_provider):
+        """Test async_ping_node returns False when node is None."""
+        zwave_provider._node = None
+
+        result = await zwave_provider.async_ping_node()
+
+        assert result is False
+
+    async def test_ping_node_returns_result_on_success(self, zwave_provider, mock_zwave_node):
+        """Test async_ping_node returns the result from node.async_ping()."""
+        mock_zwave_node.async_ping = AsyncMock(return_value=True)
+        zwave_provider._node = mock_zwave_node
+
+        result = await zwave_provider.async_ping_node()
+
+        assert result is True
+        mock_zwave_node.async_ping.assert_called_once()
+
+    async def test_ping_node_returns_false_on_failure(self, zwave_provider, mock_zwave_node):
+        """Test async_ping_node returns False when ping fails."""
+        mock_zwave_node.async_ping = AsyncMock(return_value=False)
+        zwave_provider._node = mock_zwave_node
+
+        result = await zwave_provider.async_ping_node()
+
+        assert result is False
+
+    async def test_ping_node_returns_false_on_exception(self, zwave_provider, mock_zwave_node):
+        """Test async_ping_node returns False when an exception occurs."""
+        mock_zwave_node.async_ping = AsyncMock(side_effect=RuntimeError("network error"))
+        zwave_provider._node = mock_zwave_node
+
+        result = await zwave_provider.async_ping_node()
+
+        assert result is False
