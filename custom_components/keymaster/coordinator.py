@@ -1178,7 +1178,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # Use provider if available
         if kmlock.provider:
-            success = await kmlock.provider.async_set_usercode(code_slot_num, pin)
+            slot_name = kmlock.code_slots[code_slot_num].name
+            success = await kmlock.provider.async_set_usercode(code_slot_num, pin, name=slot_name)
             if not success:
                 _LOGGER.error(
                     "[Coordinator] %s: Code Slot %s: Unable to set PIN via provider",
@@ -1565,6 +1566,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         kmslot.active = new_active
+
+        # No local PIN yet (initial state) — don't push or clear; let
+        # _sync_usercode handle importing any pre-existing lock code.
+        if kmslot.pin is None:
+            return
+
         if not kmslot.active or not kmslot.pin or not kmslot.enabled:
             await self.clear_pin_from_lock(
                 config_entry_id=kmlock.keymaster_config_entry_id,
@@ -1590,6 +1597,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if not km_code_slot:
             return
+
+        # Import name from lock when the keymaster slot has no name yet
+        if km_code_slot.name is None and usercode_slot.name:
+            km_code_slot.name = usercode_slot.name
 
         # Refresh from lock if slot claims to have a code but we don't have the value
         # (e.g., masked responses where in_use=True but code is None or all one
@@ -1633,6 +1644,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     pin=str(slot.pin),
                     override=True,
                 )
+            return
+
+        # Import pre-existing lock code when keymaster slot has never had a PIN
+        if slot.pin is None and usercode.isdigit():
+            slot.pin = usercode
+            slot.active = await KeymasterCoordinator._is_slot_active(slot)
+            slot.synced = Synced.SYNCED
             return
 
         # Slot disabled or inactive -> ensure lock is cleared
