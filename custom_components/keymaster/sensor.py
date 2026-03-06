@@ -1,10 +1,11 @@
 """Sensor for keymaster."""
 
 from dataclasses import dataclass
+from datetime import datetime as dt
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -55,6 +56,20 @@ async def async_setup_entry(
                 ),
             )
         )
+
+    entities.append(
+        KeymasterAutoLockSensor(
+            entity_description=KeymasterSensorEntityDescription(
+                key="sensor.autolock_timer",
+                name="Auto Lock Timer",
+                icon="mdi:lock-clock",
+                entity_registry_enabled_default=True,
+                hass=hass,
+                config_entry=config_entry,
+                coordinator=coordinator,
+            ),
+        )
+    )
 
     entities.extend(
         [
@@ -116,4 +131,76 @@ class KeymasterSensor(KeymasterEntity, SensorEntity):
 
         self._attr_available = True
         self._attr_native_value = self._get_property_value()
+        self.async_write_ha_state()
+
+
+class KeymasterAutoLockSensor(KeymasterEntity, SensorEntity):
+    """Sensor for the auto-lock timer countdown."""
+
+    entity_description: KeymasterSensorEntityDescription
+
+    def __init__(
+        self,
+        entity_description: KeymasterSensorEntityDescription,
+    ) -> None:
+        """Initialize auto-lock timer sensor."""
+        super().__init__(
+            entity_description=entity_description,
+        )
+        self._attr_device_class = SensorDeviceClass.TIMESTAMP
+        self._attr_native_value: dt | None = None
+
+    @staticmethod
+    def _seconds_to_hhmmss(seconds: float | None) -> str | None:
+        """Format seconds as HH:MM:SS string."""
+        if seconds is None or seconds < 0:
+            return None
+        seconds = int(seconds)
+        hours, remainder = divmod(seconds, 3600)
+        minutes, secs = divmod(remainder, 60)
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        if not self._kmlock or not self._kmlock.connected:
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
+        if not self._kmlock.autolock_enabled:
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+
+        self._attr_available = True
+        timer = self._kmlock.autolock_timer
+
+        # Snapshot all timer values at once to avoid race if timer expires mid-read
+        if timer:
+            is_running = timer.is_running
+            end_time = timer.end_time
+            duration = timer.duration
+            remaining = timer.remaining_seconds
+        else:
+            is_running = False
+            end_time = None
+            duration = None
+            remaining = None
+
+        if is_running and end_time:
+            self._attr_native_value = end_time
+            self._attr_extra_state_attributes = {
+                "duration": self._seconds_to_hhmmss(duration),
+                "remaining": self._seconds_to_hhmmss(remaining),
+                "finishes_at": end_time.isoformat(),
+                "is_running": True,
+            }
+        else:
+            self._attr_native_value = None
+            self._attr_extra_state_attributes = {
+                "duration": None,
+                "remaining": None,
+                "finishes_at": None,
+                "is_running": False,
+            }
         self.async_write_ha_state()

@@ -941,3 +941,45 @@ def test_delete_lovelace_handles_permission_error(hass: HomeAssistant, tmp_path:
 
     # Should log the error
     assert "Unable to delete lovelace YAML" in caplog.text
+
+
+async def test_generate_view_config_badges_autolock_timer(hass: HomeAssistant):
+    """Test that auto-lock timer badge is generated with correct visibility conditions."""
+    mock_registry = _create_mock_registry()
+
+    with patch(
+        "custom_components.keymaster.lovelace.er.async_get",
+        return_value=mock_registry,
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="frontdoor",
+            keymaster_config_entry_id="test_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.frontdoor",
+            advanced_date_range=False,
+            advanced_day_of_week=False,
+            door_sensor="binary_sensor.frontdoor",
+        )
+
+    badges = view["badges"]
+
+    # Find the autolock timer badge
+    timer_badges = [b for b in badges if "autolock_timer" in str(b.get("entity", ""))]
+    assert len(timer_badges) == 1
+    timer_badge = timer_badges[0]
+
+    # Should have name shown
+    assert timer_badge.get("show_name") is True
+    assert timer_badge.get("name") == "Auto Lock Timer"
+
+    # Should have visibility conditions: not unknown and not unavailable
+    visibility = timer_badge.get("visibility", [])
+    assert len(visibility) == 2
+    assert any(
+        v.get("condition") == "state" and v.get("state_not") == "unknown" for v in visibility
+    )
+    assert any(
+        v.get("condition") == "state" and v.get("state_not") == "unavailable" for v in visibility
+    )
