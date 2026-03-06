@@ -33,7 +33,7 @@ async def test_setup_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 10
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 11
 
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
@@ -58,7 +58,7 @@ async def test_setup_entry_core_state(
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 10
+        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 11
         entries = hass.config_entries.async_entries(DOMAIN)
         assert len(entries) == 1
 
@@ -76,13 +76,13 @@ async def test_unload_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 10
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 11
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 10
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 11
     assert len(hass.states.async_entity_ids(DOMAIN)) == 0
 
     assert await hass.config_entries.async_remove(entry.entry_id)

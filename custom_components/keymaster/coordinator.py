@@ -621,6 +621,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if kmlock.autolock_enabled and kmlock.autolock_timer:
             await kmlock.autolock_timer.start()
+            self.async_set_updated_data(dict(self.kmlocks))
 
         if kmlock.lock_notifications:
             message = event_label
@@ -740,6 +741,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         if kmlock.autolock_timer:
             await kmlock.autolock_timer.cancel()
+            self.async_set_updated_data(dict(self.kmlocks))
 
         if kmlock.lock_notifications:
             await send_manual_notification(

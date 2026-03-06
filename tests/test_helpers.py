@@ -167,6 +167,7 @@ async def test_keymaster_timer_init():
     assert timer._kmlock is None
     assert timer._call_action is None
     assert timer._end_time is None
+    assert timer._duration is None
     assert not timer.is_setup
     assert not timer.is_running
 
@@ -231,6 +232,7 @@ async def test_keymaster_timer_start_day(hass):
 
     assert result is True
     assert timer._end_time is not None
+    assert timer._duration == 5 * 60
     assert len(timer._unsub_events) == 2  # Timer callback + cancel callback
     assert timer.is_running
     assert timer._end_time is not None  # Should still be set after checking is_running
@@ -261,6 +263,7 @@ async def test_keymaster_timer_start_night(hass):
 
     assert result is True
     assert timer._end_time is not None
+    assert timer._duration == 10 * 60
     assert len(timer._unsub_events) == 2  # Timer callback + cancel callback
     assert timer.is_running
     assert timer._end_time is not None  # Should still be set after checking is_running
@@ -322,6 +325,7 @@ async def test_keymaster_timer_cancel(hass):
         await timer.start()
 
     assert timer._end_time is not None
+    assert timer._duration is not None
     assert timer.is_running
 
     # Cancel timer
@@ -329,6 +333,7 @@ async def test_keymaster_timer_cancel(hass):
 
     assert not timer.is_running
     assert timer._end_time is None
+    assert timer._duration is None
     assert timer._unsub_events == []
 
 
@@ -355,6 +360,7 @@ async def test_keymaster_timer_properties(hass):
     assert not timer.is_running
     assert timer.end_time is None
     assert timer.remaining_seconds is None
+    assert timer.duration is None
 
     # Start timer
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
@@ -365,6 +371,7 @@ async def test_keymaster_timer_properties(hass):
     assert timer.end_time is not None
     assert timer.remaining_seconds is not None
     assert timer.remaining_seconds > 0  # Time remaining (positive because end_time is in future)
+    assert timer.duration == 5 * 60  # 5 minutes in seconds
 
 
 async def test_delete_code_slot_entities_removes_all(hass):
@@ -462,11 +469,13 @@ async def test_keymaster_timer_is_running_expired(hass):
 
     # Manually set end_time to the past to simulate expired timer
     timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._duration = 300
     timer._unsub_events = [MagicMock()]  # Add a mock unsub function
 
     # Checking is_running should clean up the expired timer
     assert timer.is_running is False
     assert timer._end_time is None
+    assert timer._duration is None
     assert timer._unsub_events == []
 
 
@@ -487,12 +496,14 @@ async def test_keymaster_timer_is_setup_expired(hass):
 
     # Manually set end_time to the past
     timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._duration = 300
     timer._unsub_events = [MagicMock()]
 
     # Checking is_setup should clean up the expired timer
     result = timer.is_setup
     assert result is True  # Still setup, just expired
     assert timer._end_time is None
+    assert timer._duration is None
     assert timer._unsub_events == []
 
 
@@ -513,12 +524,14 @@ async def test_keymaster_timer_end_time_expired(hass):
 
     # Manually set end_time to the past
     timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._duration = 300
     timer._unsub_events = [MagicMock()]
 
     # Getting end_time should clean up and return None
     result = timer.end_time
     assert result is None
     assert timer._end_time is None
+    assert timer._duration is None
     assert timer._unsub_events == []
 
 
@@ -539,12 +552,14 @@ async def test_keymaster_timer_remaining_seconds_expired(hass):
 
     # Manually set end_time to the past
     timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._duration = 300
     timer._unsub_events = [MagicMock()]
 
     # Getting remaining_seconds should clean up and return None
     result = timer.remaining_seconds
     assert result is None
     assert timer._end_time is None
+    assert timer._duration is None
     assert timer._unsub_events == []
 
 
