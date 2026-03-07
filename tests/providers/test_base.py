@@ -1,11 +1,10 @@
 """Tests for the base lock provider."""
 
+from dataclasses import dataclass
 from unittest.mock import MagicMock
 
-import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 
 class TestBaseLockProviderPingNode:
@@ -13,11 +12,8 @@ class TestBaseLockProviderPingNode:
 
     async def test_ping_node_returns_false_by_default(self, hass):
         """Base class async_ping_node returns False (no platform support)."""
+
         # Create a minimal concrete subclass to test the base behavior
-        from dataclasses import dataclass
-
-        from homeassistant.helpers import device_registry as dr, entity_registry as er
-
         @dataclass
         class StubProvider(BaseLockProvider):
             @property
