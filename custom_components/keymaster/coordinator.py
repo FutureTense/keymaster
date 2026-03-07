@@ -454,17 +454,29 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if temp_new_state := self.hass.states.get(kmlock.lock_entity_id):
             new_state = temp_new_state.state
 
+        # Determine the intended action from event semantics first, since
+        # provider events may arrive before the entity state has updated.
+        # Fall back to entity state only when the event label is ambiguous.
+        label_lower = event_label.lower() if event_label else ""
+        if "unlock" in label_lower:
+            inferred_action = LockState.UNLOCKED
+        elif "lock" in label_lower and "jam" not in label_lower:
+            inferred_action = LockState.LOCKED
+        else:
+            inferred_action = new_state
+
         _LOGGER.debug(
             "[handle_lock_event_from_provider] %s: event_label: %s, new_state: %s, "
-            "code_slot_num: %s, action_code: %s",
+            "inferred_action: %s, code_slot_num: %s, action_code: %s",
             kmlock.lock_name,
             event_label,
             new_state,
+            inferred_action,
             code_slot_num,
             action_code,
         )
 
-        if new_state == LockState.UNLOCKED:
+        if inferred_action == LockState.UNLOCKED:
             await self._lock_unlocked(
                 kmlock=kmlock,
                 code_slot_num=code_slot_num,
@@ -472,7 +484,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 event_label=event_label,
                 action_code=action_code,
             )
-        elif new_state == LockState.LOCKED:
+        elif inferred_action == LockState.LOCKED:
             await self._lock_locked(
                 kmlock=kmlock,
                 source="event",
@@ -483,7 +495,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug(
                 "[handle_lock_event_from_provider] %s: Unknown lock state: %s",
                 kmlock.lock_name,
-                new_state,
+                inferred_action,
             )
 
     async def _handle_door_state_change(
@@ -949,6 +961,20 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete = False
                 await self._update_lock(kmlock)
                 return
+            # Ensure provider exists for platform setup even if connection
+            # hasn't completed yet (async_refresh may still be in progress).
+            # Connection will happen during the next coordinator refresh cycle.
+            existing_lock = self.kmlocks[kmlock.keymaster_config_entry_id]
+            if not existing_lock.provider:
+                keymaster_entry = self.hass.config_entries.async_get_entry(
+                    existing_lock.keymaster_config_entry_id
+                )
+                if keymaster_entry:
+                    existing_lock.provider = create_provider(
+                        hass=self.hass,
+                        lock_entity_id=existing_lock.lock_entity_id,
+                        keymaster_config_entry=keymaster_entry,
+                    )
             _LOGGER.debug("[add_lock] %s: Lock already exists, not adding", kmlock.lock_name)
             return
         _LOGGER.debug("[add_lock] %s", kmlock.lock_name)

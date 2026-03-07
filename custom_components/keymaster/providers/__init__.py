@@ -9,16 +9,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from ._base import BaseLockProvider, CodeSlot, ConnectionCallback, LockEventCallback
+from .akuvox import AkuvoxLockProvider
 from .zwave_js import ZWaveJSLockProvider
 
 _LOGGER = logging.getLogger(__name__)
 
 # Provider registry - maps platform domain to provider class
 PROVIDER_MAP: dict[str, type[BaseLockProvider]] = {
+    "local_akuvox": AkuvoxLockProvider,
     "zwave_js": ZWaveJSLockProvider,
-    # Future providers would be registered here:
-    # "zha": ZHALockProvider,
-    # "mqtt": Zigbee2MQTTLockProvider,
 }
 
 
