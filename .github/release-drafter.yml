@@ -1,3 +1,4 @@
+---
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
@@ -6,25 +7,96 @@ categories:
   - title: "💥 Breaking Change 💥"
     labels:
       - "breaking-change"
-  - title: "⚡ Enhancements ⚡"
-    labels:
-      - "enhancement"
   - title: "✨ New Features ✨"
     labels:
+      - "enhancement"
       - "feature"
   - title: "🐛 Bug Fixes 🐛"
     labels:
       - "fix"
       - "bugfix"
       - "bug"
+  - title: "⚡ Performance ⚡"
+    labels:
+      - "performance"
   - title: "🔧 Maintenance 🔧"
     labels:
       - "chore"
-      - "repo"
+      - "documentation"
       - "maintenance"
+      - "repo"
+      - "dependencies"
+      - "github_actions"
+      - "refactor"
+      - "style"
+      - "build"
+      - "revert"
   - title: "🎓 Code Quality 🎓"
     labels:
       - "code-quality"
+      - "CI"
+      - "test"
+autolabeler:
+  - label: "breaking-change"
+    title:
+      - '/^[a-z]+(\([^)]+\))?!:/i'
+  - label: "feature"
+    title:
+      - '/^feat(\([^)]+\))?:/i'
+  - label: "bugfix"
+    title:
+      - '/^fix(\([^)]+\))?:/i'
+  - label: "refactor"
+    title:
+      - '/^refactor(\([^)]+\))?:/i'
+  - label: "code-quality"
+    title:
+      - '/^test(\([^)]+\))?:/i'
+  - label: "CI"
+    title:
+      - '/^ci(\([^)]+\))?:/i'
+  - label: "chore"
+    title:
+      - '/^chore(\([^)]+\))?:/i'
+  - label: "documentation"
+    title:
+      - '/^docs(\([^)]+\))?:/i'
+  - label: "style"
+    title:
+      - '/^style(\([^)]+\))?:/i'
+  - label: "performance"
+    title:
+      - '/^perf(\([^)]+\))?:/i'
+  - label: "revert"
+    title:
+      - '/^revert(\([^)]+\))?:/i'
+  - label: "build"
+    title:
+      - '/^build(\([^)]+\))?:/i'
+version-resolver:
+  major:
+    labels:
+      - "breaking-change"
+  minor:
+    labels:
+      - "feature"
+      - "enhancement"
+  patch:
+    labels:
+      - "bug"
+      - "fix"
+      - "bugfix"
+      - "performance"
+      - "refactor"
+      - "style"
+      - "build"
+      - "chore"
+      - "documentation"
+      - "CI"
+      - "test"
+      - "code-quality"
+      - "revert"
+  default: patch
 # yamllint disable rule:line-length
 template: |
   [![Downloads for this release](https://img.shields.io/github/downloads/FutureTense/keymaster/v$RESOLVED_VERSION/total.svg)](https://github.com/FutureTense/keymaster/releases/v$RESOLVED_VERSION)
