@@ -2164,6 +2164,32 @@ class TestUpdateLockDataBackoff:
 
         disconnected_lock.provider.async_ping_node.assert_called_once()
 
+    async def test_skips_invalid_lock(self, backoff_coordinator):
+        """Test _update_lock_data returns early if lock not found."""
+        entry_id = "invalid_entry"
+        # Mock get_lock_by_config_entry_id to return None
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=None)
+        mock_connect = AsyncMock()
+        backoff_coordinator._connect_and_update_lock = mock_connect
+
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        mock_connect.assert_not_called()
+
+    async def test_aborts_if_no_provider_after_connect(self, backoff_coordinator, connected_lock):
+        """Test _update_lock_data returns early if provider is missing after successful connection."""
+        entry_id = "test_entry"
+        # The lock connected but provider is None
+        connected_lock.provider = None
+        backoff_coordinator.kmlocks = {entry_id: connected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=connected_lock)
+        backoff_coordinator._connect_and_update_lock = AsyncMock()
+        backoff_coordinator._update_code_slots = AsyncMock()
+
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        backoff_coordinator._update_code_slots.assert_not_called()
+
 
 class TestResetCodeSlot:
     """Test cases for reset_code_slot method."""
