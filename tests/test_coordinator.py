@@ -2163,3 +2163,201 @@ class TestUpdateLockDataBackoff:
         await backoff_coordinator._update_lock_data(entry_id)
 
         disconnected_lock.provider.async_ping_node.assert_called_once()
+
+
+class TestResetCodeSlot:
+    """Test cases for reset_code_slot method."""
+
+    @pytest.fixture
+    def coordinator_with_lock(self, mock_hass):
+        """Create a coordinator with a real KeymasterLock containing a code slot."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator.async_refresh = AsyncMock()
+
+            lock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            lock.code_slots = {
+                1: KeymasterCodeSlot(number=1, enabled=True, pin="1234"),
+            }
+            coordinator.kmlocks["entry_1"] = lock
+            return coordinator
+
+    async def test_reset_code_slot_replaces_slot(self, coordinator_with_lock):
+        """Test that reset_code_slot creates a fresh disabled slot."""
+        await coordinator_with_lock.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+        )
+
+        slot = coordinator_with_lock.kmlocks["entry_1"].code_slots[1]
+        assert slot.number == 1
+        assert slot.enabled is False
+        assert slot.pin is None
+        assert slot.accesslimit_day_of_week is not None
+        coordinator_with_lock.clear_pin_from_lock.assert_called_once()
+        coordinator_with_lock.async_refresh.assert_called_once()
+
+    async def test_reset_code_slot_lock_not_found(self, coordinator_with_lock):
+        """Test reset_code_slot with non-existent lock."""
+        await coordinator_with_lock.reset_code_slot(
+            config_entry_id="nonexistent",
+            code_slot_num=1,
+        )
+        coordinator_with_lock.clear_pin_from_lock.assert_not_called()
+
+    async def test_reset_code_slot_slot_not_found(self, coordinator_with_lock):
+        """Test reset_code_slot with non-existent code slot."""
+        await coordinator_with_lock.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=99,
+        )
+        coordinator_with_lock.clear_pin_from_lock.assert_not_called()
+
+
+class TestUpdateSlotActiveState:
+    """Test cases for update_slot_active_state method."""
+
+    @pytest.fixture
+    def coordinator_with_slot(self, mock_hass):
+        """Create a coordinator with a lock and code slot for active state tests."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._initial_setup_done_event = AsyncMock()
+            coordinator._initial_setup_done_event.wait = AsyncMock()
+
+            lock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            lock.code_slots = {
+                1: KeymasterCodeSlot(number=1, enabled=True, pin="1234"),
+            }
+            coordinator.kmlocks["entry_1"] = lock
+            return coordinator
+
+    async def test_update_slot_active_state_success(self, coordinator_with_slot):
+        """Test successful update of a slot's active state."""
+        result = await coordinator_with_slot.update_slot_active_state(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+        )
+        assert result is True
+
+    async def test_update_slot_active_state_lock_not_found(self, coordinator_with_slot):
+        """Test update_slot_active_state with non-existent lock."""
+        result = await coordinator_with_slot.update_slot_active_state(
+            config_entry_id="nonexistent",
+            code_slot_num=1,
+        )
+        assert result is False
+
+    async def test_update_slot_active_state_slot_not_found(self, coordinator_with_slot):
+        """Test update_slot_active_state with non-existent code slot."""
+        result = await coordinator_with_slot.update_slot_active_state(
+            config_entry_id="entry_1",
+            code_slot_num=99,
+        )
+        assert result is False
+
+
+class TestUpdateChildCodeSlotsSync:
+    """Test cases for _update_child_code_slots sync behavior."""
+
+    @pytest.fixture
+    def sync_coordinator(self, mock_hass):
+        """Create a coordinator for child code slot sync tests."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._quick_refresh = False
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator.set_pin_on_lock = AsyncMock()
+            return coordinator
+
+    async def test_update_child_code_slots_syncs_attributes(self, sync_coordinator):
+        """Test that parent attributes are synced to child code slots."""
+        parent_lock = KeymasterLock(
+            lock_name="Parent",
+            lock_entity_id="lock.parent",
+            keymaster_config_entry_id="parent_entry",
+        )
+        parent_lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, enabled=True, pin="5678", name="Guest"),
+        }
+
+        child_lock = KeymasterLock(
+            lock_name="Child",
+            lock_entity_id="lock.child",
+            keymaster_config_entry_id="child_entry",
+        )
+        child_lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, enabled=False, pin=None, name="Old Name"),
+        }
+
+        await sync_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        assert child_lock.code_slots[1].enabled is True
+        assert child_lock.code_slots[1].name == "Guest"
+
+    async def test_update_child_code_slots_no_parent_slots(self, sync_coordinator):
+        """Test early return when parent has no code slots."""
+        parent_lock = KeymasterLock(
+            lock_name="Parent",
+            lock_entity_id="lock.parent",
+            keymaster_config_entry_id="parent_entry",
+        )
+        parent_lock.code_slots = None
+
+        child_lock = KeymasterLock(
+            lock_name="Child",
+            lock_entity_id="lock.child",
+            keymaster_config_entry_id="child_entry",
+        )
+        child_lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, enabled=True),
+        }
+
+        await sync_coordinator._update_child_code_slots(parent_lock, child_lock)
+        sync_coordinator.clear_pin_from_lock.assert_not_called()
+
+    async def test_update_child_code_slots_respects_override(self, sync_coordinator):
+        """Test that child slots with override_parent are not synced."""
+        parent_lock = KeymasterLock(
+            lock_name="Parent",
+            lock_entity_id="lock.parent",
+            keymaster_config_entry_id="parent_entry",
+        )
+        parent_lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, enabled=True, pin="5678"),
+        }
+
+        child_lock = KeymasterLock(
+            lock_name="Child",
+            lock_entity_id="lock.child",
+            keymaster_config_entry_id="child_entry",
+        )
+        child_lock.code_slots = {
+            1: KeymasterCodeSlot(
+                number=1,
+                enabled=False,
+                pin=None,
+                override_parent=True,
+            ),
+        }
+
+        await sync_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        assert child_lock.code_slots[1].enabled is False
+        sync_coordinator.clear_pin_from_lock.assert_not_called()
+        sync_coordinator.set_pin_on_lock.assert_not_called()
