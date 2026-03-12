@@ -109,6 +109,84 @@ async def test_handle_provider_lock_event_unknown_state(hass, mock_coordinator, 
     mock_coordinator._lock_unlocked.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_label_overrides_stale_state(
+    hass, mock_coordinator, mock_lock
+):
+    """Test that event label is trusted over stale entity state.
+
+    Provider events (e.g., Akuvox webhooks) can arrive before entity state
+    updates. An "Unlocked via Keypad" event should trigger _lock_unlocked
+    even if the entity still shows "locked".
+    """
+    # Entity state is stale (still locked), but event says unlock happened
+    hass.states.async_set(mock_lock.lock_entity_id, LockState.LOCKED)
+
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=1,
+        event_label="Unlocked via Keypad",
+        action_code=1,
+    )
+
+    mock_coordinator._lock_unlocked.assert_called_once()
+    mock_coordinator._lock_locked.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_lock_label_overrides_stale_state(
+    hass, mock_coordinator, mock_lock
+):
+    """Test that a lock label is trusted over stale unlocked entity state."""
+    # Entity state is stale (still unlocked), but event says lock happened
+    hass.states.async_set(mock_lock.lock_entity_id, LockState.UNLOCKED)
+
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=0,
+        event_label="Locked",
+        action_code=4,
+    )
+
+    mock_coordinator._lock_locked.assert_called_once()
+    mock_coordinator._lock_unlocked.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_empty_label_falls_back_to_state(
+    hass, mock_coordinator, mock_lock
+):
+    """Test that empty event label falls back to entity state."""
+    hass.states.async_set(mock_lock.lock_entity_id, LockState.UNLOCKED)
+
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=0,
+        event_label="",
+        action_code=0,
+    )
+
+    mock_coordinator._lock_unlocked.assert_called_once()
+    mock_coordinator._lock_locked.assert_not_called()
+
+
+async def test_handle_provider_lock_event_jam_label_falls_back_to_state(
+    hass, mock_coordinator, mock_lock
+):
+    """Test that 'Lock Jammed' label falls back to entity state (not treated as lock)."""
+    hass.states.async_set(mock_lock.lock_entity_id, LockState.UNLOCKED)
+
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=0,
+        event_label="Lock Jammed",
+        action_code=0,
+    )
+
+    mock_coordinator._lock_unlocked.assert_called_once()
+    mock_coordinator._lock_locked.assert_not_called()
+
+
 @pytest.fixture
 def coordinator_for_unlock_test(hass):
     """Create a coordinator for testing _lock_unlocked method directly."""

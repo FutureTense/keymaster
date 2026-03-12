@@ -8,6 +8,7 @@
     "input_datetime",
     "input_number",
     "input_text",
+    "local_akuvox",
     "mqtt",
     "ozw",
     "script",

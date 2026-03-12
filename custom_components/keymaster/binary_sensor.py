@@ -34,12 +34,10 @@ async def async_setup_entry(
         _LOGGER.error("Lock not found for config entry %s", config_entry.entry_id)
         raise PlatformNotReady
 
-    # Provider is guaranteed to exist - config flow filters to supported platforms
-    # and coordinator fails setup if provider creation fails
-    assert kmlock.provider is not None
-
-    # Add connection status sensor if provider supports it
-    if kmlock.provider.supports_connection_status:
+    # Add connection status sensor if provider supports it (or doesn't exist yet).
+    # Provider may not yet exist during startup due to concurrent config entry setup;
+    # the sensor is created as unavailable and becomes available once the provider connects.
+    if not kmlock.provider or kmlock.provider.supports_connection_status:
         entities.append(
             KeymasterBinarySensor(
                 entity_description=KeymasterBinarySensorEntityDescription(
