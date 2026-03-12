@@ -25,6 +25,9 @@ PLATFORMS: list = [
 THROTTLE_SECONDS: int = 5
 SYNC_STATUS_THRESHOLD: int = 15
 QUICK_REFRESH_SECONDS: int = 15
+BACKOFF_INITIAL_SECONDS: int = 60
+BACKOFF_MAX_SECONDS: int = 1800  # 30 minutes
+BACKOFF_FAILURE_THRESHOLD: int = 3  # consecutive failures before backoff
 
 # hass.data attributes
 CHILD_LOCKS = "child_locks"
