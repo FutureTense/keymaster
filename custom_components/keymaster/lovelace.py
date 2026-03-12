@@ -382,6 +382,7 @@ def _generate_badge_ll_config(
     visibility: bool = False,
     tap_action: str | None = "none",
     show_name: bool = False,
+    visibility_conditions: list[MutableMapping[str, Any]] | None = None,
 ) -> MutableMapping[str, Any]:
     """Generate Lovelace config for a badge."""
     data: MutableMapping[str, Any] = {
@@ -395,7 +396,9 @@ def _generate_badge_ll_config(
         data["name"] = name
     if entity:
         data["entity"] = entity
-    if visibility:
+    if visibility_conditions:
+        data["visibility"] = visibility_conditions
+    elif visibility:
         data["visibility"] = [
             {
                 "condition": "state",
@@ -528,7 +531,7 @@ def _generate_lock_badges(
     """Generate the Lovelace badges configuration for a keymaster lock."""
     door = door_sensor is not None
     battery = battery_entity is not None
-    return [
+    badges = [
         _generate_badge_ll_config(
             entity, name, visibility=visibility, show_name=show_name, tap_action=tap_action
         )
@@ -548,6 +551,27 @@ def _generate_lock_badges(
         )
         if condition
     ]
+    badges.append(
+        _generate_badge_ll_config(
+            entity="sensor.autolock_timer",
+            name="Auto Lock Timer",
+            show_name=True,
+            tap_action="none",
+            visibility_conditions=[
+                {
+                    "condition": "state",
+                    "entity": "sensor.autolock_timer",
+                    "state_not": "unknown",
+                },
+                {
+                    "condition": "state",
+                    "entity": "sensor.autolock_timer",
+                    "state_not": "unavailable",
+                },
+            ],
+        )
+    )
+    return badges
 
 
 def _generate_dow_entities(

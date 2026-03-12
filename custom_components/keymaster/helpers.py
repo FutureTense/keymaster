@@ -55,6 +55,7 @@ class KeymasterTimer:
         self._kmlock: KeymasterLock | None = None
         self._call_action: Callable | None = None
         self._end_time: dt | None = None
+        self._duration: int | None = None
 
     async def setup(
         self, hass: HomeAssistant, kmlock: KeymasterLock, call_action: Callable
@@ -80,6 +81,7 @@ class KeymasterTimer:
             delay: int = (self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY) * 60
         else:
             delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
+        self._duration = int(delay)
         self._end_time = dt.now().astimezone() + timedelta(seconds=delay)
         _LOGGER.debug(
             "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
@@ -98,35 +100,37 @@ class KeymasterTimer:
             _LOGGER.debug("[KeymasterTimer] Timer elapsed")
         else:
             _LOGGER.debug("[KeymasterTimer] Cancelling auto-lock timer")
+        self._cleanup_expired()
+
+    def _cleanup_expired(self) -> None:
+        """Clean up all timer state (unsub events, end_time, duration)."""
         if isinstance(self._unsub_events, list):
             for unsub in self._unsub_events:
                 unsub()
             self._unsub_events = []
         self._end_time = None
+        self._duration = None
+
+    def _check_expired(self) -> bool:
+        """Check if the timer has expired and clean up if so. Returns True if expired."""
+        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
+            self._cleanup_expired()
+            return True
+        return False
 
     @property
     def is_running(self) -> bool:
         """Return if the timer is running."""
         if not self._end_time:
             return False
-        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
-            if isinstance(self._unsub_events, list):
-                for unsub in self._unsub_events:
-                    unsub()
-                self._unsub_events = []
-            self._end_time = None
+        if self._check_expired():
             return False
         return True
 
     @property
     def is_setup(self) -> bool:
         """Return if the timer has been initially setup."""
-        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
-            if isinstance(self._unsub_events, list):
-                for unsub in self._unsub_events:
-                    unsub()
-                self._unsub_events = []
-            self._end_time = None
+        self._check_expired()
         return bool(self.hass and self._kmlock and self._call_action)
 
     @property
@@ -134,12 +138,7 @@ class KeymasterTimer:
         """Returns when the timer will end."""
         if not self._end_time:
             return None
-        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
-            if isinstance(self._unsub_events, list):
-                for unsub in self._unsub_events:
-                    unsub()
-                self._unsub_events = []
-            self._end_time = None
+        if self._check_expired():
             return None
         return self._end_time
 
@@ -148,14 +147,16 @@ class KeymasterTimer:
         """Return the seconds until the timer ends."""
         if not self._end_time:
             return None
-        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
-            if isinstance(self._unsub_events, list):
-                for unsub in self._unsub_events:
-                    unsub()
-                self._unsub_events = []
-            self._end_time = None
+        if self._check_expired():
             return None
         return round((self._end_time - dt.now().astimezone()).total_seconds())
+
+    @property
+    def duration(self) -> int | None:
+        """Return the total timer duration in seconds."""
+        if self._duration is None or not self.is_running:
+            return None
+        return self._duration
 
 
 @callback
