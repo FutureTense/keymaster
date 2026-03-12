@@ -366,6 +366,47 @@ async def test_find_battery_entity_returns_battery_sensor(hass: HomeAssistant):
     assert result == "sensor.front_door_battery"
 
 
+async def test_find_battery_entity_user_overridden_device_class(hass: HomeAssistant):
+    """Test that _find_battery_entity finds sensor with user-overridden device_class."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    config_entry = MockConfigEntry(domain="zwave_js", data={})
+    config_entry.add_to_hass(hass)
+
+    device = device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={("zwave_js", "lock_device_override")},
+        name="Front Door Lock Override",
+    )
+
+    entity_registry.async_get_or_create(
+        "lock",
+        "zwave_js",
+        "lock_front_door_override",
+        config_entry=config_entry,
+        device_id=device.id,
+        suggested_object_id="front_door_override",
+    )
+
+    battery_entry = entity_registry.async_get_or_create(
+        "sensor",
+        "zwave_js",
+        "battery_front_door_override",
+        config_entry=config_entry,
+        device_id=device.id,
+        suggested_object_id="front_door_override_battery",
+    )
+
+    entity_registry.async_update_entity(
+        battery_entry.entity_id,
+        device_class=SensorDeviceClass.BATTERY,
+    )
+
+    result = _find_battery_entity(hass, "lock.front_door_override")
+    assert result == "sensor.front_door_override_battery"
+
+
 async def test_find_battery_entity_no_battery_sensor(hass: HomeAssistant):
     """Test that _find_battery_entity returns None when no battery sensor exists."""
     entity_registry = er.async_get(hass)
@@ -900,3 +941,45 @@ def test_delete_lovelace_handles_permission_error(hass: HomeAssistant, tmp_path:
 
     # Should log the error
     assert "Unable to delete lovelace YAML" in caplog.text
+
+
+async def test_generate_view_config_badges_autolock_timer(hass: HomeAssistant):
+    """Test that auto-lock timer badge is generated with correct visibility conditions."""
+    mock_registry = _create_mock_registry()
+
+    with patch(
+        "custom_components.keymaster.lovelace.er.async_get",
+        return_value=mock_registry,
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="frontdoor",
+            keymaster_config_entry_id="test_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.frontdoor",
+            advanced_date_range=False,
+            advanced_day_of_week=False,
+            door_sensor="binary_sensor.frontdoor",
+        )
+
+    badges = view["badges"]
+
+    # Find the autolock timer badge
+    timer_badges = [b for b in badges if "autolock_timer" in str(b.get("entity", ""))]
+    assert len(timer_badges) == 1
+    timer_badge = timer_badges[0]
+
+    # Should have name shown
+    assert timer_badge.get("show_name") is True
+    assert timer_badge.get("name") == "Auto Lock Timer"
+
+    # Should have visibility conditions: not unknown and not unavailable
+    visibility = timer_badge.get("visibility", [])
+    assert len(visibility) == 2
+    assert any(
+        v.get("condition") == "state" and v.get("state_not") == "unknown" for v in visibility
+    )
+    assert any(
+        v.get("condition") == "state" and v.get("state_not") == "unavailable" for v in visibility
+    )

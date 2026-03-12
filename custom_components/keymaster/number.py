@@ -193,6 +193,9 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
         # Convert to int for accesslimit_count (NumberEntity returns float)
         if self._is_accesslimit_count:
             value = int(value)
+        # Convert to int for autolock minutes (NumberEntity returns float)
+        if self._property in ("number.autolock_min_day", "number.autolock_min_night"):
+            value = int(value)
         if self._set_property_value(value):
             self._attr_native_value = value
             self.async_write_ha_state()  # Immediate UI update

@@ -103,7 +103,8 @@ def mock_coordinator(mock_hass):
         coordinator.hass = mock_hass
         coordinator.kmlocks = {}
         # Use setattr to safely add the mock method
-        coordinator.delete_lock_by_config_entry_id = AsyncMock()
+        setattr(coordinator, "delete_lock_by_config_entry_id", AsyncMock())
+        coordinator.async_set_updated_data = Mock()
         return coordinator
 
 
@@ -1006,6 +1007,7 @@ class TestLockStateEventHandlers:
         await mock_coordinator._lock_locked(mock_kmlock, source="manual")
 
         mock_kmlock.autolock_timer.cancel.assert_called_once()
+        mock_coordinator.async_set_updated_data.assert_called_once()
 
     async def test_lock_locked_with_notifications(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked sends notification when enabled."""
@@ -1028,6 +1030,36 @@ class TestLockStateEventHandlers:
             call_kwargs = mock_notify.call_args.kwargs
             assert call_kwargs["title"] == "Front Door"
             assert call_kwargs["message"] == "Locked by User 1"
+
+    async def test_lock_unlocked_starts_autolock_timer(self, mock_coordinator, mock_kmlock):
+        """Test _lock_unlocked starts autolock timer and pushes data update."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.autolock_enabled = True
+        mock_kmlock.autolock_timer = AsyncMock()
+        mock_kmlock.autolock_timer.start = AsyncMock()
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.code_slots = {}
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._lock_unlocked(mock_kmlock, source="manual")
+
+        mock_kmlock.autolock_timer.start.assert_called_once()
+        mock_coordinator.async_set_updated_data.assert_called_once()
+
+    async def test_lock_unlocked_no_autolock_no_data_update(self, mock_coordinator, mock_kmlock):
+        """Test _lock_unlocked does not push data update when autolock is disabled."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.autolock_enabled = False
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.code_slots = {}
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._lock_unlocked(mock_kmlock, source="manual")
+
+        mock_coordinator.async_set_updated_data.assert_not_called()
 
     async def test_door_opened_basic_state_change(self, mock_coordinator, mock_kmlock):
         """Test _door_opened updates door state to open."""
