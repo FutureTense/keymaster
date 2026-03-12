@@ -654,6 +654,8 @@ class TestAsyncGetUsercode:
 
         result = await provider.async_get_usercode(1)
         assert result is None
+
+    async def test_get_code_empty_pin(self, provider):
         """Test getting a code with no PIN set."""
         provider.hass.services.async_call.return_value = {
             "lock.akuvox_relay_a": {
