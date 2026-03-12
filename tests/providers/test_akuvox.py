@@ -10,6 +10,7 @@ from custom_components.keymaster.providers.akuvox import (
     AKUVOX_DOMAIN,
     AKUVOX_WEBHOOK_EVENT,
     AkuvoxLockProvider,
+    _is_local_user,
     _make_tagged_name,
     _parse_tag,
 )
@@ -71,7 +72,8 @@ def _make_user(
     device_id: str,
     name: str,
     private_pin: str = "",
-    source_type: str = "1",
+    source_type: str | None = "1",
+    user_type: str = "0",
 ) -> dict:
     """Create a user dict matching list_users response format."""
     return {
@@ -79,6 +81,7 @@ def _make_user(
         "name": name,
         "private_pin": private_pin,
         "source_type": source_type,
+        "user_type": user_type,
         "user_id": f"uid_{device_id}",
         "card_code": "",
         "schedule_relay": "1001-1",
@@ -122,6 +125,32 @@ class TestHelperFunctions:
     def test_parse_tag_empty_string(self):
         """Test parsing an empty string."""
         assert _parse_tag("") == (None, "")
+
+    # -- _is_local_user -------------------------------------------------------
+
+    def test_is_local_user_source_type_1(self):
+        """A08S/E18C pattern: source_type '1' is local."""
+        assert _is_local_user({"source_type": "1", "user_type": "0"}) is True
+
+    def test_is_local_user_source_type_2(self):
+        """A08S/E18C pattern: source_type '2' is cloud."""
+        assert _is_local_user({"source_type": "2", "user_type": "0"}) is False
+
+    def test_is_local_user_none_source_local_user_type(self):
+        """X916 pattern: source_type None, user_type '-1' is local."""
+        assert _is_local_user({"source_type": None, "user_type": "-1"}) is True
+
+    def test_is_local_user_none_source_cloud_user_type(self):
+        """X916 pattern: source_type None, user_type '0' is cloud."""
+        assert _is_local_user({"source_type": None, "user_type": "0"}) is False
+
+    def test_is_local_user_missing_source_type(self):
+        """Missing source_type key falls back to user_type."""
+        assert _is_local_user({"user_type": "-1"}) is True
+
+    def test_is_local_user_missing_both(self):
+        """Missing both fields is not local."""
+        assert _is_local_user({}) is False
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +493,34 @@ class TestAsyncGetUsercodes:
         assert result[0].slot_num == 1
         assert result[0].name == "Local"
 
+    async def test_x916_local_users_accepted(self, provider):
+        """X916 pattern: source_type None, user_type '-1' accepted as local."""
+        provider.hass.services.async_call.return_value = {
+            "lock.akuvox_relay_a": {
+                "users": [
+                    _make_user(
+                        "10",
+                        "[KM:1] Local",
+                        "1234",
+                        source_type=None,
+                        user_type="-1",
+                    ),
+                    _make_user(
+                        "20",
+                        "Cloud User",
+                        "5678",
+                        source_type=None,
+                        user_type="0",
+                    ),
+                ]
+            }
+        }
+
+        result = await provider.async_get_usercodes()
+        assert len(result) == 1
+        assert result[0].slot_num == 1
+        assert result[0].name == "Local"
+
     async def test_tagged_outside_managed_range_ignored(self, provider):
         """Test tagged users outside managed range are excluded."""
         provider.hass.services.async_call.return_value = {
@@ -578,6 +635,19 @@ class TestAsyncGetUsercode:
             "lock.akuvox_relay_a": {
                 "users": [
                     _make_user("10", "[KM:1] Cloud", "1234", source_type="2"),
+                ]
+            }
+        }
+
+        result = await provider.async_get_usercode(1)
+        assert result is None
+
+    async def test_get_code_skips_x916_cloud_users(self, provider):
+        """X916 pattern: cloud users (source_type=None, user_type='0') skipped."""
+        provider.hass.services.async_call.return_value = {
+            "lock.akuvox_relay_a": {
+                "users": [
+                    _make_user("10", "[KM:1] Cloud", "1234", source_type=None, user_type="0"),
                 ]
             }
         }
@@ -703,9 +773,32 @@ class TestAsyncSetUsercode:
         add_call = provider.hass.services.async_call.call_args_list[1]
         assert add_call[0][1] == "add_user"
 
+    async def test_set_code_skips_x916_cloud_users(self, provider):
+        """X916 pattern: cloud users skipped, triggers add_user."""
+        provider.hass.services.async_call.side_effect = [
+            {
+                "lock.akuvox_relay_a": {
+                    "users": [
+                        _make_user(
+                            "10",
+                            "[KM:1] Cloud",
+                            "1234",
+                            source_type=None,
+                            user_type="0",
+                        ),
+                    ]
+                }
+            },
+            None,
+        ]
 
-# ---------------------------------------------------------------------------
-# async_clear_usercode
+        result = await provider.async_set_usercode(1, "5678", "Local")
+        assert result is True
+
+        add_call = provider.hass.services.async_call.call_args_list[1]
+        assert add_call[0][1] == "add_user"
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -762,6 +855,26 @@ class TestAsyncClearUsercode:
         result = await provider.async_clear_usercode(1)
         assert result is True
         # Only list_users was called, no delete_user
+        assert provider.hass.services.async_call.call_count == 1
+
+    async def test_clear_skips_x916_cloud_users(self, provider):
+        """X916 pattern: cloud users (source_type=None, user_type='0') skipped."""
+        provider.hass.services.async_call.return_value = {
+            "lock.akuvox_relay_a": {
+                "users": [
+                    _make_user(
+                        "10",
+                        "[KM:1] Cloud",
+                        "1234",
+                        source_type=None,
+                        user_type="0",
+                    ),
+                ]
+            }
+        }
+
+        result = await provider.async_clear_usercode(1)
+        assert result is True
         assert provider.hass.services.async_call.call_count == 1
 
 

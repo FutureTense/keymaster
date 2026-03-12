@@ -45,9 +45,20 @@ _SLOT_TAG_RE = re.compile(r"^\[KM:(\d+)\]\s*(.*)")
 _DEFAULT_SCHEDULE_IDS = "1001"  # "Always" schedule on Akuvox devices
 _DEFAULT_LIFT_FLOOR_NUM = "1"
 
-# Local users have source_type "1"; cloud-provisioned users ("2") cannot
-# be managed and must be filtered out.
+# Akuvox firmware varies in how it marks local vs cloud users:
+#   A08S / E18C: source_type "1" = local, "2" = cloud, user_type "0" for both
+#   X916:        source_type None for all, user_type "-1" = local, "0" = cloud
 _LOCAL_SOURCE_TYPE = "1"
+_LOCAL_USER_TYPE = "-1"
+
+
+def _is_local_user(user: dict[str, Any]) -> bool:
+    """Return True if *user* was created locally on the device."""
+    source_type = user.get("source_type")
+    if source_type is not None:
+        return str(source_type) == _LOCAL_SOURCE_TYPE
+    # source_type absent — fall back to user_type (X916 pattern)
+    return str(user.get("user_type", "")) == _LOCAL_USER_TYPE
 
 
 def _make_tagged_name(slot_num: int, name: str | None = None) -> str:
@@ -405,7 +416,7 @@ class AkuvoxLockProvider(BaseLockProvider):
 
         for user in users:
             # Skip cloud-provisioned users — we can only manage local ones.
-            if str(user.get("source_type", "")) != _LOCAL_SOURCE_TYPE:
+            if not _is_local_user(user):
                 continue
             name = user.get("name", "")
             pin = user.get("private_pin", "")
@@ -487,7 +498,7 @@ class AkuvoxLockProvider(BaseLockProvider):
         """Get a specific user code from the lock."""
         users = await self._async_list_users()
         for user in users:
-            if str(user.get("source_type", "")) != _LOCAL_SOURCE_TYPE:
+            if not _is_local_user(user):
                 continue
             name = user.get("name", "")
             parsed_slot, friendly_name = _parse_tag(name)
@@ -513,7 +524,7 @@ class AkuvoxLockProvider(BaseLockProvider):
         existing_device_id: str | None = None
         existing_friendly_name: str | None = None
         for user in users:
-            if str(user.get("source_type", "")) != _LOCAL_SOURCE_TYPE:
+            if not _is_local_user(user):
                 continue
             user_name = user.get("name", "")
             parsed_slot, friendly = _parse_tag(user_name)
@@ -550,7 +561,7 @@ class AkuvoxLockProvider(BaseLockProvider):
         users = await self._async_list_users()
         target_device_id: str | None = None
         for user in users:
-            if str(user.get("source_type", "")) != _LOCAL_SOURCE_TYPE:
+            if not _is_local_user(user):
                 continue
             parsed_slot, _ = _parse_tag(user.get("name", ""))
             if parsed_slot == slot_num:
