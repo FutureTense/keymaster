@@ -45,6 +45,7 @@ from .const import (
     BACKOFF_MAX_SECONDS,
     DAY_NAMES,
     DOMAIN,
+    EVENT_KEYMASTER_CODE_SLOT_RESET,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
     QUICK_REFRESH_SECONDS,
@@ -1382,6 +1383,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             accesslimit_day_of_week=dow_slots,
         )
         kmlock.code_slots[code_slot_num] = new_kmslot
+
+        self.hass.bus.async_fire(
+            EVENT_KEYMASTER_CODE_SLOT_RESET,
+            event_data={
+                ATTR_ENTITY_ID: kmlock.lock_entity_id,
+                ATTR_CODE_SLOT: code_slot_num,
+            },
+        )
+
         await self.async_refresh()
 
     @staticmethod

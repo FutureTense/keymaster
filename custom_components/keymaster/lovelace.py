@@ -459,6 +459,7 @@ def _generate_code_slot_conditional_entities_card_ll_config(
         DIVIDER_CARD,
         _generate_entity_card_ll_config(code_slot_num, "switch", "enabled", "Enabled"),
         _generate_entity_card_ll_config(code_slot_num, "binary_sensor", "active", "Active"),
+        _generate_entity_card_ll_config(code_slot_num, "event", "last_used", "Last Used"),
         _generate_entity_card_ll_config(code_slot_num, "sensor", "synced", "Sync Status"),
         *(
             (
@@ -690,6 +691,7 @@ def _generate_parent_view_card_ll_config(
             code_slot_num, "switch", "enabled", "Enabled", parent=True, type_="simple-entity"
         ),
         _generate_entity_card_ll_config(code_slot_num, "binary_sensor", "active", "Active"),
+        _generate_entity_card_ll_config(code_slot_num, "event", "last_used", "Last Used"),
         _generate_entity_card_ll_config(code_slot_num, "sensor", "synced", "Sync Status"),
         _generate_entity_card_ll_config(
             code_slot_num, "switch", "override_parent", "Override Parent"

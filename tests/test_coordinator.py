@@ -88,6 +88,7 @@ def mock_hass():
     hass.config.path = Mock(return_value="/test/path")
     hass.bus = Mock()
     hass.bus.fire = Mock()
+    hass.bus.async_fire = Mock()
     hass.states = Mock()
     hass.states.get = Mock(return_value=None)
     return hass
@@ -2269,6 +2270,41 @@ class TestResetCodeSlot:
             code_slot_num=1,
         )
         coordinator_with_lock.clear_pin_from_lock.assert_not_called()
+
+    async def test_reset_code_slot_fires_reset_event(self, hass: HomeAssistant):
+        """Test that reset_code_slot fires a bus event for event entity reset."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(hass)
+            coordinator.hass = hass
+            coordinator.kmlocks = {}
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator.async_refresh = AsyncMock()
+
+            lock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            lock.code_slots = {
+                1: KeymasterCodeSlot(number=1, enabled=True, pin="1234"),
+            }
+            coordinator.kmlocks["entry_1"] = lock
+
+        fired_events: list = []
+        hass.bus.async_listen(
+            "keymaster_code_slot_reset",
+            fired_events.append,
+        )
+
+        await coordinator.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+        )
+        await hass.async_block_till_done()
+
+        assert len(fired_events) == 1
+        assert fired_events[0].data["code_slot_num"] == 1
+        assert fired_events[0].data["entity_id"] == "lock.front_door"
 
     async def test_reset_code_slot_slot_not_found(self, coordinator_with_lock):
         """Test reset_code_slot with non-existent code slot."""

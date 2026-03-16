@@ -29,6 +29,11 @@ KWIKSET_910_LOCK_ENTITY = "lock.smart_code_with_home_connect_technology"
 
 _LOGGER = logging.getLogger(__name__)
 
+# Keymaster creates: lock_name + autolock_timer + synced * num_slots
+# CONFIG_DATA has 6 slots → 2 + 6 = 8 keymaster sensors
+# (last_used moved from sensor to event platform)
+KEYMASTER_SENSOR_COUNT = 8
+
 
 async def test_setup_entry(
     hass,
@@ -39,6 +44,7 @@ async def test_setup_entry(
     integration,
 ):
     """Test setting up entities."""
+    baseline = len(hass.states.async_entity_ids(SENSOR_DOMAIN))
 
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
@@ -46,7 +52,7 @@ async def test_setup_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 11
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline + KEYMASTER_SENSOR_COUNT
 
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
@@ -65,13 +71,15 @@ async def test_setup_entry_core_state(
 ):
     """Test setting up entities."""
     with patch.object(hass, "state", return_value="STARTING"):
+        baseline = len(hass.states.async_entity_ids(SENSOR_DOMAIN))
+
         entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
         entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 11
+        assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline + KEYMASTER_SENSOR_COUNT
         entries = hass.config_entries.async_entries(DOMAIN)
         assert len(entries) == 1
 
@@ -83,24 +91,26 @@ async def test_unload_entry(
     integration,
 ):
     """Test unloading entities."""
+    baseline = len(hass.states.async_entity_ids(SENSOR_DOMAIN))
+
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
 
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 11
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline + KEYMASTER_SENSOR_COUNT
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 11
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline + KEYMASTER_SENSOR_COUNT
     assert len(hass.states.async_entity_ids(DOMAIN)) == 0
 
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
-    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == 3
+    assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline
 
 
 async def test_notify_script_name_slugified(hass):

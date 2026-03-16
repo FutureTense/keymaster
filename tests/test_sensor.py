@@ -254,7 +254,8 @@ async def test_async_setup_entry_with_parent_lock(hass: HomeAssistant):
     # Call setup
     await async_setup_entry(hass, config_entry, mock_add_entities)
 
-    # Should have created 5 entities: lock_name, parent_name, autolock_timer, and 2 code slot sync sensors
+    # Should have created 5 entities: lock_name, parent_name, autolock_timer,
+    # and 2 code slot sync sensors (last_used moved to event platform)
     assert len(added_entities) == 5
     assert added_entities[0].entity_description.key == "sensor.lock_name"
     assert added_entities[1].entity_description.key == "sensor.parent_name"
@@ -494,6 +495,7 @@ async def test_autolock_sensor_created_in_setup(hass: HomeAssistant):
     await async_setup_entry(hass, config_entry, mock_add_entities)
 
     # Should have: lock_name, autolock_timer, and 2 code slot sync sensors = 4
+    # (last_used moved to event platform)
     assert len(added_entities) == 4
     autolock_entities = [
         e for e in added_entities if e.entity_description.key == "sensor.autolock_timer"
