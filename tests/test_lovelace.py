@@ -189,6 +189,7 @@ async def test_generate_view_config_slot_entities(hass: HomeAssistant):
         "code_slots_1_pin",
         "code_slots_1_enabled",
         "code_slots_1_active",
+        "code_slots_1_last_used",
         "code_slots_1_synced",
         "code_slots_1_notifications",
         "accesslimit_count_enabled",
