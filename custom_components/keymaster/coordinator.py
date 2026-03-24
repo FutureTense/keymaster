@@ -758,10 +758,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("[lock_locked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
 
-        if kmlock.lock_state == LockState.LOCKED:
+        if kmlock.lock_state == LockState.LOCKED and not kmlock.pending_retry_lock:
             return
 
         kmlock.lock_state = LockState.LOCKED
+        kmlock.pending_retry_lock = False
         _LOGGER.debug(
             "[lock_locked] %s: Running. source: %s, event_label: %s, action_code: %s",
             kmlock.lock_name,
@@ -769,6 +770,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             event_label,
             action_code,
         )
+
+        # Dismiss retry lock notifications now that the lock has succeeded
+        notification_slug = slugify(kmlock.lock_name).lower()
+        await dismiss_persistent_notification(
+            hass=self.hass,
+            notification_id=f"{notification_slug}_autolock_door_open",
+        )
+        await dismiss_persistent_notification(
+            hass=self.hass,
+            notification_id=f"{notification_slug}_autolock_door_closed",
+        )
+
         if kmlock.autolock_timer:
             await kmlock.autolock_timer.cancel()
             self.async_set_updated_data(dict(self.kmlocks))
