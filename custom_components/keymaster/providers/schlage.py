@@ -50,6 +50,14 @@ def _parse_tag(name: str) -> tuple[int | None, str]:
     return None, name
 
 
+def _is_masked_pin(pin: str) -> bool:
+    """Return True if a PIN looks masked or placeholder (e.g. '****', empty)."""
+    if not pin:
+        return True
+    # Only treat '*' repeated as masked; allow real all-zero PINs like '0000'.
+    return len(set(pin)) == 1 and pin[0] == "*"
+
+
 @dataclass
 class SchlageLockProvider(BaseLockProvider):
     """Schlage WiFi lock provider implementation.
@@ -137,10 +145,18 @@ class SchlageLockProvider(BaseLockProvider):
             )
             return False
 
-        if schlage_device_id not in coordinator.data.locks:
+        try:
+            if schlage_device_id not in coordinator.data.locks:
+                _LOGGER.error(
+                    "[SchlageProvider] Lock %s not found in Schlage coordinator data",
+                    schlage_device_id,
+                )
+                return False
+        except (AttributeError, TypeError) as e:
             _LOGGER.error(
-                "[SchlageProvider] Lock %s not found in Schlage coordinator data",
-                schlage_device_id,
+                "[SchlageProvider] Can't access Schlage coordinator data: %s: %s",
+                e.__class__.__qualname__,
+                e,
             )
             return False
 
@@ -276,7 +292,10 @@ class SchlageLockProvider(BaseLockProvider):
                 untagged.append((code_id, pin, name))
 
         # Emit already-tagged codes that fall within the managed range.
-        for _code_id, pin, slot_num, friendly_name in tagged:
+        # Sort by code_id for deterministic dedup, then keep the first per slot.
+        tagged.sort(key=lambda t: t[0])
+        seen_slots: set[int] = set()
+        for code_id, pin, slot_num, friendly_name in tagged:
             if slot_num not in managed_range:
                 _LOGGER.debug(
                     "[SchlageProvider] Ignoring tagged code slot %d: outside managed range %d-%d",
@@ -285,6 +304,16 @@ class SchlageLockProvider(BaseLockProvider):
                     slot_start + slot_count - 1,
                 )
                 continue
+            if slot_num in seen_slots:
+                _LOGGER.warning(
+                    "[SchlageProvider] Duplicate tag for slot %d (code_id=%s, name='%s'); "
+                    "skipping in favor of earlier entry",
+                    slot_num,
+                    code_id,
+                    friendly_name,
+                )
+                continue
+            seen_slots.add(slot_num)
             result.append(
                 CodeSlot(
                     slot_num=slot_num,
@@ -295,9 +324,16 @@ class SchlageLockProvider(BaseLockProvider):
             )
 
         # Assign virtual slots to untagged codes and tag them on the lock.
-        # Only assign to slots within the managed range.
+        # Only codes that are successfully tagged get a managed slot; masked
+        # PINs and tagging failures are skipped to avoid slot drift.
         next_slot = slot_start
         for _code_id, pin, original_name in untagged:
+            if not original_name or not original_name.strip():
+                _LOGGER.debug(
+                    "[SchlageProvider] Skipping code with empty/whitespace name",
+                )
+                continue
+
             while next_slot in assigned_slots and next_slot in managed_range:
                 next_slot += 1
             if next_slot not in managed_range:
@@ -307,35 +343,66 @@ class SchlageLockProvider(BaseLockProvider):
                     original_name,
                 )
                 continue
-            slot_num = next_slot
-            assigned_slots.add(slot_num)
-            next_slot += 1
 
-            tagged_name = _make_tagged_name(slot_num, original_name)
-            try:
-                await self._async_delete_code(original_name)
-                await self._async_add_code(tagged_name, pin)
-                _LOGGER.info(
-                    "[SchlageProvider] Tagged code '%s' as slot %d: '%s'",
+            prospective_slot = next_slot
+            tagged_name = _make_tagged_name(prospective_slot, original_name)
+
+            if _is_masked_pin(pin):
+                _LOGGER.debug(
+                    "[SchlageProvider] Skipping untaggable code '%s' (slot %d): "
+                    "PIN appears masked or empty",
                     original_name,
-                    slot_num,
-                    tagged_name,
+                    prospective_slot,
                 )
+                continue
+
+            try:
+                await self._async_add_code(tagged_name, pin)
             except HomeAssistantError as e:
                 _LOGGER.error(
                     "[SchlageProvider] Failed to tag code '%s' for slot %d: %s: %s",
                     original_name,
-                    slot_num,
+                    prospective_slot,
                     e.__class__.__qualname__,
                     e,
                 )
+                continue
 
-            # Include the code regardless of whether tagging succeeded.
+            try:
+                await self._async_delete_code(original_name)
+            except HomeAssistantError as e:
+                _LOGGER.warning(
+                    "[SchlageProvider] Tagged code added but failed to delete "
+                    "original '%s' for slot %d: %s. Attempting rollback.",
+                    original_name,
+                    prospective_slot,
+                    e,
+                )
+                try:
+                    await self._async_delete_code(tagged_name)
+                except HomeAssistantError:
+                    _LOGGER.error(
+                        "[SchlageProvider] Rollback failed for tagged code '%s'. "
+                        "Lock may have duplicate entries.",
+                        tagged_name,
+                    )
+                continue
+
+            slot_num = prospective_slot
+            assigned_slots.add(slot_num)
+            next_slot += 1
+            _LOGGER.debug(
+                "[SchlageProvider] Tagged code '%s' as slot %d: '%s'",
+                original_name,
+                slot_num,
+                tagged_name,
+            )
             result.append(
                 CodeSlot(
                     slot_num=slot_num,
                     code=pin or None,
-                    in_use=bool(pin),
+                    # This code was just successfully added to the lock, so it is in use.
+                    in_use=True,
                     name=original_name,
                 )
             )
@@ -350,10 +417,12 @@ class SchlageLockProvider(BaseLockProvider):
             parsed_slot, friendly_name = _parse_tag(name)
             if parsed_slot == slot_num:
                 pin = code_data.get("code", "")
+                status = code_data.get("status")
+                in_use = bool(status) if status is not None else bool(pin)
                 return CodeSlot(
                     slot_num=slot_num,
                     code=pin or None,
-                    in_use=bool(pin),
+                    in_use=in_use,
                     name=friendly_name,
                 )
         return None
@@ -381,8 +450,7 @@ class SchlageLockProvider(BaseLockProvider):
         tagged_name = _make_tagged_name(slot_num, effective_name)
 
         try:
-            if existing_full_name:
-                await self._async_delete_code(existing_full_name)
+            # Add the new code first to avoid data loss if the add fails.
             await self._async_add_code(tagged_name, code)
         except HomeAssistantError as e:
             _LOGGER.error(
@@ -392,6 +460,17 @@ class SchlageLockProvider(BaseLockProvider):
                 e,
             )
             return False
+
+        if existing_full_name and existing_full_name != tagged_name:
+            try:
+                await self._async_delete_code(existing_full_name)
+            except HomeAssistantError as e:
+                _LOGGER.warning(
+                    "[SchlageProvider] Code set on slot %s but failed to remove old entry '%s': %s",
+                    slot_num,
+                    existing_full_name,
+                    e,
+                )
 
         _LOGGER.debug("[SchlageProvider] Set usercode on slot %s", slot_num)
         return True

@@ -182,8 +182,7 @@ class TestConnect:
         lock_entry.config_entry_id = "schlage_entry"
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
-        schlage_entry = MagicMock()
-        del schlage_entry.runtime_data  # AttributeError
+        schlage_entry = MagicMock(spec_set=[])
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
         assert await schlage_provider.async_connect() is False
 
@@ -226,6 +225,23 @@ class TestConnect:
         schlage_entry = MagicMock()
         coordinator = MagicMock()
         coordinator.data.locks = {}  # Empty
+        schlage_entry.runtime_data = coordinator
+        schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
+
+        device_entry = MagicMock()
+        device_entry.identifiers = {("schlage", "schlage_device_123")}
+        schlage_provider.device_registry.async_get.return_value = device_entry
+        assert await schlage_provider.async_connect() is False
+
+    async def test_connect_coordinator_data_missing(self, schlage_provider):
+        """Test connection fails when coordinator.data.locks is inaccessible."""
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_entry"
+        lock_entry.device_id = "ha_device"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        schlage_entry = MagicMock()
+        coordinator = type("Coordinator", (), {})()
         schlage_entry.runtime_data = coordinator
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
 
@@ -280,6 +296,52 @@ class TestIsConnected:
 
         assert await schlage_provider.async_is_connected() is False
 
+    async def test_not_connected_lock_entry_missing(self, schlage_provider):
+        """Test returns False when entity registry entry is missing."""
+        schlage_provider._schlage_device_id = "dev123"
+        schlage_provider.entity_registry.async_get.return_value = None
+
+        assert await schlage_provider.async_is_connected() is False
+        assert schlage_provider._connected is False
+
+    async def test_not_connected_no_config_entry_id(self, schlage_provider):
+        """Test returns False when lock_entry has no config_entry_id."""
+        schlage_provider._schlage_device_id = "dev123"
+
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = None
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        assert await schlage_provider.async_is_connected() is False
+        assert schlage_provider._connected is False
+
+    async def test_not_connected_schlage_entry_missing(self, schlage_provider):
+        """Test returns False when Schlage config entry is gone."""
+        schlage_provider._schlage_device_id = "dev123"
+
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_entry"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+        schlage_provider.hass.config_entries.async_get_entry.return_value = None
+
+        assert await schlage_provider.async_is_connected() is False
+        assert schlage_provider._connected is False
+
+    async def test_not_connected_coordinator_error(self, schlage_provider):
+        """Test returns False when coordinator access raises an exception."""
+        schlage_provider._schlage_device_id = "dev123"
+
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_entry"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        schlage_entry = MagicMock()
+        schlage_entry.runtime_data = None  # causes AttributeError on .data.locks
+        schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
+
+        assert await schlage_provider.async_is_connected() is False
+        assert schlage_provider._connected is False
+
 
 # ---------------------------------------------------------------------------
 # Get usercodes
@@ -330,21 +392,21 @@ class TestGetUsercodes:
         assert codes[1].code == "5678"
         assert codes[1].name == "Family"
 
-        # Verify delete + add calls for tagging (get_codes + 2 * (delete + add))
+        # Verify add + delete calls for tagging (get_codes + 2 * (add + delete))
         calls = schlage_provider.hass.services.async_call.call_args_list
-        assert len(calls) == 5  # 1 get_codes + 2 delete + 2 add
-        # First untagged code: delete "Guest", add "[KM:1] Guest"
-        assert calls[1].kwargs["service_data"] == {"name": "Guest"}
-        assert calls[2].kwargs["service_data"] == {
+        assert len(calls) == 5  # 1 get_codes + 2 add + 2 delete
+        # First untagged code: add "[KM:1] Guest", delete "Guest"
+        assert calls[1].kwargs["service_data"] == {
             "name": "[KM:1] Guest",
             "code": "1234",
         }
-        # Second untagged code: delete "Family", add "[KM:2] Family"
-        assert calls[3].kwargs["service_data"] == {"name": "Family"}
-        assert calls[4].kwargs["service_data"] == {
+        assert calls[2].kwargs["service_data"] == {"name": "Guest"}
+        # Second untagged code: add "[KM:2] Family", delete "Family"
+        assert calls[3].kwargs["service_data"] == {
             "name": "[KM:2] Family",
             "code": "5678",
         }
+        assert calls[4].kwargs["service_data"] == {"name": "Family"}
 
     async def test_get_usercodes_mixed_tagged_and_untagged(self, schlage_provider):
         """Test mix of tagged and untagged codes."""
@@ -382,8 +444,22 @@ class TestGetUsercodes:
         codes = await schlage_provider.async_get_usercodes()
         assert codes == []
 
-    async def test_get_usercodes_tagging_failure_still_returns_code(self, schlage_provider):
-        """Test that codes are still returned even if tagging fails."""
+    async def test_get_usercodes_non_dict_response(self, schlage_provider):
+        """Test returns empty list when service returns a non-dict response."""
+        schlage_provider.hass.services.async_call = AsyncMock(return_value=None)
+        codes = await schlage_provider.async_get_usercodes()
+        assert codes == []
+
+    async def test_get_usercodes_non_dict_entity_response(self, schlage_provider):
+        """Test returns empty list when entity response wrapper is not a dict."""
+        schlage_provider.hass.services.async_call = AsyncMock(
+            return_value={"lock.schlage_front_door": "unexpected_string"}
+        )
+        codes = await schlage_provider.async_get_usercodes()
+        assert codes == []
+
+    async def test_get_usercodes_tagging_failure_skips_code(self, schlage_provider):
+        """Test that codes are not returned if tagging fails."""
         call_count = 0
 
         async def mock_service_call(*args, **kwargs):
@@ -401,10 +477,107 @@ class TestGetUsercodes:
 
         schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
         codes = await schlage_provider.async_get_usercodes()
-        assert len(codes) == 1
-        assert codes[0].slot_num == 1
-        assert codes[0].code == "1234"
-        assert codes[0].name == "Guest"
+        # Code is not returned because tagging failed — avoids slot drift
+        assert len(codes) == 0
+
+    async def test_get_usercodes_partial_tagging_delete_failure(self, schlage_provider):
+        """Test add_code success followed by delete_code failure triggers rollback."""
+        call_count = 0
+
+        async def mock_service_call(*args, **kwargs):
+            nonlocal call_count
+            idx = call_count
+            call_count += 1
+            if idx == 0:
+                # get_codes returns untagged code
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            if idx == 1:
+                # add_code succeeds
+                return None
+            if idx == 2:
+                # delete_code (original) fails
+                raise HomeAssistantError("Delete failed after add")
+            if idx == 3:
+                # rollback: delete_code (tagged) succeeds
+                return None
+            pytest.fail(f"Unexpected service call #{idx}")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
+        codes = await schlage_provider.async_get_usercodes()
+        # Code is not returned because tagging was rolled back
+        assert len(codes) == 0
+        # get_codes + add_code + delete(original fail) + delete(rollback)
+        assert call_count == 4
+
+    async def test_get_usercodes_partial_tagging_rollback_then_retag_on_next_poll(
+        self, schlage_provider
+    ):
+        """Test that a rollback on first poll allows re-tagging to succeed on the next poll."""
+        call_count = 0
+
+        async def mock_service_call(*args, **kwargs):
+            nonlocal call_count
+            idx = call_count
+            call_count += 1
+            if idx == 0:
+                # First poll: untagged code
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            if idx == 1:
+                # add_code succeeds
+                return None
+            if idx == 2:
+                # delete_code (original) fails
+                raise HomeAssistantError("Delete failed")
+            if idx == 3:
+                # rollback: delete_code (tagged) succeeds
+                return None
+            if idx == 4:
+                # Second poll: code is still untagged (rollback worked)
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            if idx == 5:
+                # Second poll: re-tagging succeeds
+                return None
+            if idx == 6:
+                # Second poll: delete original succeeds
+                return None
+            pytest.fail(f"Unexpected service call #{idx}")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
+
+        # First poll: partial failure triggers rollback
+        codes_first = await schlage_provider.async_get_usercodes()
+        assert len(codes_first) == 0
+
+        # Second poll: retry tagging succeeds
+        codes_second = await schlage_provider.async_get_usercodes()
+        assert len(codes_second) == 1
+        assert codes_second[0].slot_num == 1
+        assert call_count == 7
+
+    async def test_get_usercodes_empty_name_skipped(self, schlage_provider):
+        """Test that codes with empty names are skipped during tagging."""
+        schlage_provider.hass.services.async_call = AsyncMock(
+            return_value={
+                "lock.schlage_front_door": {
+                    "id1": {"name": "", "code": "1234"},
+                    "id2": {"name": "   ", "code": "5678"},
+                }
+            }
+        )
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 0
 
     async def test_get_usercodes_slot_gap_filled(self, schlage_provider):
         """Test untagged codes fill gaps in slot numbering."""
@@ -477,6 +650,43 @@ class TestGetUsercodes:
         assert len(codes) == 2
         slot_nums = {c.slot_num for c in codes}
         assert slot_nums == {5, 6}
+
+    async def test_get_usercodes_duplicate_tag_deduplication(self, schlage_provider):
+        """Test that duplicate tagged slots keep only the first occurrence."""
+        schlage_provider.keymaster_config_entry.data = {"start_from": 1, "slots": 6}
+        schlage_provider.hass.services.async_call = AsyncMock(
+            return_value={
+                "lock.schlage_front_door": {
+                    "id1": {"name": "[KM:1] First", "code": "1111"},
+                    "id2": {"name": "[KM:1] Duplicate", "code": "2222"},
+                    "id3": {"name": "[KM:2] Valid", "code": "3333"},
+                }
+            }
+        )
+
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 2
+        slot_nums = [c.slot_num for c in codes]
+        assert slot_nums == [1, 2]
+        assert codes[0].name == "First"
+
+    async def test_get_usercodes_masked_pin_skips_code(self, schlage_provider):
+        """Test that codes with masked PINs are not assigned managed slots."""
+        schlage_provider.keymaster_config_entry.data = {"start_from": 1, "slots": 6}
+        schlage_provider.hass.services.async_call = AsyncMock(
+            return_value={
+                "lock.schlage_front_door": {
+                    "id1": {"name": "Masked Code", "code": "****"},
+                    "id2": {"name": "Empty Code", "code": ""},
+                }
+            }
+        )
+
+        codes = await schlage_provider.async_get_usercodes()
+        # Masked/empty PINs are skipped entirely to avoid slot drift
+        assert len(codes) == 0
+        # Service should only be called once (get_codes), no delete+add
+        assert schlage_provider.hass.services.async_call.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -552,12 +762,10 @@ class TestSetUsercode:
         assert result is True
 
         calls = schlage_provider.hass.services.async_call.call_args_list
-        # get_codes + delete_code + add_code
-        assert len(calls) == 3
-        # Delete old
-        assert calls[1].kwargs["service_data"] == {"name": "[KM:1] Guest"}
+        # get_codes + add_code only (no delete — name is unchanged)
+        assert len(calls) == 2
         # Add new — preserves friendly name since none provided
-        assert calls[2].kwargs["service_data"] == {
+        assert calls[1].kwargs["service_data"] == {
             "name": "[KM:1] Guest",
             "code": "5678",
         }
@@ -575,7 +783,7 @@ class TestSetUsercode:
         result = await schlage_provider.async_set_usercode(5, "9999")
         assert result is True
 
-        add_call = schlage_provider.hass.services.async_call.call_args_list[2]
+        add_call = schlage_provider.hass.services.async_call.call_args_list[1]
         assert add_call.kwargs["service_data"]["name"] == "[KM:5] VIP"
 
     async def test_set_service_error(self, schlage_provider):
@@ -592,6 +800,36 @@ class TestSetUsercode:
         schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
         result = await schlage_provider.async_set_usercode(1, "1234")
         assert result is False
+
+    async def test_rename_delete_failure_non_fatal(self, schlage_provider):
+        """Test that a delete failure during rename is non-fatal after add succeeds."""
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # get_codes with tagged entry in slot 1
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] Guest", "code": "1234"},
+                    }
+                }
+            if call_count == 2:
+                # add_code succeeds
+                return None
+            # delete_code fails
+            raise HomeAssistantError("Schlage delete_code error")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        result = await schlage_provider.async_set_usercode(1, "5678", "New Guest")
+        # Add succeeded so delete failure is non-fatal
+        assert result is True
+
+        calls = schlage_provider.hass.services.async_call.call_args_list
+        assert len(calls) == 3
+        delete_call = calls[2]
+        assert delete_call.args[:2] == ("schlage", "delete_code")
 
 
 # ---------------------------------------------------------------------------
