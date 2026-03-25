@@ -973,20 +973,41 @@ class TestLockStateEventHandlers:
         """Test _lock_locked updates lock state to LOCKED."""
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+        mock_kmlock.pending_retry_lock = True
 
         await mock_coordinator._lock_locked(mock_kmlock, source="manual")
 
         assert mock_kmlock.lock_state == LockState.LOCKED
+        assert mock_kmlock.pending_retry_lock is False
 
     async def test_lock_locked_already_locked_no_change(self, mock_coordinator, mock_kmlock):
-        """Test _lock_locked does nothing if already locked."""
+        """Test _lock_locked does nothing if already locked and no pending retry."""
         mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.pending_retry_lock = False
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=True)
 
         await mock_coordinator._lock_locked(mock_kmlock, source="manual")
 
         assert mock_kmlock.lock_state == LockState.LOCKED
+
+    async def test_lock_locked_already_locked_clears_pending_retry(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test _lock_locked clears pending retry and notifications even if already locked."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.pending_retry_lock = True
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new=AsyncMock(),
+        ) as mock_dismiss:
+            await mock_coordinator._lock_locked(mock_kmlock, source="manual")
+
+            assert mock_kmlock.pending_retry_lock is False
+            assert mock_dismiss.call_count == 2
 
     async def test_lock_locked_throttled(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked respects throttling."""
@@ -1131,6 +1152,79 @@ class TestLockStateEventHandlers:
             call_kwargs = mock_notify.call_args.kwargs
             assert call_kwargs["title"] == "Front Door"
             assert "closed" in call_kwargs["message"].lower()
+
+    async def test_door_closed_retry_lock_sends_notifications(self, mock_coordinator, mock_kmlock):
+        """Test _door_closed dismisses door_open and sends door_closed notification."""
+        mock_kmlock.door_state = STATE_OPEN
+        mock_kmlock.retry_lock = True
+        mock_kmlock.pending_retry_lock = True
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+        mock_coordinator._lock_lock = AsyncMock()
+
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ) as mock_dismiss,
+            patch(
+                "custom_components.keymaster.coordinator.send_persistent_notification",
+                new=AsyncMock(),
+            ) as mock_send,
+        ):
+            await mock_coordinator._door_closed(mock_kmlock)
+
+            mock_dismiss.assert_called_once()
+            assert "_autolock_door_open" in mock_dismiss.call_args.kwargs["notification_id"]
+            mock_send.assert_called_once()
+            assert "_autolock_door_closed" in mock_send.call_args.kwargs["notification_id"]
+            assert "closed" in mock_send.call_args.kwargs["message"].lower()
+
+    async def test_lock_locked_dismisses_retry_notifications(self, mock_coordinator, mock_kmlock):
+        """Test _lock_locked dismisses both retry lock persistent notifications."""
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new=AsyncMock(),
+        ) as mock_dismiss:
+            await mock_coordinator._lock_locked(mock_kmlock, source="manual")
+
+            assert mock_dismiss.call_count == 2
+            notification_ids = [
+                call.kwargs["notification_id"] for call in mock_dismiss.call_args_list
+            ]
+            assert any("_autolock_door_open" in nid for nid in notification_ids)
+            assert any("_autolock_door_closed" in nid for nid in notification_ids)
+
+    async def test_timer_triggered_open_door_sends_notification(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test _timer_triggered sends persistent notification when door is open."""
+        mock_kmlock.retry_lock = True
+        mock_kmlock.door_state = STATE_OPEN
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_persistent_notification",
+            new=AsyncMock(),
+        ) as mock_send:
+            await mock_coordinator._timer_triggered(mock_kmlock, dt.now())
+
+            assert mock_kmlock.pending_retry_lock is True
+            mock_send.assert_called_once()
+            assert "_autolock_door_open" in mock_send.call_args.kwargs["notification_id"]
+            assert "unable to lock" in mock_send.call_args.kwargs["title"].lower()
+
+    async def test_timer_triggered_closed_door_locks(self, mock_coordinator, mock_kmlock):
+        """Test _timer_triggered calls _lock_lock when door is closed."""
+        mock_kmlock.retry_lock = True
+        mock_kmlock.door_state = STATE_CLOSED
+        mock_coordinator._lock_lock = AsyncMock()
+
+        await mock_coordinator._timer_triggered(mock_kmlock, dt.now())
+
+        mock_coordinator._lock_lock.assert_called_once_with(kmlock=mock_kmlock)
 
 
 # ============================================================================
