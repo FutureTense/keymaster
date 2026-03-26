@@ -15,6 +15,7 @@ from custom_components.keymaster.lock import (
     KeymasterCodeSlotDayOfWeek,
     KeymasterLock,
 )
+from custom_components.keymaster.providers import CodeSlot
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
@@ -1722,6 +1723,19 @@ class TestDictToKmlocksConversion:
         assert result.day_of_week_num == 0
         assert result.dow_enabled is True
 
+    def test_dict_to_kmlocks_skips_init_false_fields(self, coordinator_for_conversion):
+        """Transient (init=False) fields are excluded from deserialization."""
+        data = {
+            "lock_name": "Test",
+            "lock_entity_id": "lock.test",
+            "keymaster_config_entry_id": "entry_1",
+        }
+        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterLock)
+
+        assert isinstance(result, KeymasterLock)
+        # masked_code_slots is init=False, so gets its default (empty set)
+        assert result.masked_code_slots == set()
+
 
 class TestKmlocksToDict:
     """Test cases for _kmlocks_to_dict conversion method."""
@@ -1739,6 +1753,20 @@ class TestKmlocksToDict:
         result = coordinator_for_dict._kmlocks_to_dict("just a string")
 
         assert result == "just a string"
+
+    def test_kmlocks_to_dict_skips_init_false_fields(self, coordinator_for_dict):
+        """Transient (init=False) fields are excluded from serialization."""
+        lock = KeymasterLock(
+            lock_name="Test",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry_1",
+        )
+        lock.masked_code_slots.add(1)
+
+        result = coordinator_for_dict._kmlocks_to_dict(lock)
+
+        assert isinstance(result, dict)
+        assert "masked_code_slots" not in result
 
     def test_kmlocks_to_dict_with_datetime(self, coordinator_for_dict):
         """Test conversion of datetime objects to ISO strings."""
@@ -2549,3 +2577,201 @@ class TestUpdateChildCodeSlotsSync:
         assert child_lock.code_slots[1].enabled is False
         sync_coordinator.clear_pin_from_lock.assert_not_called()
         sync_coordinator.set_pin_on_lock.assert_not_called()
+
+
+class TestSyncUsercodeRefreshMasked:
+    """Test cases for _sync_usercode masked code refresh logic (issue #589)."""
+
+    @pytest.fixture
+    def sync_coordinator(self, mock_hass):
+        """Create a coordinator wired for _sync_usercode tests."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator.set_pin_on_lock = AsyncMock()
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator._quick_refresh = False
+            return coordinator
+
+    @staticmethod
+    def _make_lock(provider=None, code_slots=None):
+        """Build a KeymasterLock with optional provider and code_slots."""
+        lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry_1",
+        )
+        lock.provider = provider
+        if code_slots is not None:
+            lock.code_slots = code_slots
+        return lock
+
+    async def test_refresh_returns_real_code(self, sync_coordinator):
+        """Refresh returns a real code → use the refreshed value."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(
+            slot_num=1, code="1234", in_use=True
+        )
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin=None)
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        # Incoming slot is masked
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # The real code should be imported into the slot
+        assert km_slot.pin == "1234"
+
+    async def test_refresh_still_masked_falls_back_to_local_pin(self, sync_coordinator):
+        """Refresh still masked → fall back to the locally stored PIN."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(
+            slot_num=1, code="**********", in_use=True
+        )
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="5678")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # Should keep local PIN, not replace with masked value
+        assert km_slot.pin == "5678"
+
+    async def test_refresh_still_masked_no_local_pin(self, sync_coordinator):
+        """Refresh still masked, no local PIN → keep local PIN as None (masked/unknown)."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(
+            slot_num=1, code="**********", in_use=True
+        )
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin=None)
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # No local PIN, so the original masked value persists; _sync_pin
+        # sees a non-digit string and keeps local pin as None (synced).
+        # The key assertion: pin is NOT set to the masked string.
+        assert km_slot.pin is None
+
+    async def test_refresh_returns_none_code_falls_back(self, sync_coordinator):
+        """Refresh returns code=None → still masked, fall back to local PIN."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(slot_num=1, code=None, in_use=True)
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="9999")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code=None, in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        assert km_slot.pin == "9999"
+
+    async def test_no_provider_skips_refresh(self, sync_coordinator):
+        """No provider available → skip refresh entirely."""
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="5678")
+        lock = self._make_lock(provider=None, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        # Without a provider, refresh should not be attempted.
+        # The masked code goes through to _sync_pin which keeps local pin.
+        assert km_slot.pin == "5678"
+
+    async def test_refresh_returns_none_object(self, sync_coordinator):
+        """Provider refresh returns None → use original values."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = None
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="4321")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # Refresh returned None, original masked code goes to _sync_pin
+        # which treats the non-digit string as masked and keeps local pin.
+        assert km_slot.pin == "4321"
+
+    async def test_all_zeros_code_not_treated_as_masked(self, sync_coordinator):
+        """All-zeros code is NOT treated as masked (could be a valid PIN)."""
+        provider = AsyncMock()
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="2468")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="0000000000", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        # "0000000000" is not a mask pattern; refresh should NOT be called
+        provider.async_refresh_usercode.assert_not_awaited()
+        # _sync_pin treats "0000000000" as a real numeric code and imports it
+        assert km_slot.pin == "0000000000"
+
+    async def test_subsequent_poll_skips_refresh(self, sync_coordinator):
+        """After masked result recorded, subsequent polls skip the Z-Wave refresh."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(
+            slot_num=1, code="**********", in_use=True
+        )
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="5678")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        # First call: triggers refresh, records slot as masked
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        assert 1 in lock.masked_code_slots
+
+        # Second call: should NOT call refresh again
+        provider.async_refresh_usercode.reset_mock()
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+        provider.async_refresh_usercode.assert_not_awaited()
+        # Local PIN should still be intact
+        assert km_slot.pin == "5678"
+
+    async def test_valid_pin_1111_not_treated_as_masked(self, sync_coordinator):
+        """A real PIN like '1111' is not mistaken for a masked code."""
+        provider = AsyncMock()
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="1111")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="1111", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        # '1111' is not a mask pattern, so refresh should NOT be called
+        provider.async_refresh_usercode.assert_not_awaited()
+        assert km_slot.pin == "1111"
+
+    async def test_valid_pin_0000_not_treated_as_masked(self, sync_coordinator):
+        """A real PIN like '0000' is not mistaken for a masked code."""
+        provider = AsyncMock()
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="0000")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="0000", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        # '0000' is not a mask pattern, so refresh should NOT be called
+        provider.async_refresh_usercode.assert_not_awaited()
+        assert km_slot.pin == "0000"
+
+    async def test_refresh_reveals_slot_empty(self, sync_coordinator):
+        """Refresh returns in_use=False → slot treated as empty, PIN re-pushed."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(slot_num=1, code=None, in_use=False)
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="5678")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # Refresh says slot empty → local PIN fallback skipped → _sync_pin
+        # sees empty code and re-pushes the local PIN to the lock.
+        sync_coordinator.set_pin_on_lock.assert_awaited_once()
+        assert km_slot.pin == "5678"
