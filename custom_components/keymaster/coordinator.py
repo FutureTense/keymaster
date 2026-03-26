@@ -79,6 +79,18 @@ STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.locks"
 
 
+def _is_masked_code(code: str | None) -> bool:
+    """Check if a code appears to be a masked/redacted response from a lock.
+
+    Known mask patterns: all ``*`` characters or None.
+    """
+    if code is None:
+        return True
+    if not code:
+        return False
+    return code == "*" * len(code)
+
+
 class KeymasterCoordinator(DataUpdateCoordinator):
     """Coordinator to manage keymaster locks."""
 
@@ -288,6 +300,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
             for field in fields(cls):
                 field_name: str = field.name
+
+                # Skip transient (init=False) fields — they are not persisted.
+                if not field.init:
+                    continue
+
                 field_type: type | None = keymasterlock_type_lookup.get(field_name)
                 if not field_type and isinstance(field.type, type):
                     field_type = field.type
@@ -403,6 +420,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             result: MutableMapping = {}
             for field in fields(instance):
                 field_name: str = field.name
+
+                # Skip transient (init=False) fields — they are not persisted.
+                if not field.init:
+                    continue
+
                 field_value: Any = getattr(instance, field_name)
 
                 # Convert datetime object to ISO string
@@ -1728,14 +1750,41 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if km_code_slot.name is None and usercode_slot.name:
             km_code_slot.name = usercode_slot.name
 
-        # Refresh from lock if slot claims to have a code but we don't have the value
-        # (e.g., masked responses where in_use=True but code is None or all one
-        # character)
-        if kmlock.provider and in_use and (usercode is None or len(set(usercode)) == 1):
-            refreshed = await kmlock.provider.async_refresh_usercode(code_slot_num)
-            if refreshed:
-                usercode = refreshed.code
-                in_use = refreshed.in_use
+        # Refresh from lock if slot claims to have a code but the reported
+        # value looks masked (all '*', all '0', or None).  Only attempt the
+        # refresh once per slot; after a masked result the slot is recorded in
+        # masked_code_slots so subsequent polls skip the Z-Wave round-trip,
+        # avoiding battery drain (#589).
+        if kmlock.provider and in_use and _is_masked_code(usercode):
+            if code_slot_num not in kmlock.masked_code_slots:
+                refreshed = await kmlock.provider.async_refresh_usercode(code_slot_num)
+                if refreshed:
+                    in_use = refreshed.in_use
+                    if not _is_masked_code(refreshed.code):
+                        usercode = refreshed.code
+                        kmlock.masked_code_slots.discard(code_slot_num)
+                    else:
+                        kmlock.masked_code_slots.add(code_slot_num)
+
+            # Use local PIN if the code is still masked
+            # Only fall back to local PIN when the slot is still in-use;
+            # if the refresh revealed in_use=False, let downstream handling
+            # treat the slot as empty.
+            if _is_masked_code(usercode) and in_use:
+                if km_code_slot.pin:
+                    _LOGGER.debug(
+                        "Lock %s slot %s reports masked code; using local PIN instead",
+                        kmlock.lock_name,
+                        code_slot_num,
+                    )
+                    usercode = km_code_slot.pin
+                else:
+                    _LOGGER.debug(
+                        "Lock %s slot %s reports masked code but no local "
+                        "PIN is available; keeping masked value",
+                        kmlock.lock_name,
+                        code_slot_num,
+                    )
 
         # Fix for Schlage masked responses: if slot is not in use (status=0) but
         # usercode is masked (e.g., "**********" or "0000000000"), treat it as empty
