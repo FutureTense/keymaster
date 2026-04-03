@@ -360,6 +360,7 @@ def _generate_entity_card_ll_config(
     name: str,
     parent: bool = False,
     type_: str | None = None,
+    tap_action: MutableMapping[str, Any] | None = None,
 ) -> MutableMapping[str, Any]:
     """Generate entity configuration for use in Lovelace cards."""
     prefix = "parent." if parent else ""
@@ -367,7 +368,7 @@ def _generate_entity_card_ll_config(
     data: MutableMapping[str, Any] = {
         "entity": entity,
         "name": name,
-        "tap_action": {"action": "none"},
+        "tap_action": tap_action or {"action": "none"},
         "hold_action": {"action": "none"},
         "double_tap_action": {"action": "none"},
     }
@@ -417,13 +418,14 @@ def _generate_conditional_card_ll_config(
     conditions: list[MutableMapping[str, Any]],
     parent: bool = False,
     type_: str | None = None,
+    tap_action: MutableMapping[str, Any] | None = None,
 ) -> MutableMapping[str, Any]:
     """Generate Lovelace config for a `conditional` card."""
     return {
         "type": "conditional",
         "conditions": conditions,
         "row": _generate_entity_card_ll_config(
-            code_slot_num, domain, key, name, parent=parent, type_=type_
+            code_slot_num, domain, key, name, parent=parent, type_=type_, tap_action=tap_action
         ),
     }
 
@@ -634,6 +636,11 @@ def _generate_date_range_entities(
 ) -> list[MutableMapping[str, Any]]:
     """Build the date range entities for the code slot."""
     type_ = "simple-entity" if parent else None
+    # Non-parent views use the custom datetime row with pencil icon and
+    # more-info tap action for editing.  Parent views use simple-entity
+    # with no tap action since the values are read-only (controlled by parent).
+    datetime_type = "simple-entity" if parent else "custom:keymaster-datetime-row"
+    datetime_tap: MutableMapping[str, Any] | None = None if parent else {"action": "more-info"}
     return [
         *([] if parent else [DIVIDER_CARD]),
         _generate_entity_card_ll_config(
@@ -655,7 +662,8 @@ def _generate_date_range_entities(
                 )
             ],
             parent=parent,
-            type_=type_,
+            type_=datetime_type,
+            tap_action=datetime_tap,
         ),
         _generate_conditional_card_ll_config(
             code_slot_num,
@@ -668,7 +676,8 @@ def _generate_date_range_entities(
                 )
             ],
             parent=parent,
-            type_=type_,
+            type_=datetime_type,
+            tap_action=datetime_tap,
         ),
     ]
 
