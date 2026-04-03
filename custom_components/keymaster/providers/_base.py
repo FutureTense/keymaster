@@ -212,6 +212,18 @@ class BaseLockProvider(ABC):
         """
         return await self.async_get_usercode(slot_num)
 
+    async def async_ping_node(self) -> bool:
+        """Ping the node to check if it is responsive.
+
+        Useful for recovering nodes that the controller has marked as dead
+        but may still be physically alive (e.g., due to RF interference
+        or routing issues).
+
+        Returns True if the node responded to the ping, False otherwise.
+        Override in subclass if the platform supports node pinging.
+        """
+        return False
+
     def get_node_id(self) -> int | None:
         """Get the node ID for this lock (if applicable).
 

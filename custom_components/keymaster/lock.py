@@ -81,6 +81,8 @@ class KeymasterLock:
     child_config_entry_ids: list = field(default_factory=list)
     listeners: list[Callable] = field(default_factory=list)
     pending_delete: bool = False
+    # Transient runtime-only field; excluded from persistence (init=False).
+    masked_code_slots: set[int] = field(default_factory=set, init=False, repr=False)
 
 
 keymasterlock_type_lookup: MutableMapping[str, type] = {

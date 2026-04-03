@@ -16,6 +16,7 @@ from homeassistant.core_config import Config
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.event import async_call_later
+from homeassistant.util import slugify
 
 from .const import (
     CONF_ADVANCED_DATE_RANGE,
@@ -114,7 +115,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     if not updated_config.get(CONF_NOTIFY_SCRIPT_NAME):
         updated_config[CONF_NOTIFY_SCRIPT_NAME] = (
-            f"keymaster_{updated_config.get(CONF_LOCK_NAME)}_manual_notify"
+            f"keymaster_{slugify(updated_config.get(CONF_LOCK_NAME, ''))}_manual_notify"
         )
     elif isinstance(updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str) and updated_config[
         CONF_NOTIFY_SCRIPT_NAME

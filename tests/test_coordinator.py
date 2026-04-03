@@ -8,12 +8,14 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from custom_components.keymaster.const import BACKOFF_FAILURE_THRESHOLD, BACKOFF_MAX_SECONDS
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
     KeymasterCodeSlotDayOfWeek,
     KeymasterLock,
 )
+from custom_components.keymaster.providers import CodeSlot
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
@@ -44,7 +46,7 @@ def validate_lock_relationship_invariants(
             if lock.parent_config_entry_id not in coordinator.kmlocks:
                 violations.append(
                     f"Invalid parent reference: child {lock_id} references "
-                    f"non-existent parent {lock.parent_config_entry_id}"
+                    f"non-existent parent {lock.parent_config_entry_id}",
                 )
 
     # Invariant 3: Bidirectional consistency - if parent lists child, child must point to parent
@@ -55,7 +57,7 @@ def validate_lock_relationship_invariants(
                 if child.parent_config_entry_id != lock_id:
                     violations.append(
                         f"Bidirectional inconsistency: parent {lock_id} lists child {child_id}, "
-                        f"but child points to parent {child.parent_config_entry_id}"
+                        f"but child points to parent {child.parent_config_entry_id}",
                     )
 
     # Invariant 4: If child points to parent, parent must list child
@@ -65,14 +67,14 @@ def validate_lock_relationship_invariants(
             if lock_id not in parent.child_config_entry_ids:
                 violations.append(
                     f"Missing child reference: child {lock_id} points to parent "
-                    f"{lock.parent_config_entry_id}, but parent doesn't list child"
+                    f"{lock.parent_config_entry_id}, but parent doesn't list child",
                 )
 
     # Invariant 5: No duplicates in child lists
     for lock_id, lock in coordinator.kmlocks.items():
         if len(lock.child_config_entry_ids) != len(set(lock.child_config_entry_ids)):
             violations.append(
-                f"Duplicate children: parent {lock_id} has duplicate entries in child list"
+                f"Duplicate children: parent {lock_id} has duplicate entries in child list",
             )
 
     return violations
@@ -87,6 +89,7 @@ def mock_hass():
     hass.config.path = Mock(return_value="/test/path")
     hass.bus = Mock()
     hass.bus.fire = Mock()
+    hass.bus.async_fire = Mock()
     hass.states = Mock()
     hass.states.get = Mock(return_value=None)
     return hass
@@ -103,6 +106,7 @@ def mock_coordinator(mock_hass):
         coordinator.kmlocks = {}
         # Use setattr to safely add the mock method
         setattr(coordinator, "delete_lock_by_config_entry_id", AsyncMock())
+        coordinator.async_set_updated_data = Mock()
         return coordinator
 
 
@@ -127,7 +131,10 @@ class TestVerifyLockConfiguration:
     """Test cases for _verify_lock_configuration method."""
 
     async def test_verify_lock_configuration_with_valid_config_entry(
-        self, mock_coordinator, mock_keymaster_lock, mock_config_entry
+        self,
+        mock_coordinator,
+        mock_keymaster_lock,
+        mock_config_entry,
     ):
         """Test that valid config entries are not deleted."""
         # Arrange
@@ -139,12 +146,14 @@ class TestVerifyLockConfiguration:
 
         # Assert
         mock_coordinator.hass.config_entries.async_get_entry.assert_called_once_with(
-            "test_entry_id"
+            "test_entry_id",
         )
         mock_coordinator.delete_lock_by_config_entry_id.assert_not_called()
 
     async def test_verify_lock_configuration_with_invalid_config_entry(
-        self, mock_coordinator, mock_keymaster_lock
+        self,
+        mock_coordinator,
+        mock_keymaster_lock,
     ):
         """Test that locks with invalid config entries are deleted."""
         # Arrange
@@ -156,15 +165,16 @@ class TestVerifyLockConfiguration:
 
         # Assert
         mock_coordinator.hass.config_entries.async_get_entry.assert_called_once_with(
-            "test_entry_id"
+            "test_entry_id",
         )
         mock_coordinator.delete_lock_by_config_entry_id.assert_called_once_with("test_entry_id")
 
     async def test_verify_lock_configuration_with_multiple_locks_mixed_validity(
-        self, mock_coordinator, mock_config_entry
+        self,
+        mock_coordinator,
+        mock_config_entry,
     ):
         """Test verification with multiple locks where some have valid config entries and others don't."""
-
         # Arrange
         valid_lock = Mock(spec=KeymasterLock)
         valid_lock.keymaster_config_entry_id = "valid_entry_id"
@@ -206,7 +216,9 @@ class TestVerifyLockConfiguration:
         mock_coordinator.delete_lock_by_config_entry_id.assert_not_called()
 
     async def test_verify_lock_configuration_with_all_valid_locks(
-        self, mock_coordinator, mock_config_entry
+        self,
+        mock_coordinator,
+        mock_config_entry,
     ):
         """Test verification when all locks have valid config entries."""
         # Arrange
@@ -270,7 +282,10 @@ class TestUpdateChildCodeSlots:
         return slot
 
     async def test_disabled_parent_slot_with_pin_no_mismatch(
-        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+        self,
+        mock_coordinator,
+        mock_keymaster_lock,
+        mock_code_slot,
     ):
         """Test that disabled parent slot with PIN doesn't cause mismatch with cleared child."""
         # Arrange: Parent slot disabled but has PIN, child slot cleared
@@ -302,7 +317,10 @@ class TestUpdateChildCodeSlots:
         assert pin_mismatch is False  # No mismatch!
 
     async def test_inactive_parent_slot_with_pin_no_mismatch(
-        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+        self,
+        mock_coordinator,
+        mock_keymaster_lock,
+        mock_code_slot,
     ):
         """Test that inactive parent slot with PIN doesn't cause mismatch with cleared child."""
         # Arrange: Parent slot enabled but inactive (time restriction), child cleared
@@ -334,7 +352,10 @@ class TestUpdateChildCodeSlots:
         assert pin_mismatch is False
 
     async def test_enabled_active_parent_slot_normal_sync(
-        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+        self,
+        mock_coordinator,
+        mock_keymaster_lock,
+        mock_code_slot,
     ):
         """Test that enabled+active parent slot continues normal sync behavior."""
         # Arrange: Parent enabled+active, child has different PIN
@@ -366,7 +387,10 @@ class TestUpdateChildCodeSlots:
         assert pin_mismatch is True  # Mismatch detected!
 
     async def test_enabled_active_parent_matching_child_no_mismatch(
-        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+        self,
+        mock_coordinator,
+        mock_keymaster_lock,
+        mock_code_slot,
     ):
         """Test that enabled+active parent with matching child PIN shows no mismatch."""
         # Arrange: Parent and child both have same PIN
@@ -399,7 +423,10 @@ class TestUpdateChildCodeSlots:
         assert pin_mismatch is False
 
     async def test_masked_child_response_ignored(
-        self, mock_coordinator, mock_keymaster_lock, mock_code_slot
+        self,
+        mock_coordinator,
+        mock_keymaster_lock,
+        mock_code_slot,
     ):
         """Test that masked child responses are ignored (PR #515 behavior)."""
         # Arrange: Parent enabled+active, child returns masked response
@@ -780,7 +807,6 @@ class TestLockRelationshipInvariants:
         This test validates that _rebuild_lock_relationships never crashes even with
         random lock configurations. It would have caught both bugs we fixed.
         """
-
         mock_coordinator.kmlocks = {}
         parent_locks = []
 
@@ -932,7 +958,6 @@ class TestLockStateEventHandlers:
     @pytest.fixture
     def mock_kmlock(self):
         """Create a mock KeymasterLock."""
-
         lock = Mock(spec=KeymasterLock)
         lock.keymaster_config_entry_id = "test_lock_id"
         lock.lock_name = "Front Door"
@@ -947,28 +972,46 @@ class TestLockStateEventHandlers:
 
     async def test_lock_locked_basic_state_change(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked updates lock state to LOCKED."""
-
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+        mock_kmlock.pending_retry_lock = True
 
         await mock_coordinator._lock_locked(mock_kmlock, source="manual")
 
         assert mock_kmlock.lock_state == LockState.LOCKED
+        assert mock_kmlock.pending_retry_lock is False
 
     async def test_lock_locked_already_locked_no_change(self, mock_coordinator, mock_kmlock):
-        """Test _lock_locked does nothing if already locked."""
-
+        """Test _lock_locked does nothing if already locked and no pending retry."""
         mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.pending_retry_lock = False
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=True)
 
         await mock_coordinator._lock_locked(mock_kmlock, source="manual")
 
         assert mock_kmlock.lock_state == LockState.LOCKED
+
+    async def test_lock_locked_already_locked_clears_pending_retry(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test _lock_locked clears pending retry and notifications even if already locked."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.pending_retry_lock = True
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new=AsyncMock(),
+        ) as mock_dismiss:
+            await mock_coordinator._lock_locked(mock_kmlock, source="manual")
+
+            assert mock_kmlock.pending_retry_lock is False
+            assert mock_dismiss.call_count == 2
 
     async def test_lock_locked_throttled(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked respects throttling."""
-
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=False)
 
@@ -987,6 +1030,7 @@ class TestLockStateEventHandlers:
         await mock_coordinator._lock_locked(mock_kmlock, source="manual")
 
         mock_kmlock.autolock_timer.cancel.assert_called_once()
+        mock_coordinator.async_set_updated_data.assert_called_once()
 
     async def test_lock_locked_with_notifications(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked sends notification when enabled."""
@@ -1000,7 +1044,9 @@ class TestLockStateEventHandlers:
             new=AsyncMock(),
         ) as mock_notify:
             await mock_coordinator._lock_locked(
-                mock_kmlock, source="keypad", event_label="Locked by User 1"
+                mock_kmlock,
+                source="keypad",
+                event_label="Locked by User 1",
             )
 
             mock_notify.assert_called_once()
@@ -1008,9 +1054,38 @@ class TestLockStateEventHandlers:
             assert call_kwargs["title"] == "Front Door"
             assert call_kwargs["message"] == "Locked by User 1"
 
+    async def test_lock_unlocked_starts_autolock_timer(self, mock_coordinator, mock_kmlock):
+        """Test _lock_unlocked starts autolock timer and pushes data update."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.autolock_enabled = True
+        mock_kmlock.autolock_timer = AsyncMock()
+        mock_kmlock.autolock_timer.start = AsyncMock()
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.code_slots = {}
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._lock_unlocked(mock_kmlock, source="manual")
+
+        mock_kmlock.autolock_timer.start.assert_called_once()
+        mock_coordinator.async_set_updated_data.assert_called_once()
+
+    async def test_lock_unlocked_no_autolock_no_data_update(self, mock_coordinator, mock_kmlock):
+        """Test _lock_unlocked does not push data update when autolock is disabled."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.autolock_enabled = False
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.code_slots = {}
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._lock_unlocked(mock_kmlock, source="manual")
+
+        mock_coordinator.async_set_updated_data.assert_not_called()
+
     async def test_door_opened_basic_state_change(self, mock_coordinator, mock_kmlock):
         """Test _door_opened updates door state to open."""
-
         mock_kmlock.door_state = STATE_CLOSED
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=True)
@@ -1021,7 +1096,6 @@ class TestLockStateEventHandlers:
 
     async def test_door_opened_already_open_no_change(self, mock_coordinator, mock_kmlock):
         """Test _door_opened does nothing if already open."""
-
         mock_kmlock.door_state = STATE_OPEN
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=True)
@@ -1032,7 +1106,6 @@ class TestLockStateEventHandlers:
 
     async def test_door_opened_with_notifications(self, mock_coordinator, mock_kmlock):
         """Test _door_opened sends notification when enabled."""
-
         mock_kmlock.door_state = STATE_CLOSED
         mock_kmlock.door_notifications = True
         mock_kmlock.notify_script_name = "notify_script"
@@ -1052,7 +1125,6 @@ class TestLockStateEventHandlers:
 
     async def test_door_closed_basic_state_change(self, mock_coordinator, mock_kmlock):
         """Test _door_closed updates door state to closed."""
-
         mock_kmlock.door_state = STATE_OPEN
         mock_kmlock.retry_lock = False
         mock_coordinator._throttle = Mock()
@@ -1064,7 +1136,6 @@ class TestLockStateEventHandlers:
 
     async def test_door_closed_with_notifications(self, mock_coordinator, mock_kmlock):
         """Test _door_closed sends notification when enabled."""
-
         mock_kmlock.door_state = STATE_OPEN
         mock_kmlock.door_notifications = True
         mock_kmlock.notify_script_name = "notify_script"
@@ -1083,6 +1154,79 @@ class TestLockStateEventHandlers:
             assert call_kwargs["title"] == "Front Door"
             assert "closed" in call_kwargs["message"].lower()
 
+    async def test_door_closed_retry_lock_sends_notifications(self, mock_coordinator, mock_kmlock):
+        """Test _door_closed dismisses door_open and sends door_closed notification."""
+        mock_kmlock.door_state = STATE_OPEN
+        mock_kmlock.retry_lock = True
+        mock_kmlock.pending_retry_lock = True
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+        mock_coordinator._lock_lock = AsyncMock()
+
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ) as mock_dismiss,
+            patch(
+                "custom_components.keymaster.coordinator.send_persistent_notification",
+                new=AsyncMock(),
+            ) as mock_send,
+        ):
+            await mock_coordinator._door_closed(mock_kmlock)
+
+            mock_dismiss.assert_called_once()
+            assert "_autolock_door_open" in mock_dismiss.call_args.kwargs["notification_id"]
+            mock_send.assert_called_once()
+            assert "_autolock_door_closed" in mock_send.call_args.kwargs["notification_id"]
+            assert "closed" in mock_send.call_args.kwargs["message"].lower()
+
+    async def test_lock_locked_dismisses_retry_notifications(self, mock_coordinator, mock_kmlock):
+        """Test _lock_locked dismisses both retry lock persistent notifications."""
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new=AsyncMock(),
+        ) as mock_dismiss:
+            await mock_coordinator._lock_locked(mock_kmlock, source="manual")
+
+            assert mock_dismiss.call_count == 2
+            notification_ids = [
+                call.kwargs["notification_id"] for call in mock_dismiss.call_args_list
+            ]
+            assert any("_autolock_door_open" in nid for nid in notification_ids)
+            assert any("_autolock_door_closed" in nid for nid in notification_ids)
+
+    async def test_timer_triggered_open_door_sends_notification(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test _timer_triggered sends persistent notification when door is open."""
+        mock_kmlock.retry_lock = True
+        mock_kmlock.door_state = STATE_OPEN
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_persistent_notification",
+            new=AsyncMock(),
+        ) as mock_send:
+            await mock_coordinator._timer_triggered(mock_kmlock, dt.now())
+
+            assert mock_kmlock.pending_retry_lock is True
+            mock_send.assert_called_once()
+            assert "_autolock_door_open" in mock_send.call_args.kwargs["notification_id"]
+            assert "unable to lock" in mock_send.call_args.kwargs["title"].lower()
+
+    async def test_timer_triggered_closed_door_locks(self, mock_coordinator, mock_kmlock):
+        """Test _timer_triggered calls _lock_lock when door is closed."""
+        mock_kmlock.retry_lock = True
+        mock_kmlock.door_state = STATE_CLOSED
+        mock_coordinator._lock_lock = AsyncMock()
+
+        await mock_coordinator._timer_triggered(mock_kmlock, dt.now())
+
+        mock_coordinator._lock_lock.assert_called_once_with(kmlock=mock_kmlock)
+
 
 # ============================================================================
 # State Synchronization Tests
@@ -1095,7 +1239,6 @@ class TestStateSynchronization:
     @pytest.fixture
     def mock_kmlock_with_entities(self):
         """Create a mock KeymasterLock with entity IDs."""
-
         lock = Mock(spec=KeymasterLock)
         lock.keymaster_config_entry_id = "test_lock_id"
         lock.lock_name = "Front Door"
@@ -1106,10 +1249,11 @@ class TestStateSynchronization:
         return lock
 
     async def test_update_door_and_lock_state_syncs_lock_state(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that lock state is synced from entity without triggering actions."""
-
         mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
 
@@ -1123,10 +1267,11 @@ class TestStateSynchronization:
         assert mock_kmlock_with_entities.lock_state == LockState.LOCKED
 
     async def test_update_door_and_lock_state_syncs_door_state(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that door state is synced from entity without triggering actions."""
-
         mock_kmlock_with_entities.door_state = STATE_CLOSED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
 
@@ -1149,10 +1294,11 @@ class TestStateSynchronization:
         assert mock_kmlock_with_entities.door_state == STATE_OPEN
 
     async def test_update_door_and_lock_state_triggers_lock_actions(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that lock state changes trigger actions when requested."""
-
         mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
         mock_coordinator._lock_locked = AsyncMock()
@@ -1171,10 +1317,11 @@ class TestStateSynchronization:
         assert call_kwargs["source"] == "status_sync"
 
     async def test_update_door_and_lock_state_triggers_unlock_actions(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that unlock state changes trigger actions when requested."""
-
         mock_kmlock_with_entities.lock_state = LockState.LOCKED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
         mock_coordinator._lock_unlocked = AsyncMock()
@@ -1192,10 +1339,11 @@ class TestStateSynchronization:
         assert call_kwargs["kmlock"] == mock_kmlock_with_entities
 
     async def test_update_door_and_lock_state_triggers_door_opened(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that door open changes trigger actions when requested."""
-
         mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
         mock_kmlock_with_entities.door_state = STATE_CLOSED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
@@ -1221,10 +1369,11 @@ class TestStateSynchronization:
         mock_coordinator._door_opened.assert_called_once()
 
     async def test_update_door_and_lock_state_triggers_door_closed(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that door closed changes trigger actions when requested."""
-
         mock_kmlock_with_entities.door_state = STATE_OPEN
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
         mock_coordinator._door_closed = AsyncMock()
@@ -1249,10 +1398,11 @@ class TestStateSynchronization:
         mock_coordinator._door_closed.assert_called_once()
 
     async def test_update_door_and_lock_state_handles_missing_lock_entity(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that missing lock entity is handled gracefully."""
-
         mock_kmlock_with_entities.lock_state = LockState.UNLOCKED
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
 
@@ -1266,7 +1416,9 @@ class TestStateSynchronization:
         assert mock_kmlock_with_entities.lock_state == LockState.UNLOCKED
 
     async def test_update_door_and_lock_state_handles_empty_lock_entity_id(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that empty lock entity ID is handled gracefully."""
         mock_kmlock_with_entities.lock_entity_id = ""
@@ -1276,10 +1428,11 @@ class TestStateSynchronization:
         await mock_coordinator._update_door_and_lock_state(trigger_actions_if_changed=False)
 
     async def test_update_door_and_lock_state_handles_no_door_sensor(
-        self, mock_coordinator, mock_kmlock_with_entities
+        self,
+        mock_coordinator,
+        mock_kmlock_with_entities,
     ):
         """Test that lock without door sensor is handled gracefully."""
-
         mock_kmlock_with_entities.door_sensor_entity_id = None
         mock_coordinator.kmlocks = {"test_lock_id": mock_kmlock_with_entities}
 
@@ -1299,7 +1452,6 @@ class TestCoordinatorUtilities:
 
     async def test_count_locks_not_pending_delete_with_multiple_locks(self, mock_coordinator):
         """Test counting locks excluding pending delete."""
-
         # Create multiple locks with different states
         lock1 = Mock(spec=KeymasterLock)
         lock1.pending_delete = False
@@ -1329,7 +1481,6 @@ class TestCoordinatorUtilities:
 
     async def test_count_locks_not_pending_delete_all_pending(self, mock_coordinator):
         """Test counting when all locks are pending delete."""
-
         lock1 = Mock(spec=KeymasterLock)
         lock1.pending_delete = True
         lock1.keymaster_config_entry_id = "lock1_id"
@@ -1368,7 +1519,9 @@ class TestCoordinatorUtilities:
         assert result is None
 
     async def test_sync_get_lock_by_config_entry_id_found(
-        self, mock_coordinator, mock_keymaster_lock
+        self,
+        mock_coordinator,
+        mock_keymaster_lock,
     ):
         """Test synchronously getting lock by config entry ID."""
         mock_keymaster_lock.keymaster_config_entry_id = "test_entry_id"
@@ -1570,6 +1723,19 @@ class TestDictToKmlocksConversion:
         assert result.day_of_week_num == 0
         assert result.dow_enabled is True
 
+    def test_dict_to_kmlocks_skips_init_false_fields(self, coordinator_for_conversion):
+        """Transient (init=False) fields are excluded from deserialization."""
+        data = {
+            "lock_name": "Test",
+            "lock_entity_id": "lock.test",
+            "keymaster_config_entry_id": "entry_1",
+        }
+        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterLock)
+
+        assert isinstance(result, KeymasterLock)
+        # masked_code_slots is init=False, so gets its default (empty set)
+        assert result.masked_code_slots == set()
+
 
 class TestKmlocksToDict:
     """Test cases for _kmlocks_to_dict conversion method."""
@@ -1587,6 +1753,20 @@ class TestKmlocksToDict:
         result = coordinator_for_dict._kmlocks_to_dict("just a string")
 
         assert result == "just a string"
+
+    def test_kmlocks_to_dict_skips_init_false_fields(self, coordinator_for_dict):
+        """Transient (init=False) fields are excluded from serialization."""
+        lock = KeymasterLock(
+            lock_name="Test",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry_1",
+        )
+        lock.masked_code_slots.add(1)
+
+        result = coordinator_for_dict._kmlocks_to_dict(lock)
+
+        assert isinstance(result, dict)
+        assert "masked_code_slots" not in result
 
     def test_kmlocks_to_dict_with_datetime(self, coordinator_for_dict):
         """Test conversion of datetime objects to ISO strings."""
@@ -1692,9 +1872,9 @@ class TestStorageAndMigration:
                         "name": "User 1",
                         "enabled": True,
                         "pin": "1234",
-                    }
+                    },
                 },
-            }
+            },
         }
 
     # Tests for _async_load_data
@@ -1704,7 +1884,7 @@ class TestStorageAndMigration:
         """Test loading data when Store is empty returns empty dict."""
         coordinator_for_storage._store.async_load = AsyncMock(return_value=None)
         coordinator_for_storage.hass.config.path = Mock(
-            return_value="/fake/path/custom_components/keymaster/json_kmlocks"
+            return_value="/fake/path/custom_components/keymaster/json_kmlocks",
         )
 
         with patch("pathlib.Path.exists", return_value=False):
@@ -1718,7 +1898,7 @@ class TestStorageAndMigration:
         """Test loading data from Store with existing data."""
         coordinator_for_storage._store.async_load = AsyncMock(return_value=sample_lock_dict)
         coordinator_for_storage.hass.config.path = Mock(
-            return_value="/fake/path/custom_components/keymaster/json_kmlocks"
+            return_value="/fake/path/custom_components/keymaster/json_kmlocks",
         )
 
         with patch("pathlib.Path.exists", return_value=False):
@@ -1867,7 +2047,9 @@ class TestStorageAndMigration:
         assert result == {}
 
     def test_migrate_legacy_json_folder_not_deleted_if_not_empty(
-        self, coordinator_for_storage, tmp_path
+        self,
+        coordinator_for_storage,
+        tmp_path,
     ):
         """Test that folder is not deleted if it contains other files."""
         json_folder = tmp_path / "json_kmlocks"
@@ -1903,9 +2085,9 @@ class TestStorageAndMigration:
                     "1": {
                         "number": 1,
                         "pin": encoded_pin,
-                    }
+                    },
                 },
-            }
+            },
         }
 
         result = coordinator_for_storage._process_loaded_data(config)
@@ -1920,7 +2102,7 @@ class TestStorageAndMigration:
                 "lock_entity_id": "lock.test",
                 "keymaster_config_entry_id": "entry1",
                 "code_slots": {},
-            }
+            },
         }
 
         result = coordinator_for_storage._process_loaded_data(config)
@@ -1959,3 +2141,637 @@ class TestStorageAndMigration:
         assert reloaded["entry1"].code_slots[1].name == "User 1"
         assert reloaded["entry1"].code_slots[1].pin == "5678"
         assert reloaded["entry1"].code_slots[1].enabled is True
+
+
+class TestUpdateLockDataBackoff:
+    """Test exponential backoff for failed lock connections in _update_lock_data."""
+
+    @pytest.fixture
+    def backoff_coordinator(self, mock_hass):
+        """Create a coordinator with backoff attributes initialized."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._consecutive_failures = {}
+            coordinator._next_retry_time = {}
+            return coordinator
+
+    @pytest.fixture
+    def disconnected_lock(self):
+        """Create a mock lock that fails to connect."""
+        lock = Mock(spec=KeymasterLock)
+        lock.keymaster_config_entry_id = "test_entry"
+        lock.lock_name = "Test Lock"
+        lock.connected = False
+        lock.provider = None
+        return lock
+
+    @pytest.fixture
+    def connected_lock(self):
+        """Create a mock lock that connects successfully."""
+        lock = Mock(spec=KeymasterLock)
+        lock.keymaster_config_entry_id = "test_entry"
+        lock.lock_name = "Test Lock"
+        lock.connected = True
+        lock.provider = AsyncMock()
+        lock.provider.async_get_usercodes = AsyncMock(return_value=[])
+        lock.code_slots = {}
+        return lock
+
+    async def test_tracks_consecutive_failures(self, backoff_coordinator, disconnected_lock):
+        """Test failure counter increments on each failed connection."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=disconnected_lock)
+        backoff_coordinator._connect_and_update_lock = AsyncMock()
+
+        # Act — two consecutive failures
+        await backoff_coordinator._update_lock_data(entry_id)
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert
+        assert backoff_coordinator._consecutive_failures[entry_id] == 2
+
+    async def test_backoff_activates_after_threshold(self, backoff_coordinator, disconnected_lock):
+        """Test backoff engages after BACKOFF_FAILURE_THRESHOLD consecutive failures."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=disconnected_lock)
+        backoff_coordinator._connect_and_update_lock = AsyncMock()
+
+        # Act — reach the threshold
+        for _ in range(BACKOFF_FAILURE_THRESHOLD):
+            await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — backoff should now be set
+        assert entry_id in backoff_coordinator._next_retry_time
+        assert backoff_coordinator._next_retry_time[entry_id] > dt.now().astimezone()
+
+    async def test_skips_update_during_backoff(self, backoff_coordinator, disconnected_lock):
+        """Test _update_lock_data returns early when in backoff period."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=disconnected_lock)
+        mock_connect = AsyncMock()
+        backoff_coordinator._connect_and_update_lock = mock_connect
+
+        # Set a backoff time far in the future
+        backoff_coordinator._next_retry_time[entry_id] = dt.now().astimezone() + timedelta(hours=1)
+
+        # Act
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — _connect_and_update_lock should NOT have been called
+        mock_connect.assert_not_called()
+
+    async def test_retries_after_backoff_expires(self, backoff_coordinator, disconnected_lock):
+        """Test _update_lock_data retries when backoff period has expired."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=disconnected_lock)
+        mock_connect = AsyncMock()
+        backoff_coordinator._connect_and_update_lock = mock_connect
+
+        # Set backoff in the past
+        backoff_coordinator._next_retry_time[entry_id] = dt.now().astimezone() - timedelta(
+            seconds=1,
+        )
+
+        # Act
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — _connect_and_update_lock SHOULD have been called
+        mock_connect.assert_called_once()
+
+    async def test_resets_counters_on_success(self, backoff_coordinator, connected_lock):
+        """Test failure and backoff counters reset after successful connection."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: connected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=connected_lock)
+        backoff_coordinator._connect_and_update_lock = AsyncMock()
+        backoff_coordinator._update_code_slots = AsyncMock()
+
+        # Simulate prior failures whose backoff has already expired
+        backoff_coordinator._consecutive_failures[entry_id] = 5
+        backoff_coordinator._next_retry_time[entry_id] = dt.now().astimezone() - timedelta(
+            seconds=1,
+        )
+
+        # Act
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — counters should be cleared
+        assert entry_id not in backoff_coordinator._consecutive_failures
+        assert entry_id not in backoff_coordinator._next_retry_time
+
+    async def test_backoff_caps_at_max(self, backoff_coordinator, disconnected_lock):
+        """Test backoff duration does not exceed BACKOFF_MAX_SECONDS."""
+        # Arrange
+        entry_id = "test_entry"
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=disconnected_lock)
+        backoff_coordinator._connect_and_update_lock = AsyncMock()
+
+        # Simulate many prior failures (well past where 2^n would exceed max)
+        backoff_coordinator._consecutive_failures[entry_id] = 50
+
+        # Act
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        # Assert — backoff should be capped at BACKOFF_MAX_SECONDS
+        expected_max = dt.now().astimezone() + timedelta(seconds=BACKOFF_MAX_SECONDS + 1)
+        assert backoff_coordinator._next_retry_time[entry_id] < expected_max
+
+    async def test_pings_node_on_first_failure(self, backoff_coordinator, disconnected_lock):
+        """Test that the coordinator pings the node on the first connection failure."""
+        entry_id = "test_entry"
+        disconnected_lock.provider = AsyncMock()
+        disconnected_lock.provider.async_ping_node = AsyncMock(return_value=False)
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=disconnected_lock)
+        backoff_coordinator._connect_and_update_lock = AsyncMock()
+
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        disconnected_lock.provider.async_ping_node.assert_called_once()
+
+    async def test_does_not_ping_on_subsequent_failures(
+        self, backoff_coordinator, disconnected_lock
+    ):
+        """Test that ping only fires on the first failure, not on later ones."""
+        entry_id = "test_entry"
+        disconnected_lock.provider = AsyncMock()
+        disconnected_lock.provider.async_ping_node = AsyncMock(return_value=False)
+        backoff_coordinator.kmlocks = {entry_id: disconnected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=disconnected_lock)
+        backoff_coordinator._connect_and_update_lock = AsyncMock()
+
+        # First failure — should ping
+        await backoff_coordinator._update_lock_data(entry_id)
+        # Second failure — should not ping again
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        disconnected_lock.provider.async_ping_node.assert_called_once()
+
+    async def test_skips_invalid_lock(self, backoff_coordinator):
+        """Test _update_lock_data returns early if lock not found."""
+        entry_id = "invalid_entry"
+        # Mock get_lock_by_config_entry_id to return None
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=None)
+        mock_connect = AsyncMock()
+        backoff_coordinator._connect_and_update_lock = mock_connect
+
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        mock_connect.assert_not_called()
+
+    async def test_aborts_if_no_provider_after_connect(self, backoff_coordinator, connected_lock):
+        """Test _update_lock_data returns early if provider is missing after successful connection."""
+        entry_id = "test_entry"
+        # The lock connected but provider is None
+        connected_lock.provider = None
+        backoff_coordinator.kmlocks = {entry_id: connected_lock}
+        backoff_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=connected_lock)
+        backoff_coordinator._connect_and_update_lock = AsyncMock()
+        backoff_coordinator._update_code_slots = AsyncMock()
+
+        await backoff_coordinator._update_lock_data(entry_id)
+
+        backoff_coordinator._update_code_slots.assert_not_called()
+
+
+class TestResetCodeSlot:
+    """Test cases for reset_code_slot method."""
+
+    @pytest.fixture
+    def coordinator_with_lock(self, mock_hass):
+        """Create a coordinator with a real KeymasterLock containing a code slot."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator.async_refresh = AsyncMock()
+
+            lock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            lock.code_slots = {
+                1: KeymasterCodeSlot(number=1, enabled=True, pin="1234"),
+            }
+            coordinator.kmlocks["entry_1"] = lock
+            return coordinator
+
+    async def test_reset_code_slot_replaces_slot(self, coordinator_with_lock):
+        """Test that reset_code_slot creates a fresh disabled slot."""
+        await coordinator_with_lock.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+        )
+
+        slot = coordinator_with_lock.kmlocks["entry_1"].code_slots[1]
+        assert slot.number == 1
+        assert slot.enabled is False
+        assert slot.pin is None
+        assert slot.accesslimit_day_of_week is not None
+        coordinator_with_lock.clear_pin_from_lock.assert_called_once()
+        coordinator_with_lock.async_refresh.assert_called_once()
+
+    async def test_reset_code_slot_lock_not_found(self, coordinator_with_lock):
+        """Test reset_code_slot with non-existent lock."""
+        await coordinator_with_lock.reset_code_slot(
+            config_entry_id="nonexistent",
+            code_slot_num=1,
+        )
+        coordinator_with_lock.clear_pin_from_lock.assert_not_called()
+
+    async def test_reset_code_slot_fires_reset_event(self, hass: HomeAssistant):
+        """Test that reset_code_slot fires a bus event for event entity reset."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(hass)
+            coordinator.hass = hass
+            coordinator.kmlocks = {}
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator.async_refresh = AsyncMock()
+
+            lock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            lock.code_slots = {
+                1: KeymasterCodeSlot(number=1, enabled=True, pin="1234"),
+            }
+            coordinator.kmlocks["entry_1"] = lock
+
+        fired_events: list = []
+        hass.bus.async_listen(
+            "keymaster_code_slot_reset",
+            fired_events.append,
+        )
+
+        await coordinator.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+        )
+        await hass.async_block_till_done()
+
+        assert len(fired_events) == 1
+        assert fired_events[0].data["code_slot_num"] == 1
+        assert fired_events[0].data["entity_id"] == "lock.front_door"
+
+    async def test_reset_code_slot_slot_not_found(self, coordinator_with_lock):
+        """Test reset_code_slot with non-existent code slot."""
+        await coordinator_with_lock.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=99,
+        )
+        coordinator_with_lock.clear_pin_from_lock.assert_not_called()
+
+
+class TestUpdateSlotActiveState:
+    """Test cases for update_slot_active_state method."""
+
+    @pytest.fixture
+    def coordinator_with_slot(self, mock_hass):
+        """Create a coordinator with a lock and code slot for active state tests."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._initial_setup_done_event = AsyncMock()
+            coordinator._initial_setup_done_event.wait = AsyncMock()
+
+            lock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            lock.code_slots = {
+                1: KeymasterCodeSlot(number=1, enabled=True, pin="1234"),
+            }
+            coordinator.kmlocks["entry_1"] = lock
+            return coordinator
+
+    async def test_update_slot_active_state_success(self, coordinator_with_slot):
+        """Test successful update of a slot's active state."""
+        result = await coordinator_with_slot.update_slot_active_state(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+        )
+        assert result is True
+
+    async def test_update_slot_active_state_lock_not_found(self, coordinator_with_slot):
+        """Test update_slot_active_state with non-existent lock."""
+        result = await coordinator_with_slot.update_slot_active_state(
+            config_entry_id="nonexistent",
+            code_slot_num=1,
+        )
+        assert result is False
+
+    async def test_update_slot_active_state_slot_not_found(self, coordinator_with_slot):
+        """Test update_slot_active_state with non-existent code slot."""
+        result = await coordinator_with_slot.update_slot_active_state(
+            config_entry_id="entry_1",
+            code_slot_num=99,
+        )
+        assert result is False
+
+
+class TestUpdateChildCodeSlotsSync:
+    """Test cases for _update_child_code_slots sync behavior."""
+
+    @pytest.fixture
+    def sync_coordinator(self, mock_hass):
+        """Create a coordinator for child code slot sync tests."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._quick_refresh = False
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator.set_pin_on_lock = AsyncMock()
+            return coordinator
+
+    async def test_update_child_code_slots_syncs_attributes(self, sync_coordinator):
+        """Test that parent attributes are synced to child code slots."""
+        parent_lock = KeymasterLock(
+            lock_name="Parent",
+            lock_entity_id="lock.parent",
+            keymaster_config_entry_id="parent_entry",
+        )
+        parent_lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, enabled=True, pin="5678", name="Guest"),
+        }
+
+        child_lock = KeymasterLock(
+            lock_name="Child",
+            lock_entity_id="lock.child",
+            keymaster_config_entry_id="child_entry",
+        )
+        child_lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, enabled=False, pin=None, name="Old Name"),
+        }
+
+        await sync_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        assert child_lock.code_slots[1].enabled is True
+        assert child_lock.code_slots[1].name == "Guest"
+
+    async def test_update_child_code_slots_no_parent_slots(self, sync_coordinator):
+        """Test early return when parent has no code slots."""
+        parent_lock = KeymasterLock(
+            lock_name="Parent",
+            lock_entity_id="lock.parent",
+            keymaster_config_entry_id="parent_entry",
+        )
+        parent_lock.code_slots = None
+
+        child_lock = KeymasterLock(
+            lock_name="Child",
+            lock_entity_id="lock.child",
+            keymaster_config_entry_id="child_entry",
+        )
+        child_lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, enabled=True),
+        }
+
+        await sync_coordinator._update_child_code_slots(parent_lock, child_lock)
+        sync_coordinator.clear_pin_from_lock.assert_not_called()
+
+    async def test_update_child_code_slots_respects_override(self, sync_coordinator):
+        """Test that child slots with override_parent are not synced."""
+        parent_lock = KeymasterLock(
+            lock_name="Parent",
+            lock_entity_id="lock.parent",
+            keymaster_config_entry_id="parent_entry",
+        )
+        parent_lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, enabled=True, pin="5678"),
+        }
+
+        child_lock = KeymasterLock(
+            lock_name="Child",
+            lock_entity_id="lock.child",
+            keymaster_config_entry_id="child_entry",
+        )
+        child_lock.code_slots = {
+            1: KeymasterCodeSlot(
+                number=1,
+                enabled=False,
+                pin=None,
+                override_parent=True,
+            ),
+        }
+
+        await sync_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        assert child_lock.code_slots[1].enabled is False
+        sync_coordinator.clear_pin_from_lock.assert_not_called()
+        sync_coordinator.set_pin_on_lock.assert_not_called()
+
+
+class TestSyncUsercodeRefreshMasked:
+    """Test cases for _sync_usercode masked code refresh logic (issue #589)."""
+
+    @pytest.fixture
+    def sync_coordinator(self, mock_hass):
+        """Create a coordinator wired for _sync_usercode tests."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator.set_pin_on_lock = AsyncMock()
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator._quick_refresh = False
+            return coordinator
+
+    @staticmethod
+    def _make_lock(provider=None, code_slots=None):
+        """Build a KeymasterLock with optional provider and code_slots."""
+        lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry_1",
+        )
+        lock.provider = provider
+        if code_slots is not None:
+            lock.code_slots = code_slots
+        return lock
+
+    async def test_refresh_returns_real_code(self, sync_coordinator):
+        """Refresh returns a real code → use the refreshed value."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(
+            slot_num=1, code="1234", in_use=True
+        )
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin=None)
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        # Incoming slot is masked
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # The real code should be imported into the slot
+        assert km_slot.pin == "1234"
+
+    async def test_refresh_still_masked_falls_back_to_local_pin(self, sync_coordinator):
+        """Refresh still masked → fall back to the locally stored PIN."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(
+            slot_num=1, code="**********", in_use=True
+        )
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="5678")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # Should keep local PIN, not replace with masked value
+        assert km_slot.pin == "5678"
+
+    async def test_refresh_still_masked_no_local_pin(self, sync_coordinator):
+        """Refresh still masked, no local PIN → keep local PIN as None (masked/unknown)."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(
+            slot_num=1, code="**********", in_use=True
+        )
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin=None)
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # No local PIN, so the original masked value persists; _sync_pin
+        # sees a non-digit string and keeps local pin as None (synced).
+        # The key assertion: pin is NOT set to the masked string.
+        assert km_slot.pin is None
+
+    async def test_refresh_returns_none_code_falls_back(self, sync_coordinator):
+        """Refresh returns code=None → still masked, fall back to local PIN."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(slot_num=1, code=None, in_use=True)
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="9999")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code=None, in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        assert km_slot.pin == "9999"
+
+    async def test_no_provider_skips_refresh(self, sync_coordinator):
+        """No provider available → skip refresh entirely."""
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="5678")
+        lock = self._make_lock(provider=None, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        # Without a provider, refresh should not be attempted.
+        # The masked code goes through to _sync_pin which keeps local pin.
+        assert km_slot.pin == "5678"
+
+    async def test_refresh_returns_none_object(self, sync_coordinator):
+        """Provider refresh returns None → use original values."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = None
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="4321")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # Refresh returned None, original masked code goes to _sync_pin
+        # which treats the non-digit string as masked and keeps local pin.
+        assert km_slot.pin == "4321"
+
+    async def test_all_zeros_code_not_treated_as_masked(self, sync_coordinator):
+        """All-zeros code is NOT treated as masked (could be a valid PIN)."""
+        provider = AsyncMock()
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="2468")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="0000000000", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        # "0000000000" is not a mask pattern; refresh should NOT be called
+        provider.async_refresh_usercode.assert_not_awaited()
+        # _sync_pin treats "0000000000" as a real numeric code and imports it
+        assert km_slot.pin == "0000000000"
+
+    async def test_subsequent_poll_skips_refresh(self, sync_coordinator):
+        """After masked result recorded, subsequent polls skip the Z-Wave refresh."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(
+            slot_num=1, code="**********", in_use=True
+        )
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="5678")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        # First call: triggers refresh, records slot as masked
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        assert 1 in lock.masked_code_slots
+
+        # Second call: should NOT call refresh again
+        provider.async_refresh_usercode.reset_mock()
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+        provider.async_refresh_usercode.assert_not_awaited()
+        # Local PIN should still be intact
+        assert km_slot.pin == "5678"
+
+    async def test_valid_pin_1111_not_treated_as_masked(self, sync_coordinator):
+        """A real PIN like '1111' is not mistaken for a masked code."""
+        provider = AsyncMock()
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="1111")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="1111", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        # '1111' is not a mask pattern, so refresh should NOT be called
+        provider.async_refresh_usercode.assert_not_awaited()
+        assert km_slot.pin == "1111"
+
+    async def test_valid_pin_0000_not_treated_as_masked(self, sync_coordinator):
+        """A real PIN like '0000' is not mistaken for a masked code."""
+        provider = AsyncMock()
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="0000")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="0000", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        # '0000' is not a mask pattern, so refresh should NOT be called
+        provider.async_refresh_usercode.assert_not_awaited()
+        assert km_slot.pin == "0000"
+
+    async def test_refresh_reveals_slot_empty(self, sync_coordinator):
+        """Refresh returns in_use=False → slot treated as empty, PIN re-pushed."""
+        provider = AsyncMock()
+        provider.async_refresh_usercode.return_value = CodeSlot(slot_num=1, code=None, in_use=False)
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="5678")
+        lock = self._make_lock(provider=provider, code_slots={1: km_slot})
+        usercode_slot = CodeSlot(slot_num=1, code="**********", in_use=True)
+
+        await sync_coordinator._sync_usercode(lock, usercode_slot)
+
+        provider.async_refresh_usercode.assert_awaited_once_with(1)
+        # Refresh says slot empty → local PIN fallback skipped → _sync_pin
+        # sees empty code and re-pushes the local PIN to the lock.
+        sync_coordinator.set_pin_on_lock.assert_awaited_once()
+        assert km_slot.pin == "5678"

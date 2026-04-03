@@ -559,3 +559,52 @@ async def test_number_entity_converts_float_to_int_for_accesslimit_count(
         # Also verify the code slot was updated with an int
         assert kmlock.code_slots[1].accesslimit_count == 5
         assert isinstance(kmlock.code_slots[1].accesslimit_count, int)
+
+
+@pytest.mark.parametrize(
+    ("key", "attr_name"),
+    [
+        ("number.autolock_min_day", "autolock_min_day"),
+        ("number.autolock_min_night", "autolock_min_night"),
+    ],
+)
+async def test_number_entity_autolock_float_to_int(
+    hass: HomeAssistant, number_config_entry, coordinator, key, attr_name
+):
+    """Test autolock minute values are converted from float to int."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=number_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.autolock_enabled = True
+    coordinator.kmlocks[number_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterNumberEntityDescription(
+        key=key,
+        name="Auto Lock",
+        icon="mdi:timer-lock",
+        mode=NumberMode.BOX,
+        native_min_value=1,
+        native_step=1,
+        device_class=NumberDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=number_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterNumber(entity_description=entity_description)
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(entity, "async_write_ha_state"),
+    ):
+        await entity.async_set_native_value(5.0)
+
+        assert entity._attr_native_value == 5
+        assert isinstance(entity._attr_native_value, int)
+        assert getattr(kmlock, attr_name) == 5
+        assert isinstance(getattr(kmlock, attr_name), int)

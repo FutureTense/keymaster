@@ -16,6 +16,7 @@ PLATFORMS: list = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.DATETIME,
+    Platform.EVENT,
     Platform.NUMBER,
     Platform.SENSOR,
     Platform.SWITCH,
@@ -25,6 +26,9 @@ PLATFORMS: list = [
 THROTTLE_SECONDS: int = 5
 SYNC_STATUS_THRESHOLD: int = 15
 QUICK_REFRESH_SECONDS: int = 15
+BACKOFF_INITIAL_SECONDS: int = 60
+BACKOFF_MAX_SECONDS: int = 1800  # 30 minutes
+BACKOFF_FAILURE_THRESHOLD: int = 3  # consecutive failures before backoff
 
 # hass.data attributes
 CHILD_LOCKS = "child_locks"
@@ -34,6 +38,7 @@ UNSUB_LISTENERS = "unsub_listeners"
 
 # Events
 EVENT_KEYMASTER_LOCK_STATE_CHANGED = "keymaster_lock_state_changed"
+EVENT_KEYMASTER_CODE_SLOT_RESET = "keymaster_code_slot_reset"
 
 # Event data constants
 ATTR_ACTION_CODE = "action_code"
