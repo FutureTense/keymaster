@@ -1,4 +1,4 @@
-import { css, html, LitElement, nothing, PropertyValues, TemplateResult } from 'lit';
+import { LitElement, PropertyValues, TemplateResult, css, html, nothing } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import { HomeAssistant } from './ha_type_stubs';
 
@@ -108,11 +108,19 @@ export class KeymasterDatetimeRow extends LitElement {
         const hour12 =
             timeFmt === '12' ? true : timeFmt === '24' ? false : undefined;
 
-        // When HA specifies a date order override, build the date part manually
+        // When HA specifies a date order override, use formatToParts for
+        // locale-correct digits then reorder to the requested layout.
         if (dateFmt && dateFmt !== 'language') {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
+            const dateParts = new Intl.DateTimeFormat(lang, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            }).formatToParts(d);
+            const get = (type: string): string =>
+                dateParts.find((p) => p.type === type)?.value ?? '';
+            const year = get('year');
+            const month = get('month');
+            const day = get('day');
             let datePart: string;
             switch (dateFmt) {
                 case 'YMD':

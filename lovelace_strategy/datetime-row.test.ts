@@ -70,9 +70,16 @@ function expectedFormat(
         timeFmt === '12' ? true : timeFmt === '24' ? false : undefined;
 
     if (dateFmt && dateFmt !== 'language') {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
+        const dateParts = new Intl.DateTimeFormat(lang, {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).formatToParts(d);
+        const get = (type: string): string =>
+            dateParts.find((p) => p.type === type)?.value ?? '';
+        const year = get('year');
+        const month = get('month');
+        const day = get('day');
         let datePart: string;
         switch (dateFmt) {
             case 'YMD':
@@ -424,9 +431,78 @@ describe('KeymasterDatetimeRow', () => {
 
             document.body.removeChild(el);
         });
+
+        it('falls back to YYYY-MM-DD for unrecognised date_format', async () => {
+            const utcStr = '2026-04-03T14:30:00+00:00';
+            const d = new Date(utcStr);
+            // Force an unrecognised date_format value to exercise the default branch
+            const locale = { language: 'en', date_format: 'UNKNOWN' as 'YMD' };
+
+            const el = createElement();
+            el.setConfig({ entity: 'datetime.test' });
+            el.hass = createMockHass(
+                {
+                    'datetime.test': {
+                        state: utcStr,
+                        attributes: { friendly_name: 'Test' },
+                    },
+                },
+                locale
+            );
+
+            document.body.appendChild(el);
+            await el.updateComplete;
+
+            const stateText = el.shadowRoot!.querySelector('.state')?.textContent;
+            // Default branch produces YYYY-MM-DD format
+            expect(stateText).toMatch(/^\d{4}-\d{2}-\d{2}/);
+
+            // Verify the date parts match the actual date
+            const dateParts = new Intl.DateTimeFormat('en', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            }).formatToParts(d);
+            const get = (type: string): string =>
+                dateParts.find((p) => p.type === type)?.value ?? '';
+            expect(stateText).toContain(`${get('year')}-${get('month')}-${get('day')}`);
+
+            document.body.removeChild(el);
+        });
     });
 
     describe('shouldUpdate', () => {
+        it('returns true when locale language changes', async () => {
+            const el = createElement();
+            el.setConfig({ entity: 'datetime.test' });
+
+            const stateObj = {
+                state: '2026-04-03T14:30:00+00:00',
+                attributes: { friendly_name: 'Test' },
+            };
+
+            el.hass = createMockHass(
+                { 'datetime.test': stateObj },
+                { language: 'en', time_format: '24', date_format: 'YMD' }
+            );
+            document.body.appendChild(el);
+            await el.updateComplete;
+
+            const renderSpy = vi.spyOn(el as never, 'render');
+
+            // Change locale language → shouldUpdate must return true
+            el.hass = createMockHass(
+                { 'datetime.test': stateObj },
+                { language: 'de', time_format: '24', date_format: 'YMD' }
+            );
+            await el.updateComplete;
+
+            expect(renderSpy).toHaveBeenCalled();
+
+            renderSpy.mockRestore();
+            document.body.removeChild(el);
+        });
+
         it('returns false when entity state is unchanged', async () => {
             const el = createElement();
             el.setConfig({ entity: 'datetime.test' });
