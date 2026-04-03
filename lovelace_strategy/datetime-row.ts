@@ -33,6 +33,14 @@ export class KeymasterDatetimeRow extends LitElement {
         if (!this._config) return true;
         const oldHass = changedProps.get('hass') as HomeAssistant | undefined;
         if (!oldHass) return true;
+
+        if (
+            oldHass.locale?.language !== this.hass.locale?.language ||
+            oldHass.locale?.time_format !== this.hass.locale?.time_format
+        ) {
+            return true;
+        }
+
         const entityId = this._config.entity;
         return oldHass.states[entityId] !== this.hass.states[entityId];
     }
@@ -60,8 +68,8 @@ export class KeymasterDatetimeRow extends LitElement {
 
     /**
      * Format an ISO datetime state string for compact local-time display.
-     * Uses Intl.DateTimeFormat with HA locale settings for 12/24h and
-     * date order preferences.  Falls back to the browser locale.
+     * Uses Intl.DateTimeFormat with HA locale language and 12/24h
+     * preference when available. Falls back to browser defaults.
      */
     private _formatState(state: string): string {
         if (!state || state === 'unknown' || state === 'unavailable') {

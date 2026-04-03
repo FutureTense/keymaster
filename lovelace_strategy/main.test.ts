@@ -34,7 +34,7 @@ describe('main.ts custom element registrations', () => {
         getSpy.mockRestore();
     });
 
-    it('registers all six custom elements on first load', async () => {
+    it('registers all seven custom elements on first load', async () => {
         // All elements are unregistered
         getSpy.mockReturnValue(undefined);
 
@@ -78,7 +78,7 @@ describe('main.ts custom element registrations', () => {
             expect(primaryCtor).not.toBe(aliasCtor);
         }
 
-        // All six constructors should be unique
+        // All seven constructors should be unique
         const ctors = [...defined.values()];
         expect(new Set(ctors).size).toBe(7);
     });
