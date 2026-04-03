@@ -164,7 +164,7 @@ describe('KeymasterDatetimeRow', () => {
             const expected = expectedFormat(d);
 
             const el = createElement();
-            el.setConfig({ entity: 'datetime.test' });
+            el.setConfig({ entity: 'datetime.test', tap_action: { action: 'more-info' } });
             el.hass = createMockHass({
                 'datetime.test': {
                     state: utcStr,
@@ -520,9 +520,9 @@ describe('KeymasterDatetimeRow', () => {
     });
 
     describe('styles', () => {
-        it('pencil icon uses mdi:pencil', async () => {
+        it('pencil icon shown when tap_action is more-info', async () => {
             const el = createElement();
-            el.setConfig({ entity: 'datetime.test' });
+            el.setConfig({ entity: 'datetime.test', tap_action: { action: 'more-info' } });
             el.hass = createMockHass({
                 'datetime.test': {
                     state: '2026-04-03T14:30:00+00:00',
@@ -536,6 +536,44 @@ describe('KeymasterDatetimeRow', () => {
             const editIcon = el.shadowRoot!.querySelector('.edit-icon');
             expect(editIcon).not.toBeNull();
             expect(editIcon?.getAttribute('icon')).toBe('mdi:pencil');
+
+            document.body.removeChild(el);
+        });
+
+        it('pencil icon hidden when tap_action is none', async () => {
+            const el = createElement();
+            el.setConfig({ entity: 'datetime.test', tap_action: { action: 'none' } });
+            el.hass = createMockHass({
+                'datetime.test': {
+                    state: '2026-04-03T14:30:00+00:00',
+                    attributes: { friendly_name: 'Test' },
+                },
+            });
+
+            document.body.appendChild(el);
+            await el.updateComplete;
+
+            const editIcon = el.shadowRoot!.querySelector('.edit-icon');
+            expect(editIcon).toBeNull();
+
+            document.body.removeChild(el);
+        });
+
+        it('pencil icon hidden when no tap_action configured', async () => {
+            const el = createElement();
+            el.setConfig({ entity: 'datetime.test' });
+            el.hass = createMockHass({
+                'datetime.test': {
+                    state: '2026-04-03T14:30:00+00:00',
+                    attributes: { friendly_name: 'Test' },
+                },
+            });
+
+            document.body.appendChild(el);
+            await el.updateComplete;
+
+            const editIcon = el.shadowRoot!.querySelector('.edit-icon');
+            expect(editIcon).toBeNull();
 
             document.body.removeChild(el);
         });

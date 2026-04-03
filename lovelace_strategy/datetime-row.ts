@@ -7,15 +7,13 @@ interface DatetimeRowConfig {
     name?: string;
     icon?: string;
     tap_action?: object;
-    hold_action?: object;
-    double_tap_action?: object;
 }
 
 /**
  * Lightweight entity row for datetime entities that displays the current
- * value as text with a pencil icon to indicate editability.  Delegates
- * layout to hui-generic-entity-row for perfect alignment with standard
- * rows.  Tapping opens HA's native more-info dialog.
+ * value as text with a pencil icon when editable.  Delegates layout to
+ * hui-generic-entity-row for alignment with standard rows.  Tapping
+ * dispatches hass-more-info when configured.
  */
 export class KeymasterDatetimeRow extends LitElement {
     @property({ attribute: false }) hass!: HomeAssistant;
@@ -56,6 +54,9 @@ export class KeymasterDatetimeRow extends LitElement {
         }
 
         const stateDisplay = this._formatState(stateObj.state);
+        const editable =
+            (this._config.tap_action as Record<string, unknown> | undefined)?.action ===
+            'more-info';
 
         return html`
             <hui-generic-entity-row
@@ -65,7 +66,9 @@ export class KeymasterDatetimeRow extends LitElement {
             >
                 <div class="state-wrapper">
                     <span class="state">${stateDisplay}</span>
-                    <ha-icon icon="mdi:pencil" class="edit-icon"></ha-icon>
+                    ${editable
+                        ? html`<ha-icon icon="mdi:pencil" class="edit-icon"></ha-icon>`
+                        : nothing}
                 </div>
             </hui-generic-entity-row>
         `;
