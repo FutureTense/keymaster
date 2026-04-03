@@ -36,7 +36,8 @@ export class KeymasterDatetimeRow extends LitElement {
 
         if (
             oldHass.locale?.language !== this.hass.locale?.language ||
-            oldHass.locale?.time_format !== this.hass.locale?.time_format
+            oldHass.locale?.time_format !== this.hass.locale?.time_format ||
+            oldHass.locale?.date_format !== this.hass.locale?.date_format
         ) {
             return true;
         }
@@ -57,7 +58,11 @@ export class KeymasterDatetimeRow extends LitElement {
         const stateDisplay = this._formatState(stateObj.state);
 
         return html`
-            <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
+            <hui-generic-entity-row
+                .hass=${this.hass}
+                .config=${this._config}
+                @click=${this._handleAction}
+            >
                 <div class="state-wrapper">
                     <span class="state">${stateDisplay}</span>
                     <ha-icon icon="mdi:pencil" class="edit-icon"></ha-icon>
@@ -66,10 +71,25 @@ export class KeymasterDatetimeRow extends LitElement {
         `;
     }
 
+    /** Dispatch hass-more-info when tap_action requests it. */
+    private _handleAction(): void {
+        if (!this._config?.tap_action) return;
+        const action = (this._config.tap_action as Record<string, unknown>)?.action;
+        if (action === 'more-info') {
+            this.dispatchEvent(
+                new CustomEvent('hass-more-info', {
+                    bubbles: true,
+                    composed: true,
+                    detail: { entityId: this._config.entity },
+                })
+            );
+        }
+    }
+
     /**
      * Format an ISO datetime state string for compact local-time display.
-     * Uses Intl.DateTimeFormat with HA locale language and 12/24h
-     * preference when available. Falls back to browser defaults.
+     * Uses HA locale settings for language, 12/24h, and date order
+     * (DMY/MDY/YMD) when available. Falls back to browser defaults.
      */
     private _formatState(state: string): string {
         if (!state || state === 'unknown' || state === 'unavailable') {
@@ -81,9 +101,38 @@ export class KeymasterDatetimeRow extends LitElement {
         const locale = this.hass?.locale;
         const lang = locale?.language || undefined;
         const timeFmt = locale?.time_format;
+        const dateFmt = locale?.date_format;
         const hour12 =
             timeFmt === '12' ? true : timeFmt === '24' ? false : undefined;
 
+        // When HA specifies a date order override, build the date part manually
+        if (dateFmt && dateFmt !== 'language') {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            let datePart: string;
+            switch (dateFmt) {
+                case 'YMD':
+                    datePart = `${year}-${month}-${day}`;
+                    break;
+                case 'DMY':
+                    datePart = `${day}/${month}/${year}`;
+                    break;
+                case 'MDY':
+                    datePart = `${month}/${day}/${year}`;
+                    break;
+                default:
+                    datePart = `${year}-${month}-${day}`;
+            }
+            const timePart = new Intl.DateTimeFormat(lang, {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12,
+            }).format(d);
+            return `${datePart} ${timePart}`;
+        }
+
+        // Default: let Intl handle date ordering based on language
         const formatter = new Intl.DateTimeFormat(lang, {
             year: 'numeric',
             month: '2-digit',
