@@ -60,7 +60,8 @@ export class KeymasterDatetimeRow extends LitElement {
 
     /**
      * Format an ISO datetime state string for compact local-time display.
-     * Parses the UTC state via Date so the browser converts to local time.
+     * Uses Intl.DateTimeFormat with HA locale settings for 12/24h and
+     * date order preferences.  Falls back to the browser locale.
      */
     private _formatState(state: string): string {
         if (!state || state === 'unknown' || state === 'unavailable') {
@@ -68,12 +69,22 @@ export class KeymasterDatetimeRow extends LitElement {
         }
         const d = new Date(state);
         if (isNaN(d.getTime())) return state;
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const hour = String(d.getHours()).padStart(2, '0');
-        const minute = String(d.getMinutes()).padStart(2, '0');
-        return `${year}-${month}-${day} ${hour}:${minute}`;
+
+        const locale = this.hass?.locale;
+        const lang = locale?.language || undefined;
+        const timeFmt = locale?.time_format;
+        const hour12 =
+            timeFmt === '12' ? true : timeFmt === '24' ? false : undefined;
+
+        const formatter = new Intl.DateTimeFormat(lang, {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12,
+        });
+        return formatter.format(d);
     }
 
     static styles = css`

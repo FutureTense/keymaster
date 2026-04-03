@@ -601,7 +601,7 @@ async def test_generate_view_config_advanced_date_range(hass: HomeAssistant):
     assert any("accesslimit_date_range_end" in str(e) for e in all_entity_refs)
 
 
-async def test_date_range_uses_simple_entity_with_more_info(hass: HomeAssistant):
+async def test_date_range_uses_datetime_row_with_more_info(hass: HomeAssistant):
     """Test that date range start/end entities use custom:keymaster-datetime-row with more-info tap."""
     mock_registry = _create_mock_registry()
 
@@ -681,7 +681,7 @@ async def test_parent_date_range_uses_simple_entity_with_no_tap(hass: HomeAssist
                     ):
                         parent_datetime_rows.append(row)
 
-    assert len(parent_datetime_rows) >= 2
+    assert len(parent_datetime_rows) == 2
     for row in parent_datetime_rows:
         assert row.get("type") == "simple-entity", (
             f"Expected simple-entity type for parent {row.get('entity')}, got {row.get('type')}"

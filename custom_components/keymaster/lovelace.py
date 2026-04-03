@@ -368,7 +368,7 @@ def _generate_entity_card_ll_config(
     data: MutableMapping[str, Any] = {
         "entity": entity,
         "name": name,
-        "tap_action": tap_action or {"action": "none"},
+        "tap_action": tap_action if tap_action is not None else {"action": "none"},
         "hold_action": {"action": "none"},
         "double_tap_action": {"action": "none"},
     }

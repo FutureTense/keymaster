@@ -39,13 +39,35 @@ beforeAll(() => {
 });
 
 function createMockHass(
-    states: Record<string, { state: string; attributes: Record<string, unknown> }> = {}
+    states: Record<string, { state: string; attributes: Record<string, unknown> }> = {},
+    locale?: { language: string; time_format?: 'language' | '12' | '24' }
 ): HomeAssistant {
     return {
         callWS: vi.fn(),
         config: { state: 'RUNNING' },
+        locale,
         states,
     } as unknown as HomeAssistant;
+}
+
+/** Build the expected Intl-formatted string for a given Date, matching the component logic. */
+function expectedFormat(
+    d: Date,
+    locale?: { language: string; time_format?: 'language' | '12' | '24' }
+): string {
+    const lang = locale?.language || undefined;
+    const timeFmt = locale?.time_format;
+    const hour12 =
+        timeFmt === '12' ? true : timeFmt === '24' ? false : undefined;
+    const formatter = new Intl.DateTimeFormat(lang, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12,
+    });
+    return formatter.format(d);
 }
 
 function createElement(): KeymasterDatetimeRow {
@@ -103,7 +125,7 @@ describe('KeymasterDatetimeRow', () => {
         it('renders state text and pencil icon in slot', async () => {
             const utcStr = '2026-04-03T00:00:00+00:00';
             const d = new Date(utcStr);
-            const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            const expected = expectedFormat(d);
 
             const el = createElement();
             el.setConfig({ entity: 'datetime.test' });
@@ -146,7 +168,7 @@ describe('KeymasterDatetimeRow', () => {
         it('formats ISO datetime state correctly', async () => {
             const utcStr = '2026-04-03T00:00:00+00:00';
             const d = new Date(utcStr);
-            const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            const expected = expectedFormat(d);
 
             const el = createElement();
             el.setConfig({ entity: 'datetime.test' });
@@ -168,7 +190,7 @@ describe('KeymasterDatetimeRow', () => {
         it('converts UTC datetime to local timezone', async () => {
             const utcStr = '2026-04-03T23:00:00+00:00';
             const d = new Date(utcStr);
-            const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            const expected = expectedFormat(d);
 
             const el = createElement();
             el.setConfig({ entity: 'datetime.test' });
@@ -184,9 +206,10 @@ describe('KeymasterDatetimeRow', () => {
 
             const stateText = el.shadowRoot!.querySelector('.state')?.textContent;
             expect(stateText).toBe(expected);
-            // In non-UTC timezones, verify it does NOT just regex-extract the UTC values
+            // In non-UTC timezones, the local date/time will differ from the UTC input
             if (d.getTimezoneOffset() !== 0) {
-                expect(stateText).not.toBe('2026-04-03 23:00');
+                const utcFakeLocal = new Date(2026, 3, 3, 23, 0);
+                expect(stateText).not.toBe(expectedFormat(utcFakeLocal));
             }
 
             document.body.removeChild(el);
@@ -224,6 +247,64 @@ describe('KeymasterDatetimeRow', () => {
             await el.updateComplete;
 
             expect(el.shadowRoot!.querySelector('.state')?.textContent).toBe('unavailable');
+
+            document.body.removeChild(el);
+        });
+
+        it('respects HA locale 12-hour time format', async () => {
+            const utcStr = '2026-04-03T14:30:00+00:00';
+            const d = new Date(utcStr);
+            const locale = { language: 'en', time_format: '12' as const };
+            const expected = expectedFormat(d, locale);
+
+            const el = createElement();
+            el.setConfig({ entity: 'datetime.test' });
+            el.hass = createMockHass(
+                {
+                    'datetime.test': {
+                        state: utcStr,
+                        attributes: { friendly_name: 'Test' },
+                    },
+                },
+                locale
+            );
+
+            document.body.appendChild(el);
+            await el.updateComplete;
+
+            const stateText = el.shadowRoot!.querySelector('.state')?.textContent;
+            expect(stateText).toBe(expected);
+            // 12-hour format should contain AM or PM
+            expect(stateText).toMatch(/AM|PM/);
+
+            document.body.removeChild(el);
+        });
+
+        it('respects HA locale 24-hour time format', async () => {
+            const utcStr = '2026-04-03T14:30:00+00:00';
+            const d = new Date(utcStr);
+            const locale = { language: 'en', time_format: '24' as const };
+            const expected = expectedFormat(d, locale);
+
+            const el = createElement();
+            el.setConfig({ entity: 'datetime.test' });
+            el.hass = createMockHass(
+                {
+                    'datetime.test': {
+                        state: utcStr,
+                        attributes: { friendly_name: 'Test' },
+                    },
+                },
+                locale
+            );
+
+            document.body.appendChild(el);
+            await el.updateComplete;
+
+            const stateText = el.shadowRoot!.querySelector('.state')?.textContent;
+            expect(stateText).toBe(expected);
+            // 24-hour format should NOT contain AM or PM
+            expect(stateText).not.toMatch(/AM|PM/);
 
             document.body.removeChild(el);
         });
