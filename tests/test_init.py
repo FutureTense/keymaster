@@ -1,7 +1,7 @@
 """Test keymaster init."""
 
 import logging
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -130,11 +130,19 @@ async def test_notify_script_name_slugified(hass):
     entry.add_to_hass(hass)
 
     # async_setup_entry updates config data before coordinator setup.
-    # We only need to verify the config update, so patch services setup.
-    with patch(
-        "custom_components.keymaster.async_setup_services",
-        return_value=None,
+    # We only need to verify the config update, so patch services and coordinator setup.
+    with (
+        patch(
+            "custom_components.keymaster.async_setup_services",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator",
+        ) as mock_coordinator_class,
     ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.add_lock = AsyncMock()
+        # Will fail at async_forward_entry_setups but config data is already updated
         with pytest.raises(Exception):
             await async_setup_entry(hass, entry)
 
