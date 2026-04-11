@@ -1285,12 +1285,15 @@ class TestSetupTimer:
 
     async def test_setup_timer_passes_timer_id_and_store(self, mock_coordinator):
         """Test _setup_timer passes timer_id and store to timer.setup()."""
-        kmlock = Mock(spec=KeymasterLock)
-        kmlock.keymaster_config_entry_id = "test_entry_123"
-        kmlock.autolock_timer = None
+        kmlock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry_123",
+        )
 
         mock_timer = AsyncMock()
         mock_timer.is_setup = False
+        mock_timer.is_running = False
 
         with patch(
             "custom_components.keymaster.coordinator.KeymasterTimer",
@@ -1303,9 +1306,33 @@ class TestSetupTimer:
         assert call_kwargs["timer_id"] == "test_entry_123_autolock"
         assert call_kwargs["store"] is mock_coordinator._timer_store
 
+    async def test_setup_timer_pushes_data_when_timer_resumed(self, mock_coordinator):
+        """Test _setup_timer pushes data to entities when timer resumes from persistence."""
+        kmlock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry_123",
+        )
+
+        mock_timer = AsyncMock()
+        mock_timer.is_setup = False
+        mock_timer.is_running = True  # Timer resumed from store
+
+        with patch(
+            "custom_components.keymaster.coordinator.KeymasterTimer",
+            return_value=mock_timer,
+        ):
+            await mock_coordinator._setup_timer(kmlock)
+
+        mock_coordinator.async_set_updated_data.assert_called_once()
+
     async def test_setup_timer_skips_if_already_setup(self, mock_coordinator):
         """Test _setup_timer does not call setup() again if timer is already set up."""
-        kmlock = Mock(spec=KeymasterLock)
+        kmlock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry_123",
+        )
         kmlock.autolock_timer = Mock()
         kmlock.autolock_timer.is_setup = True
 

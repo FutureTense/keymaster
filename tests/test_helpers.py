@@ -565,6 +565,10 @@ async def test_keymaster_timer_setup_recovers_expired_timer(hass, mock_store):
         action_called = True
 
     await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+    await hass.async_block_till_done()
+
+    # Expired timer should have fired the action
+    assert action_called is True
 
     # Expired timer should be cleaned from store
     mock_store.async_save.assert_called()

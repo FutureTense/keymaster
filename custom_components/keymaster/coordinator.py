@@ -929,6 +929,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 timer_id=timer_id,
                 store=self._timer_store,
             )
+            if kmlock.autolock_timer.is_running:
+                self.async_set_updated_data(dict(self.kmlocks))
 
     async def _timer_triggered(self, kmlock: KeymasterLock, _: dt) -> None:
         _LOGGER.debug("[timer_triggered] %s", kmlock.lock_name)
