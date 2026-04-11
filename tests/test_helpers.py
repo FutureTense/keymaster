@@ -1,6 +1,6 @@
 """Test keymaster helpers."""
 
-from datetime import datetime as dt, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,7 +18,7 @@ from custom_components.keymaster.helpers import (
 )
 from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.helpers import entity_registry as er
-from homeassistant.util import slugify
+from homeassistant.util import dt as dt_util, slugify
 
 
 # Test Throttle class
@@ -477,7 +477,7 @@ async def test_keymaster_timer_cancel_elapsed(hass):
         await timer.start()
 
     # Cancel with timer_elapsed parameter (simulating callback after timer ends)
-    await timer.cancel(timer_elapsed=dt.now())
+    await timer.cancel(timer_elapsed=dt_util.utcnow())
 
     assert not timer.is_running
     assert timer._end_time is None
@@ -503,7 +503,7 @@ async def test_keymaster_timer_is_running_expired(hass):
     await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store)
 
     # Manually set end_time to the past to simulate expired timer
-    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._end_time = dt_util.utcnow() - timedelta(seconds=10)
     timer._duration = 300
     timer._unsub_events = [MagicMock()]  # Add a mock unsub function
 
@@ -533,7 +533,7 @@ async def test_keymaster_timer_is_setup_expired(hass):
     await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store)
 
     # Manually set end_time to the past
-    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._end_time = dt_util.utcnow() - timedelta(seconds=10)
     timer._duration = 300
     timer._unsub_events = [MagicMock()]
 
@@ -564,7 +564,7 @@ async def test_keymaster_timer_end_time_expired(hass):
     await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store)
 
     # Manually set end_time to the past
-    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._end_time = dt_util.utcnow() - timedelta(seconds=10)
     timer._duration = 300
     timer._unsub_events = [MagicMock()]
 
@@ -595,7 +595,7 @@ async def test_keymaster_timer_remaining_seconds_expired(hass):
     await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store)
 
     # Manually set end_time to the past
-    timer._end_time = dt.now().astimezone() - timedelta(seconds=10)
+    timer._end_time = dt_util.utcnow() - timedelta(seconds=10)
     timer._duration = 300
     timer._unsub_events = [MagicMock()]
 
@@ -616,7 +616,7 @@ async def test_keymaster_timer_setup_recovers_expired_timer(hass, mock_store):
         keymaster_config_entry_id="test_entry",
     )
 
-    expired_end_time = (dt.now().astimezone() - timedelta(minutes=5)).isoformat()
+    expired_end_time = (dt_util.utcnow() - timedelta(minutes=5)).isoformat()
     mock_store.async_load = AsyncMock(
         return_value={"test_timer": {"end_time": expired_end_time, "duration": 300}}
     )
@@ -647,7 +647,7 @@ async def test_keymaster_timer_setup_resumes_active_timer(hass, mock_store):
         keymaster_config_entry_id="test_entry",
     )
 
-    future_end_time = (dt.now().astimezone() + timedelta(minutes=5)).isoformat()
+    future_end_time = (dt_util.utcnow() + timedelta(minutes=5)).isoformat()
     mock_store.async_load = AsyncMock(
         return_value={"test_timer": {"end_time": future_end_time, "duration": 600}}
     )

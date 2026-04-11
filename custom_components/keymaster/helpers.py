@@ -15,7 +15,7 @@ from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers import entity_registry as er, sun
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
-from homeassistant.util import slugify
+from homeassistant.util import dt as dt_util, slugify
 
 from .const import DEFAULT_AUTOLOCK_MIN_DAY, DEFAULT_AUTOLOCK_MIN_NIGHT, DOMAIN
 from .providers import is_platform_supported
@@ -91,13 +91,13 @@ class KeymasterTimer:
         if timer_data:
             end_time = dt.fromisoformat(timer_data["end_time"])
             duration = timer_data.get("duration")
-            if end_time <= dt.now().astimezone():
+            if end_time <= dt_util.utcnow():
                 _LOGGER.debug(
                     "[KeymasterTimer] %s: Persisted timer expired during downtime, firing",
                     timer_id,
                 )
                 await self._remove_from_store()
-                hass.async_create_task(call_action(dt.now()))
+                hass.async_create_task(call_action(dt_util.utcnow()))
             else:
                 _LOGGER.debug(
                     "[KeymasterTimer] %s: Resuming persisted timer, ending %s",
@@ -120,7 +120,7 @@ class KeymasterTimer:
         else:
             delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
         self._duration = int(delay)
-        self._end_time = dt.now().astimezone() + timedelta(seconds=delay)
+        self._end_time = dt_util.utcnow() + timedelta(seconds=delay)
         _LOGGER.debug(
             "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
             int(delay),
@@ -158,7 +158,7 @@ class KeymasterTimer:
 
     async def _resume(self, end_time: dt, duration: int | None) -> None:
         """Resume a timer from a persisted end_time."""
-        remaining = (end_time - dt.now().astimezone()).total_seconds()
+        remaining = (end_time - dt_util.utcnow()).total_seconds()
         self._end_time = end_time
         self._duration = duration
         self._schedule_callbacks(remaining)
@@ -185,7 +185,7 @@ class KeymasterTimer:
 
     def _check_expired(self) -> bool:
         """Check if the timer has expired and clean up in-memory state if so."""
-        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
+        if isinstance(self._end_time, dt) and self._end_time <= dt_util.utcnow():
             self._cancel_callbacks()
             self._end_time = None
             self._duration = None
@@ -223,7 +223,7 @@ class KeymasterTimer:
             return None
         if self._check_expired():
             return None
-        return round((self._end_time - dt.now().astimezone()).total_seconds())
+        return round((self._end_time - dt_util.utcnow()).total_seconds())
 
     @property
     def duration(self) -> int | None:
