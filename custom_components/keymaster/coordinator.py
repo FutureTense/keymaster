@@ -60,6 +60,7 @@ from .helpers import (
     TIMER_STORAGE_VERSION,
     KeymasterTimer,
     Throttle,
+    TimerStoreEntry,
     call_hass_service,
     delete_code_slot_entities,
     dismiss_persistent_notification,
@@ -118,7 +119,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             config_entry=None,
         )
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
-        self._timer_store: Store[dict[str, Any]] = Store(
+        self._timer_store: Store[dict[str, TimerStoreEntry]] = Store(
             hass, TIMER_STORAGE_VERSION, TIMER_STORAGE_KEY
         )
 

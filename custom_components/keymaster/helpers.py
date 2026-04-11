@@ -6,7 +6,7 @@ from collections.abc import Callable, MutableMapping
 from datetime import datetime as dt, timedelta
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from homeassistant.components import persistent_notification
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
@@ -22,6 +22,14 @@ from .providers import is_platform_supported
 
 TIMER_STORAGE_VERSION = 1
 TIMER_STORAGE_KEY = f"{DOMAIN}.timers"
+
+
+class TimerStoreEntry(TypedDict):
+    """Persisted state for a single autolock timer."""
+
+    end_time: str
+    duration: int
+
 
 if TYPE_CHECKING:
     from .lock import KeymasterLock
@@ -73,7 +81,7 @@ class KeymasterTimer:
         self._end_time: dt | None = None
         self._duration: int | None = None
         self._timer_id: str | None = None
-        self._store: Store[dict[str, Any]] | None = None
+        self._store: Store[dict[str, TimerStoreEntry]] | None = None
 
     async def setup(
         self,
@@ -81,7 +89,7 @@ class KeymasterTimer:
         kmlock: KeymasterLock,
         call_action: Callable,
         timer_id: str,
-        store: Store[dict[str, Any]],
+        store: Store[dict[str, TimerStoreEntry]],
     ) -> None:
         """Set up the timer and recover any persisted state."""
         self.hass = hass
@@ -103,7 +111,7 @@ class KeymasterTimer:
                 )
                 await self._remove_from_store()
                 return
-            duration = timer_data.get("duration")
+            duration = timer_data.get("duration", 0)
             if end_time <= dt_util.utcnow():
                 _LOGGER.debug(
                     "[KeymasterTimer] %s: Persisted timer expired during downtime, firing",
@@ -171,7 +179,7 @@ class KeymasterTimer:
             unsub()
         self._unsub_events = []
 
-    async def _resume(self, end_time: dt, duration: int | None) -> None:
+    async def _resume(self, end_time: dt, duration: int) -> None:
         """Resume a timer from a persisted end_time."""
         remaining = (end_time - dt_util.utcnow()).total_seconds()
         self._end_time = end_time
