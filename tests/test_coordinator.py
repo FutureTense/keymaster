@@ -1234,7 +1234,7 @@ class TestLockStateEventHandlers:
 
 
 class TestSetupTimer:
-    """Tests for _setup_timer auto-starting when lock is already unlocked."""
+    """Tests for _setup_timer passing timer_id and store to the timer."""
 
     @pytest.fixture
     def mock_coordinator(self, hass):
@@ -1244,19 +1244,14 @@ class TestSetupTimer:
         coordinator._initial_setup_done_event.set()
         return coordinator
 
-    async def test_setup_timer_starts_when_lock_unlocked_and_autolock_enabled(
-        self, mock_coordinator
-    ):
-        """Test _setup_timer starts timer when lock is already unlocked with autolock enabled."""
+    async def test_setup_timer_passes_timer_id_and_store(self, mock_coordinator):
+        """Test _setup_timer passes timer_id and store to timer.setup()."""
         kmlock = Mock(spec=KeymasterLock)
-        kmlock.autolock_enabled = True
-        kmlock.lock_state = LockState.UNLOCKED
+        kmlock.keymaster_config_entry_id = "test_entry_123"
         kmlock.autolock_timer = None
 
         mock_timer = AsyncMock()
         mock_timer.is_setup = False
-        mock_timer.is_running = False
-        mock_timer.start = AsyncMock()
 
         with patch(
             "custom_components.keymaster.coordinator.KeymasterTimer",
@@ -1265,70 +1260,19 @@ class TestSetupTimer:
             await mock_coordinator._setup_timer(kmlock)
 
         mock_timer.setup.assert_called_once()
-        mock_timer.start.assert_called_once()
+        call_kwargs = mock_timer.setup.call_args.kwargs
+        assert call_kwargs["timer_id"] == "test_entry_123_autolock"
+        assert call_kwargs["store"] is mock_coordinator._timer_store
 
-    async def test_setup_timer_does_not_start_when_lock_locked(self, mock_coordinator):
-        """Test _setup_timer does not start timer when lock is locked."""
+    async def test_setup_timer_skips_if_already_setup(self, mock_coordinator):
+        """Test _setup_timer does not call setup() again if timer is already set up."""
         kmlock = Mock(spec=KeymasterLock)
-        kmlock.autolock_enabled = True
-        kmlock.lock_state = LockState.LOCKED
-        kmlock.autolock_timer = None
+        kmlock.autolock_timer = Mock()
+        kmlock.autolock_timer.is_setup = True
 
-        mock_timer = AsyncMock()
-        mock_timer.is_setup = False
-        mock_timer.is_running = False
-        mock_timer.start = AsyncMock()
+        await mock_coordinator._setup_timer(kmlock)
 
-        with patch(
-            "custom_components.keymaster.coordinator.KeymasterTimer",
-            return_value=mock_timer,
-        ):
-            await mock_coordinator._setup_timer(kmlock)
-
-        mock_timer.setup.assert_called_once()
-        mock_timer.start.assert_not_called()
-
-    async def test_setup_timer_does_not_start_when_autolock_disabled(self, mock_coordinator):
-        """Test _setup_timer does not start timer when autolock is disabled."""
-        kmlock = Mock(spec=KeymasterLock)
-        kmlock.autolock_enabled = False
-        kmlock.lock_state = LockState.UNLOCKED
-        kmlock.autolock_timer = None
-
-        mock_timer = AsyncMock()
-        mock_timer.is_setup = False
-        mock_timer.is_running = False
-        mock_timer.start = AsyncMock()
-
-        with patch(
-            "custom_components.keymaster.coordinator.KeymasterTimer",
-            return_value=mock_timer,
-        ):
-            await mock_coordinator._setup_timer(kmlock)
-
-        mock_timer.setup.assert_called_once()
-        mock_timer.start.assert_not_called()
-
-    async def test_setup_timer_does_not_start_when_already_running(self, mock_coordinator):
-        """Test _setup_timer does not restart timer that is already running."""
-        kmlock = Mock(spec=KeymasterLock)
-        kmlock.autolock_enabled = True
-        kmlock.lock_state = LockState.UNLOCKED
-        kmlock.autolock_timer = None
-
-        mock_timer = AsyncMock()
-        mock_timer.is_setup = False
-        mock_timer.is_running = True
-        mock_timer.start = AsyncMock()
-
-        with patch(
-            "custom_components.keymaster.coordinator.KeymasterTimer",
-            return_value=mock_timer,
-        ):
-            await mock_coordinator._setup_timer(kmlock)
-
-        mock_timer.setup.assert_called_once()
-        mock_timer.start.assert_not_called()
+        kmlock.autolock_timer.setup.assert_not_called()
 
 
 # ============================================================================

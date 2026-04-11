@@ -56,6 +56,8 @@ from .const import (
 )
 from .exceptions import ProviderNotConfiguredError
 from .helpers import (
+    TIMER_STORAGE_KEY,
+    TIMER_STORAGE_VERSION,
     KeymasterTimer,
     Throttle,
     call_hass_service,
@@ -116,6 +118,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             config_entry=None,
         )
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        self._timer_store: Store[dict[str, Any]] = Store(
+            hass, TIMER_STORAGE_VERSION, TIMER_STORAGE_KEY
+        )
 
     async def initial_setup(self) -> None:
         """Trigger the initial async_setup."""
@@ -912,18 +917,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not hasattr(kmlock, "autolock_timer") or not kmlock.autolock_timer:
             kmlock.autolock_timer = KeymasterTimer()
         if not kmlock.autolock_timer.is_setup:
+            timer_id = f"{kmlock.keymaster_config_entry_id}_autolock"
             await kmlock.autolock_timer.setup(
                 hass=self.hass,
                 kmlock=kmlock,
                 call_action=functools.partial(self._timer_triggered, kmlock),
+                timer_id=timer_id,
+                store=self._timer_store,
             )
-
-        if (
-            kmlock.autolock_enabled
-            and kmlock.lock_state == LockState.UNLOCKED
-            and not kmlock.autolock_timer.is_running
-        ):
-            await kmlock.autolock_timer.start()
 
     async def _timer_triggered(self, kmlock: KeymasterLock, _: dt) -> None:
         _LOGGER.debug("[timer_triggered] %s", kmlock.lock_name)
