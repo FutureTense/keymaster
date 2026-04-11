@@ -202,7 +202,7 @@ async def test_keymaster_timer_init():
     assert timer._kmlock is None
     assert timer._call_action is None
     assert timer._end_time is None
-    assert timer._total_duration is None
+    assert timer._duration is None
     assert not timer.is_setup
     assert not timer.is_running
 
@@ -273,7 +273,7 @@ async def test_keymaster_timer_start_day(hass):
 
     assert result is True
     assert timer._end_time is not None
-    assert timer._total_duration == 5 * 60
+    assert timer._duration == 5 * 60
     assert len(timer._unsub_events) == 1
     assert timer.is_running
     assert timer._end_time is not None  # Should still be set after checking is_running
@@ -307,7 +307,7 @@ async def test_keymaster_timer_start_night(hass):
 
     assert result is True
     assert timer._end_time is not None
-    assert timer._total_duration == 10 * 60
+    assert timer._duration == 10 * 60
     assert len(timer._unsub_events) == 1
     assert timer.is_running
     assert timer._end_time is not None  # Should still be set after checking is_running
@@ -375,7 +375,7 @@ async def test_keymaster_timer_cancel(hass):
         await timer.start()
 
     assert timer._end_time is not None
-    assert timer._total_duration is not None
+    assert timer._duration is not None
     assert timer.is_running
 
     # Cancel timer
@@ -383,7 +383,7 @@ async def test_keymaster_timer_cancel(hass):
 
     assert not timer.is_running
     assert timer._end_time is None
-    assert timer._total_duration is None
+    assert timer._duration is None
     assert timer._unsub_events == []
 
 
@@ -413,7 +413,7 @@ async def test_keymaster_timer_properties(hass):
     assert not timer.is_running
     assert timer.end_time is None
     assert timer.remaining_seconds is None
-    assert timer.total_duration is None
+    assert timer.duration is None
 
     # Start timer
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
@@ -424,7 +424,7 @@ async def test_keymaster_timer_properties(hass):
     assert timer.end_time is not None
     assert timer.remaining_seconds is not None
     assert timer.remaining_seconds > 0  # Time remaining (positive because end_time is in future)
-    assert timer.total_duration == 5 * 60  # 5 minutes in seconds
+    assert timer.duration == 5 * 60  # 5 minutes in seconds
 
 
 async def test_delete_code_slot_entities_removes_all(hass):
@@ -527,20 +527,20 @@ async def test_keymaster_timer_expired_properties_are_pure(hass):
 
     unsub = MagicMock()
     timer._end_time = dt_util.utcnow() - timedelta(seconds=1)
-    timer._total_duration = 300
+    timer._duration = 300
     timer._unsub_events = [unsub]
 
     # Properties return "not running" values
     assert timer.is_running is False
     assert timer.end_time is None
     assert timer.remaining_seconds is None
-    assert timer.total_duration is None
+    assert timer.duration is None
     assert timer.is_setup is True
 
     # But internal state is untouched — only the scheduled callback cleans up
     unsub.assert_not_called()
     assert timer._end_time is not None
-    assert timer._total_duration == 300
+    assert timer._duration == 300
     assert len(timer._unsub_events) == 1
 
 
@@ -555,7 +555,7 @@ async def test_keymaster_timer_setup_recovers_expired_timer(hass, mock_store):
 
     expired_end_time = (dt_util.utcnow() - timedelta(minutes=5)).isoformat()
     mock_store.async_load = AsyncMock(
-        return_value={"test_timer": {"end_time": expired_end_time, "total_duration": 300}}
+        return_value={"test_timer": {"end_time": expired_end_time, "duration": 300}}
     )
 
     action_called = False
@@ -590,7 +590,7 @@ async def test_keymaster_timer_setup_resumes_active_timer(hass, mock_store):
 
     future_end_time = (dt_util.utcnow() + timedelta(minutes=5)).isoformat()
     mock_store.async_load = AsyncMock(
-        return_value={"test_timer": {"end_time": future_end_time, "total_duration": 600}}
+        return_value={"test_timer": {"end_time": future_end_time, "duration": 600}}
     )
 
     async def mock_action(*args):
@@ -600,7 +600,7 @@ async def test_keymaster_timer_setup_resumes_active_timer(hass, mock_store):
 
     # Timer should be running with the persisted end_time
     assert timer.is_running
-    assert timer._total_duration == 600
+    assert timer._duration == 600
     assert len(timer._unsub_events) == 1
 
 
@@ -646,7 +646,7 @@ async def test_keymaster_timer_start_persists_to_store(hass, mock_store):
     saved_data = mock_store.async_save.call_args[0][0]
     assert "test_timer" in saved_data
     assert "end_time" in saved_data["test_timer"]
-    assert saved_data["test_timer"]["total_duration"] == 300
+    assert saved_data["test_timer"]["duration"] == 300
 
 
 async def test_keymaster_timer_cancel_removes_from_store(hass, mock_store):
@@ -670,9 +670,7 @@ async def test_keymaster_timer_cancel_removes_from_store(hass, mock_store):
     mock_store.async_save.reset_mock()
     # Simulate store has the timer data
     mock_store.async_load = AsyncMock(
-        return_value={
-            "test_timer": {"end_time": timer._end_time.isoformat(), "total_duration": 300}
-        }
+        return_value={"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
     )
 
     await timer.cancel()

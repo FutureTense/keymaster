@@ -383,7 +383,7 @@ async def test_autolock_sensor_idle_when_timer_not_running(
 
     assert entity._attr_available
     assert entity._attr_native_value is None
-    assert entity._attr_extra_state_attributes["total_duration"] is None
+    assert entity._attr_extra_state_attributes["duration"] is None
     assert entity._attr_extra_state_attributes["remaining"] is None
     assert entity._attr_extra_state_attributes["finishes_at"] is None
     assert entity._attr_extra_state_attributes["is_running"] is False
@@ -406,7 +406,7 @@ async def test_autolock_sensor_active_when_timer_running(
     mock_timer.is_running = True
     mock_timer.end_time = end_time
     mock_timer.remaining_seconds = 300
-    mock_timer.total_duration = 600
+    mock_timer.duration = 600
     kmlock.autolock_timer = mock_timer
     coordinator.kmlocks[sensor_config_entry.entry_id] = kmlock
 
@@ -427,7 +427,7 @@ async def test_autolock_sensor_active_when_timer_running(
 
     assert entity._attr_available
     assert entity._attr_native_value == end_time
-    assert entity._attr_extra_state_attributes["total_duration"] == "0:10:00"
+    assert entity._attr_extra_state_attributes["duration"] == "0:10:00"
     assert entity._attr_extra_state_attributes["remaining"] == "0:05:00"
     assert entity._attr_extra_state_attributes["finishes_at"] == end_time.isoformat()
     assert entity._attr_extra_state_attributes["is_running"] is True
@@ -464,7 +464,7 @@ async def test_autolock_sensor_no_timer_object(
 
     assert entity._attr_available
     assert entity._attr_native_value is None
-    assert entity._attr_extra_state_attributes["total_duration"] is None
+    assert entity._attr_extra_state_attributes["duration"] is None
     assert entity._attr_extra_state_attributes["remaining"] is None
     assert entity._attr_extra_state_attributes["finishes_at"] is None
     assert entity._attr_extra_state_attributes["is_running"] is False

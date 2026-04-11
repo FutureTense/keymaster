@@ -179,18 +179,18 @@ class KeymasterAutoLockSensor(KeymasterEntity, SensorEntity):
         if timer:
             is_running = timer.is_running
             end_time = timer.end_time
-            total_duration = timer.total_duration
+            duration = timer.duration
             remaining = timer.remaining_seconds
         else:
             is_running = False
             end_time = None
-            total_duration = None
+            duration = None
             remaining = None
 
         if is_running and end_time:
             self._attr_native_value = end_time
             self._attr_extra_state_attributes = {
-                "total_duration": self._seconds_to_hhmmss(total_duration),
+                "duration": self._seconds_to_hhmmss(duration),
                 "remaining": self._seconds_to_hhmmss(remaining),
                 "finishes_at": end_time.isoformat(),
                 "is_running": True,
@@ -198,7 +198,7 @@ class KeymasterAutoLockSensor(KeymasterEntity, SensorEntity):
         else:
             self._attr_native_value = None
             self._attr_extra_state_attributes = {
-                "total_duration": None,
+                "duration": None,
                 "remaining": None,
                 "finishes_at": None,
                 "is_running": False,
