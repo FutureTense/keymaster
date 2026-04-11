@@ -27,6 +27,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Create and setup keymaster Services."""
+    hass.data.setdefault(DOMAIN, {})
     if COORDINATOR not in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
         hass.data[DOMAIN][COORDINATOR] = coordinator

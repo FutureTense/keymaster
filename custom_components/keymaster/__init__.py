@@ -267,7 +267,7 @@ async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
     if coordinator is None:
         return
 
-    if len(coordinator.data) == 0:
+    if len(coordinator.data) == 0 and not hass.config_entries.async_entries(DOMAIN):
         _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")
         await coordinator.async_remove_data()
         await coordinator.async_shutdown()
