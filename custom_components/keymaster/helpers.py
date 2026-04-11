@@ -150,9 +150,7 @@ class KeymasterTimer:
                 await self._call_action(now)
             await self.cancel(timer_elapsed=now)
 
-        self._unsub_events.append(
-            async_call_later(hass=self.hass, delay=delay, action=_on_expired)
-        )
+        self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=_on_expired))
 
     def _cancel_callbacks(self) -> None:
         """Unsubscribe all pending callbacks."""
