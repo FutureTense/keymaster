@@ -918,6 +918,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 call_action=functools.partial(self._timer_triggered, kmlock),
             )
 
+        if (
+            kmlock.autolock_enabled
+            and kmlock.lock_state == LockState.UNLOCKED
+            and not kmlock.autolock_timer.is_running
+        ):
+            await kmlock.autolock_timer.start()
+
     async def _timer_triggered(self, kmlock: KeymasterLock, _: dt) -> None:
         _LOGGER.debug("[timer_triggered] %s", kmlock.lock_name)
         if kmlock.retry_lock and kmlock.door_state == STATE_OPEN:

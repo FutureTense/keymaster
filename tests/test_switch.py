@@ -1,6 +1,6 @@
 """Tests for keymaster Switch platform."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -23,6 +23,7 @@ from custom_components.keymaster.const import (
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
+from homeassistant.components.lock.const import LockState
 from homeassistant.core import HomeAssistant
 
 CONFIG_DATA_SWITCH = {
@@ -204,6 +205,83 @@ async def test_switch_autolock_user_values_persist_after_disable_reenable(
         assert kmlock.autolock_enabled is True
         assert kmlock.autolock_min_day == 30
         assert kmlock.autolock_min_night == 10
+
+
+async def test_switch_autolock_starts_timer_when_lock_unlocked(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test enabling autolock starts timer immediately when lock is already unlocked (issue #594)."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.autolock_enabled = False
+    kmlock.lock_state = LockState.UNLOCKED
+    kmlock.autolock_timer = Mock()
+    kmlock.autolock_timer.is_running = False
+    kmlock.autolock_timer.start = AsyncMock()
+    coordinator.kmlocks[switch_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.autolock_enabled",
+        name="Auto Lock",
+        icon="mdi:lock-clock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSwitch(entity_description=entity_description)
+    entity._attr_is_on = False
+
+    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+        await entity.async_turn_on()
+
+    assert entity._attr_is_on is True
+    assert kmlock.autolock_enabled is True
+    kmlock.autolock_timer.start.assert_called_once()
+
+
+async def test_switch_autolock_does_not_start_timer_when_lock_locked(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test enabling autolock does not start timer when lock is locked."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.autolock_enabled = False
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.autolock_timer = Mock()
+    kmlock.autolock_timer.is_running = False
+    kmlock.autolock_timer.start = AsyncMock()
+    coordinator.kmlocks[switch_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.autolock_enabled",
+        name="Auto Lock",
+        icon="mdi:lock-clock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSwitch(entity_description=entity_description)
+    entity._attr_is_on = False
+
+    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+        await entity.async_turn_on()
+
+    assert entity._attr_is_on is True
+    kmlock.autolock_timer.start.assert_not_called()
 
 
 async def test_switch_async_turn_off(hass: HomeAssistant, switch_config_entry, coordinator):

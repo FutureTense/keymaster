@@ -1229,6 +1229,109 @@ class TestLockStateEventHandlers:
 
 
 # ============================================================================
+# Timer Setup Tests
+# ============================================================================
+
+
+class TestSetupTimer:
+    """Tests for _setup_timer auto-starting when lock is already unlocked."""
+
+    @pytest.fixture
+    def mock_coordinator(self, hass):
+        """Create a coordinator instance with mocked internals."""
+        coordinator = KeymasterCoordinator(hass)
+        coordinator.async_set_updated_data = Mock()
+        coordinator._initial_setup_done_event.set()
+        return coordinator
+
+    async def test_setup_timer_starts_when_lock_unlocked_and_autolock_enabled(
+        self, mock_coordinator
+    ):
+        """Test _setup_timer starts timer when lock is already unlocked with autolock enabled."""
+        kmlock = Mock(spec=KeymasterLock)
+        kmlock.autolock_enabled = True
+        kmlock.lock_state = LockState.UNLOCKED
+        kmlock.autolock_timer = None
+
+        mock_timer = AsyncMock()
+        mock_timer.is_setup = False
+        mock_timer.is_running = False
+        mock_timer.start = AsyncMock()
+
+        with patch(
+            "custom_components.keymaster.coordinator.KeymasterTimer",
+            return_value=mock_timer,
+        ):
+            await mock_coordinator._setup_timer(kmlock)
+
+        mock_timer.setup.assert_called_once()
+        mock_timer.start.assert_called_once()
+
+    async def test_setup_timer_does_not_start_when_lock_locked(self, mock_coordinator):
+        """Test _setup_timer does not start timer when lock is locked."""
+        kmlock = Mock(spec=KeymasterLock)
+        kmlock.autolock_enabled = True
+        kmlock.lock_state = LockState.LOCKED
+        kmlock.autolock_timer = None
+
+        mock_timer = AsyncMock()
+        mock_timer.is_setup = False
+        mock_timer.is_running = False
+        mock_timer.start = AsyncMock()
+
+        with patch(
+            "custom_components.keymaster.coordinator.KeymasterTimer",
+            return_value=mock_timer,
+        ):
+            await mock_coordinator._setup_timer(kmlock)
+
+        mock_timer.setup.assert_called_once()
+        mock_timer.start.assert_not_called()
+
+    async def test_setup_timer_does_not_start_when_autolock_disabled(self, mock_coordinator):
+        """Test _setup_timer does not start timer when autolock is disabled."""
+        kmlock = Mock(spec=KeymasterLock)
+        kmlock.autolock_enabled = False
+        kmlock.lock_state = LockState.UNLOCKED
+        kmlock.autolock_timer = None
+
+        mock_timer = AsyncMock()
+        mock_timer.is_setup = False
+        mock_timer.is_running = False
+        mock_timer.start = AsyncMock()
+
+        with patch(
+            "custom_components.keymaster.coordinator.KeymasterTimer",
+            return_value=mock_timer,
+        ):
+            await mock_coordinator._setup_timer(kmlock)
+
+        mock_timer.setup.assert_called_once()
+        mock_timer.start.assert_not_called()
+
+    async def test_setup_timer_does_not_start_when_already_running(self, mock_coordinator):
+        """Test _setup_timer does not restart timer that is already running."""
+        kmlock = Mock(spec=KeymasterLock)
+        kmlock.autolock_enabled = True
+        kmlock.lock_state = LockState.UNLOCKED
+        kmlock.autolock_timer = None
+
+        mock_timer = AsyncMock()
+        mock_timer.is_setup = False
+        mock_timer.is_running = True
+        mock_timer.start = AsyncMock()
+
+        with patch(
+            "custom_components.keymaster.coordinator.KeymasterTimer",
+            return_value=mock_timer,
+        ):
+            await mock_coordinator._setup_timer(kmlock)
+
+        mock_timer.setup.assert_called_once()
+        mock_timer.start.assert_not_called()
+
+
+# ============================================================================
 # State Synchronization Tests
 # ============================================================================
 
