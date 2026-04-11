@@ -71,7 +71,7 @@ class KeymasterTimer:
         self._kmlock: KeymasterLock | None = None
         self._call_action: Callable | None = None
         self._end_time: dt | None = None
-        self._duration: int | None = None
+        self._total_duration: int | None = None
         self._timer_id: str | None = None
         self._store: Store[dict[str, Any]] | None = None
 
@@ -95,7 +95,7 @@ class KeymasterTimer:
         timer_data = data.get(timer_id)
         if timer_data:
             end_time = dt.fromisoformat(timer_data["end_time"])
-            duration = timer_data.get("duration")
+            total_duration = timer_data.get("total_duration")
             if end_time <= dt_util.utcnow():
                 _LOGGER.debug(
                     "[KeymasterTimer] %s: Persisted timer expired during downtime, firing",
@@ -109,7 +109,7 @@ class KeymasterTimer:
                     timer_id,
                     end_time,
                 )
-                await self._resume(end_time, duration)
+                await self._resume(end_time, total_duration)
 
     async def start(self) -> bool:
         """Start a timer."""
@@ -124,7 +124,7 @@ class KeymasterTimer:
             delay: int = (self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY) * 60
         else:
             delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
-        self._duration = int(delay)
+        self._total_duration = int(delay)
         self._end_time = dt_util.utcnow() + timedelta(seconds=delay)
         _LOGGER.debug(
             "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
@@ -143,7 +143,7 @@ class KeymasterTimer:
             _LOGGER.debug("[KeymasterTimer] Cancelling auto-lock timer")
         self._cancel_callbacks()
         self._end_time = None
-        self._duration = None
+        self._total_duration = None
         await self._remove_from_store()
 
     def _schedule_callbacks(self, delay: float) -> None:
@@ -163,11 +163,11 @@ class KeymasterTimer:
             unsub()
         self._unsub_events = []
 
-    async def _resume(self, end_time: dt, duration: int | None) -> None:
+    async def _resume(self, end_time: dt, total_duration: int | None) -> None:
         """Resume a timer from a persisted end_time."""
         remaining = (end_time - dt_util.utcnow()).total_seconds()
         self._end_time = end_time
-        self._duration = duration
+        self._total_duration = total_duration
         self._schedule_callbacks(remaining)
 
     async def _persist_to_store(self) -> None:
@@ -177,7 +177,7 @@ class KeymasterTimer:
         data = await self._store.async_load() or {}
         data[self._timer_id] = {
             "end_time": self._end_time.isoformat(),
-            "duration": self._duration,
+            "total_duration": self._total_duration,
         }
         await self._store.async_save(data)
 
@@ -213,9 +213,9 @@ class KeymasterTimer:
         return round((self._end_time - dt_util.utcnow()).total_seconds())
 
     @property
-    def duration(self) -> int | None:
+    def total_duration(self) -> int | None:
         """Return the total timer duration in seconds."""
-        return self._duration if self.is_running else None
+        return self._total_duration if self.is_running else None
 
 
 @callback
