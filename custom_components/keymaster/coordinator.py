@@ -660,6 +660,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         kmlock.lock_state = LockState.UNLOCKED
+        self._throttle.reset("lock_locked", kmlock.keymaster_config_entry_id)
         _LOGGER.debug(
             "[lock_unlocked] %s: Running. code_slot_num: %s, source: %s, "
             "event_label: %s, action_code: %s",
@@ -790,6 +791,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         kmlock.lock_state = LockState.LOCKED
         kmlock.pending_retry_lock = False
+        self._throttle.reset("lock_unlocked", kmlock.keymaster_config_entry_id)
         _LOGGER.debug(
             "[lock_locked] %s: Running. source: %s, event_label: %s, action_code: %s",
             kmlock.lock_name,
@@ -847,6 +849,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         kmlock.door_state = STATE_OPEN
+        self._throttle.reset("door_closed", kmlock.keymaster_config_entry_id)
         _LOGGER.debug("[door_opened] %s: Running", kmlock.lock_name)
 
         if kmlock.door_notifications:
@@ -870,6 +873,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         kmlock.door_state = STATE_CLOSED
+        self._throttle.reset("door_opened", kmlock.keymaster_config_entry_id)
         _LOGGER.debug("[door_closed] %s: Running", kmlock.lock_name)
 
         if kmlock.retry_lock and kmlock.pending_retry_lock:

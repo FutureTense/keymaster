@@ -66,6 +66,30 @@ def test_throttle_cooldown_expires():
         assert throttle.is_allowed("test_func", "key1", 5) is True
 
 
+def test_throttle_reset_clears_cooldown():
+    """Test that reset allows the next call through even within cooldown."""
+    throttle = Throttle()
+    with patch("custom_components.keymaster.helpers.time.time") as mock_time:
+        mock_time.return_value = 100.0
+        assert throttle.is_allowed("lock_unlocked", "entry1", 5) is True
+
+        mock_time.return_value = 102.0
+        assert throttle.is_allowed("lock_unlocked", "entry1", 5) is False
+
+        # Reset the throttle (as _lock_locked would do)
+        throttle.reset("lock_unlocked", "entry1")
+
+        # Should now be allowed even though cooldown hasn't expired
+        mock_time.return_value = 103.0
+        assert throttle.is_allowed("lock_unlocked", "entry1", 5) is True
+
+
+def test_throttle_reset_nonexistent_is_noop():
+    """Test that resetting a non-existent key doesn't raise."""
+    throttle = Throttle()
+    throttle.reset("nonexistent_func", "nonexistent_key")  # should not raise
+
+
 # Test service helpers
 async def test_call_hass_service_success(hass):
     """Test calling a hass service successfully."""

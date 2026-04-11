@@ -10,6 +10,7 @@ import pytest
 
 from custom_components.keymaster.const import BACKOFF_FAILURE_THRESHOLD, BACKOFF_MAX_SECONDS
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.helpers import Throttle
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
     KeymasterCodeSlotDayOfWeek,
@@ -1226,6 +1227,44 @@ class TestLockStateEventHandlers:
         await mock_coordinator._timer_triggered(mock_kmlock, dt.now())
 
         mock_coordinator._lock_lock.assert_called_once_with(kmlock=mock_kmlock)
+
+    async def test_rapid_unlock_lock_unlock_not_throttled(self, mock_coordinator, mock_kmlock):
+        """Test unlock→lock→unlock within throttle window still starts the timer.
+
+        Regression test: previously the throttle would swallow the second unlock
+        because it was within the cooldown of the first, even though a lock event
+        occurred in between.
+        """
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.autolock_enabled = True
+        mock_kmlock.autolock_timer = AsyncMock()
+        mock_kmlock.autolock_timer.start = AsyncMock()
+        mock_kmlock.autolock_timer.cancel = AsyncMock()
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.code_slots = {}
+        mock_kmlock.pending_retry_lock = False
+
+        # Use a real Throttle with a long cooldown to force the race
+        mock_coordinator._throttle = Throttle()
+        throttle_seconds_patch = patch(
+            "custom_components.keymaster.coordinator.THROTTLE_SECONDS", 60
+        )
+
+        with throttle_seconds_patch:
+            # 1. Unlock — should start timer
+            await mock_coordinator._lock_unlocked(mock_kmlock, source="event")
+            assert mock_kmlock.lock_state == LockState.UNLOCKED
+            assert mock_kmlock.autolock_timer.start.call_count == 1
+
+            # 2. Lock — should cancel timer
+            await mock_coordinator._lock_locked(mock_kmlock, source="event")
+            assert mock_kmlock.lock_state == LockState.LOCKED
+            mock_kmlock.autolock_timer.cancel.assert_called_once()
+
+            # 3. Unlock again (within throttle window) — should NOT be throttled
+            await mock_coordinator._lock_unlocked(mock_kmlock, source="event")
+            assert mock_kmlock.lock_state == LockState.UNLOCKED
+            assert mock_kmlock.autolock_timer.start.call_count == 2
 
 
 # ============================================================================

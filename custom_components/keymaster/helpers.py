@@ -48,6 +48,11 @@ class Throttle:
             return True
         return False
 
+    def reset(self, func_name: str, key: str) -> None:
+        """Clear the cooldown for a function/key so the next call is allowed."""
+        if func_name in self._cooldowns:
+            self._cooldowns[func_name].pop(key, None)
+
 
 class KeymasterTimer:
     """Persistent auto-lock timer backed by HA Store.
