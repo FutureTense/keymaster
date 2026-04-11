@@ -94,7 +94,15 @@ class KeymasterTimer:
         data = await store.async_load() or {}
         timer_data = data.get(timer_id)
         if timer_data:
-            end_time = dt.fromisoformat(timer_data["end_time"])
+            try:
+                end_time = dt.fromisoformat(timer_data["end_time"])
+            except (KeyError, TypeError, ValueError):
+                _LOGGER.warning(
+                    "[KeymasterTimer] %s: Invalid persisted timer data, removing",
+                    timer_id,
+                )
+                await self._remove_from_store()
+                return
             duration = timer_data.get("duration")
             if end_time <= dt_util.utcnow():
                 _LOGGER.debug(
