@@ -131,6 +131,7 @@ async def test_notify_script_name_slugified(hass):
 
     # async_setup_entry updates config data before coordinator setup.
     # We only need to verify the config update, so patch services and coordinator setup.
+    hass.data.setdefault(DOMAIN, {})
     with (
         patch(
             "custom_components.keymaster.async_setup_services",
@@ -143,7 +144,7 @@ async def test_notify_script_name_slugified(hass):
         mock_coordinator = mock_coordinator_class.return_value
         mock_coordinator.add_lock = AsyncMock()
         # Will fail at async_forward_entry_setups but config data is already updated
-        with pytest.raises(Exception):
+        with pytest.raises((AttributeError, TypeError)):
             await async_setup_entry(hass, entry)
 
     assert entry.data[CONF_NOTIFY_SCRIPT_NAME] == "keymaster_akuvox_relay_a_manual_notify"
