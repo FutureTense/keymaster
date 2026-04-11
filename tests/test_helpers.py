@@ -483,8 +483,8 @@ async def test_keymaster_timer_cancel_elapsed(hass):
     assert timer._end_time is None
 
 
-async def test_keymaster_timer_is_running_expired(hass):
-    """Test is_running when timer has already expired."""
+async def test_keymaster_timer_expired_properties_are_pure(hass):
+    """Test all property reads on an expired timer return correct values without side effects."""
     timer = KeymasterTimer()
 
     kmlock = KeymasterLock(
@@ -492,7 +492,6 @@ async def test_keymaster_timer_is_running_expired(hass):
         lock_entity_id="lock.test_lock",
         keymaster_config_entry_id="test_entry",
     )
-    kmlock.autolock_min_day = 5
 
     async def mock_callback(*args):
         pass
@@ -502,109 +501,23 @@ async def test_keymaster_timer_is_running_expired(hass):
     store.async_save = AsyncMock()
     await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store)
 
-    # Manually set end_time to the past to simulate expired timer
-    timer._end_time = dt_util.utcnow() - timedelta(seconds=10)
+    unsub = MagicMock()
+    timer._end_time = dt_util.utcnow() - timedelta(seconds=1)
     timer._duration = 300
-    timer._unsub_events = [MagicMock()]  # Add a mock unsub function
+    timer._unsub_events = [unsub]
 
-    # Checking is_running should clean up the expired timer
+    # Properties return "not running" values
     assert timer.is_running is False
-    assert timer._end_time is None
-    assert timer._duration is None
-    assert timer._unsub_events == []
+    assert timer.end_time is None
+    assert timer.remaining_seconds is None
+    assert timer.duration is None
+    assert timer.is_setup is True
 
-
-async def test_keymaster_timer_is_setup_expired(hass):
-    """Test is_setup when timer has expired cleans up."""
-    timer = KeymasterTimer()
-
-    kmlock = KeymasterLock(
-        lock_name="test_lock",
-        lock_entity_id="lock.test_lock",
-        keymaster_config_entry_id="test_entry",
-    )
-
-    async def mock_callback(*args):
-        pass
-
-    store = AsyncMock()
-    store.async_load = AsyncMock(return_value={})
-    store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store)
-
-    # Manually set end_time to the past
-    timer._end_time = dt_util.utcnow() - timedelta(seconds=10)
-    timer._duration = 300
-    timer._unsub_events = [MagicMock()]
-
-    # Checking is_setup should clean up the expired timer
-    result = timer.is_setup
-    assert result is True  # Still setup, just expired
-    assert timer._end_time is None
-    assert timer._duration is None
-    assert timer._unsub_events == []
-
-
-async def test_keymaster_timer_end_time_expired(hass):
-    """Test end_time when timer has expired returns None."""
-    timer = KeymasterTimer()
-
-    kmlock = KeymasterLock(
-        lock_name="test_lock",
-        lock_entity_id="lock.test_lock",
-        keymaster_config_entry_id="test_entry",
-    )
-
-    async def mock_callback(*args):
-        pass
-
-    store = AsyncMock()
-    store.async_load = AsyncMock(return_value={})
-    store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store)
-
-    # Manually set end_time to the past
-    timer._end_time = dt_util.utcnow() - timedelta(seconds=10)
-    timer._duration = 300
-    timer._unsub_events = [MagicMock()]
-
-    # Getting end_time should clean up and return None
-    result = timer.end_time
-    assert result is None
-    assert timer._end_time is None
-    assert timer._duration is None
-    assert timer._unsub_events == []
-
-
-async def test_keymaster_timer_remaining_seconds_expired(hass):
-    """Test remaining_seconds when timer has expired returns None."""
-    timer = KeymasterTimer()
-
-    kmlock = KeymasterLock(
-        lock_name="test_lock",
-        lock_entity_id="lock.test_lock",
-        keymaster_config_entry_id="test_entry",
-    )
-
-    async def mock_callback(*args):
-        pass
-
-    store = AsyncMock()
-    store.async_load = AsyncMock(return_value={})
-    store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store)
-
-    # Manually set end_time to the past
-    timer._end_time = dt_util.utcnow() - timedelta(seconds=10)
-    timer._duration = 300
-    timer._unsub_events = [MagicMock()]
-
-    # Getting remaining_seconds should clean up and return None
-    result = timer.remaining_seconds
-    assert result is None
-    assert timer._end_time is None
-    assert timer._duration is None
-    assert timer._unsub_events == []
+    # But internal state is untouched — only the scheduled callback cleans up
+    unsub.assert_not_called()
+    assert timer._end_time is not None
+    assert timer._duration == 300
+    assert len(timer._unsub_events) == 1
 
 
 async def test_keymaster_timer_setup_recovers_expired_timer(hass, mock_store):

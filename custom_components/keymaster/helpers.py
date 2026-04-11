@@ -187,54 +187,32 @@ class KeymasterTimer:
             del data[self._timer_id]
             await self._store.async_save(data)
 
-    def _check_expired(self) -> bool:
-        """Check if the timer has expired and clean up in-memory state if so."""
-        if isinstance(self._end_time, dt) and self._end_time <= dt_util.utcnow():
-            self._cancel_callbacks()
-            self._end_time = None
-            self._duration = None
-            return True
-        return False
-
     @property
     def is_running(self) -> bool:
         """Return if the timer is running."""
-        if not self._end_time:
-            return False
-        if self._check_expired():
-            return False
-        return True
+        return self._end_time is not None and self._end_time > dt_util.utcnow()
 
     @property
     def is_setup(self) -> bool:
         """Return if the timer has been initially setup."""
-        self._check_expired()
         return bool(self.hass and self._kmlock and self._call_action)
 
     @property
     def end_time(self) -> dt | None:
         """Returns when the timer will end."""
-        if not self._end_time:
-            return None
-        if self._check_expired():
-            return None
-        return self._end_time
+        return self._end_time if self.is_running else None
 
     @property
     def remaining_seconds(self) -> int | None:
         """Return the seconds until the timer ends."""
-        if not self._end_time:
-            return None
-        if self._check_expired():
+        if not self.is_running:
             return None
         return round((self._end_time - dt_util.utcnow()).total_seconds())
 
     @property
     def duration(self) -> int | None:
         """Return the total timer duration in seconds."""
-        if self._duration is None or not self.is_running:
-            return None
-        return self._duration
+        return self._duration if self.is_running else None
 
 
 @callback
