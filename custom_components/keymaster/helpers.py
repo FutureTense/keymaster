@@ -142,12 +142,16 @@ class KeymasterTimer:
         await self._remove_from_store()
 
     def _schedule_callbacks(self, delay: float) -> None:
-        """Schedule the action and cleanup callbacks."""
+        """Schedule a single callback that fires the action then cleans up."""
+
+        async def _on_expired(now: dt) -> None:
+            """Fire the action and clean up timer state."""
+            if self._call_action:
+                await self._call_action(now)
+            await self.cancel(timer_elapsed=now)
+
         self._unsub_events.append(
-            async_call_later(hass=self.hass, delay=delay, action=self._call_action)
-        )
-        self._unsub_events.append(
-            async_call_later(hass=self.hass, delay=delay, action=self.cancel)
+            async_call_later(hass=self.hass, delay=delay, action=_on_expired)
         )
 
     def _cancel_callbacks(self) -> None:

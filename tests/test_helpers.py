@@ -250,7 +250,7 @@ async def test_keymaster_timer_start_day(hass):
     assert result is True
     assert timer._end_time is not None
     assert timer._duration == 5 * 60
-    assert len(timer._unsub_events) == 2  # Timer callback + cancel callback
+    assert len(timer._unsub_events) == 1
     assert timer.is_running
     assert timer._end_time is not None  # Should still be set after checking is_running
 
@@ -284,7 +284,7 @@ async def test_keymaster_timer_start_night(hass):
     assert result is True
     assert timer._end_time is not None
     assert timer._duration == 10 * 60
-    assert len(timer._unsub_events) == 2  # Timer callback + cancel callback
+    assert len(timer._unsub_events) == 1
     assert timer.is_running
     assert timer._end_time is not None  # Should still be set after checking is_running
 
@@ -315,14 +315,14 @@ async def test_keymaster_timer_restart(hass):
         result1 = await timer.start()
 
     assert result1 is True
-    assert len(timer._unsub_events) == 2
+    assert len(timer._unsub_events) == 1
 
     # Start timer again - should cancel previous and restart
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
         result2 = await timer.start()
 
     assert result2 is True
-    assert len(timer._unsub_events) == 2  # Old callbacks cancelled, new ones added
+    assert len(timer._unsub_events) == 1  # Old callback cancelled, new one added
 
 
 async def test_keymaster_timer_cancel(hass):
@@ -660,7 +660,7 @@ async def test_keymaster_timer_setup_resumes_active_timer(hass, mock_store):
     # Timer should be running with the persisted end_time
     assert timer.is_running
     assert timer._duration == 600
-    assert len(timer._unsub_events) == 2
+    assert len(timer._unsub_events) == 1
 
 
 async def test_keymaster_timer_setup_no_persisted_timer(hass, mock_store):
