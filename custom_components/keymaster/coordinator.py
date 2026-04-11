@@ -922,12 +922,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not hasattr(kmlock, "autolock_timer") or not kmlock.autolock_timer:
             kmlock.autolock_timer = KeymasterTimer()
         if not kmlock.autolock_timer.is_setup:
-            timer_id = f"{kmlock.keymaster_config_entry_id}_autolock"
             await kmlock.autolock_timer.setup(
                 hass=self.hass,
                 kmlock=kmlock,
                 call_action=functools.partial(self._timer_triggered, kmlock),
-                timer_id=timer_id,
+                timer_id=f"{kmlock.keymaster_config_entry_id}_autolock",
                 store=self._timer_store,
             )
             if kmlock.autolock_timer.is_running:
