@@ -740,9 +740,7 @@ async def test_keymaster_timer_setup_missing_end_time_key(hass, mock_store):
     )
 
     # end_time key is missing entirely
-    mock_store.async_load = AsyncMock(
-        return_value={"test_timer": {"duration": 300}}
-    )
+    mock_store.async_load = AsyncMock(return_value={"test_timer": {"duration": 300}})
 
     async def mock_action(*args):
         pass
@@ -842,9 +840,7 @@ async def test_keymaster_timer_setup_duration_missing_defaults_to_zero(hass, moc
     )
 
     future_end_time = (dt_util.utcnow() + timedelta(minutes=5)).isoformat()
-    mock_store.async_load = AsyncMock(
-        return_value={"test_timer": {"end_time": future_end_time}}
-    )
+    mock_store.async_load = AsyncMock(return_value={"test_timer": {"end_time": future_end_time}})
 
     async def mock_action(*args):
         pass
