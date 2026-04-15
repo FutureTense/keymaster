@@ -1266,6 +1266,35 @@ class TestLockStateEventHandlers:
             assert mock_kmlock.lock_state == LockState.UNLOCKED
             assert mock_kmlock.autolock_timer.start.call_count == 2
 
+    async def test_rapid_door_open_close_open_not_throttled(self, mock_coordinator, mock_kmlock):
+        """Test open→close→open within throttle window still processes the second open.
+
+        Mirrors the lock throttle reset test but for door sensor events.
+        """
+        mock_kmlock.door_state = STATE_CLOSED
+        mock_kmlock.door_notifications = False
+        mock_kmlock.retry_lock = False
+        mock_kmlock.pending_retry_lock = False
+
+        # Use a real Throttle with a long cooldown to force the race
+        mock_coordinator._throttle = Throttle()
+        throttle_seconds_patch = patch(
+            "custom_components.keymaster.coordinator.THROTTLE_SECONDS", 60
+        )
+
+        with throttle_seconds_patch:
+            # 1. Open — should process
+            await mock_coordinator._door_opened(mock_kmlock)
+            assert mock_kmlock.door_state == STATE_OPEN
+
+            # 2. Close — should process
+            await mock_coordinator._door_closed(mock_kmlock)
+            assert mock_kmlock.door_state == STATE_CLOSED
+
+            # 3. Open again (within throttle window) — should NOT be throttled
+            await mock_coordinator._door_opened(mock_kmlock)
+            assert mock_kmlock.door_state == STATE_OPEN
+
 
 # ============================================================================
 # Timer Setup Tests

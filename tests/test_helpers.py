@@ -699,6 +699,240 @@ def test_async_has_supported_provider_no_args(hass):
     assert result is False
 
 
+async def test_keymaster_timer_setup_invalid_end_time_format(hass, mock_store):
+    """Test setup() handles corrupt end_time string in persisted data."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": "not-a-date", "duration": 300}}
+    )
+
+    action_called = False
+
+    async def mock_action(*args):
+        nonlocal action_called
+        action_called = True
+
+    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+
+    # Action should NOT have fired
+    assert action_called is False
+    # Timer should not be running
+    assert not timer.is_running
+    # Invalid entry should be removed from store
+    mock_store.async_save.assert_called()
+    saved_data = mock_store.async_save.call_args[0][0]
+    assert "test_timer" not in saved_data
+
+
+async def test_keymaster_timer_setup_missing_end_time_key(hass, mock_store):
+    """Test setup() handles persisted data with missing end_time key."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    # end_time key is missing entirely
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"duration": 300}}
+    )
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+
+    assert not timer.is_running
+    # Invalid entry should be removed from store
+    mock_store.async_save.assert_called()
+    saved_data = mock_store.async_save.call_args[0][0]
+    assert "test_timer" not in saved_data
+
+
+async def test_keymaster_timer_setup_null_end_time(hass, mock_store):
+    """Test setup() handles persisted data with None end_time."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": None, "duration": 300}}
+    )
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+
+    assert not timer.is_running
+    mock_store.async_save.assert_called()
+    saved_data = mock_store.async_save.call_args[0][0]
+    assert "test_timer" not in saved_data
+
+
+async def test_keymaster_timer_persist_skipped_without_store(hass):
+    """Test _persist_to_store is a no-op when store is not set."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    async def mock_action(*args):
+        pass
+
+    # Setup without a store (pass None)
+    timer.hass = hass
+    timer._kmlock = kmlock
+    timer._call_action = mock_action
+    timer._timer_id = "test_timer"
+    timer._store = None
+    timer._end_time = dt_util.utcnow() + timedelta(minutes=5)
+
+    # Should not raise
+    await timer._persist_to_store()
+
+
+async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store):
+    """Test _remove_from_store is a no-op when timer_id is not in the store."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    # Store has data but NOT our timer_id
+    mock_store.async_load = AsyncMock(
+        return_value={"other_timer": {"end_time": "2026-01-01T00:00:00", "duration": 300}}
+    )
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+
+    mock_store.async_save.reset_mock()
+
+    # Manually call _remove_from_store
+    await timer._remove_from_store()
+
+    # Should not have saved (no changes needed)
+    mock_store.async_save.assert_not_called()
+
+
+async def test_keymaster_timer_setup_duration_missing_defaults_to_zero(hass, mock_store):
+    """Test setup() defaults duration to 0 when missing from persisted data."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    future_end_time = (dt_util.utcnow() + timedelta(minutes=5)).isoformat()
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": future_end_time}}
+    )
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+
+    assert timer.is_running
+    assert timer._duration == 0
+
+
+async def test_keymaster_timer_on_expired_callback(hass, mock_store):
+    """Test the _on_expired callback fires the action then cancels the timer."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    action_called_with = None
+
+    async def mock_action(now):
+        nonlocal action_called_with
+        action_called_with = now
+
+    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    assert len(timer._unsub_events) == 1
+
+    # Simulate store having the timer data for cancel's _remove_from_store
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
+    )
+
+    # Grab the callback that was passed to async_call_later and invoke it directly
+    with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
+        # Re-start to capture the callback
+        await timer.start()
+        callback_fn = mock_call_later.call_args[1]["action"]
+
+    # Fire the callback
+    now = dt_util.utcnow()
+    await callback_fn(now)
+
+    # Action should have been called
+    assert action_called_with == now
+    # Timer should be cleaned up
+    assert not timer.is_running
+    assert timer._end_time is None
+    assert timer._duration is None
+
+
+async def test_keymaster_timer_remove_from_store_no_store(hass):
+    """Test _remove_from_store is a no-op when store is None."""
+    timer = KeymasterTimer()
+    timer._timer_id = "test_timer"
+    timer._store = None
+
+    # Should not raise
+    await timer._remove_from_store()
+
+
+async def test_keymaster_timer_remove_from_store_no_timer_id(hass, mock_store):
+    """Test _remove_from_store is a no-op when timer_id is None."""
+    timer = KeymasterTimer()
+    timer._store = mock_store
+    timer._timer_id = None
+
+    # Should not raise
+    await timer._remove_from_store()
+    mock_store.async_load.assert_not_called()
+
+
+def test_throttle_reset_existing_func_missing_key():
+    """Test reset() with existing func_name but non-existent key is a safe no-op."""
+    throttle = Throttle()
+    # Create the func_name bucket by calling is_allowed
+    throttle.is_allowed("lock_unlocked", "entry1", 5)
+    # Reset a different key in the same func_name — should not raise
+    throttle.reset("lock_unlocked", "other_entry")
+    # Original key should still be throttled
+    assert throttle.is_allowed("lock_unlocked", "entry1", 5) is False
+
+
 async def test_dismiss_persistent_notification(hass):
     """Test dismissing persistent notification."""
     with patch(
