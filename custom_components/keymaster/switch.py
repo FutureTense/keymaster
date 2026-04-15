@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import logging
 from typing import Any
 
+from homeassistant.components.lock.const import LockState
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -292,6 +293,13 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                     self._kmlock.autolock_min_day = DEFAULT_AUTOLOCK_MIN_DAY
                 if self._kmlock.autolock_min_night is None:
                     self._kmlock.autolock_min_night = DEFAULT_AUTOLOCK_MIN_NIGHT
+                if (
+                    self._kmlock.lock_state == LockState.UNLOCKED
+                    and self._kmlock.autolock_timer
+                    and not self._kmlock.autolock_timer.is_running
+                ):
+                    await self._kmlock.autolock_timer.start()
+                    self.coordinator.async_set_updated_data(dict(self.coordinator.kmlocks))
             if (
                 self._property.endswith(".enabled")
                 and self._kmlock
@@ -324,6 +332,10 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
 
         if self._set_property_value(False):
             self._attr_is_on = False
+            if self._property == "switch.autolock_enabled" and self._kmlock:
+                if self._kmlock.autolock_timer and self._kmlock.autolock_timer.is_running:
+                    await self._kmlock.autolock_timer.cancel()
+                    self.coordinator.async_set_updated_data(dict(self.coordinator.kmlocks))
             if self._property.endswith(".enabled") and self._code_slot:
                 await self.coordinator.update_slot_active_state(
                     config_entry_id=self._config_entry.entry_id,

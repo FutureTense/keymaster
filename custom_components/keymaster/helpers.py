@@ -6,7 +6,7 @@ from collections.abc import Callable, MutableMapping
 from datetime import datetime as dt, timedelta
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from homeassistant.components import persistent_notification
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
@@ -14,10 +14,22 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers import entity_registry as er, sun
 from homeassistant.helpers.event import async_call_later
-from homeassistant.util import slugify
+from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util, slugify
 
 from .const import DEFAULT_AUTOLOCK_MIN_DAY, DEFAULT_AUTOLOCK_MIN_NIGHT, DOMAIN
 from .providers import is_platform_supported
+
+TIMER_STORAGE_VERSION = 1
+TIMER_STORAGE_KEY = f"{DOMAIN}.timers"
+
+
+class TimerStoreEntry(TypedDict):
+    """Persisted state for a single autolock timer."""
+
+    end_time: str
+    duration: int
+
 
 if TYPE_CHECKING:
     from .lock import KeymasterLock
@@ -44,9 +56,21 @@ class Throttle:
             return True
         return False
 
+    def reset(self, func_name: str, key: str) -> None:
+        """Clear the cooldown for a function/key so the next call is allowed."""
+        if func_name in self._cooldowns:
+            self._cooldowns[func_name].pop(key, None)
+
 
 class KeymasterTimer:
-    """Timer to use in keymaster."""
+    """Persistent auto-lock timer backed by HA Store.
+
+    The timer persists its end_time to disk so it survives HA restarts.
+    On setup(), if a persisted timer is found:
+      - expired  → fire the action immediately and clean up
+      - active   → resume with the remaining time
+      - absent   → idle (no timer was running)
+    """
 
     def __init__(self) -> None:
         """Initialize the keymaster Timer."""
@@ -56,14 +80,52 @@ class KeymasterTimer:
         self._call_action: Callable | None = None
         self._end_time: dt | None = None
         self._duration: int | None = None
+        self._timer_id: str | None = None
+        self._store: Store[dict[str, TimerStoreEntry]] | None = None
 
     async def setup(
-        self, hass: HomeAssistant, kmlock: KeymasterLock, call_action: Callable
+        self,
+        hass: HomeAssistant,
+        kmlock: KeymasterLock,
+        call_action: Callable,
+        timer_id: str,
+        store: Store[dict[str, TimerStoreEntry]],
     ) -> None:
-        """Create fields for the keymaster Timer."""
+        """Set up the timer and recover any persisted state."""
         self.hass = hass
         self._kmlock = kmlock
         self._call_action = call_action
+        self._timer_id = timer_id
+        self._store = store
+
+        # Recover persisted timer
+        data = await store.async_load() or {}
+        timer_data = data.get(timer_id)
+        if timer_data:
+            try:
+                end_time = dt.fromisoformat(timer_data["end_time"])
+            except (KeyError, TypeError, ValueError):
+                _LOGGER.warning(
+                    "[KeymasterTimer] %s: Invalid persisted timer data, removing",
+                    timer_id,
+                )
+                await self._remove_from_store()
+                return
+            duration = timer_data.get("duration", 0)
+            if end_time <= dt_util.utcnow():
+                _LOGGER.debug(
+                    "[KeymasterTimer] %s: Persisted timer expired during downtime, firing",
+                    timer_id,
+                )
+                await self._remove_from_store()
+                hass.async_create_task(call_action(dt_util.utcnow()))
+            else:
+                _LOGGER.debug(
+                    "[KeymasterTimer] %s: Resuming persisted timer, ending %s",
+                    timer_id,
+                    end_time,
+                )
+                await self._resume(end_time, duration)
 
     async def start(self) -> bool:
         """Start a timer."""
@@ -71,27 +133,22 @@ class KeymasterTimer:
             _LOGGER.error("[KeymasterTimer] Cannot start timer as timer not setup")
             return False
 
-        if isinstance(self._end_time, dt) and isinstance(self._unsub_events, list):
-            # Already running so reset and restart timer
-            for unsub in self._unsub_events:
-                unsub()
-            self._unsub_events = []
+        # Cancel any existing timer
+        self._cancel_callbacks()
 
         if sun.is_up(self.hass):
             delay: int = (self._kmlock.autolock_min_day or DEFAULT_AUTOLOCK_MIN_DAY) * 60
         else:
             delay = (self._kmlock.autolock_min_night or DEFAULT_AUTOLOCK_MIN_NIGHT) * 60
         self._duration = int(delay)
-        self._end_time = dt.now().astimezone() + timedelta(seconds=delay)
+        self._end_time = dt_util.utcnow() + timedelta(seconds=delay)
         _LOGGER.debug(
             "[KeymasterTimer] Starting auto-lock timer for %s seconds. Ending %s",
             int(delay),
             self._end_time,
         )
-        self._unsub_events.append(
-            async_call_later(hass=self.hass, delay=delay, action=self._call_action)
-        )
-        self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=self.cancel))
+        self._schedule_callbacks(delay)
+        await self._persist_to_store()
         return True
 
     async def cancel(self, timer_elapsed: dt | None = None) -> None:
@@ -100,63 +157,81 @@ class KeymasterTimer:
             _LOGGER.debug("[KeymasterTimer] Timer elapsed")
         else:
             _LOGGER.debug("[KeymasterTimer] Cancelling auto-lock timer")
-        self._cleanup_expired()
-
-    def _cleanup_expired(self) -> None:
-        """Clean up all timer state (unsub events, end_time, duration)."""
-        if isinstance(self._unsub_events, list):
-            for unsub in self._unsub_events:
-                unsub()
-            self._unsub_events = []
+        self._cancel_callbacks()
         self._end_time = None
         self._duration = None
+        await self._remove_from_store()
 
-    def _check_expired(self) -> bool:
-        """Check if the timer has expired and clean up if so. Returns True if expired."""
-        if isinstance(self._end_time, dt) and self._end_time <= dt.now().astimezone():
-            self._cleanup_expired()
-            return True
-        return False
+    def _schedule_callbacks(self, delay: float) -> None:
+        """Schedule a single callback that fires the action then cleans up."""
+
+        async def _on_expired(now: dt) -> None:
+            """Fire the action and clean up timer state."""
+            if self._call_action:
+                await self._call_action(now)
+            await self.cancel(timer_elapsed=now)
+
+        self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=_on_expired))
+
+    def _cancel_callbacks(self) -> None:
+        """Unsubscribe all pending callbacks."""
+        for unsub in self._unsub_events:
+            unsub()
+        self._unsub_events = []
+
+    async def _resume(self, end_time: dt, duration: int) -> None:
+        """Resume a timer from a persisted end_time."""
+        remaining = (end_time - dt_util.utcnow()).total_seconds()
+        self._end_time = end_time
+        self._duration = duration
+        self._schedule_callbacks(remaining)
+
+    async def _persist_to_store(self) -> None:
+        """Write current timer state to the store."""
+        if not self._store or not self._timer_id or not self._end_time:
+            return
+        data = await self._store.async_load() or {}
+        data[self._timer_id] = {
+            "end_time": self._end_time.isoformat(),
+            "duration": self._duration,
+        }
+        await self._store.async_save(data)
+
+    async def _remove_from_store(self) -> None:
+        """Remove this timer's entry from the store."""
+        if not self._store or not self._timer_id:
+            return
+        data = await self._store.async_load() or {}
+        if self._timer_id in data:
+            del data[self._timer_id]
+            await self._store.async_save(data)
 
     @property
     def is_running(self) -> bool:
         """Return if the timer is running."""
-        if not self._end_time:
-            return False
-        if self._check_expired():
-            return False
-        return True
+        return self._end_time is not None and self._end_time > dt_util.utcnow()
 
     @property
     def is_setup(self) -> bool:
         """Return if the timer has been initially setup."""
-        self._check_expired()
         return bool(self.hass and self._kmlock and self._call_action)
 
     @property
     def end_time(self) -> dt | None:
         """Returns when the timer will end."""
-        if not self._end_time:
-            return None
-        if self._check_expired():
-            return None
-        return self._end_time
+        return self._end_time if self.is_running else None
 
     @property
     def remaining_seconds(self) -> int | None:
         """Return the seconds until the timer ends."""
-        if not self._end_time:
+        if not self.is_running:
             return None
-        if self._check_expired():
-            return None
-        return round((self._end_time - dt.now().astimezone()).total_seconds())
+        return round((self._end_time - dt_util.utcnow()).total_seconds())
 
     @property
     def duration(self) -> int | None:
         """Return the total timer duration in seconds."""
-        if self._duration is None or not self.is_running:
-            return None
-        return self._duration
+        return self._duration if self.is_running else None
 
 
 @callback

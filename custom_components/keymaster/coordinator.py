@@ -56,8 +56,11 @@ from .const import (
 )
 from .exceptions import ProviderNotConfiguredError
 from .helpers import (
+    TIMER_STORAGE_KEY,
+    TIMER_STORAGE_VERSION,
     KeymasterTimer,
     Throttle,
+    TimerStoreEntry,
     call_hass_service,
     delete_code_slot_entities,
     dismiss_persistent_notification,
@@ -116,6 +119,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             config_entry=None,
         )
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        self._timer_store: Store[dict[str, TimerStoreEntry]] = Store(
+            hass, TIMER_STORAGE_VERSION, TIMER_STORAGE_KEY
+        )
 
     async def initial_setup(self) -> None:
         """Trigger the initial async_setup."""
@@ -655,6 +661,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         kmlock.lock_state = LockState.UNLOCKED
+        self._throttle.reset("lock_locked", kmlock.keymaster_config_entry_id)
         _LOGGER.debug(
             "[lock_unlocked] %s: Running. code_slot_num: %s, source: %s, "
             "event_label: %s, action_code: %s",
@@ -785,6 +792,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         kmlock.lock_state = LockState.LOCKED
         kmlock.pending_retry_lock = False
+        self._throttle.reset("lock_unlocked", kmlock.keymaster_config_entry_id)
         _LOGGER.debug(
             "[lock_locked] %s: Running. source: %s, event_label: %s, action_code: %s",
             kmlock.lock_name,
@@ -842,6 +850,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         kmlock.door_state = STATE_OPEN
+        self._throttle.reset("door_closed", kmlock.keymaster_config_entry_id)
         _LOGGER.debug("[door_opened] %s: Running", kmlock.lock_name)
 
         if kmlock.door_notifications:
@@ -865,6 +874,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         kmlock.door_state = STATE_CLOSED
+        self._throttle.reset("door_opened", kmlock.keymaster_config_entry_id)
         _LOGGER.debug("[door_closed] %s: Running", kmlock.lock_name)
 
         if kmlock.retry_lock and kmlock.pending_retry_lock:
@@ -916,7 +926,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 hass=self.hass,
                 kmlock=kmlock,
                 call_action=functools.partial(self._timer_triggered, kmlock),
+                timer_id=f"{kmlock.keymaster_config_entry_id}_autolock",
+                store=self._timer_store,
             )
+            if kmlock.autolock_timer.is_running:
+                self.async_set_updated_data(dict(self.kmlocks))
 
     async def _timer_triggered(self, kmlock: KeymasterLock, _: dt) -> None:
         _LOGGER.debug("[timer_triggered] %s", kmlock.lock_name)

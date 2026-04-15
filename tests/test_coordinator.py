@@ -10,6 +10,7 @@ import pytest
 
 from custom_components.keymaster.const import BACKOFF_FAILURE_THRESHOLD, BACKOFF_MAX_SECONDS
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.helpers import Throttle
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
     KeymasterCodeSlotDayOfWeek,
@@ -1226,6 +1227,147 @@ class TestLockStateEventHandlers:
         await mock_coordinator._timer_triggered(mock_kmlock, dt.now())
 
         mock_coordinator._lock_lock.assert_called_once_with(kmlock=mock_kmlock)
+
+    async def test_rapid_unlock_lock_unlock_not_throttled(self, mock_coordinator, mock_kmlock):
+        """Test unlock→lock→unlock within throttle window still starts the timer.
+
+        Regression test: previously the throttle would swallow the second unlock
+        because it was within the cooldown of the first, even though a lock event
+        occurred in between.
+        """
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.autolock_enabled = True
+        mock_kmlock.autolock_timer = AsyncMock()
+        mock_kmlock.autolock_timer.start = AsyncMock()
+        mock_kmlock.autolock_timer.cancel = AsyncMock()
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.code_slots = {}
+        mock_kmlock.pending_retry_lock = False
+
+        # Use a real Throttle with a long cooldown to force the race
+        mock_coordinator._throttle = Throttle()
+        throttle_seconds_patch = patch(
+            "custom_components.keymaster.coordinator.THROTTLE_SECONDS", 60
+        )
+
+        with throttle_seconds_patch:
+            # 1. Unlock — should start timer
+            await mock_coordinator._lock_unlocked(mock_kmlock, source="event")
+            assert mock_kmlock.lock_state == LockState.UNLOCKED
+            assert mock_kmlock.autolock_timer.start.call_count == 1
+
+            # 2. Lock — should cancel timer
+            await mock_coordinator._lock_locked(mock_kmlock, source="event")
+            assert mock_kmlock.lock_state == LockState.LOCKED
+            mock_kmlock.autolock_timer.cancel.assert_called_once()
+
+            # 3. Unlock again (within throttle window) — should NOT be throttled
+            await mock_coordinator._lock_unlocked(mock_kmlock, source="event")
+            assert mock_kmlock.lock_state == LockState.UNLOCKED
+            assert mock_kmlock.autolock_timer.start.call_count == 2
+
+    async def test_rapid_door_open_close_open_not_throttled(self, mock_coordinator, mock_kmlock):
+        """Test open→close→open within throttle window still processes the second open.
+
+        Mirrors the lock throttle reset test but for door sensor events.
+        """
+        mock_kmlock.door_state = STATE_CLOSED
+        mock_kmlock.door_notifications = False
+        mock_kmlock.retry_lock = False
+        mock_kmlock.pending_retry_lock = False
+
+        # Use a real Throttle with a long cooldown to force the race
+        mock_coordinator._throttle = Throttle()
+        throttle_seconds_patch = patch(
+            "custom_components.keymaster.coordinator.THROTTLE_SECONDS", 60
+        )
+
+        with throttle_seconds_patch:
+            # 1. Open — should process
+            await mock_coordinator._door_opened(mock_kmlock)
+            assert mock_kmlock.door_state == STATE_OPEN
+
+            # 2. Close — should process
+            await mock_coordinator._door_closed(mock_kmlock)
+            assert mock_kmlock.door_state == STATE_CLOSED
+
+            # 3. Open again (within throttle window) — should NOT be throttled
+            await mock_coordinator._door_opened(mock_kmlock)
+            assert mock_kmlock.door_state == STATE_OPEN
+
+
+# ============================================================================
+# Timer Setup Tests
+# ============================================================================
+
+
+class TestSetupTimer:
+    """Tests for _setup_timer passing timer_id and store to the timer."""
+
+    @pytest.fixture
+    def mock_coordinator(self, hass):
+        """Create a coordinator instance with mocked internals."""
+        coordinator = KeymasterCoordinator(hass)
+        coordinator.async_set_updated_data = Mock()
+        coordinator._initial_setup_done_event.set()
+        return coordinator
+
+    async def test_setup_timer_passes_timer_id_and_store(self, mock_coordinator):
+        """Test _setup_timer passes timer_id and store to timer.setup()."""
+        kmlock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry_123",
+        )
+
+        mock_timer = AsyncMock()
+        mock_timer.is_setup = False
+        mock_timer.is_running = False
+
+        with patch(
+            "custom_components.keymaster.coordinator.KeymasterTimer",
+            return_value=mock_timer,
+        ):
+            await mock_coordinator._setup_timer(kmlock)
+
+        mock_timer.setup.assert_called_once()
+        call_kwargs = mock_timer.setup.call_args.kwargs
+        assert call_kwargs["timer_id"] == "test_entry_123_autolock"
+        assert call_kwargs["store"] is mock_coordinator._timer_store
+
+    async def test_setup_timer_pushes_data_when_timer_resumed(self, mock_coordinator):
+        """Test _setup_timer pushes data to entities when timer resumes from persistence."""
+        kmlock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry_123",
+        )
+
+        mock_timer = AsyncMock()
+        mock_timer.is_setup = False
+        mock_timer.is_running = True  # Timer resumed from store
+
+        with patch(
+            "custom_components.keymaster.coordinator.KeymasterTimer",
+            return_value=mock_timer,
+        ):
+            await mock_coordinator._setup_timer(kmlock)
+
+        mock_coordinator.async_set_updated_data.assert_called_once()
+
+    async def test_setup_timer_skips_if_already_setup(self, mock_coordinator):
+        """Test _setup_timer does not call setup() again if timer is already set up."""
+        kmlock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry_123",
+        )
+        kmlock.autolock_timer = Mock()
+        kmlock.autolock_timer.is_setup = True
+
+        await mock_coordinator._setup_timer(kmlock)
+
+        kmlock.autolock_timer.setup.assert_not_called()
 
 
 # ============================================================================
