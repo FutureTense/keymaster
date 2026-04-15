@@ -240,7 +240,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
             async_call_later(
                 hass=hass,
                 delay=20,
-                action=functools.partial(delete_coordinator, hass),
+                action=functools.partial(delete_coordinator, hass, config_entry.entry_id),
             )
 
     # Clean up strategy resource if no other keymaster entries need it
@@ -259,7 +259,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     return unload_ok
 
 
-async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
+async def delete_coordinator(hass: HomeAssistant, unloaded_entry_id: str, _: dt) -> None:
     """Delete the coordinator if no more kmlock entities exist."""
     # _LOGGER.debug("[delete_coordinator] Triggered")
     hass_data = hass.data.get(DOMAIN, {})
@@ -267,7 +267,9 @@ async def delete_coordinator(hass: HomeAssistant, _: dt) -> None:
     if coordinator is None:
         return
 
-    if len(coordinator.data) == 0:
+    if len(coordinator.data) == 0 and not any(
+        entry.entry_id != unloaded_entry_id for entry in hass.config_entries.async_entries(DOMAIN)
+    ):
         _LOGGER.debug("[delete_coordinator] All locks removed, removing coordinator")
         await coordinator.async_remove_data()
         await coordinator.async_shutdown()

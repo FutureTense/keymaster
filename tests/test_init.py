@@ -1,7 +1,7 @@
 """Test keymaster init."""
 
 import logging
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -129,10 +129,22 @@ async def test_notify_script_name_slugified(hass):
     entry = MockConfigEntry(domain=DOMAIN, title="Akuvox Relay A", data=config_data, version=4)
     entry.add_to_hass(hass)
 
-    # async_setup_entry updates config data before coordinator setup, which
-    # requires hass.data[DOMAIN] to exist. We only need to verify the config
-    # update, so raise KeyError is expected when services setup runs.
-    with pytest.raises(KeyError, match="keymaster"):
-        await async_setup_entry(hass, entry)
+    # async_setup_entry updates config data before coordinator setup.
+    # We only need to verify the config update, so patch services and coordinator setup.
+    hass.data.setdefault(DOMAIN, {})
+    with (
+        patch(
+            "custom_components.keymaster.async_setup_services",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator",
+        ) as mock_coordinator_class,
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.add_lock = AsyncMock()
+        # Will fail at async_forward_entry_setups but config data is already updated
+        with pytest.raises((AttributeError, TypeError)):
+            await async_setup_entry(hass, entry)
 
     assert entry.data[CONF_NOTIFY_SCRIPT_NAME] == "keymaster_akuvox_relay_a_manual_notify"

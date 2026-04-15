@@ -171,6 +171,30 @@ async def test_service_regenerate_lovelace(hass, keymaster_integration, caplog):
 #     assert args["value"] == 0
 
 
+async def test_async_setup_services_domain_not_in_hass_data(hass):
+    """Test async_setup_services works when hass.data[DOMAIN] doesn't exist (issue #593)."""
+
+    # Simulate the state after delete_coordinator has popped DOMAIN from hass.data
+    hass.data.pop(DOMAIN, None)
+
+    with (
+        patch(
+            "custom_components.keymaster.services.KeymasterCoordinator"
+        ) as mock_coordinator_class,
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = True
+
+        # Should not raise KeyError
+        await async_setup_services(hass)
+
+        # Coordinator should have been created and stored
+        assert DOMAIN in hass.data
+        assert COORDINATOR in hass.data[DOMAIN]
+
+
 async def test_async_setup_services_coordinator_update_fails(hass):
     """Test async_setup_services raises ConfigEntryNotReady when coordinator update fails (line 36)."""
 
