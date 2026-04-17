@@ -119,7 +119,9 @@ async def test_handle_provider_lock_event_label_overrides_stale_state(
     updates. An "Unlocked via Keypad" event should trigger _lock_unlocked
     even if the entity still shows "locked".
     """
-    # Entity state is stale (still locked), but event says unlock happened
+    # Akuvox scenario: keymaster and entity both track LOCKED; webhook fires
+    # the "unlocked" event before the entity state updates.
+    mock_lock.lock_state = LockState.LOCKED
     hass.states.async_set(mock_lock.lock_entity_id, LockState.LOCKED)
 
     await mock_coordinator._handle_provider_lock_event(
@@ -139,6 +141,7 @@ async def test_handle_provider_lock_event_lock_label_overrides_stale_state(
 ):
     """Test that a lock label is trusted over stale unlocked entity state."""
     # Entity state is stale (still unlocked), but event says lock happened
+    mock_lock.lock_state = LockState.UNLOCKED
     hass.states.async_set(mock_lock.lock_entity_id, LockState.UNLOCKED)
 
     await mock_coordinator._handle_provider_lock_event(
@@ -146,6 +149,56 @@ async def test_handle_provider_lock_event_lock_label_overrides_stale_state(
         code_slot_num=0,
         event_label="Locked",
         action_code=4,
+    )
+
+    mock_coordinator._lock_locked.assert_called_once()
+    mock_coordinator._lock_unlocked.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_fresh_state_overrides_stale_label(
+    hass, mock_coordinator, mock_lock
+):
+    """Test that a fresh entity state is trusted over a stale event label.
+
+    Regression test for #594. The Z-Wave JS fallback path
+    (handle_lock_state_change) reads alarm_type/access_control sensors to
+    derive an event label. Some locks (e.g. Schlage BE469ZP) don't reliably
+    update those sensors for manual actions, so the label can be stale
+    (e.g. "RF Lock" left over from a previous auto-lock) while the lock's
+    entity state has genuinely just transitioned to UNLOCKED. The entity
+    state change must win, otherwise _lock_locked would run and cancel the
+    autolock timer instead of starting it.
+    """
+    # Schlage scenario: keymaster last saw LOCKED, entity just transitioned
+    # to UNLOCKED, but the derived label is a stale "RF Lock".
+    mock_lock.lock_state = LockState.LOCKED
+    hass.states.async_set(mock_lock.lock_entity_id, LockState.UNLOCKED)
+
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=0,
+        event_label="RF Lock",
+        action_code=24,
+    )
+
+    mock_coordinator._lock_unlocked.assert_called_once()
+    mock_coordinator._lock_locked.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_fresh_state_overrides_unlock_label(
+    hass, mock_coordinator, mock_lock
+):
+    """Mirror of the Schlage regression for the unlock-label-but-now-locked case."""
+    mock_lock.lock_state = LockState.UNLOCKED
+    hass.states.async_set(mock_lock.lock_entity_id, LockState.LOCKED)
+
+    await mock_coordinator._handle_provider_lock_event(
+        kmlock=mock_lock,
+        code_slot_num=0,
+        event_label="RF Unlock",
+        action_code=25,
     )
 
     mock_coordinator._lock_locked.assert_called_once()

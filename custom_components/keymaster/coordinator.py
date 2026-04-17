@@ -495,11 +495,22 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if temp_new_state := self.hass.states.get(kmlock.lock_entity_id):
             new_state = temp_new_state.state
 
-        # Determine the intended action from event semantics first, since
-        # provider events may arrive before the entity state has updated.
-        # Fall back to entity state only when the event label is ambiguous.
+        # Disambiguate between the event label and the entity state:
+        # - If the entity state differs from our last-tracked state, the state
+        #   has genuinely changed and is authoritative. This handles providers
+        #   that derive event_label from a sensor which may be stale (e.g.
+        #   Z-Wave JS alarm_type/access_control fallback in handle_lock_state_change).
+        # - Otherwise, trust the label's semantics. Some providers (e.g. Akuvox
+        #   webhooks) fire events before the entity state updates, so falling
+        #   back to `new_state` in that case would drop the event.
+        # - If the label is ambiguous, fall back to new_state.
         label_lower = event_label.lower() if event_label else ""
-        if "unlock" in label_lower:
+        state_changed = (
+            new_state in (LockState.LOCKED, LockState.UNLOCKED) and new_state != kmlock.lock_state
+        )
+        if state_changed:
+            inferred_action = new_state
+        elif "unlock" in label_lower:
             inferred_action = LockState.UNLOCKED
         elif "lock" in label_lower and "jam" not in label_lower:
             inferred_action = LockState.LOCKED
