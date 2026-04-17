@@ -706,6 +706,80 @@ async def test_generate_view_config_child_lock_parent_entities(hass: HomeAssista
     assert "Enabled" in names
 
 
+async def test_generate_view_config_child_lock_hide_pins(hass: HomeAssistant):
+    """Test child lock parent-view replaces PIN with markdown card when hide_pins is True."""
+    mock_registry = _create_mock_registry()
+
+    with patch(
+        "custom_components.keymaster.lovelace.er.async_get",
+        return_value=mock_registry,
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="backdoor",
+            keymaster_config_entry_id="child_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.backdoor",
+            advanced_date_range=False,
+            advanced_day_of_week=False,
+            parent_config_entry_id="parent_entry_id",
+            hide_pins=True,
+        )
+
+    # Get parent view card (second card in the grid, after the heading)
+    parent_card = view["sections"][0]["cards"][1]
+    parent_entities = parent_card["card"]["entities"]
+
+    # PIN should NOT be a simple-entity anymore
+    simple_entity_names = [
+        e.get("name") for e in parent_entities if e.get("type") == "simple-entity"
+    ]
+    assert "PIN" not in simple_entity_names
+
+    # Instead, there should be a markdown card in the entities list
+    markdown_cards = [e for e in parent_entities if e.get("type") == "markdown"]
+    assert len(markdown_cards) == 1
+    assert "Slot occupied" in markdown_cards[0]["content"]
+    assert "Empty" in markdown_cards[0]["content"]
+
+
+async def test_generate_view_config_child_lock_no_hide_pins(hass: HomeAssistant):
+    """Test child lock parent-view keeps simple-entity PIN when hide_pins is False."""
+    mock_registry = _create_mock_registry()
+
+    with patch(
+        "custom_components.keymaster.lovelace.er.async_get",
+        return_value=mock_registry,
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="backdoor",
+            keymaster_config_entry_id="child_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.backdoor",
+            advanced_date_range=False,
+            advanced_day_of_week=False,
+            parent_config_entry_id="parent_entry_id",
+            hide_pins=False,
+        )
+
+    # Get parent view card
+    parent_card = view["sections"][0]["cards"][1]
+    parent_entities = parent_card["card"]["entities"]
+
+    # PIN should still be a simple-entity
+    simple_entity_names = [
+        e.get("name") for e in parent_entities if e.get("type") == "simple-entity"
+    ]
+    assert "PIN" in simple_entity_names
+
+    # No markdown cards
+    markdown_cards = [e for e in parent_entities if e.get("type") == "markdown"]
+    assert len(markdown_cards) == 0
+
+
 async def test_generate_view_config_child_lock_override_parent(hass: HomeAssistant):
     """Test child lock has override parent switch somewhere in the view."""
     mock_registry = _create_mock_registry()
@@ -889,6 +963,7 @@ async def test_async_generate_lovelace_delegates_to_view_config(hass: HomeAssist
             advanced_day_of_week=True,
             door_sensor="binary_sensor.door",
             parent_config_entry_id="parent_id",
+            hide_pins=False,
         )
 
         # Verify written data contains the view config
