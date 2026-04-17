@@ -713,60 +713,97 @@ def _generate_parent_view_card_ll_config(
     When parent_pin_entity_id is provided, the PIN row is replaced with a
     read-only markdown card that indicates whether the slot is occupied.
     """
-    pin_row: MutableMapping[str, Any]
-    if parent_pin_entity_id:
-        pin_row = {
-            "type": "markdown",
-            "content": (
-                f"{{% set pin = states('{parent_pin_entity_id}') %}}"
-                "**PIN:** "
-                "{% if pin not in ['unknown', 'unavailable', 'None', ''] %}"
-                "Slot occupied"
-                "{% else %}"
-                "Empty"
-                "{% endif %}"
-            ),
-        }
-    else:
-        pin_row = _generate_entity_card_ll_config(
-            code_slot_num, "text", "pin", "PIN", parent=True, type_="simple-entity"
-        )
-
     entities: list[MutableMapping[str, Any]] = [
         _generate_entity_card_ll_config(
             code_slot_num, "text", "name", "Name", parent=True, type_="simple-entity"
         ),
-        pin_row,
-        _generate_entity_card_ll_config(
-            code_slot_num, "switch", "enabled", "Enabled", parent=True, type_="simple-entity"
-        ),
-        _generate_entity_card_ll_config(code_slot_num, "binary_sensor", "active", "Active"),
-        _generate_entity_card_ll_config(code_slot_num, "event", "last_used", "Last Used"),
-        _generate_entity_card_ll_config(code_slot_num, "sensor", "synced", "Sync Status"),
-        _generate_entity_card_ll_config(
-            code_slot_num, "switch", "override_parent", "Override Parent"
-        ),
-        _generate_entity_card_ll_config(code_slot_num, "switch", "notifications", "Notifications"),
-        _generate_entity_card_ll_config(
-            code_slot_num,
-            "switch",
-            "accesslimit_count_enabled",
-            "Limit by Number of Uses",
-            parent=True,
-            type_="simple-entity",
-        ),
-        _generate_conditional_card_ll_config(
-            code_slot_num,
-            "number",
-            "accesslimit_count",
-            "Uses Remaining",
-            [_generate_state_condition(code_slot_num, "accesslimit_count_enabled", parent=True)],
-            parent=True,
-            type_="simple-entity",
-        ),
-        *(_generate_date_range_entities(code_slot_num, parent=True) if advanced_date_range else ()),
-        *(_generate_dow_entities(code_slot_num, parent=True) if advanced_day_of_week else ()),
     ]
+
+    # Only include PIN as an entity row when not hiding; when hiding, a
+    # separate markdown card is added via vertical-stack below.
+    if not parent_pin_entity_id:
+        entities.append(
+            _generate_entity_card_ll_config(
+                code_slot_num, "text", "pin", "PIN", parent=True, type_="simple-entity"
+            )
+        )
+
+    entities.extend(
+        [
+            _generate_entity_card_ll_config(
+                code_slot_num, "switch", "enabled", "Enabled", parent=True, type_="simple-entity"
+            ),
+            _generate_entity_card_ll_config(code_slot_num, "binary_sensor", "active", "Active"),
+            _generate_entity_card_ll_config(code_slot_num, "event", "last_used", "Last Used"),
+            _generate_entity_card_ll_config(code_slot_num, "sensor", "synced", "Sync Status"),
+            _generate_entity_card_ll_config(
+                code_slot_num, "switch", "override_parent", "Override Parent"
+            ),
+            _generate_entity_card_ll_config(
+                code_slot_num, "switch", "notifications", "Notifications"
+            ),
+            _generate_entity_card_ll_config(
+                code_slot_num,
+                "switch",
+                "accesslimit_count_enabled",
+                "Limit by Number of Uses",
+                parent=True,
+                type_="simple-entity",
+            ),
+            _generate_conditional_card_ll_config(
+                code_slot_num,
+                "number",
+                "accesslimit_count",
+                "Uses Remaining",
+                [
+                    _generate_state_condition(
+                        code_slot_num, "accesslimit_count_enabled", parent=True
+                    )
+                ],
+                parent=True,
+                type_="simple-entity",
+            ),
+            *(
+                _generate_date_range_entities(code_slot_num, parent=True)
+                if advanced_date_range
+                else ()
+            ),
+            *(_generate_dow_entities(code_slot_num, parent=True) if advanced_day_of_week else ()),
+        ]
+    )
+
+    entities_card: MutableMapping[str, Any] = {
+        "type": "entities",
+        "show_header_toggle": False,
+        "state_color": True,
+        "entities": entities,
+    }
+
+    # When hiding PINs, wrap in a vertical-stack: the entities card (without
+    # the PIN row) plus a markdown card showing slot occupancy. Markdown is a
+    # card type and cannot be used as an entities-row, so vertical-stack is
+    # needed to combine them.
+    if parent_pin_entity_id:
+        inner_card: MutableMapping[str, Any] = {
+            "type": "vertical-stack",
+            "cards": [
+                entities_card,
+                {
+                    "type": "markdown",
+                    "content": (
+                        f"{{% set pin = states('{parent_pin_entity_id}') %}}"
+                        "**PIN:** "
+                        "{% if pin not in ['unknown', 'unavailable', 'None', ''] %}"
+                        "Slot occupied"
+                        "{% else %}"
+                        "Empty"
+                        "{% endif %}"
+                    ),
+                },
+            ],
+        }
+    else:
+        inner_card = entities_card
 
     return {
         "type": "conditional",
@@ -775,12 +812,7 @@ def _generate_parent_view_card_ll_config(
                 code_slot_num, "override_parent", state="off", needs_type=True
             )
         ],
-        "card": {
-            "type": "entities",
-            "show_header_toggle": False,
-            "state_color": True,
-            "entities": entities,
-        },
+        "card": inner_card,
     }
 
 

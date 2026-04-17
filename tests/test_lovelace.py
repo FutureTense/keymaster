@@ -727,21 +727,26 @@ async def test_generate_view_config_child_lock_hide_pins(hass: HomeAssistant):
             hide_pins=True,
         )
 
-    # Get parent view card (second card in the grid, after the heading)
+    # Get parent view conditional card (second card in the grid, after heading)
     parent_card = view["sections"][0]["cards"][1]
-    parent_entities = parent_card["card"]["entities"]
 
-    # PIN should NOT be a simple-entity anymore
+    # When hide_pins=True, the conditional wraps a vertical-stack
+    inner = parent_card["card"]
+    assert inner["type"] == "vertical-stack"
+
+    # First card in the stack is the entities card (without PIN row)
+    entities_card = inner["cards"][0]
+    assert entities_card["type"] == "entities"
     simple_entity_names = [
-        e.get("name") for e in parent_entities if e.get("type") == "simple-entity"
+        e.get("name") for e in entities_card["entities"] if e.get("type") == "simple-entity"
     ]
     assert "PIN" not in simple_entity_names
 
-    # Instead, there should be a markdown card in the entities list
-    markdown_cards = [e for e in parent_entities if e.get("type") == "markdown"]
-    assert len(markdown_cards) == 1
-    assert "Slot occupied" in markdown_cards[0]["content"]
-    assert "Empty" in markdown_cards[0]["content"]
+    # Second card in the stack is the markdown card
+    markdown_card = inner["cards"][1]
+    assert markdown_card["type"] == "markdown"
+    assert "Slot occupied" in markdown_card["content"]
+    assert "Empty" in markdown_card["content"]
 
 
 async def test_generate_view_config_child_lock_no_hide_pins(hass: HomeAssistant):
