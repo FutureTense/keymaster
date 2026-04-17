@@ -13,7 +13,11 @@ const ALIAS_ELEMENTS = [
     'll-strategy-section-keymaster-section',
 ];
 
-const ALL_ELEMENTS = [...PRIMARY_ELEMENTS, ...ALIAS_ELEMENTS];
+const CUSTOM_ROW_ELEMENTS = [
+    'keymaster-datetime-row',
+];
+
+const ALL_ELEMENTS = [...PRIMARY_ELEMENTS, ...ALIAS_ELEMENTS, ...CUSTOM_ROW_ELEMENTS];
 
 describe('main.ts custom element registrations', () => {
     let defineSpy: ReturnType<typeof vi.spyOn>;
@@ -30,7 +34,7 @@ describe('main.ts custom element registrations', () => {
         getSpy.mockRestore();
     });
 
-    it('registers all six custom elements on first load', async () => {
+    it('registers all seven custom elements on first load', async () => {
         // All elements are unregistered
         getSpy.mockReturnValue(undefined);
 
@@ -39,7 +43,7 @@ describe('main.ts custom element registrations', () => {
         for (const name of ALL_ELEMENTS) {
             expect(defineSpy).toHaveBeenCalledWith(name, expect.any(Function));
         }
-        expect(defineSpy).toHaveBeenCalledTimes(6);
+        expect(defineSpy).toHaveBeenCalledTimes(7);
     });
 
     it('skips registration when elements are already defined', async () => {
@@ -74,8 +78,8 @@ describe('main.ts custom element registrations', () => {
             expect(primaryCtor).not.toBe(aliasCtor);
         }
 
-        // All six constructors should be unique
+        // All seven constructors should be unique
         const ctors = [...defined.values()];
-        expect(new Set(ctors).size).toBe(6);
+        expect(new Set(ctors).size).toBe(7);
     });
 });

@@ -1,8 +1,16 @@
 import { Connection, HassConfig, HassEntities, MessageBase } from 'home-assistant-js-websocket';
 
+/** Subset of HA's FrontendLocaleData relevant for formatting. */
+export interface HALocaleData {
+    language: string;
+    time_format?: 'language' | '12' | '24';
+    date_format?: 'language' | 'DMY' | 'MDY' | 'YMD';
+}
+
 export interface HomeAssistant {
     config: HassConfig;
     connection: Connection;
+    locale?: HALocaleData;
     resources: object;
     states: HassEntities;
     callService(domain: string, service: string, data?: object): Promise<void>;

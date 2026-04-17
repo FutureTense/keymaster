@@ -1,3 +1,4 @@
+import { KeymasterDatetimeRow } from './datetime-row';
 import { KeymasterDashboardStrategy } from './dashboard-strategy';
 import { KeymasterViewStrategy } from './view-strategy';
 import { KeymasterSectionStrategy } from './section-strategy';
@@ -13,11 +14,17 @@ declare global {
         'll-strategy-dashboard-keymaster': KeymasterDashboardStrategy;
         'll-strategy-view-keymaster': KeymasterViewStrategy;
         'll-strategy-section-keymaster': KeymasterSectionStrategy;
+        'keymaster-datetime-row': KeymasterDatetimeRow;
         // Aliases for explicit type naming (e.g., custom:keymaster-dashboard)
         'll-strategy-dashboard-keymaster-dashboard': KeymasterDashboardStrategyAlias;
         'll-strategy-view-keymaster-view': KeymasterViewStrategyAlias;
         'll-strategy-section-keymaster-section': KeymasterSectionStrategyAlias;
     }
+}
+
+// Custom entity rows
+if (!customElements.get('keymaster-datetime-row')) {
+    customElements.define('keymaster-datetime-row', KeymasterDatetimeRow);
 }
 
 // Primary registrations (custom:keymaster)

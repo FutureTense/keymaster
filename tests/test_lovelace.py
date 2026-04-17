@@ -601,6 +601,97 @@ async def test_generate_view_config_advanced_date_range(hass: HomeAssistant):
     assert any("accesslimit_date_range_end" in str(e) for e in all_entity_refs)
 
 
+async def test_date_range_uses_datetime_row_with_more_info(hass: HomeAssistant):
+    """Test that date range start/end entities use custom:keymaster-datetime-row with more-info tap."""
+    mock_registry = _create_mock_registry()
+
+    with patch(
+        "custom_components.keymaster.lovelace.er.async_get",
+        return_value=mock_registry,
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="frontdoor",
+            keymaster_config_entry_id="test_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.frontdoor",
+            advanced_date_range=True,
+            advanced_day_of_week=False,
+        )
+
+    entities = view["sections"][0]["cards"][1]["card"]["entities"]
+
+    # Find the date range start/end conditional rows
+    datetime_rows = []
+    for e in entities:
+        if isinstance(e, dict) and "row" in e and isinstance(e["row"], dict):
+            row = e["row"]
+            entity_id = row.get("entity", "")
+            if "accesslimit_date_range_start" in entity_id or (
+                "accesslimit_date_range_end" in entity_id
+            ):
+                datetime_rows.append(row)
+
+    assert len(datetime_rows) == 2, f"Expected 2 datetime rows, found {len(datetime_rows)}"
+    for row in datetime_rows:
+        assert row.get("type") == "custom:keymaster-datetime-row", (
+            f"Expected custom:keymaster-datetime-row type for {row.get('entity')}, "
+            f"got {row.get('type')}"
+        )
+        assert row.get("tap_action") == {"action": "more-info"}, (
+            f"Expected more-info tap_action for {row.get('entity')}, got {row.get('tap_action')}"
+        )
+
+
+async def test_parent_date_range_uses_simple_entity_with_no_tap(hass: HomeAssistant):
+    """Test that parent view date range entities use simple-entity with no tap action."""
+    mock_registry = _create_mock_registry()
+
+    with patch(
+        "custom_components.keymaster.lovelace.er.async_get",
+        return_value=mock_registry,
+    ):
+        view = generate_view_config(
+            hass=hass,
+            kmlock_name="frontdoor",
+            keymaster_config_entry_id="test_entry_id",
+            code_slot_start=1,
+            code_slots=1,
+            lock_entity="lock.frontdoor",
+            advanced_date_range=True,
+            advanced_day_of_week=False,
+            parent_config_entry_id="parent_entry_id",
+        )
+
+    # Child view with parent: second section has a parent-view conditional card
+    # containing parent entities. The parent card is at index 1 in the grid's cards.
+    section_cards = view["sections"][0]["cards"]
+    # Find the parent-view conditional card
+    parent_datetime_rows = []
+    for card in section_cards:
+        if isinstance(card, dict) and "card" in card:
+            inner = card.get("card", {})
+            for e in inner.get("entities", []):
+                if isinstance(e, dict) and "row" in e and isinstance(e["row"], dict):
+                    row = e["row"]
+                    entity_id = row.get("entity", "")
+                    if "accesslimit_date_range_start" in entity_id or (
+                        "accesslimit_date_range_end" in entity_id
+                    ):
+                        parent_datetime_rows.append(row)
+
+    assert len(parent_datetime_rows) == 2
+    for row in parent_datetime_rows:
+        assert row.get("type") == "simple-entity", (
+            f"Expected simple-entity type for parent {row.get('entity')}, got {row.get('type')}"
+        )
+        assert row.get("tap_action") == {"action": "none"}, (
+            f"Expected no-action tap_action for parent {row.get('entity')}, "
+            f"got {row.get('tap_action')}"
+        )
+
+
 async def test_generate_view_config_advanced_day_of_week(hass: HomeAssistant):
     """Test view configuration with advanced day of week enabled."""
     mock_registry = _create_mock_registry()

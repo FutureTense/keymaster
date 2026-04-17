@@ -9,7 +9,7 @@ custom_components/*/__pycache__/
 venv
 *.pyc
 .coverage
-coverage.xml
+coverage.*
 .tox
 ha-core/
 
@@ -23,3 +23,4 @@ package-lock.json
 .cursor/
 .aider*
 .continue/
+coverage/
