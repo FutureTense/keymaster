@@ -10,6 +10,7 @@ from .const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
     CONF_DOOR_SENSOR_ENTITY_ID,
+    CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_PARENT_ENTRY_ID,
@@ -83,6 +84,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
                 advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
                 door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
+                hide_pins=config_entry.data.get(CONF_HIDE_PINS, False),
             )
 
     # hass.services.async_register(

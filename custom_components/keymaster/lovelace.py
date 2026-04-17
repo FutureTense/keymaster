@@ -84,19 +84,36 @@ def generate_section_config(
     advanced_date_range: bool,
     advanced_day_of_week: bool,
     parent_config_entry_id: str | None = None,
+    hide_pins: bool = False,
 ) -> MutableMapping[str, Any]:
     """Generate the Lovelace section configuration for a single code slot.
 
     Returns the section configuration as a dict (for WebSocket/strategy use).
     """
-    generate_dict_func = (
-        _generate_child_code_slot_dict if parent_config_entry_id else _generate_code_slot_dict
-    )
-    code_slot_dict: MutableMapping[str, Any] = generate_dict_func(
-        code_slot_num=slot_num,
-        advanced_date_range=advanced_date_range,
-        advanced_day_of_week=advanced_day_of_week,
-    )
+    # For child locks with hide_pins, resolve the parent PIN entity ID so the
+    # parent-view card can render a masked markdown card instead of simple-entity.
+    parent_pin_entity_id: str | None = None
+    if parent_config_entry_id and hide_pins:
+        parent_pin_entity_id = resolve_entity_id(
+            hass,
+            keymaster_config_entry_id,
+            parent_config_entry_id,
+            f"parent.text.code_slots:{slot_num}.pin",
+        )
+
+    if parent_config_entry_id:
+        code_slot_dict: MutableMapping[str, Any] = _generate_child_code_slot_dict(
+            code_slot_num=slot_num,
+            advanced_date_range=advanced_date_range,
+            advanced_day_of_week=advanced_day_of_week,
+            parent_pin_entity_id=parent_pin_entity_id,
+        )
+    else:
+        code_slot_dict = _generate_code_slot_dict(
+            code_slot_num=slot_num,
+            advanced_date_range=advanced_date_range,
+            advanced_day_of_week=advanced_day_of_week,
+        )
 
     mapped_section: MutableMapping[str, Any] | list[MutableMapping[str, Any]] = (
         _map_property_to_entity_id(
@@ -126,6 +143,7 @@ def generate_view_config(
     advanced_day_of_week: bool,
     door_sensor: str | None = None,
     parent_config_entry_id: str | None = None,
+    hide_pins: bool = False,
 ) -> MutableMapping[str, Any]:
     """Generate the complete Lovelace view configuration for a keymaster lock.
 
@@ -147,6 +165,7 @@ def generate_view_config(
             advanced_date_range=advanced_date_range,
             advanced_day_of_week=advanced_day_of_week,
             parent_config_entry_id=parent_config_entry_id,
+            hide_pins=hide_pins,
         )
         for slot_num in range(code_slot_start, code_slot_start + code_slots)
     ]
@@ -172,6 +191,7 @@ async def async_generate_lovelace(
     advanced_day_of_week: bool,
     door_sensor: str | None = None,
     parent_config_entry_id: str | None = None,
+    hide_pins: bool = False,
 ) -> None:
     """Create the lovelace file for the keymaster lock."""
     folder: str = hass.config.path("custom_components", DOMAIN, "lovelace")
@@ -188,6 +208,7 @@ async def async_generate_lovelace(
         advanced_day_of_week=advanced_day_of_week,
         door_sensor=door_sensor,
         parent_config_entry_id=parent_config_entry_id,
+        hide_pins=hide_pins,
     )
     lovelace: list[MutableMapping[str, Any]] = [view_config]
 
@@ -259,6 +280,17 @@ def _write_lovelace_yaml(folder: str, filename: str, lovelace: Any) -> None:
     return
 
 
+def resolve_entity_id(
+    hass: HomeAssistant,
+    keymaster_config_entry_id: str,
+    parent_config_entry_id: str | None,
+    prop: str,
+) -> str | None:
+    """Resolve a keymaster property path to a real HA entity ID."""
+    entity_registry: er.EntityRegistry = er.async_get(hass)
+    return _get_entity_id(entity_registry, keymaster_config_entry_id, parent_config_entry_id, prop)
+
+
 def _map_property_to_entity_id(
     hass: HomeAssistant,
     lovelace_entities: list[MutableMapping[str, Any]] | MutableMapping[str, Any],
@@ -266,10 +298,6 @@ def _map_property_to_entity_id(
     parent_config_entry_id: str | None = None,
 ) -> MutableMapping[str, Any] | list[MutableMapping[str, Any]]:
     """Update all the entities with the entity_id for the keymaster lock."""
-    # _LOGGER.debug(
-    #     f"[map_property_to_entity_id] keymaster_config_entry_id: {keymaster_config_entry_id}, "
-    #     f"parent_config_entry_id: {parent_config_entry_id}"
-    # )
     entity_registry: er.EntityRegistry = er.async_get(hass)
     lovelace_list: list[MutableMapping[str, Any]] | MutableMapping[str, Any] = _process_entities(
         lovelace_entities,
@@ -674,49 +702,108 @@ def _generate_date_range_entities(
 
 
 def _generate_parent_view_card_ll_config(
-    code_slot_num: int, advanced_date_range: bool, advanced_day_of_week: bool
+    code_slot_num: int,
+    advanced_date_range: bool,
+    advanced_day_of_week: bool,
+    parent_pin_entity_id: str | None = None,
 ) -> MutableMapping[str, Any]:
     """Build the parent-view conditional card for a child lock code slot.
 
     Shows parent's settings alongside child's status when override_parent is off.
+    When parent_pin_entity_id is provided, the PIN row is replaced with a
+    read-only markdown card that indicates whether the slot is occupied.
     """
     entities: list[MutableMapping[str, Any]] = [
         _generate_entity_card_ll_config(
             code_slot_num, "text", "name", "Name", parent=True, type_="simple-entity"
         ),
-        _generate_entity_card_ll_config(
-            code_slot_num, "text", "pin", "PIN", parent=True, type_="simple-entity"
-        ),
-        _generate_entity_card_ll_config(
-            code_slot_num, "switch", "enabled", "Enabled", parent=True, type_="simple-entity"
-        ),
-        _generate_entity_card_ll_config(code_slot_num, "binary_sensor", "active", "Active"),
-        _generate_entity_card_ll_config(code_slot_num, "event", "last_used", "Last Used"),
-        _generate_entity_card_ll_config(code_slot_num, "sensor", "synced", "Sync Status"),
-        _generate_entity_card_ll_config(
-            code_slot_num, "switch", "override_parent", "Override Parent"
-        ),
-        _generate_entity_card_ll_config(code_slot_num, "switch", "notifications", "Notifications"),
-        _generate_entity_card_ll_config(
-            code_slot_num,
-            "switch",
-            "accesslimit_count_enabled",
-            "Limit by Number of Uses",
-            parent=True,
-            type_="simple-entity",
-        ),
-        _generate_conditional_card_ll_config(
-            code_slot_num,
-            "number",
-            "accesslimit_count",
-            "Uses Remaining",
-            [_generate_state_condition(code_slot_num, "accesslimit_count_enabled", parent=True)],
-            parent=True,
-            type_="simple-entity",
-        ),
-        *(_generate_date_range_entities(code_slot_num, parent=True) if advanced_date_range else ()),
-        *(_generate_dow_entities(code_slot_num, parent=True) if advanced_day_of_week else ()),
     ]
+
+    # Only include PIN as an entity row when not hiding; when hiding, a
+    # separate markdown card is added via vertical-stack below.
+    if not parent_pin_entity_id:
+        entities.append(
+            _generate_entity_card_ll_config(
+                code_slot_num, "text", "pin", "PIN", parent=True, type_="simple-entity"
+            )
+        )
+
+    entities.extend(
+        [
+            _generate_entity_card_ll_config(
+                code_slot_num, "switch", "enabled", "Enabled", parent=True, type_="simple-entity"
+            ),
+            _generate_entity_card_ll_config(code_slot_num, "binary_sensor", "active", "Active"),
+            _generate_entity_card_ll_config(code_slot_num, "event", "last_used", "Last Used"),
+            _generate_entity_card_ll_config(code_slot_num, "sensor", "synced", "Sync Status"),
+            _generate_entity_card_ll_config(
+                code_slot_num, "switch", "override_parent", "Override Parent"
+            ),
+            _generate_entity_card_ll_config(
+                code_slot_num, "switch", "notifications", "Notifications"
+            ),
+            _generate_entity_card_ll_config(
+                code_slot_num,
+                "switch",
+                "accesslimit_count_enabled",
+                "Limit by Number of Uses",
+                parent=True,
+                type_="simple-entity",
+            ),
+            _generate_conditional_card_ll_config(
+                code_slot_num,
+                "number",
+                "accesslimit_count",
+                "Uses Remaining",
+                [
+                    _generate_state_condition(
+                        code_slot_num, "accesslimit_count_enabled", parent=True
+                    )
+                ],
+                parent=True,
+                type_="simple-entity",
+            ),
+            *(
+                _generate_date_range_entities(code_slot_num, parent=True)
+                if advanced_date_range
+                else ()
+            ),
+            *(_generate_dow_entities(code_slot_num, parent=True) if advanced_day_of_week else ()),
+        ]
+    )
+
+    entities_card: MutableMapping[str, Any] = {
+        "type": "entities",
+        "show_header_toggle": False,
+        "state_color": True,
+        "entities": entities,
+    }
+
+    # When hiding PINs, wrap in a vertical-stack: the entities card (without
+    # the PIN row) plus a markdown card showing slot occupancy. Markdown is a
+    # card type and cannot be used as an entities-row, so vertical-stack is
+    # needed to combine them.
+    if parent_pin_entity_id:
+        inner_card: MutableMapping[str, Any] = {
+            "type": "vertical-stack",
+            "cards": [
+                entities_card,
+                {
+                    "type": "markdown",
+                    "content": (
+                        f"{{% set pin = states('{parent_pin_entity_id}') %}}"
+                        "**PIN:** "
+                        "{% if pin not in ['unknown', 'unavailable', 'None', ''] %}"
+                        "Slot occupied"
+                        "{% else %}"
+                        "Empty"
+                        "{% endif %}"
+                    ),
+                },
+            ],
+        }
+    else:
+        inner_card = entities_card
 
     return {
         "type": "conditional",
@@ -725,17 +812,15 @@ def _generate_parent_view_card_ll_config(
                 code_slot_num, "override_parent", state="off", needs_type=True
             )
         ],
-        "card": {
-            "type": "entities",
-            "show_header_toggle": False,
-            "state_color": True,
-            "entities": entities,
-        },
+        "card": inner_card,
     }
 
 
 def _generate_child_code_slot_dict(
-    code_slot_num: int, advanced_date_range: bool, advanced_day_of_week: bool
+    code_slot_num: int,
+    advanced_date_range: bool,
+    advanced_day_of_week: bool,
+    parent_pin_entity_id: str | None = None,
 ) -> MutableMapping[str, Any]:
     """Build the dict for the code slot of a child keymaster lock."""
     return {
@@ -743,7 +828,10 @@ def _generate_child_code_slot_dict(
         "cards": [
             _generate_header_ll_config(code_slot_num),
             _generate_parent_view_card_ll_config(
-                code_slot_num, advanced_date_range, advanced_day_of_week
+                code_slot_num,
+                advanced_date_range,
+                advanced_day_of_week,
+                parent_pin_entity_id=parent_pin_entity_id,
             ),
             {
                 "type": "conditional",

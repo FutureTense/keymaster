@@ -210,6 +210,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
         advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
         door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
+        hide_pins=config_entry.data.get(CONF_HIDE_PINS, False),
     )
 
     return True
