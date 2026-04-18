@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, MutableMapping
 from datetime import datetime as dt, timedelta
 import logging
@@ -82,6 +83,7 @@ class KeymasterTimer:
         self._duration: int | None = None
         self._timer_id: str | None = None
         self._store: Store[dict[str, TimerStoreEntry]] | None = None
+        self._store_lock = asyncio.Lock()
 
     async def setup(
         self,
@@ -190,27 +192,28 @@ class KeymasterTimer:
         """Write current timer state to the store."""
         if not self._store or not self._timer_id or not self._end_time:
             return
-        # Capture values before any await; cancel() may clear them mid-persist.
-        end_time = self._end_time
-        duration = self._duration
-        data = await self._store.async_load() or {}
-        # If cancel() ran during the await, don't resurrect a canceled entry.
-        if self._end_time is not end_time:
-            return
-        data[self._timer_id] = {
-            "end_time": end_time.isoformat(),
-            "duration": duration,
-        }
-        await self._store.async_save(data)
+        async with self._store_lock:
+            # Capture values so a concurrent cancel() can't null them mid-persist.
+            end_time = self._end_time
+            duration = self._duration
+            if not end_time:
+                return
+            data = await self._store.async_load() or {}
+            data[self._timer_id] = {
+                "end_time": end_time.isoformat(),
+                "duration": duration,
+            }
+            await self._store.async_save(data)
 
     async def _remove_from_store(self) -> None:
         """Remove this timer's entry from the store."""
         if not self._store or not self._timer_id:
             return
-        data = await self._store.async_load() or {}
-        if self._timer_id in data:
-            del data[self._timer_id]
-            await self._store.async_save(data)
+        async with self._store_lock:
+            data = await self._store.async_load() or {}
+            if self._timer_id in data:
+                del data[self._timer_id]
+                await self._store.async_save(data)
 
     @property
     def is_running(self) -> bool:

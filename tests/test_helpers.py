@@ -802,8 +802,8 @@ async def test_keymaster_timer_persist_skipped_without_store(hass):
     await timer._persist_to_store()
 
 
-async def test_keymaster_timer_persist_survives_concurrent_cancel(hass, mock_store):
-    """Test _persist_to_store bails out if cancel() clears _end_time mid-persist."""
+async def test_keymaster_timer_persist_no_crash_when_end_time_cleared(hass, mock_store):
+    """Test _persist_to_store doesn't crash if _end_time is cleared before lock acquired."""
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
         lock_name="test_lock",
@@ -817,26 +817,50 @@ async def test_keymaster_timer_persist_survives_concurrent_cancel(hass, mock_sto
 
     await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
 
-    # Make async_load simulate a yield that lets cancel() sneak in
-    original_end_time = dt_util.utcnow() + timedelta(minutes=5)
-
-    async def load_and_cancel():
-        """Simulate cancel() running during the await in _persist_to_store."""
+    # Set timer state then clear it (simulates cancel() winning the pre-guard check)
+    timer._end_time = dt_util.utcnow() + timedelta(minutes=5)
+    timer._duration = 300
+    # Acquire the lock first (simulates cancel holding it), then clear end_time
+    async with timer._store_lock:
         timer._end_time = None
         timer._duration = None
-        return {}
 
-    mock_store.async_load = AsyncMock(side_effect=load_and_cancel)
-
-    # Manually set timer state as start() would
-    timer._end_time = original_end_time
-    timer._duration = 300
-
-    # Should NOT raise AttributeError, and should NOT resurrect the canceled entry
+    # Now persist runs — should bail out at the pre-guard, not crash
     await timer._persist_to_store()
-
-    # cancel() won the race — persist should have bailed out without saving
     mock_store.async_save.assert_not_called()
+
+
+async def test_keymaster_timer_store_lock_serializes_persist_and_remove(hass, mock_store):
+    """Test that _store_lock prevents persist and remove from interleaving."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    # Verify persist saved the timer
+    mock_store.async_save.assert_called()
+    saved_data = mock_store.async_save.call_args[0][0]
+    assert "test_timer" in saved_data
+
+    # Now cancel — remove should clean up the entry
+    mock_store.async_load = AsyncMock(return_value=dict(saved_data))
+    mock_store.async_save.reset_mock()
+    await timer.cancel()
+
+    mock_store.async_save.assert_called()
+    final_data = mock_store.async_save.call_args[0][0]
+    assert "test_timer" not in final_data
 
 
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store):
