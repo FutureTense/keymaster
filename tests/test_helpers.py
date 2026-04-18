@@ -802,6 +802,46 @@ async def test_keymaster_timer_persist_skipped_without_store(hass):
     await timer._persist_to_store()
 
 
+async def test_keymaster_timer_persist_survives_concurrent_cancel(hass, mock_store):
+    """Test _persist_to_store doesn't crash if cancel() clears _end_time mid-persist."""
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
+
+    # Make async_load simulate a yield that lets cancel() sneak in
+    original_end_time = dt_util.utcnow() + timedelta(minutes=5)
+
+    async def load_and_cancel():
+        """Simulate cancel() running during the await in _persist_to_store."""
+        timer._end_time = None
+        timer._duration = None
+        return {}
+
+    mock_store.async_load = AsyncMock(side_effect=load_and_cancel)
+
+    # Manually set timer state as start() would
+    timer._end_time = original_end_time
+    timer._duration = 300
+
+    # Should NOT raise AttributeError
+    await timer._persist_to_store()
+
+    # Store should have been saved with the snapshotted values
+    mock_store.async_save.assert_called()
+    saved_data = mock_store.async_save.call_args[0][0]
+    assert "test_timer" in saved_data
+    assert saved_data["test_timer"]["duration"] == 300
+
+
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store):
     """Test _remove_from_store is a no-op when timer_id is not in the store."""
     timer = KeymasterTimer()

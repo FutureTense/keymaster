@@ -190,10 +190,13 @@ class KeymasterTimer:
         """Write current timer state to the store."""
         if not self._store or not self._timer_id or not self._end_time:
             return
+        # Capture values before any await; cancel() may clear them mid-persist.
+        end_time = self._end_time
+        duration = self._duration
         data = await self._store.async_load() or {}
         data[self._timer_id] = {
-            "end_time": self._end_time.isoformat(),
-            "duration": self._duration,
+            "end_time": end_time.isoformat(),
+            "duration": duration,
         }
         await self._store.async_save(data)
 
