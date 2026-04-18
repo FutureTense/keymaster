@@ -803,7 +803,7 @@ async def test_keymaster_timer_persist_skipped_without_store(hass):
 
 
 async def test_keymaster_timer_persist_survives_concurrent_cancel(hass, mock_store):
-    """Test _persist_to_store doesn't crash if cancel() clears _end_time mid-persist."""
+    """Test _persist_to_store bails out if cancel() clears _end_time mid-persist."""
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
         lock_name="test_lock",
@@ -832,14 +832,11 @@ async def test_keymaster_timer_persist_survives_concurrent_cancel(hass, mock_sto
     timer._end_time = original_end_time
     timer._duration = 300
 
-    # Should NOT raise AttributeError
+    # Should NOT raise AttributeError, and should NOT resurrect the canceled entry
     await timer._persist_to_store()
 
-    # Store should have been saved with the snapshotted values
-    mock_store.async_save.assert_called()
-    saved_data = mock_store.async_save.call_args[0][0]
-    assert "test_timer" in saved_data
-    assert saved_data["test_timer"]["duration"] == 300
+    # cancel() won the race — persist should have bailed out without saving
+    mock_store.async_save.assert_not_called()
 
 
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store):

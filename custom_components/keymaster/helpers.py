@@ -194,6 +194,9 @@ class KeymasterTimer:
         end_time = self._end_time
         duration = self._duration
         data = await self._store.async_load() or {}
+        # If cancel() ran during the await, don't resurrect a canceled entry.
+        if self._end_time is not end_time:
+            return
         data[self._timer_id] = {
             "end_time": end_time.isoformat(),
             "duration": duration,
