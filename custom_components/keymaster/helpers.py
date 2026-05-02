@@ -84,6 +84,7 @@ class KeymasterTimer:
         self._timer_id: str | None = None
         self._store: Store[dict[str, TimerStoreEntry]] | None = None
         self._store_lock: asyncio.Lock | None = None
+        self._detached = False
 
     async def setup(
         self,
@@ -102,10 +103,16 @@ class KeymasterTimer:
         self._store_lock = store_lock
         self._store = store
 
-        # Recover persisted timer
-        data = await store.async_load() or {}
-        timer_data = data.get(timer_id)
-        if timer_data:
+        # Recover persisted timer under the lock so any in-flight persist/cancel
+        # from an outgoing timer (e.g. config entry reload) finishes first. This
+        # prevents reading a stale empty store while the old timer is mid-save.
+        # _resume is sync w.r.t. the store; _remove_from_store is inlined here
+        # because asyncio.Lock isn't reentrant.
+        async with self._store_lock:
+            data = await store.async_load() or {}
+            timer_data = data.get(timer_id)
+            if not timer_data:
+                return
             try:
                 end_time = dt.fromisoformat(timer_data["end_time"])
             except (KeyError, TypeError, ValueError):
@@ -113,7 +120,8 @@ class KeymasterTimer:
                     "[KeymasterTimer] %s: Invalid persisted timer data, removing",
                     timer_id,
                 )
-                await self._remove_from_store()
+                del data[timer_id]
+                await store.async_save(data)
                 return
             duration = timer_data.get("duration", 0)
             if end_time <= dt_util.utcnow():
@@ -121,7 +129,8 @@ class KeymasterTimer:
                     "[KeymasterTimer] %s: Persisted timer expired during downtime, firing",
                     timer_id,
                 )
-                await self._remove_from_store()
+                del data[timer_id]
+                await store.async_save(data)
                 hass.async_create_task(call_action(dt_util.utcnow()))
             else:
                 _LOGGER.debug(
@@ -157,6 +166,12 @@ class KeymasterTimer:
 
     async def cancel(self, timer_elapsed: dt | None = None) -> None:
         """Cancel a timer."""
+        if self._detached:
+            # An _on_expired coroutine that was already running when detach()
+            # ran must NOT remove the store entry — the replacement timer owns
+            # it and will resume from there.
+            _LOGGER.debug("[KeymasterTimer] Cancel called on detached timer; ignoring")
+            return
         if timer_elapsed:
             _LOGGER.debug("[KeymasterTimer] Timer elapsed")
         else:
@@ -176,6 +191,8 @@ class KeymasterTimer:
         kmlock reference and fires alongside the new timer.
         """
         _LOGGER.debug("[KeymasterTimer] Detaching timer (state preserved in store)")
+        # Set first so any _on_expired already running short-circuits cancel().
+        self._detached = True
         try:
             self._cancel_callbacks()
         except Exception:

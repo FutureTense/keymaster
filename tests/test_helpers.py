@@ -1028,6 +1028,84 @@ async def test_keymaster_timer_detach_preserves_store(hass, mock_store, store_lo
     mock_store.async_save.assert_not_called()
 
 
+async def test_keymaster_timer_cancel_after_detach_is_noop(hass, mock_store, store_lock):
+    """Test cancel() on a detached timer doesn't touch the store.
+
+    Protects against an _on_expired coroutine that was already scheduled when
+    detach() ran: its `await self.cancel()` must not remove the store entry
+    that the replacement timer is about to resume from.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    # Make the store actually contain the persisted entry so cancel() would
+    # otherwise remove it
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": "2099-01-01T00:00:00+00:00", "duration": 300}}
+    )
+    timer.detach()
+    mock_store.async_save.reset_mock()
+
+    # Simulating an in-flight _on_expired calling cancel after detach
+    await timer.cancel()
+    mock_store.async_save.assert_not_called()
+
+
+async def test_keymaster_timer_setup_load_under_lock(hass, mock_store, store_lock):
+    """Test setup()'s load+resume runs under the store lock.
+
+    If setup() loaded outside the lock, a config entry reload could let the
+    new timer read an empty store while the outgoing timer's persist was
+    still queued, silently losing autolock state.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    # Acquire the lock before setup; if setup loads under the lock it must wait
+    async with store_lock:
+        setup_task = asyncio.create_task(
+            timer.setup(
+                hass,
+                kmlock,
+                mock_action,
+                timer_id="test_timer",
+                store=mock_store,
+                store_lock=store_lock,
+            )
+        )
+        # Yield to let setup run as far as it can
+        await asyncio.sleep(0)
+        assert not setup_task.done(), "setup should be blocked on the store lock"
+        # async_load must NOT have been called yet — it's inside the lock
+        mock_store.async_load.assert_not_called()
+
+    # Lock released; setup should now finish
+    await setup_task
+    mock_store.async_load.assert_called()
+
+
 async def test_keymaster_timer_persist_after_detach_is_noop(hass, mock_store, store_lock):
     """Test _persist_to_store after detach() is a silent no-op (doesn't crash, no save).
 
