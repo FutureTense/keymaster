@@ -83,9 +83,9 @@ class KeymasterTimer:
         self._duration: int | None = None
         self._timer_id: str | None = None
         self._store: Store[dict[str, TimerStoreEntry]] | None = None
-        # Replaced in setup() with a lock shared across all timers using the
-        # same store; the per-instance default is a safe fallback for tests.
-        self._store_lock: asyncio.Lock = asyncio.Lock()
+        # Set in setup(); shared across all timers writing to the same store
+        # so concurrent persists/removes can't drop each other's entries.
+        self._store_lock: asyncio.Lock | None = None
 
     async def setup(
         self,
@@ -94,15 +94,14 @@ class KeymasterTimer:
         call_action: Callable,
         timer_id: str,
         store: Store[dict[str, TimerStoreEntry]],
-        store_lock: asyncio.Lock | None = None,
+        store_lock: asyncio.Lock,
     ) -> None:
         """Set up the timer and recover any persisted state."""
         self.hass = hass
         self._kmlock = kmlock
         self._call_action = call_action
         self._timer_id = timer_id
-        if store_lock is not None:
-            self._store_lock = store_lock
+        self._store_lock = store_lock
         self._store = store
 
         # Recover persisted timer
@@ -195,7 +194,7 @@ class KeymasterTimer:
 
     async def _persist_to_store(self) -> None:
         """Write current timer state to the store."""
-        if not self._store or not self._timer_id or not self._end_time:
+        if not self._store or not self._timer_id or not self._end_time or not self._store_lock:
             return
         async with self._store_lock:
             # Capture values so a concurrent cancel() can't null them mid-persist.
@@ -212,7 +211,7 @@ class KeymasterTimer:
 
     async def _remove_from_store(self) -> None:
         """Remove this timer's entry from the store."""
-        if not self._store or not self._timer_id:
+        if not self._store or not self._timer_id or not self._store_lock:
             return
         async with self._store_lock:
             data = await self._store.async_load() or {}

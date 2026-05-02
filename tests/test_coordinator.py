@@ -1313,7 +1313,7 @@ class TestSetupTimer:
         return coordinator
 
     async def test_setup_timer_passes_timer_id_and_store(self, mock_coordinator):
-        """Test _setup_timer passes timer_id and store to timer.setup()."""
+        """Test _setup_timer passes timer_id, store, and shared store_lock to setup()."""
         kmlock = KeymasterLock(
             lock_name="test_lock",
             lock_entity_id="lock.test",
@@ -1334,6 +1334,10 @@ class TestSetupTimer:
         call_kwargs = mock_timer.setup.call_args.kwargs
         assert call_kwargs["timer_id"] == "test_entry_123_autolock"
         assert call_kwargs["store"] is mock_coordinator._timer_store
+        # The shared lock must be the coordinator's, not a per-timer one,
+        # otherwise concurrent persists from different timers can clobber
+        # each other's entries in the shared store dict.
+        assert call_kwargs["store_lock"] is mock_coordinator._timer_store_lock
 
     async def test_setup_timer_pushes_data_when_timer_resumed(self, mock_coordinator):
         """Test _setup_timer pushes data to entities when timer resumes from persistence."""
