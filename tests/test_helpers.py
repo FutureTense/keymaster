@@ -234,7 +234,9 @@ async def test_keymaster_timer_setup(hass):
     store = AsyncMock()
     store.async_load = AsyncMock(return_value={})
     store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock())
+    await timer.setup(
+        hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock()
+    )
 
     assert timer.hass is hass
     assert timer._kmlock is kmlock
@@ -272,7 +274,9 @@ async def test_keymaster_timer_start_day(hass):
     store = AsyncMock()
     store.async_load = AsyncMock(return_value={})
     store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock())
+    await timer.setup(
+        hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock()
+    )
 
     # Mock sun.is_up to return True (daytime)
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
@@ -306,7 +310,9 @@ async def test_keymaster_timer_start_night(hass):
     store = AsyncMock()
     store.async_load = AsyncMock(return_value={})
     store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock())
+    await timer.setup(
+        hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock()
+    )
 
     # Mock sun.is_up to return False (nighttime)
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=False):
@@ -339,7 +345,9 @@ async def test_keymaster_timer_restart(hass):
     store = AsyncMock()
     store.async_load = AsyncMock(return_value={})
     store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock())
+    await timer.setup(
+        hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock()
+    )
 
     # Start timer first time
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
@@ -375,7 +383,9 @@ async def test_keymaster_timer_cancel(hass):
     store = AsyncMock()
     store.async_load = AsyncMock(return_value={})
     store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock())
+    await timer.setup(
+        hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock()
+    )
 
     # Start timer
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
@@ -413,7 +423,9 @@ async def test_keymaster_timer_properties(hass):
     store = AsyncMock()
     store.async_load = AsyncMock(return_value={})
     store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock())
+    await timer.setup(
+        hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock()
+    )
 
     # Before starting
     assert timer.is_setup
@@ -501,7 +513,9 @@ async def test_keymaster_timer_cancel_elapsed(hass):
     store = AsyncMock()
     store.async_load = AsyncMock(return_value={})
     store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock())
+    await timer.setup(
+        hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock()
+    )
 
     # Start timer
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
@@ -530,7 +544,9 @@ async def test_keymaster_timer_expired_properties_are_pure(hass):
     store = AsyncMock()
     store.async_load = AsyncMock(return_value={})
     store.async_save = AsyncMock()
-    await timer.setup(hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock())
+    await timer.setup(
+        hass, kmlock, mock_callback, timer_id="test_timer", store=store, store_lock=asyncio.Lock()
+    )
 
     unsub = MagicMock()
     timer._end_time = dt_util.utcnow() - timedelta(seconds=1)
@@ -571,7 +587,9 @@ async def test_keymaster_timer_setup_recovers_expired_timer(hass, mock_store, st
         nonlocal action_called
         action_called = True
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
     await hass.async_block_till_done()
 
     # Expired timer should have fired the action
@@ -603,7 +621,9 @@ async def test_keymaster_timer_setup_resumes_active_timer(hass, mock_store, stor
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     # Timer should be running with the persisted end_time
     assert timer.is_running
@@ -623,7 +643,9 @@ async def test_keymaster_timer_setup_no_persisted_timer(hass, mock_store, store_
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     # Timer should be set up but not running
     assert timer.is_setup
@@ -643,7 +665,9 @@ async def test_keymaster_timer_start_persists_to_store(hass, mock_store, store_l
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
         await timer.start()
@@ -669,7 +693,9 @@ async def test_keymaster_timer_cancel_removes_from_store(hass, mock_store, store
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
         await timer.start()
@@ -725,7 +751,9 @@ async def test_keymaster_timer_setup_invalid_end_time_format(hass, mock_store, s
         nonlocal action_called
         action_called = True
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     # Action should NOT have fired
     assert action_called is False
@@ -752,7 +780,9 @@ async def test_keymaster_timer_setup_missing_end_time_key(hass, mock_store, stor
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     assert not timer.is_running
     # Invalid entry should be removed from store
@@ -777,7 +807,9 @@ async def test_keymaster_timer_setup_null_end_time(hass, mock_store, store_lock)
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     assert not timer.is_running
     mock_store.async_save.assert_called()
@@ -829,7 +861,9 @@ async def test_keymaster_timer_concurrent_persist_and_cancel(hass, mock_store, s
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     # Simulate real store: load returns whatever was last saved
     store_state: dict = {}
@@ -884,7 +918,9 @@ async def test_keymaster_timer_concurrent_persist_and_cancel(hass, mock_store, s
     assert "test_timer" not in saved_states[1], "cancel should have removed the entry"
 
 
-async def test_keymaster_timer_shared_lock_prevents_cross_timer_update_loss(hass, mock_store, store_lock):
+async def test_keymaster_timer_shared_lock_prevents_cross_timer_update_loss(
+    hass, mock_store, store_lock
+):
     """Test two timers sharing a store lock don't drop each other's persisted entries.
 
     Without a shared lock, timer A and timer B can both load the store dict
@@ -964,7 +1000,9 @@ async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store, s
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     mock_store.async_save.reset_mock()
 
@@ -975,7 +1013,9 @@ async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store, s
     mock_store.async_save.assert_not_called()
 
 
-async def test_keymaster_timer_setup_duration_missing_defaults_to_zero(hass, mock_store, store_lock):
+async def test_keymaster_timer_setup_duration_missing_defaults_to_zero(
+    hass, mock_store, store_lock
+):
     """Test setup() defaults duration to 0 when missing from persisted data."""
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
@@ -990,7 +1030,9 @@ async def test_keymaster_timer_setup_duration_missing_defaults_to_zero(hass, moc
     async def mock_action(*args):
         pass
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     assert timer.is_running
     assert timer._duration == 0
@@ -1012,7 +1054,9 @@ async def test_keymaster_timer_on_expired_callback(hass, mock_store, store_lock)
         nonlocal action_called_with
         action_called_with = now
 
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
 
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
         await timer.start()
