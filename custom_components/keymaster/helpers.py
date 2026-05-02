@@ -168,6 +168,23 @@ class KeymasterTimer:
         self._duration = None
         await self._remove_from_store()
 
+    def detach(self) -> None:
+        """Drop in-memory callbacks/state without touching the persisted store entry.
+
+        Used when the owning KeymasterLock is being replaced (e.g. config entry
+        reload). The replacement lock's timer will resume from the store entry
+        on setup(), so we must NOT remove it here. Without this, the orphaned
+        old timer keeps its async_call_later callback scheduled with a stale
+        kmlock reference, causing duplicate or out-of-date autolock actions.
+        """
+        _LOGGER.debug("[KeymasterTimer] Detaching timer (state preserved in store)")
+        self._cancel_callbacks()
+        self._end_time = None
+        self._duration = None
+        self.hass = None
+        self._kmlock = None
+        self._call_action = None
+
     def _schedule_callbacks(self, delay: float) -> None:
         """Schedule a single callback that fires the action then cleans up."""
 

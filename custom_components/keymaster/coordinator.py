@@ -1135,6 +1135,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_state()
         await self._update_listeners(self.kmlocks[new.keymaster_config_entry_id])
+        # Drop the old kmlock's timer callbacks before wiring up the new one.
+        # Without this, the old timer's async_call_later stays scheduled with
+        # a stale kmlock reference and will fire alongside the new timer.
+        # Store entry is preserved so the new timer resumes from it.
+        if old.autolock_timer:
+            old.autolock_timer.detach()
         await self._setup_timer(self.kmlocks[new.keymaster_config_entry_id])
         await self.async_refresh()
         return True

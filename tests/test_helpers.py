@@ -983,6 +983,51 @@ async def test_keymaster_timer_shared_lock_prevents_cross_timer_update_loss(
     assert "timer_b" in store_state
 
 
+async def test_keymaster_timer_detach_preserves_store(hass, mock_store, store_lock):
+    """Test detach() cancels callbacks and clears refs but preserves the store entry.
+
+    detach() is used when a kmlock is being replaced (config entry reload). The
+    replacement's timer must be able to resume from the store, so detach must
+    NOT call _remove_from_store (unlike cancel()).
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    # Track save/load calls AFTER start() so we only see what detach does
+    mock_store.async_save.reset_mock()
+    mock_store.async_load.reset_mock()
+
+    # Sanity: timer has a scheduled callback before detach
+    assert len(timer._unsub_events) == 1
+
+    timer.detach()
+
+    # In-memory state cleared
+    assert timer._unsub_events == []
+    assert timer._end_time is None
+    assert timer._duration is None
+    assert timer.hass is None
+    assert timer._kmlock is None
+    assert timer._call_action is None
+    # Critical: store was NOT modified — replacement timer needs to resume from it
+    mock_store.async_save.assert_not_called()
+
+
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store, store_lock):
     """Test _remove_from_store is a no-op when timer_id is not in the store."""
     timer = KeymasterTimer()
