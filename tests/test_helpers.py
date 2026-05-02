@@ -878,6 +878,69 @@ async def test_keymaster_timer_concurrent_persist_and_cancel(hass, mock_store):
     assert "test_timer" not in saved_states[1], "cancel should have removed the entry"
 
 
+async def test_keymaster_timer_shared_lock_prevents_cross_timer_update_loss(hass, mock_store):
+    """Test two timers sharing a store lock don't drop each other's persisted entries.
+
+    Without a shared lock, timer A and timer B can both load the store dict
+    concurrently, each mutate their own key, and the later async_save() will
+    overwrite the earlier write. The shared lock forces serialization so
+    both entries land in the final saved state.
+    """
+    shared_lock = asyncio.Lock()
+
+    # Simulate the real Store: load returns whatever was last saved
+    store_state: dict = {}
+    saved_states: list[dict] = []
+
+    async def record_save(data):
+        nonlocal store_state
+        store_state = dict(data)
+        saved_states.append(dict(data))
+
+    # Snapshot store_state on entry, then yield. With the shared lock, only
+    # one persist enters at a time, so each snapshot reflects the previous
+    # save. Without the lock, both persists snapshot the empty pre-write
+    # state and the second save clobbers the first.
+    async def snapshotting_load():
+        snapshot = dict(store_state)
+        await asyncio.sleep(0)
+        return snapshot
+
+    async def mock_action(*args):
+        pass
+
+    timer_a = KeymasterTimer()
+    timer_b = KeymasterTimer()
+    kmlock_a = KeymasterLock(
+        lock_name="lock_a", lock_entity_id="lock.a", keymaster_config_entry_id="entry_a"
+    )
+    kmlock_b = KeymasterLock(
+        lock_name="lock_b", lock_entity_id="lock.b", keymaster_config_entry_id="entry_b"
+    )
+    await timer_a.setup(
+        hass, kmlock_a, mock_action, timer_id="timer_a", store=mock_store, store_lock=shared_lock
+    )
+    await timer_b.setup(
+        hass, kmlock_b, mock_action, timer_id="timer_b", store=mock_store, store_lock=shared_lock
+    )
+
+    # Swap the mocks AFTER setup so the barrier only counts persist's loads
+    mock_store.async_save = AsyncMock(side_effect=record_save)
+    mock_store.async_load = AsyncMock(side_effect=snapshotting_load)
+
+    timer_a._end_time = dt_util.utcnow() + timedelta(minutes=5)
+    timer_a._duration = 300
+    timer_b._end_time = dt_util.utcnow() + timedelta(minutes=10)
+    timer_b._duration = 600
+
+    # Persist both concurrently — without a shared lock, one would overwrite the other
+    await asyncio.gather(timer_a._persist_to_store(), timer_b._persist_to_store())
+
+    # Final saved state must contain BOTH entries
+    assert "timer_a" in store_state
+    assert "timer_b" in store_state
+
+
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store):
     """Test _remove_from_store is a no-op when timer_id is not in the store."""
     timer = KeymasterTimer()

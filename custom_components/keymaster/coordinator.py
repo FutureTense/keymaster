@@ -122,6 +122,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._timer_store: Store[dict[str, TimerStoreEntry]] = Store(
             hass, TIMER_STORAGE_VERSION, TIMER_STORAGE_KEY
         )
+        # Shared across all KeymasterTimer instances writing to _timer_store so
+        # concurrent persists/removes can't drop each other's entries.
+        self._timer_store_lock = asyncio.Lock()
 
     async def initial_setup(self) -> None:
         """Trigger the initial async_setup."""
@@ -928,6 +931,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 call_action=functools.partial(self._timer_triggered, kmlock),
                 timer_id=f"{kmlock.keymaster_config_entry_id}_autolock",
                 store=self._timer_store,
+                store_lock=self._timer_store_lock,
             )
             if kmlock.autolock_timer.is_running:
                 self.async_set_updated_data(dict(self.kmlocks))

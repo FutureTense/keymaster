@@ -83,7 +83,9 @@ class KeymasterTimer:
         self._duration: int | None = None
         self._timer_id: str | None = None
         self._store: Store[dict[str, TimerStoreEntry]] | None = None
-        self._store_lock = asyncio.Lock()
+        # Replaced in setup() with a lock shared across all timers using the
+        # same store; the per-instance default is a safe fallback for tests.
+        self._store_lock: asyncio.Lock = asyncio.Lock()
 
     async def setup(
         self,
@@ -92,12 +94,15 @@ class KeymasterTimer:
         call_action: Callable,
         timer_id: str,
         store: Store[dict[str, TimerStoreEntry]],
+        store_lock: asyncio.Lock | None = None,
     ) -> None:
         """Set up the timer and recover any persisted state."""
         self.hass = hass
         self._kmlock = kmlock
         self._call_action = call_action
         self._timer_id = timer_id
+        if store_lock is not None:
+            self._store_lock = store_lock
         self._store = store
 
         # Recover persisted timer
