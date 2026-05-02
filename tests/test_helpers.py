@@ -1028,6 +1028,37 @@ async def test_keymaster_timer_detach_preserves_store(hass, mock_store, store_lo
     mock_store.async_save.assert_not_called()
 
 
+async def test_keymaster_timer_persist_after_detach_is_noop(hass, mock_store, store_lock):
+    """Test _persist_to_store after detach() is a silent no-op (doesn't crash, no save).
+
+    detach() nulls _end_time, so the early guard returns. This protects against
+    a queued persist running after the timer was detached.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    timer.detach()
+    mock_store.async_save.reset_mock()
+
+    # Should not raise and should not save
+    await timer._persist_to_store()
+    mock_store.async_save.assert_not_called()
+
+
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store, store_lock):
     """Test _remove_from_store is a no-op when timer_id is not in the store."""
     timer = KeymasterTimer()

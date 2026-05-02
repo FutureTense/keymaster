@@ -83,8 +83,6 @@ class KeymasterTimer:
         self._duration: int | None = None
         self._timer_id: str | None = None
         self._store: Store[dict[str, TimerStoreEntry]] | None = None
-        # Set in setup(); shared across all timers writing to the same store
-        # so concurrent persists/removes can't drop each other's entries.
         self._store_lock: asyncio.Lock | None = None
 
     async def setup(
@@ -171,19 +169,25 @@ class KeymasterTimer:
     def detach(self) -> None:
         """Drop in-memory callbacks/state without touching the persisted store entry.
 
-        Used when the owning KeymasterLock is being replaced (e.g. config entry
-        reload). The replacement lock's timer will resume from the store entry
-        on setup(), so we must NOT remove it here. Without this, the orphaned
-        old timer keeps its async_call_later callback scheduled with a stale
-        kmlock reference, causing duplicate or out-of-date autolock actions.
+        Unlike cancel(), which removes the store entry, detach() leaves it so a
+        replacement KeymasterTimer (created by _setup_timer on the new kmlock
+        after a config entry reload) can resume from it. Without this, the
+        orphaned old timer's async_call_later stays armed against a stale
+        kmlock reference and fires alongside the new timer.
         """
         _LOGGER.debug("[KeymasterTimer] Detaching timer (state preserved in store)")
-        self._cancel_callbacks()
-        self._end_time = None
-        self._duration = None
-        self.hass = None
-        self._kmlock = None
-        self._call_action = None
+        try:
+            self._cancel_callbacks()
+        except Exception:
+            # Best-effort: even if unsub raises (e.g. HA shutdown), we must
+            # finish nulling refs so the orphan can't operate on stale state.
+            _LOGGER.exception("[KeymasterTimer] Error cancelling callbacks during detach")
+        finally:
+            self._end_time = None
+            self._duration = None
+            self.hass = None
+            self._kmlock = None
+            self._call_action = None
 
     def _schedule_callbacks(self, delay: float) -> None:
         """Schedule a single callback that fires the action then cleans up."""
@@ -211,10 +215,18 @@ class KeymasterTimer:
 
     async def _persist_to_store(self) -> None:
         """Write current timer state to the store."""
-        if not self._store or not self._timer_id or not self._end_time or not self._store_lock:
+        if not self._store or not self._timer_id or not self._end_time:
+            return
+        if not self._store_lock:
+            _LOGGER.error(
+                "[KeymasterTimer] %s: store_lock missing; setup() was not called. "
+                "Persist skipped, autolock will not survive restart",
+                self._timer_id,
+            )
             return
         async with self._store_lock:
-            # Capture values so a concurrent cancel() can't null them mid-persist.
+            # Re-check after lock acquisition: detach() can null _end_time
+            # while we were queued, in which case there's nothing to persist.
             end_time = self._end_time
             duration = self._duration
             if not end_time:
@@ -228,7 +240,14 @@ class KeymasterTimer:
 
     async def _remove_from_store(self) -> None:
         """Remove this timer's entry from the store."""
-        if not self._store or not self._timer_id or not self._store_lock:
+        if not self._store or not self._timer_id:
+            return
+        if not self._store_lock:
+            _LOGGER.error(
+                "[KeymasterTimer] %s: store_lock missing; setup() was not called. "
+                "Remove skipped, stale entry will resume on restart",
+                self._timer_id,
+            )
             return
         async with self._store_lock:
             data = await self._store.async_load() or {}
