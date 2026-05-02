@@ -1,5 +1,6 @@
 """Test keymaster helpers."""
 
+import asyncio
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -802,8 +803,15 @@ async def test_keymaster_timer_persist_skipped_without_store(hass):
     await timer._persist_to_store()
 
 
-async def test_keymaster_timer_persist_no_crash_when_end_time_cleared(hass, mock_store):
-    """Test _persist_to_store doesn't crash if _end_time is cleared before lock acquired."""
+async def test_keymaster_timer_concurrent_persist_and_cancel(hass, mock_store):
+    """Test concurrent _persist_to_store and cancel() don't crash and cancel wins.
+
+    Reproduces the original race: persist passes its initial guard, awaits
+    async_load, and during that yield cancel() runs. With the asyncio.Lock,
+    cancel must wait for persist to release the lock — so persist completes
+    cleanly (no AttributeError) and cancel runs strictly after, leaving the
+    final store state with the entry removed.
+    """
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
         lock_name="test_lock",
@@ -817,50 +825,57 @@ async def test_keymaster_timer_persist_no_crash_when_end_time_cleared(hass, mock
 
     await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
 
-    # Set timer state then clear it (simulates cancel() winning the pre-guard check)
+    # Simulate real store: load returns whatever was last saved
+    store_state: dict = {}
+    saved_states: list[dict] = []
+
+    async def record_save(data):
+        nonlocal store_state
+        store_state = dict(data)
+        saved_states.append(dict(data))
+
+    mock_store.async_save = AsyncMock(side_effect=record_save)
+
+    # Block async_load on an event so persist gets stuck after acquiring the lock.
+    # Once the event is set, persist completes; cancel (queued behind the lock)
+    # then runs and removes the entry.
+    load_release = asyncio.Event()
+    persist_load_started = asyncio.Event()
+    load_call_count = 0
+
+    async def blocking_load():
+        nonlocal load_call_count
+        load_call_count += 1
+        if load_call_count == 1:
+            # First call is from persist — block until cancel has been invoked
+            persist_load_started.set()
+            await load_release.wait()
+        return dict(store_state)
+
+    mock_store.async_load = AsyncMock(side_effect=blocking_load)
+
+    # Prime timer state as start() would
     timer._end_time = dt_util.utcnow() + timedelta(minutes=5)
     timer._duration = 300
-    # Acquire the lock first (simulates cancel holding it), then clear end_time
-    async with timer._store_lock:
-        timer._end_time = None
-        timer._duration = None
 
-    # Now persist runs — should bail out at the pre-guard, not crash
-    await timer._persist_to_store()
-    mock_store.async_save.assert_not_called()
+    # Kick off persist; it will acquire the lock and block on async_load
+    persist_task = asyncio.create_task(timer._persist_to_store())
+    await persist_load_started.wait()
 
+    # Now invoke cancel concurrently — it must wait for the lock
+    cancel_task = asyncio.create_task(timer.cancel())
+    # Yield to let cancel attempt to acquire the lock and block
+    await asyncio.sleep(0)
+    assert not cancel_task.done(), "cancel should be blocked waiting for the store lock"
 
-async def test_keymaster_timer_store_lock_serializes_persist_and_remove(hass, mock_store):
-    """Test that _store_lock prevents persist and remove from interleaving."""
-    timer = KeymasterTimer()
-    kmlock = KeymasterLock(
-        lock_name="test_lock",
-        lock_entity_id="lock.test_lock",
-        keymaster_config_entry_id="test_entry",
-    )
-    kmlock.autolock_min_day = 5
+    # Release persist; it should save, then cancel acquires lock and removes
+    load_release.set()
+    await asyncio.gather(persist_task, cancel_task)
 
-    async def mock_action(*args):
-        pass
-
-    await timer.setup(hass, kmlock, mock_action, timer_id="test_timer", store=mock_store)
-
-    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
-        await timer.start()
-
-    # Verify persist saved the timer
-    mock_store.async_save.assert_called()
-    saved_data = mock_store.async_save.call_args[0][0]
-    assert "test_timer" in saved_data
-
-    # Now cancel — remove should clean up the entry
-    mock_store.async_load = AsyncMock(return_value=dict(saved_data))
-    mock_store.async_save.reset_mock()
-    await timer.cancel()
-
-    mock_store.async_save.assert_called()
-    final_data = mock_store.async_save.call_args[0][0]
-    assert "test_timer" not in final_data
+    # No crash, persist saved the entry, cancel then removed it
+    assert len(saved_states) == 2
+    assert "test_timer" in saved_states[0], "persist should have saved the entry"
+    assert "test_timer" not in saved_states[1], "cancel should have removed the entry"
 
 
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store):
