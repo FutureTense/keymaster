@@ -1079,6 +1079,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             or not old.code_slots
         ):
             return False
+        # Detach the old timer BEFORE any awaits below so its scheduled
+        # callback can't fire during the await chain (which would invoke
+        # _timer_triggered against the about-to-be-orphaned `old` kmlock).
+        if old.autolock_timer:
+            old.autolock_timer.detach()
         await KeymasterCoordinator._unsubscribe_listeners(old)
         # _LOGGER.debug("[update_lock] %s: old: %s", new.lock_name, old)
         del_code_slots: list[int] = [
@@ -1135,9 +1140,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._rebuild_lock_relationships()
         await self._update_door_and_lock_state()
         await self._update_listeners(self.kmlocks[new.keymaster_config_entry_id])
-        # Cancel old timer's callbacks; new timer will resume from the preserved store entry.
-        if old.autolock_timer:
-            old.autolock_timer.detach()
         await self._setup_timer(self.kmlocks[new.keymaster_config_entry_id])
         await self.async_refresh()
         return True

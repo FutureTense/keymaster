@@ -1373,16 +1373,17 @@ class TestSetupTimer:
 
         kmlock.autolock_timer.setup.assert_not_called()
 
-    async def test_update_lock_detaches_old_timer_before_setup(self, mock_coordinator):
-        """Test _update_lock detaches the old kmlock's timer before wiring up the new one.
+    async def test_update_lock_detaches_old_timer_before_any_await(self, mock_coordinator):
+        """Test _update_lock detaches the old timer BEFORE the await chain.
 
-        Without detach(), the old timer's async_call_later callback stays
-        scheduled with a stale kmlock reference, firing alongside the new
-        timer and causing duplicate autolock actions on config entry reload.
+        If detach happens after one of the awaits, the old timer can fire
+        in the gap and run _timer_triggered against the (about-to-be-)
+        orphaned kmlock — for example mutating old.pending_retry_lock,
+        which the replacement never sees.
         """
         entry_id = "test_entry_reload"
+        call_order: list[str] = []
 
-        # Build a minimum-viable existing kmlock with a timer that looks active
         old_lock = KeymasterLock(
             lock_name="test_lock",
             lock_entity_id="lock.test",
@@ -1392,9 +1393,8 @@ class TestSetupTimer:
         old_lock.number_of_code_slots = 1
         old_lock.code_slots = {1: Mock(accesslimit_day_of_week=None)}
         old_lock.autolock_timer = Mock()
-        old_lock.autolock_timer.detach = Mock()
+        old_lock.autolock_timer.detach = Mock(side_effect=lambda: call_order.append("detach"))
 
-        # Build the replacement kmlock (config entry reload yields a new instance)
         new_lock = KeymasterLock(
             lock_name="test_lock",
             lock_entity_id="lock.test",
@@ -1407,19 +1407,36 @@ class TestSetupTimer:
         mock_coordinator.kmlocks[entry_id] = old_lock
         mock_coordinator._initial_setup_done_event.set()
 
+        async def record_unsub(*args, **kwargs):
+            call_order.append("unsubscribe_listeners")
+
+        async def record_setup(*args, **kwargs):
+            call_order.append("setup_timer")
+
         with (
-            patch.object(KeymasterCoordinator, "_unsubscribe_listeners", new=AsyncMock()),
+            patch.object(
+                KeymasterCoordinator,
+                "_unsubscribe_listeners",
+                new=AsyncMock(side_effect=record_unsub),
+            ),
             patch.object(mock_coordinator, "_rebuild_lock_relationships", new=AsyncMock()),
             patch.object(mock_coordinator, "_update_door_and_lock_state", new=AsyncMock()),
             patch.object(mock_coordinator, "_update_listeners", new=AsyncMock()),
-            patch.object(mock_coordinator, "_setup_timer", new=AsyncMock()) as mock_setup_timer,
+            patch.object(
+                mock_coordinator, "_setup_timer", new=AsyncMock(side_effect=record_setup)
+            ) as mock_setup_timer,
             patch.object(mock_coordinator, "async_refresh", new=AsyncMock()),
         ):
             await mock_coordinator._update_lock(new_lock)
 
-        # Old timer must be detached BEFORE the new timer is set up
         old_lock.autolock_timer.detach.assert_called_once_with()
         mock_setup_timer.assert_called_once()
+        # Critical ordering: detach must run BEFORE any of the await calls
+        # in _update_lock, so the old timer can't fire during the gap.
+        assert call_order[0] == "detach", f"detach must be first, got {call_order}"
+        assert "unsubscribe_listeners" in call_order
+        assert call_order.index("detach") < call_order.index("unsubscribe_listeners")
+        assert call_order.index("detach") < call_order.index("setup_timer")
         # And the new kmlock (now in self.kmlocks) is what _setup_timer received
         assert mock_setup_timer.call_args.args[0] is mock_coordinator.kmlocks[entry_id]
 

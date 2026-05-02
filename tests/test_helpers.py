@@ -1014,16 +1014,22 @@ async def test_keymaster_timer_detach_preserves_store(hass, mock_store, store_lo
 
     # Sanity: timer has a scheduled callback before detach
     assert len(timer._unsub_events) == 1
+    saved_end_time = timer._end_time
+    saved_duration = timer._duration
 
     timer.detach()
 
-    # In-memory state cleared
+    # Callbacks unsubscribed and kmlock binding cleared
     assert timer._unsub_events == []
-    assert timer._end_time is None
-    assert timer._duration is None
     assert timer.hass is None
     assert timer._kmlock is None
     assert timer._call_action is None
+    assert timer._detached is True
+    # _end_time/_duration are PRESERVED so an in-flight _persist_to_store can
+    # still write the entry under the lock (otherwise a start() racing with
+    # reload would silently lose the autolock state).
+    assert timer._end_time == saved_end_time
+    assert timer._duration == saved_duration
     # Critical: store was NOT modified — replacement timer needs to resume from it
     mock_store.async_save.assert_not_called()
 
@@ -1106,11 +1112,104 @@ async def test_keymaster_timer_setup_load_under_lock(hass, mock_store, store_loc
     mock_store.async_load.assert_called()
 
 
-async def test_keymaster_timer_persist_after_detach_is_noop(hass, mock_store, store_lock):
-    """Test _persist_to_store after detach() is a silent no-op (doesn't crash, no save).
+async def test_keymaster_timer_on_expired_removes_store_before_action(hass, mock_store, store_lock):
+    """Test _on_expired removes store entry BEFORE calling the action.
 
-    detach() nulls _end_time, so the early guard returns. This protects against
-    a queued persist running after the timer was detached.
+    If detach() races during the action call, the store entry is already gone
+    so the replacement timer's setup() can't replay the same expired timer
+    and double-fire the lock action.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    call_order: list[str] = []
+
+    async def mock_action(*args):
+        call_order.append("action")
+
+    real_save = mock_store.async_save
+
+    async def tracking_save(data):
+        if "test_timer" not in data:
+            call_order.append("remove")
+        await real_save(data)
+
+    mock_store.async_save = AsyncMock(side_effect=tracking_save)
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    # Capture the real _on_expired by patching async_call_later
+    with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
+        with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+            await timer.start()
+        callback_fn = mock_call_later.call_args[1]["action"]
+
+    # Make load return the entry so _remove_from_store actually saves
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
+    )
+
+    await callback_fn(dt_util.utcnow())
+
+    # Remove must have happened BEFORE the action call
+    assert call_order == ["remove", "action"]
+
+
+async def test_keymaster_timer_on_expired_skipped_after_detach(hass, mock_store, store_lock):
+    """Test _on_expired is a no-op if detach() ran before it could fire.
+
+    When the timer was queued to fire (async_call_later put _on_expired in
+    the run queue) but detach ran first, _on_expired must NOT fire the
+    action — the replacement timer will resume from the preserved store
+    entry and fire it instead.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    action_called = False
+
+    async def mock_action(*args):
+        nonlocal action_called
+        action_called = True
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
+        with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+            await timer.start()
+        callback_fn = mock_call_later.call_args[1]["action"]
+
+    # Detach BEFORE the callback fires (simulating reload)
+    timer.detach()
+    mock_store.async_save.reset_mock()
+
+    await callback_fn(dt_util.utcnow())
+
+    assert not action_called, "action must not fire on a detached timer"
+    mock_store.async_save.assert_not_called()
+
+
+async def test_keymaster_timer_persist_after_detach_still_saves(hass, mock_store, store_lock):
+    """Test _persist_to_store after detach() still writes the entry.
+
+    detach() preserves _end_time/_duration so an in-flight persist queued
+    behind the store lock will still save when it eventually acquires it.
+    Without this, a start() racing with config entry reload would silently
+    lose the autolock — the replacement timer would load an empty store.
     """
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
@@ -1132,9 +1231,11 @@ async def test_keymaster_timer_persist_after_detach_is_noop(hass, mock_store, st
     timer.detach()
     mock_store.async_save.reset_mock()
 
-    # Should not raise and should not save
+    # Persist should still save the preserved end_time/duration
     await timer._persist_to_store()
-    mock_store.async_save.assert_not_called()
+    mock_store.async_save.assert_called_once()
+    saved_data = mock_store.async_save.call_args[0][0]
+    assert "test_timer" in saved_data
 
 
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store, store_lock):

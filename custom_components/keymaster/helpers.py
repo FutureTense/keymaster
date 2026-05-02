@@ -167,9 +167,8 @@ class KeymasterTimer:
     async def cancel(self, timer_elapsed: dt | None = None) -> None:
         """Cancel a timer."""
         if self._detached:
-            # An _on_expired coroutine that was already running when detach()
-            # ran must NOT remove the store entry — the replacement timer owns
-            # it and will resume from there.
+            # The owning kmlock has been replaced; the replacement timer owns
+            # the store entry. Do nothing here so we can't trash its state.
             _LOGGER.debug("[KeymasterTimer] Cancel called on detached timer; ignoring")
             return
         if timer_elapsed:
@@ -182,16 +181,18 @@ class KeymasterTimer:
         await self._remove_from_store()
 
     def detach(self) -> None:
-        """Drop in-memory callbacks/state without touching the persisted store entry.
+        """Drop in-memory callbacks and clear the kmlock binding.
 
-        Unlike cancel(), which removes the store entry, detach() leaves it so a
-        replacement KeymasterTimer (created by _setup_timer on the new kmlock
-        after a config entry reload) can resume from it. Without this, the
-        orphaned old timer's async_call_later stays armed against a stale
-        kmlock reference and fires alongside the new timer.
+        Unlike cancel(), detach() leaves the persisted store entry so a
+        replacement KeymasterTimer (created on the new kmlock after a config
+        entry reload) can resume from it. _end_time and _duration are also
+        preserved so an in-flight _persist_to_store() queued behind the store
+        lock will still write the entry — without this, a start() racing with
+        reload would silently drop the autolock.
         """
         _LOGGER.debug("[KeymasterTimer] Detaching timer (state preserved in store)")
-        # Set first so any _on_expired already running short-circuits cancel().
+        # Set first so any _on_expired already past its initial guard sees the
+        # detached state when it tries to call back into us.
         self._detached = True
         try:
             self._cancel_callbacks()
@@ -200,8 +201,6 @@ class KeymasterTimer:
             # finish nulling refs so the orphan can't operate on stale state.
             _LOGGER.exception("[KeymasterTimer] Error cancelling callbacks during detach")
         finally:
-            self._end_time = None
-            self._duration = None
             self.hass = None
             self._kmlock = None
             self._call_action = None
@@ -210,10 +209,27 @@ class KeymasterTimer:
         """Schedule a single callback that fires the action then cleans up."""
 
         async def _on_expired(now: dt) -> None:
-            """Fire the action and clean up timer state."""
-            if self._call_action:
-                await self._call_action(now)
-            await self.cancel(timer_elapsed=now)
+            """Fire the action and clean up timer state.
+
+            Removes the store entry BEFORE calling the action so that a
+            concurrent detach()/reload can't preserve a fired entry that
+            would replay on the replacement timer. The action snapshot is
+            taken before the store await so detach can't deny the firing
+            after we've committed to it.
+            """
+            if self._call_action is None:
+                # Detached before the callback could start; replacement timer
+                # owns the store entry and will fire it.
+                return
+            action = self._call_action
+            await self._remove_from_store()
+            try:
+                await action(now)
+            except Exception:
+                _LOGGER.exception("[KeymasterTimer] Action raised in _on_expired")
+            self._cancel_callbacks()
+            self._end_time = None
+            self._duration = None
 
         self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=_on_expired))
 
