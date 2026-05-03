@@ -1490,6 +1490,56 @@ class TestSetupTimer:
 
         assert mock_coordinator.kmlocks[entry_id].pending_retry_lock is True
 
+    async def test_update_lock_restores_timer_on_inner_failure(self, mock_coordinator):
+        """Test _update_lock re-attaches the autolock timer if a later step raises.
+
+        Without rollback, an exception in any of the await steps after detach()
+        leaves the kmlock with no working timer until the next reload, silently
+        disabling autolock.
+        """
+        entry_id = "test_entry_rollback"
+
+        old_lock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id=entry_id,
+        )
+        old_lock.starting_code_slot = 1
+        old_lock.number_of_code_slots = 1
+        old_lock.code_slots = {1: Mock(accesslimit_day_of_week=None)}
+        old_lock.autolock_timer = Mock()
+        old_lock.autolock_timer.detach = AsyncMock()
+
+        new_lock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id=entry_id,
+        )
+        new_lock.starting_code_slot = 1
+        new_lock.number_of_code_slots = 1
+        new_lock.code_slots = {1: Mock(accesslimit_day_of_week=None)}
+
+        mock_coordinator.kmlocks[entry_id] = old_lock
+        mock_coordinator._initial_setup_done_event.set()
+
+        with (
+            # Make _unsubscribe_listeners raise to simulate a failure
+            patch.object(
+                KeymasterCoordinator,
+                "_unsubscribe_listeners",
+                new=AsyncMock(side_effect=RuntimeError("teardown failed")),
+            ),
+            patch.object(mock_coordinator, "_setup_timer", new=AsyncMock()) as mock_setup_timer,
+            pytest.raises(RuntimeError, match="teardown failed"),
+        ):
+            await mock_coordinator._update_lock(new_lock)
+
+        # Rollback must call _setup_timer on the kmlock currently in self.kmlocks
+        # (which is still old_lock since we failed before kmlocks was replaced)
+        # so the autolock isn't silently disabled.
+        mock_setup_timer.assert_called_once()
+        assert mock_setup_timer.call_args.args[0] is mock_coordinator.kmlocks[entry_id]
+
 
 # ============================================================================
 # State Synchronization Tests

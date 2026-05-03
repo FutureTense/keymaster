@@ -1083,8 +1083,35 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         # callback can't fire during the await chain. detach() awaits any
         # in-flight _on_expired so any mutations it makes to old (e.g.
         # pending_retry_lock) are visible when we copy state below.
+        # Once detached, the old timer is unusable until the new timer is
+        # set up — so wrap the rest of the body in a try/except that
+        # restores the autolock on whichever kmlock is current if any
+        # subsequent step fails. The store entry was preserved by detach,
+        # so _setup_timer() will resume the autolock from disk.
         if old.autolock_timer:
             await old.autolock_timer.detach()
+        try:
+            await self._update_lock_inner(old, new)
+        except Exception:
+            current = self.kmlocks.get(new.keymaster_config_entry_id)
+            if current is not None:
+                _LOGGER.exception(
+                    "[update_lock] %s: Update failed mid-flight; "
+                    "restoring autolock timer to keep state from being silently lost",
+                    new.lock_name,
+                )
+                try:
+                    await self._setup_timer(current)
+                except Exception:
+                    _LOGGER.exception(
+                        "[update_lock] %s: Failed to restore autolock timer after rollback",
+                        new.lock_name,
+                    )
+            raise
+        return True
+
+    async def _update_lock_inner(self, old: KeymasterLock, new: KeymasterLock) -> None:
+        """Body of _update_lock after the old timer has been detached."""
         await KeymasterCoordinator._unsubscribe_listeners(old)
         # _LOGGER.debug("[update_lock] %s: old: %s", new.lock_name, old)
         del_code_slots: list[int] = [
@@ -1146,7 +1173,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._update_listeners(self.kmlocks[new.keymaster_config_entry_id])
         await self._setup_timer(self.kmlocks[new.keymaster_config_entry_id])
         await self.async_refresh()
-        return True
 
     async def _delete_lock(self, kmlock: KeymasterLock, _: dt) -> None:
         await self._initial_setup_done_event.wait()

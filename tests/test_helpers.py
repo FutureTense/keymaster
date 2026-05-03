@@ -1204,6 +1204,49 @@ async def test_keymaster_timer_on_expired_action_fires_even_if_remove_raises(
     assert action_called, "action must fire even if storage cleanup fails"
 
 
+async def test_keymaster_timer_on_expired_preserves_store_when_action_raises(
+    hass, mock_store, store_lock
+):
+    """Test the store entry is preserved when the action raises.
+
+    The lock action is safety-critical. If it fails (e.g. lock service
+    raised), the door is still unlocked — we MUST preserve the store
+    entry so the timer replays on the next HA restart, otherwise the
+    autolock state is silently lost forever.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def failing_action(*args):
+        raise RuntimeError("lock service failed")
+
+    await timer.setup(
+        hass, kmlock, failing_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
+        with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+            await timer.start()
+        callback_fn = mock_call_later.call_args[1]["action"]
+
+    # Load returns the entry, so a remove call would actually save
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
+    )
+    mock_store.async_save.reset_mock()
+
+    # Should not raise (action exception is caught), but should NOT remove from store
+    await callback_fn(dt_util.utcnow())
+
+    # Critical: no save call means the store entry was NOT removed
+    mock_store.async_save.assert_not_called()
+
+
 async def test_keymaster_timer_on_expired_skipped_after_detach(hass, mock_store, store_lock):
     """Test _on_expired is a no-op if detach() ran before it could fire.
 

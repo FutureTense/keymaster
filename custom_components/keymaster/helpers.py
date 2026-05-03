@@ -240,9 +240,19 @@ class KeymasterTimer:
                 try:
                     await action(now)
                 except Exception:
-                    _LOGGER.exception("[KeymasterTimer] Action raised in _on_expired")
-                # Cleanup happens regardless of whether detach() ran during
-                # the action; we own the store entry until we finish here.
+                    # Preserve the store entry so the timer replays on next
+                    # HA restart — the action (e.g. locking the door) is
+                    # safety-critical and a failure here means it didn't
+                    # happen yet. Skip the cleanup so retry remains possible.
+                    _LOGGER.exception(
+                        "[KeymasterTimer] Action raised in _on_expired; "
+                        "store entry preserved for retry on restart"
+                    )
+                    return
+                # Action succeeded — clean up. We use _remove_from_store
+                # directly (not cancel()) since cancel() is a noop on
+                # detached timers; an in-flight callback racing with detach
+                # must still remove the entry it owns.
                 await self._remove_from_store()
                 self._cancel_callbacks()
                 self._end_time = None
