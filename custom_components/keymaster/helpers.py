@@ -198,6 +198,16 @@ class KeymasterTimer:
             _LOGGER.debug("[KeymasterTimer] Timer elapsed")
         else:
             _LOGGER.debug("[KeymasterTimer] Cancelling auto-lock timer")
+        await self._clear_timer_state()
+
+    async def _clear_timer_state(self) -> None:
+        """Clear the persisted entry and reset in-memory timer fields.
+
+        Called from cancel() (user/coordinator-initiated) and from a
+        successful _on_expired (after the action fired). Direct callers
+        from _on_expired bypass cancel()'s _detached short-circuit so an
+        in-flight callback still removes the entry it owns.
+        """
         self._cancel_callbacks()
         self._end_time = None
         self._duration = None
@@ -274,14 +284,11 @@ class KeymasterTimer:
                         "store entry preserved for retry on restart"
                     )
                     return
-                # Action succeeded — clean up. We use _remove_from_store
-                # directly (not cancel()) since cancel() is a noop on
+                # Action succeeded — clear state. We call _clear_timer_state
+                # directly instead of cancel() because cancel() is a noop on
                 # detached timers; an in-flight callback racing with detach
                 # must still remove the entry it owns.
-                await self._remove_from_store()
-                self._cancel_callbacks()
-                self._end_time = None
-                self._duration = None
+                await self._clear_timer_state()
             finally:
                 self._on_expired_task = None
 
