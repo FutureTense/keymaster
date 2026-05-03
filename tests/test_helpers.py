@@ -1440,6 +1440,103 @@ async def test_keymaster_timer_on_expired_remove_runs_when_detach_races(
     assert "test_timer" not in save_calls[-1], "store entry must be removed"
 
 
+async def test_keymaster_timer_setup_recovery_preserves_store_when_action_raises(
+    hass, mock_store, store_lock
+):
+    """Test setup() recovery preserves the store entry if the recovery action raises.
+
+    Mirrors _on_expired's safety contract: if the lock action fails on
+    startup recovery, the entry must stay so the timer replays on next
+    restart instead of being lost forever.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    expired_end_time = (dt_util.utcnow() - timedelta(minutes=5)).isoformat()
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": expired_end_time, "duration": 300}}
+    )
+
+    async def failing_action(*args):
+        raise RuntimeError("recovery action failed")
+
+    await timer.setup(
+        hass, kmlock, failing_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    mock_store.async_save.reset_mock()
+    await hass.async_block_till_done()
+
+    # Store entry must be preserved for retry on next restart
+    mock_store.async_save.assert_not_called()
+
+
+async def test_keymaster_timer_setup_resets_detached_flag(hass, mock_store, store_lock):
+    """Test setup() resets _detached so a previously-detached instance is reusable.
+
+    Without this reset, _update_lock's rollback path reuses the detached
+    timer object via _setup_timer(current); subsequent cancel() calls
+    would silently no-op and the user couldn't stop the autolock.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    await timer.detach()
+    assert timer._detached is True
+
+    # Re-setup the same instance (simulating rollback)
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    assert timer._detached is False
+
+
+async def test_keymaster_timer_persist_raises_if_store_lock_missing(hass, mock_store):
+    """Test _persist_to_store raises RuntimeError when _store_lock is missing.
+
+    setup() always sets _store_lock; if it didn't run, persisting would
+    silently lose the autolock state across restarts. The raise converts
+    a silent failure into a loud one.
+    """
+    timer = KeymasterTimer()
+    timer._store = mock_store
+    timer._timer_id = "test_timer"
+    timer._end_time = dt_util.utcnow() + timedelta(minutes=5)
+    # _store_lock intentionally NOT set
+
+    with pytest.raises(RuntimeError, match="store_lock missing"):
+        await timer._persist_to_store()
+
+
+async def test_keymaster_timer_remove_raises_if_store_lock_missing(hass, mock_store):
+    """Test _remove_from_store raises RuntimeError when _store_lock is missing.
+
+    Without raising, a stale entry could remain and fire a phantom
+    autolock on the next restart.
+    """
+    timer = KeymasterTimer()
+    timer._store = mock_store
+    timer._timer_id = "test_timer"
+    # _store_lock intentionally NOT set
+
+    with pytest.raises(RuntimeError, match="store_lock missing"):
+        await timer._remove_from_store()
+
+
 async def test_keymaster_timer_persist_recheck_aborts_after_cancel(hass, mock_store, store_lock):
     """Test _persist_to_store's post-lock recheck aborts when cancel nulled _end_time.
 

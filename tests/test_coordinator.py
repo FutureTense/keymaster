@@ -1523,20 +1523,27 @@ class TestSetupTimer:
         mock_coordinator._initial_setup_done_event.set()
 
         with (
-            # Make _unsubscribe_listeners raise to simulate a failure
+            # Make _rebuild_lock_relationships raise so we get past the initial
+            # _unsubscribe_listeners (so the rollback has something to restore)
+            patch.object(KeymasterCoordinator, "_unsubscribe_listeners", new=AsyncMock()),
             patch.object(
-                KeymasterCoordinator,
-                "_unsubscribe_listeners",
-                new=AsyncMock(side_effect=RuntimeError("teardown failed")),
+                mock_coordinator,
+                "_rebuild_lock_relationships",
+                new=AsyncMock(side_effect=RuntimeError("rebuild failed")),
             ),
+            patch.object(
+                mock_coordinator, "_update_listeners", new=AsyncMock()
+            ) as mock_update_listeners,
             patch.object(mock_coordinator, "_setup_timer", new=AsyncMock()) as mock_setup_timer,
-            pytest.raises(RuntimeError, match="teardown failed"),
+            pytest.raises(RuntimeError, match="rebuild failed"),
         ):
             await mock_coordinator._update_lock(new_lock)
 
-        # Rollback must call _setup_timer on the kmlock currently in self.kmlocks
-        # (which is still old_lock since we failed before kmlocks was replaced)
-        # so the autolock isn't silently disabled.
+        # Rollback must restore BOTH listeners and timer on the kmlock
+        # currently in self.kmlocks, otherwise autolock and event-driven
+        # state changes are silently disabled.
+        mock_update_listeners.assert_called_once()
+        assert mock_update_listeners.call_args.args[0] is mock_coordinator.kmlocks[entry_id]
         mock_setup_timer.assert_called_once()
         assert mock_setup_timer.call_args.args[0] is mock_coordinator.kmlocks[entry_id]
 

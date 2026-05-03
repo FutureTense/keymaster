@@ -1163,9 +1163,19 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if current is not None:
                 _LOGGER.exception(
                     "[update_lock] %s: Update failed mid-flight; "
-                    "restoring autolock timer to keep state from being silently lost",
+                    "restoring autolock timer and listeners to keep state from being silently lost",
                     new.lock_name,
                 )
+                # Re-attach listeners — _unsubscribe_listeners runs early in
+                # the try block, so a later failure leaves the surviving
+                # kmlock with no event listeners until another reload.
+                try:
+                    await self._update_listeners(current)
+                except Exception:
+                    _LOGGER.exception(
+                        "[update_lock] %s: Failed to restore listeners after rollback",
+                        new.lock_name,
+                    )
                 try:
                     await self._setup_timer(current)
                 except Exception:
