@@ -1440,38 +1440,58 @@ async def test_keymaster_timer_on_expired_remove_runs_when_detach_races(
     assert "test_timer" not in save_calls[-1], "store entry must be removed"
 
 
-async def test_keymaster_timer_setup_recovery_preserves_store_when_action_raises(
+async def test_keymaster_timer_setup_recovery_removes_entry_atomically(
     hass, mock_store, store_lock
 ):
-    """Test setup() recovery preserves the store entry if the recovery action raises.
+    """Test setup() recovery removes the expired entry under the lock.
 
-    Mirrors _on_expired's safety contract: if the lock action fails on
-    startup recovery, the entry must stay so the timer replays on next
-    restart instead of being lost forever.
+    Two setup() calls on the same timer_id (e.g. during reload/rollback)
+    must not both schedule the recovery action. Removing the entry
+    atomically with detection ensures the second setup sees no entry
+    and doesn't schedule a duplicate firing.
     """
-    timer = KeymasterTimer()
+    expired_end_time = (dt_util.utcnow() - timedelta(minutes=5)).isoformat()
+    # Stateful store: load returns whatever is currently saved
+    state: dict = {"test_timer": {"end_time": expired_end_time, "duration": 300}}
+
+    async def stateful_load():
+        return dict(state)
+
+    async def stateful_save(data):
+        state.clear()
+        state.update(data)
+
+    mock_store.async_load = AsyncMock(side_effect=stateful_load)
+    mock_store.async_save = AsyncMock(side_effect=stateful_save)
+
+    action_call_count = 0
+
+    async def mock_action(*args):
+        nonlocal action_call_count
+        action_call_count += 1
+
     kmlock = KeymasterLock(
         lock_name="test_lock",
         lock_entity_id="lock.test_lock",
         keymaster_config_entry_id="test_entry",
     )
 
-    expired_end_time = (dt_util.utcnow() - timedelta(minutes=5)).isoformat()
-    mock_store.async_load = AsyncMock(
-        return_value={"test_timer": {"end_time": expired_end_time, "duration": 300}}
+    # First setup discovers expired entry, claims (removes), schedules action
+    timer1 = KeymasterTimer()
+    await timer1.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
     )
 
-    async def failing_action(*args):
-        raise RuntimeError("recovery action failed")
-
-    await timer.setup(
-        hass, kmlock, failing_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    # Second setup on the SAME timer_id must see no entry and skip scheduling
+    timer2 = KeymasterTimer()
+    await timer2.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
     )
-    mock_store.async_save.reset_mock()
+
     await hass.async_block_till_done()
 
-    # Store entry must be preserved for retry on next restart
-    mock_store.async_save.assert_not_called()
+    assert action_call_count == 1, "recovery action must fire exactly once"
+    assert "test_timer" not in state, "entry must be removed by the recovering setup"
 
 
 async def test_keymaster_timer_setup_resets_detached_flag(hass, mock_store, store_lock):

@@ -130,12 +130,15 @@ class KeymasterTimer:
                     "[KeymasterTimer] %s: Persisted timer expired during downtime, firing",
                     timer_id,
                 )
-                # Schedule the action to run on the event loop. The handler
-                # (_run_recovery_action) only removes the store entry on
-                # success, mirroring _on_expired's preserve-on-failure
-                # semantics so a transient action failure replays on the
-                # NEXT restart instead of being lost forever.
-                hass.async_create_task(self._run_recovery_action(dt_util.utcnow()))
+                # Remove the entry atomically with detection so a concurrent
+                # setup() (e.g. during reload/rollback) can't see the same
+                # expired entry and schedule the recovery action twice. The
+                # trade-off: if the recovery action then fails, the autolock
+                # state is lost (no replay on next restart) — acceptable for
+                # this startup-only edge case since the user's next lock
+                # interaction creates a fresh autolock cycle.
+                await self._remove_from_store_locked()
+                hass.async_create_task(call_action(dt_util.utcnow()))
             else:
                 _LOGGER.debug(
                     "[KeymasterTimer] %s: Resuming persisted timer, ending %s",
@@ -143,25 +146,6 @@ class KeymasterTimer:
                     end_time,
                 )
                 await self._resume(end_time, duration)
-
-    async def _run_recovery_action(self, now: dt) -> None:
-        """Run the persisted action on startup recovery; only remove on success.
-
-        Mirrors _on_expired's safety contract: if the action raises, the
-        store entry is preserved so the timer replays on the next restart.
-        """
-        if self._call_action is None:
-            return
-        try:
-            await self._call_action(now)
-        except Exception:
-            _LOGGER.exception(
-                "[KeymasterTimer] %s: Recovery action raised; "
-                "store entry preserved for retry on restart",
-                self._timer_id,
-            )
-            return
-        await self._remove_from_store()
 
     async def start(self) -> bool:
         """Start a timer."""

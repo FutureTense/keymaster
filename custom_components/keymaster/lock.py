@@ -26,6 +26,19 @@ class KeymasterCodeSlotDayOfWeek:
     time_start: dt_time | None = None
     time_end: dt_time | None = None
 
+    @classmethod
+    def derive_from_existing(cls, old: KeymasterCodeSlotDayOfWeek) -> KeymasterCodeSlotDayOfWeek:
+        """Build a new DOW instance carrying the user-configurable state of ``old``."""
+        return cls(
+            day_of_week_num=old.day_of_week_num,
+            day_of_week_name=old.day_of_week_name,
+            dow_enabled=old.dow_enabled,
+            limit_by_time=old.limit_by_time,
+            include_exclude=old.include_exclude,
+            time_start=old.time_start,
+            time_end=old.time_end,
+        )
+
 
 @dataclass
 class KeymasterCodeSlot:
@@ -46,6 +59,34 @@ class KeymasterCodeSlot:
     accesslimit_date_range_end: dt | None = None
     accesslimit_day_of_week_enabled: bool = False
     accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
+
+    @classmethod
+    def derive_from_existing(cls, old: KeymasterCodeSlot, *, number: int) -> KeymasterCodeSlot:
+        """Build a new code slot for ``number`` carrying user state from ``old``.
+
+        Runtime-only fields (``active``, ``synced``) are intentionally left at
+        their defaults — they belong to the new instance's lifecycle.
+        """
+        new = cls(
+            number=number,
+            enabled=old.enabled,
+            name=old.name,
+            pin=old.pin,
+            override_parent=old.override_parent,
+            notifications=old.notifications,
+            accesslimit_count_enabled=old.accesslimit_count_enabled,
+            accesslimit_count=old.accesslimit_count,
+            accesslimit_date_range_enabled=old.accesslimit_date_range_enabled,
+            accesslimit_date_range_start=old.accesslimit_date_range_start,
+            accesslimit_date_range_end=old.accesslimit_date_range_end,
+            accesslimit_day_of_week_enabled=old.accesslimit_day_of_week_enabled,
+        )
+        if old.accesslimit_day_of_week:
+            new.accesslimit_day_of_week = {
+                dow_num: KeymasterCodeSlotDayOfWeek.derive_from_existing(old_dow)
+                for dow_num, old_dow in old.accesslimit_day_of_week.items()
+            }
+        return new
 
 
 @dataclass
@@ -83,6 +124,31 @@ class KeymasterLock:
     pending_delete: bool = False
     # Transient runtime-only field; excluded from persistence (init=False).
     masked_code_slots: set[int] = field(default_factory=set, init=False, repr=False)
+
+    def inherit_state_from(self, old: KeymasterLock) -> None:
+        """Carry user/runtime state from a previous instance into this one.
+
+        Called when a config entry is reloaded: the new lock instance is
+        constructed fresh from config, but state the user owns (autolock
+        config, current lock/door state, code slot contents, in-flight
+        retry) must survive the swap. Owning this on the dataclass keeps
+        the field-by-field copy logic next to the field declarations
+        rather than scattered through the coordinator.
+        """
+        self.lock_state = old.lock_state
+        self.door_state = old.door_state
+        self.autolock_enabled = old.autolock_enabled
+        self.autolock_min_day = old.autolock_min_day
+        self.autolock_min_night = old.autolock_min_night
+        self.retry_lock = old.retry_lock
+        self.pending_retry_lock = old.pending_retry_lock
+        if not self.code_slots or not old.code_slots:
+            return
+        for code_slot_num in self.code_slots:
+            if code_slot_num in old.code_slots:
+                self.code_slots[code_slot_num] = KeymasterCodeSlot.derive_from_existing(
+                    old.code_slots[code_slot_num], number=code_slot_num
+                )
 
 
 keymasterlock_type_lookup: MutableMapping[str, type] = {
