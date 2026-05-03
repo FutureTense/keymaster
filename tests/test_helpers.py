@@ -1008,14 +1008,17 @@ async def test_keymaster_timer_detach_preserves_store(hass, mock_store, store_lo
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
         await timer.start()
 
-    # Track save/load calls AFTER start() so we only see what detach does
-    mock_store.async_save.reset_mock()
-    mock_store.async_load.reset_mock()
-
     # Sanity: timer has a scheduled callback before detach
     assert len(timer._unsub_events) == 1
     saved_end_time = timer._end_time
     saved_duration = timer._duration
+
+    # The persist from start() already wrote the entry; make load reflect that
+    # so detach's force-persist check sees the entry exists and skips the write.
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": saved_end_time.isoformat(), "duration": 300}}
+    )
+    mock_store.async_save.reset_mock()
 
     await timer.detach()
 
@@ -1030,8 +1033,47 @@ async def test_keymaster_timer_detach_preserves_store(hass, mock_store, store_lo
     # reload would silently lose the autolock state).
     assert timer._end_time == saved_end_time
     assert timer._duration == saved_duration
-    # Critical: store was NOT modified — replacement timer needs to resume from it
+    # Store entry already present, detach's force-persist skipped the write
     mock_store.async_save.assert_not_called()
+
+
+async def test_keymaster_timer_detach_force_persists_when_store_empty(hass, mock_store, store_lock):
+    """Test detach() writes in-memory state to disk if the queued persist hasn't run.
+
+    Scenario: start() called just before reload sets _end_time and queues
+    a _persist_to_store behind the shared lock (held by some other op).
+    detach() runs before that queued persist. Without force-persist, the
+    REPLACEMENT timer (a fresh KeymasterTimer instance on the new kmlock)
+    would load an empty store and the autolock would be silently lost.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    # Simulate the queued persist NOT having run: store is empty
+    mock_store.async_load = AsyncMock(return_value={})
+    mock_store.async_save.reset_mock()
+    saved_end_time = timer._end_time
+
+    await timer.detach()
+
+    mock_store.async_save.assert_called_once()
+    saved_data = mock_store.async_save.call_args[0][0]
+    assert "test_timer" in saved_data
+    assert saved_data["test_timer"]["end_time"] == saved_end_time.isoformat()
 
 
 async def test_keymaster_timer_cancel_after_detach_is_noop(hass, mock_store, store_lock):
@@ -1569,6 +1611,57 @@ async def test_keymaster_timer_setup_rescues_preserved_state(hass, mock_store, s
     saved = mock_store.async_save.call_args[0][0]
     assert "test_timer" in saved
     assert timer.is_running
+
+
+async def test_keymaster_timer_setup_rescues_expired_state_without_resurrecting(
+    hass, mock_store, store_lock
+):
+    """Test setup()'s rescue path takes recovery for an already-expired _end_time.
+
+    If reload took longer than the autolock delay, the preserved _end_time
+    is now in the past. We must NOT write it back to disk + _resume — that
+    would leave an expired entry that a subsequent reload could replay.
+    Instead, fire the recovery action immediately and leave the store clean.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    action_call_count = 0
+
+    async def mock_action(*args):
+        nonlocal action_call_count
+        action_call_count += 1
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    # Manually set an in-the-past _end_time and detach so it's preserved
+    timer._end_time = dt_util.utcnow() - timedelta(seconds=5)
+    timer._duration = 300
+    # Skip the async_load that would interfere; we want detach's force-persist
+    # to NOT write (entry already there in our mock)
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
+    )
+    await timer.detach()
+    # Now empty the store and re-setup: the rescue should detect expiry
+    mock_store.async_load = AsyncMock(return_value={})
+    mock_store.async_save.reset_mock()
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    await hass.async_block_till_done()
+
+    assert action_call_count == 1, "expired-rescue must fire action once"
+    mock_store.async_save.assert_not_called()  # no resurrected entry on disk
+    assert timer._end_time is None
+    assert timer._duration is None
 
 
 async def test_keymaster_timer_setup_clears_state_when_no_pending(hass, mock_store, store_lock):

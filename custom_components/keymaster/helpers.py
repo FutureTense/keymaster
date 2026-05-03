@@ -118,21 +118,34 @@ class KeymasterTimer:
             if not timer_data:
                 # No persisted entry. If detach preserved an in-memory
                 # _end_time (a start() just before reload that hadn't yet
-                # persisted), claim it now by writing+resuming. Otherwise
-                # clear stale fields so is_running doesn't lie.
+                # persisted), claim it. Otherwise clear stale fields so
+                # is_running doesn't lie.
                 if self._end_time and self._duration is not None:
-                    _LOGGER.debug(
-                        "[KeymasterTimer] %s: Rescuing preserved timer state from "
-                        "pre-reload start(); ending %s",
-                        timer_id,
-                        self._end_time,
-                    )
-                    data[timer_id] = {
-                        "end_time": self._end_time.isoformat(),
-                        "duration": self._duration,
-                    }
-                    await store.async_save(data)
-                    await self._resume(self._end_time, self._duration)
+                    if self._end_time <= dt_util.utcnow():
+                        # Already expired during reload — fire as recovery,
+                        # don't write back (that would let a subsequent
+                        # reload replay the same overdue autolock).
+                        _LOGGER.debug(
+                            "[KeymasterTimer] %s: Preserved timer expired "
+                            "during reload; firing without resurrecting in store",
+                            timer_id,
+                        )
+                        self._end_time = None
+                        self._duration = None
+                        hass.async_create_task(call_action(dt_util.utcnow()))
+                    else:
+                        _LOGGER.debug(
+                            "[KeymasterTimer] %s: Rescuing preserved timer state "
+                            "from pre-reload start(); ending %s",
+                            timer_id,
+                            self._end_time,
+                        )
+                        data[timer_id] = {
+                            "end_time": self._end_time.isoformat(),
+                            "duration": self._duration,
+                        }
+                        await store.async_save(data)
+                        await self._resume(self._end_time, self._duration)
                 else:
                     self._end_time = None
                     self._duration = None
@@ -256,6 +269,30 @@ class KeymasterTimer:
                 await in_flight
             except Exception:
                 _LOGGER.exception("[KeymasterTimer] In-flight callback raised during detach")
+        # Force-persist any in-memory state so the REPLACEMENT timer (a
+        # fresh KeymasterTimer instance on the new kmlock) can resume from
+        # disk even if a queued _persist_to_store() from a recent start()
+        # hasn't run yet. The replacement instance can't see our in-memory
+        # _end_time, only the store. If the queued persist has already
+        # written, the in-store check makes this a no-op.
+        if (
+            self._end_time
+            and self._duration is not None
+            and self._store
+            and self._store_lock
+            and self._timer_id
+        ):
+            try:
+                async with self._store_lock:
+                    data = await self._store.async_load() or {}
+                    if self._timer_id not in data:
+                        data[self._timer_id] = {
+                            "end_time": self._end_time.isoformat(),
+                            "duration": self._duration,
+                        }
+                        await self._store.async_save(data)
+            except Exception:
+                _LOGGER.exception("[KeymasterTimer] Error force-persisting state during detach")
         self.hass = None
         self._kmlock = None
         self._call_action = None
