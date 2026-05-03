@@ -85,7 +85,10 @@ class KeymasterTimer:
         self._store: Store[dict[str, TimerStoreEntry]] | None = None
         self._store_lock: asyncio.Lock | None = None
         self._detached = False
-        self._on_expired_task: asyncio.Task[None] | None = None
+        # In-flight action tasks (the scheduled _on_expired AND any setup()
+        # recovery action). detach() awaits all of them so their mutations
+        # on the old kmlock are visible to inherit_state_from.
+        self._inflight_tasks: set[asyncio.Task[None]] = set()
 
     async def setup(
         self,
@@ -132,7 +135,7 @@ class KeymasterTimer:
                         )
                         self._end_time = None
                         self._duration = None
-                        hass.async_create_task(call_action(dt_util.utcnow()))
+                        self._track_recovery(hass, dt_util.utcnow())
                     else:
                         _LOGGER.debug(
                             "[KeymasterTimer] %s: Rescuing preserved timer state "
@@ -177,7 +180,7 @@ class KeymasterTimer:
                 await self._remove_from_store_locked()
                 self._end_time = None
                 self._duration = None
-                hass.async_create_task(call_action(dt_util.utcnow()))
+                self._track_recovery(hass, dt_util.utcnow())
             else:
                 _LOGGER.debug(
                     "[KeymasterTimer] %s: Resuming persisted timer, ending %s",
@@ -263,18 +266,25 @@ class KeymasterTimer:
         # Wait for any in-flight _on_expired to finish so callers see its
         # mutations (e.g. pending_retry_lock) on the old kmlock before they
         # copy state to the replacement.
-        in_flight = self._on_expired_task
-        if in_flight is not None and not in_flight.done():
-            try:
-                await in_flight
-            except Exception:
-                _LOGGER.exception("[KeymasterTimer] In-flight callback raised during detach")
+        # Await ALL in-flight action tasks (scheduled _on_expired AND any
+        # setup() recovery actions) so their mutations on the old kmlock
+        # are visible before inherit_state_from copies state to new.
+        for task in list(self._inflight_tasks):
+            if not task.done():
+                try:
+                    await task
+                except Exception:
+                    _LOGGER.exception("[KeymasterTimer] In-flight task raised during detach")
         # Force-persist any in-memory state so the REPLACEMENT timer (a
         # fresh KeymasterTimer instance on the new kmlock) can resume from
         # disk even if a queued _persist_to_store() from a recent start()
         # hasn't run yet. The replacement instance can't see our in-memory
         # _end_time, only the store. If the queued persist has already
         # written, the in-store check makes this a no-op.
+        # Propagate exceptions: when state exists only in memory (the exact
+        # race this exists for), failure means the replacement comes up with
+        # no entry. The caller (_update_lock) needs to know so its rollback
+        # path can attempt recovery instead of silently dropping the autolock.
         if (
             self._end_time
             and self._duration is not None
@@ -282,17 +292,14 @@ class KeymasterTimer:
             and self._store_lock
             and self._timer_id
         ):
-            try:
-                async with self._store_lock:
-                    data = await self._store.async_load() or {}
-                    if self._timer_id not in data:
-                        data[self._timer_id] = {
-                            "end_time": self._end_time.isoformat(),
-                            "duration": self._duration,
-                        }
-                        await self._store.async_save(data)
-            except Exception:
-                _LOGGER.exception("[KeymasterTimer] Error force-persisting state during detach")
+            async with self._store_lock:
+                data = await self._store.async_load() or {}
+                if self._timer_id not in data:
+                    data[self._timer_id] = {
+                        "end_time": self._end_time.isoformat(),
+                        "duration": self._duration,
+                    }
+                    await self._store.async_save(data)
         self.hass = None
         self._kmlock = None
         self._call_action = None
@@ -310,11 +317,11 @@ class KeymasterTimer:
             detach() must still remove the entry or the replacement timer's
             setup() will replay the action.
 
-            Registers itself as self._on_expired_task so that detach() can
+            Registers itself in self._inflight_tasks so that detach() can
             await completion — any mutations the action made on the old
             kmlock are then visible to _update_lock's state copy.
             """
-            self._on_expired_task = asyncio.current_task()
+            self._inflight_tasks.add(asyncio.current_task())
             try:
                 if self._call_action is None:
                     return
@@ -337,9 +344,28 @@ class KeymasterTimer:
                 # must still remove the entry it owns.
                 await self._clear_timer_state()
             finally:
-                self._on_expired_task = None
+                self._inflight_tasks.discard(asyncio.current_task())
 
         self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=_on_expired))
+
+    async def _run_recovery_action(self, now: dt) -> None:
+        """Fire a startup-recovery action; tracked by detach()."""
+        if self._call_action is None:
+            return
+        try:
+            await self._call_action(now)
+        except Exception:
+            _LOGGER.exception("[KeymasterTimer] Recovery action raised")
+
+    def _track_recovery(self, hass: HomeAssistant, now: dt) -> None:
+        """Schedule a recovery action and add it to the in-flight set.
+
+        The task is added before being scheduled so detach() can await it
+        even if it hasn't started running yet.
+        """
+        task = hass.async_create_task(self._run_recovery_action(now))
+        self._inflight_tasks.add(task)
+        task.add_done_callback(self._inflight_tasks.discard)
 
     def _cancel_callbacks(self) -> None:
         """Unsubscribe all pending callbacks."""

@@ -1037,6 +1037,87 @@ async def test_keymaster_timer_detach_preserves_store(hass, mock_store, store_lo
     mock_store.async_save.assert_not_called()
 
 
+async def test_keymaster_timer_detach_awaits_recovery_action(hass, mock_store, store_lock):
+    """Test detach() awaits an in-flight setup() recovery action.
+
+    Without this, a reload during recovery could copy the old kmlock's
+    state before _timer_triggered finishes mutating it (e.g. setting
+    pending_retry_lock=True on door-open), losing those mutations.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    action_started = asyncio.Event()
+    action_release = asyncio.Event()
+    action_completed = False
+
+    async def slow_action(*args):
+        nonlocal action_completed
+        action_started.set()
+        await action_release.wait()
+        action_completed = True
+
+    expired_end_time = (dt_util.utcnow() - timedelta(minutes=5)).isoformat()
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": expired_end_time, "duration": 300}}
+    )
+
+    # setup() schedules the recovery as a tracked task
+    await timer.setup(
+        hass, kmlock, slow_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    await action_started.wait()
+    assert not action_completed
+
+    # detach must wait for the recovery to complete
+    detach_task = asyncio.create_task(timer.detach())
+    await asyncio.sleep(0)
+    assert not detach_task.done(), "detach must wait for in-flight recovery action"
+
+    action_release.set()
+    await detach_task
+
+    assert action_completed
+
+
+async def test_keymaster_timer_detach_propagates_force_persist_failure(
+    hass, mock_store, store_lock
+):
+    """Test detach() does NOT swallow force-persist failures.
+
+    When the timer state exists only in memory, a storage failure means
+    the replacement comes up empty. Failing loud lets _update_lock's
+    rollback path attempt recovery instead of silently disabling autolock.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+
+    # Make load empty so force-persist would try to write, then make save raise
+    mock_store.async_load = AsyncMock(return_value={})
+    mock_store.async_save = AsyncMock(side_effect=OSError("transient disk error"))
+
+    with pytest.raises(OSError, match="transient disk error"):
+        await timer.detach()
+
+
 async def test_keymaster_timer_detach_force_persists_when_store_empty(hass, mock_store, store_lock):
     """Test detach() writes in-memory state to disk if the queued persist hasn't run.
 
