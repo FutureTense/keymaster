@@ -1079,11 +1079,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             or not old.code_slots
         ):
             return False
-        # Detach the old timer BEFORE any awaits below so its scheduled
-        # callback can't fire during the await chain (which would invoke
-        # _timer_triggered against the about-to-be-orphaned `old` kmlock).
+        # Detach the old timer BEFORE any other awaits so its scheduled
+        # callback can't fire during the await chain. detach() awaits any
+        # in-flight _on_expired so any mutations it makes to old (e.g.
+        # pending_retry_lock) are visible when we copy state below.
         if old.autolock_timer:
-            old.autolock_timer.detach()
+            await old.autolock_timer.detach()
         await KeymasterCoordinator._unsubscribe_listeners(old)
         # _LOGGER.debug("[update_lock] %s: old: %s", new.lock_name, old)
         del_code_slots: list[int] = [
@@ -1102,6 +1103,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         new.autolock_min_day = old.autolock_min_day
         new.autolock_min_night = old.autolock_min_night
         new.retry_lock = old.retry_lock
+        # Preserve transient retry state; the door-open retry path on the
+        # replacement won't fire its lock action otherwise.
+        new.pending_retry_lock = old.pending_retry_lock
         for code_slot_num, new_kmslot in new.code_slots.items():
             if code_slot_num not in old.code_slots:
                 continue

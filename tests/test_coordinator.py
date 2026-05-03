@@ -1393,7 +1393,11 @@ class TestSetupTimer:
         old_lock.number_of_code_slots = 1
         old_lock.code_slots = {1: Mock(accesslimit_day_of_week=None)}
         old_lock.autolock_timer = Mock()
-        old_lock.autolock_timer.detach = Mock(side_effect=lambda: call_order.append("detach"))
+
+        async def record_detach():
+            call_order.append("detach")
+
+        old_lock.autolock_timer.detach = AsyncMock(side_effect=record_detach)
 
         new_lock = KeymasterLock(
             lock_name="test_lock",
@@ -1439,6 +1443,52 @@ class TestSetupTimer:
         assert call_order.index("detach") < call_order.index("setup_timer")
         # And the new kmlock (now in self.kmlocks) is what _setup_timer received
         assert mock_setup_timer.call_args.args[0] is mock_coordinator.kmlocks[entry_id]
+
+    async def test_update_lock_copies_pending_retry_lock(self, mock_coordinator):
+        """Test _update_lock copies pending_retry_lock from old to new kmlock.
+
+        If autolock was waiting for the door to close (pending_retry_lock=True)
+        when the user reloaded, the replacement kmlock must inherit that flag
+        or it will never re-attempt the lock.
+        """
+        entry_id = "test_entry_pending_retry"
+
+        old_lock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id=entry_id,
+        )
+        old_lock.starting_code_slot = 1
+        old_lock.number_of_code_slots = 1
+        old_lock.code_slots = {1: Mock(accesslimit_day_of_week=None)}
+        old_lock.autolock_timer = Mock()
+        old_lock.autolock_timer.detach = AsyncMock()
+        old_lock.pending_retry_lock = True  # autolock was waiting
+
+        new_lock = KeymasterLock(
+            lock_name="test_lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id=entry_id,
+        )
+        new_lock.starting_code_slot = 1
+        new_lock.number_of_code_slots = 1
+        new_lock.code_slots = {1: Mock(accesslimit_day_of_week=None)}
+        # Default is False; the copy in _update_lock should flip it to True
+
+        mock_coordinator.kmlocks[entry_id] = old_lock
+        mock_coordinator._initial_setup_done_event.set()
+
+        with (
+            patch.object(KeymasterCoordinator, "_unsubscribe_listeners", new=AsyncMock()),
+            patch.object(mock_coordinator, "_rebuild_lock_relationships", new=AsyncMock()),
+            patch.object(mock_coordinator, "_update_door_and_lock_state", new=AsyncMock()),
+            patch.object(mock_coordinator, "_update_listeners", new=AsyncMock()),
+            patch.object(mock_coordinator, "_setup_timer", new=AsyncMock()),
+            patch.object(mock_coordinator, "async_refresh", new=AsyncMock()),
+        ):
+            await mock_coordinator._update_lock(new_lock)
+
+        assert mock_coordinator.kmlocks[entry_id].pending_retry_lock is True
 
 
 # ============================================================================

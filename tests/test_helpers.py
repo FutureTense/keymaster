@@ -1017,7 +1017,7 @@ async def test_keymaster_timer_detach_preserves_store(hass, mock_store, store_lo
     saved_end_time = timer._end_time
     saved_duration = timer._duration
 
-    timer.detach()
+    await timer.detach()
 
     # Callbacks unsubscribed and kmlock binding cleared
     assert timer._unsub_events == []
@@ -1063,7 +1063,7 @@ async def test_keymaster_timer_cancel_after_detach_is_noop(hass, mock_store, sto
     mock_store.async_load = AsyncMock(
         return_value={"test_timer": {"end_time": "2099-01-01T00:00:00+00:00", "duration": 300}}
     )
-    timer.detach()
+    await timer.detach()
     mock_store.async_save.reset_mock()
 
     # Simulating an in-flight _on_expired calling cancel after detach
@@ -1194,7 +1194,7 @@ async def test_keymaster_timer_on_expired_skipped_after_detach(hass, mock_store,
         callback_fn = mock_call_later.call_args[1]["action"]
 
     # Detach BEFORE the callback fires (simulating reload)
-    timer.detach()
+    await timer.detach()
     mock_store.async_save.reset_mock()
 
     await callback_fn(dt_util.utcnow())
@@ -1228,7 +1228,7 @@ async def test_keymaster_timer_persist_after_detach_still_saves(hass, mock_store
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
         await timer.start()
 
-    timer.detach()
+    await timer.detach()
     mock_store.async_save.reset_mock()
 
     # Persist should still save the preserved end_time/duration
@@ -1236,6 +1236,64 @@ async def test_keymaster_timer_persist_after_detach_still_saves(hass, mock_store
     mock_store.async_save.assert_called_once()
     saved_data = mock_store.async_save.call_args[0][0]
     assert "test_timer" in saved_data
+
+
+async def test_keymaster_timer_detach_awaits_in_flight_callback(hass, mock_store, store_lock):
+    """Test detach() awaits any in-flight _on_expired before returning.
+
+    This ensures _update_lock observes whatever mutations the action made
+    on the old kmlock (e.g. pending_retry_lock) before it copies state to
+    the replacement. Without the await, detach would return while the
+    action was still running and the state copy would miss the mutation.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    action_started = asyncio.Event()
+    action_release = asyncio.Event()
+    action_completed = False
+
+    async def slow_action(*args):
+        nonlocal action_completed
+        action_started.set()
+        await action_release.wait()
+        action_completed = True
+
+    await timer.setup(
+        hass, kmlock, slow_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
+        with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+            await timer.start()
+        callback_fn = mock_call_later.call_args[1]["action"]
+
+    # Make load return the entry so remove will save (and reach the action)
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
+    )
+
+    # Kick off the callback; it'll block inside slow_action
+    expire_task = asyncio.create_task(callback_fn(dt_util.utcnow()))
+    await action_started.wait()
+    assert not action_completed
+
+    # Now start detach; it must wait for the in-flight callback
+    detach_task = asyncio.create_task(timer.detach())
+    await asyncio.sleep(0)
+    assert not detach_task.done(), "detach must wait for in-flight callback"
+
+    # Release the action, both should complete
+    action_release.set()
+    await asyncio.gather(expire_task, detach_task)
+
+    assert action_completed
+    assert timer.hass is None  # detach finished its cleanup
 
 
 async def test_keymaster_timer_on_expired_skips_action_if_detached_during_remove(
@@ -1282,7 +1340,7 @@ async def test_keymaster_timer_on_expired_skips_action_if_detached_during_remove
     expire_task = asyncio.create_task(callback_fn(dt_util.utcnow()))
     await asyncio.sleep(0)
     # Detach during the remove-await
-    timer.detach()
+    await timer.detach()
     await expire_task
 
     # Action must NOT have fired against the orphaned kmlock

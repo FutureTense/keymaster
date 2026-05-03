@@ -85,6 +85,7 @@ class KeymasterTimer:
         self._store: Store[dict[str, TimerStoreEntry]] | None = None
         self._store_lock: asyncio.Lock | None = None
         self._detached = False
+        self._on_expired_task: asyncio.Task[None] | None = None
 
     async def setup(
         self,
@@ -177,7 +178,7 @@ class KeymasterTimer:
         self._duration = None
         await self._remove_from_store()
 
-    def detach(self) -> None:
+    async def detach(self) -> None:
         """Drop in-memory callbacks and clear the kmlock binding.
 
         Unlike cancel(), detach() leaves the persisted store entry so a
@@ -186,6 +187,10 @@ class KeymasterTimer:
         preserved so an in-flight _persist_to_store() queued behind the store
         lock will still write the entry — without this, a start() racing with
         reload would silently drop the autolock.
+
+        Awaits any in-flight _on_expired callback before clearing the kmlock
+        binding so callers (e.g. _update_lock copying state from old to new)
+        observe whatever mutations the action made on the old kmlock.
         """
         _LOGGER.debug("[KeymasterTimer] Detaching timer (state preserved in store)")
         # Set first so any _on_expired already past its initial guard sees the
@@ -197,10 +202,18 @@ class KeymasterTimer:
             # Best-effort: even if unsub raises (e.g. HA shutdown), we must
             # finish nulling refs so the orphan can't operate on stale state.
             _LOGGER.exception("[KeymasterTimer] Error cancelling callbacks during detach")
-        finally:
-            self.hass = None
-            self._kmlock = None
-            self._call_action = None
+        # Wait for any in-flight _on_expired to finish so callers see its
+        # mutations (e.g. pending_retry_lock) on the old kmlock before they
+        # copy state to the replacement.
+        in_flight = self._on_expired_task
+        if in_flight is not None and not in_flight.done():
+            try:
+                await in_flight
+            except Exception:
+                _LOGGER.exception("[KeymasterTimer] In-flight callback raised during detach")
+        self.hass = None
+        self._kmlock = None
+        self._call_action = None
 
     def _schedule_callbacks(self, delay: float) -> None:
         """Schedule a single callback that fires the action then cleans up."""
@@ -213,26 +226,30 @@ class KeymasterTimer:
             the replacement timer. After the remove await we re-check whether
             detach() ran during the yield — if so, the action would target an
             orphaned kmlock, so we hand off to the replacement timer instead.
+
+            Registers itself as self._on_expired_task so that detach() can
+            await its completion (any mutations the action made to the old
+            kmlock are then visible to _update_lock's state-copy).
             """
-            if self._call_action is None:
-                return
-            await self._remove_from_store()
-            # Re-check after the await: if detach() ran during the remove, the
-            # captured kmlock is now orphaned. The replacement timer's setup()
-            # already loaded the (now-removed) entry under the same lock and
-            # will handle firing if it loaded before we removed.
-            if self._detached:
-                return
-            action = self._call_action
-            if action is None:
-                return
+            self._on_expired_task = asyncio.current_task()
             try:
-                await action(now)
-            except Exception:
-                _LOGGER.exception("[KeymasterTimer] Action raised in _on_expired")
-            self._cancel_callbacks()
-            self._end_time = None
-            self._duration = None
+                if self._call_action is None:
+                    return
+                await self._remove_from_store()
+                if self._detached:
+                    return
+                action = self._call_action
+                if action is None:
+                    return
+                try:
+                    await action(now)
+                except Exception:
+                    _LOGGER.exception("[KeymasterTimer] Action raised in _on_expired")
+                self._cancel_callbacks()
+                self._end_time = None
+                self._duration = None
+            finally:
+                self._on_expired_task = None
 
         self._unsub_events.append(async_call_later(hass=self.hass, delay=delay, action=_on_expired))
 
