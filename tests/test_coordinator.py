@@ -1435,11 +1435,15 @@ class TestSetupTimer:
 
         old_lock.autolock_timer.detach.assert_called_once_with()
         mock_setup_timer.assert_called_once()
-        # Critical ordering: detach must run BEFORE any of the await calls
-        # in _update_lock, so the old timer can't fire during the gap.
-        assert call_order[0] == "detach", f"detach must be first, got {call_order}"
+        # Critical ordering: _unsubscribe_listeners runs BEFORE detach so
+        # in-flight provider/door callbacks can't reach the about-to-be
+        # detached timer (where start()/cancel() would silently fail or
+        # no-op). detach must still run before _setup_timer so the new
+        # timer can resume from the preserved store entry.
         assert "unsubscribe_listeners" in call_order
-        assert call_order.index("detach") < call_order.index("unsubscribe_listeners")
+        assert "detach" in call_order
+        assert "setup_timer" in call_order
+        assert call_order.index("unsubscribe_listeners") < call_order.index("detach")
         assert call_order.index("detach") < call_order.index("setup_timer")
         # And the new kmlock (now in self.kmlocks) is what _setup_timer received
         assert mock_setup_timer.call_args.args[0] is mock_coordinator.kmlocks[entry_id]

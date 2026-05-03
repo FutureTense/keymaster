@@ -1079,19 +1079,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             or not old.code_slots
         ):
             return False
-        # Detach the old timer BEFORE any other awaits so its scheduled
-        # callback can't fire during the await chain. detach() awaits any
-        # in-flight _on_expired so any mutations it makes to old (e.g.
-        # pending_retry_lock) are visible when we copy state below.
+        # Unsubscribe listeners FIRST so in-flight provider/door callbacks
+        # can't reach the about-to-be-detached timer (where start()/cancel()
+        # would silently fail or no-op). Then detach the old timer; its
+        # detach() awaits any in-flight _on_expired so mutations it made on
+        # old (e.g. pending_retry_lock) are visible to the state copy.
         # Once detached, the old timer is unusable until the new timer is
-        # set up — so wrap the rest of the body in a try/except that
-        # restores the autolock on whichever kmlock is current if any
-        # subsequent step fails. The store entry was preserved by detach,
-        # so _setup_timer() will resume the autolock from disk.
-        if old.autolock_timer:
-            await old.autolock_timer.detach()
+        # set up — wrap the rest in try/except that restores listeners and
+        # the autolock on whichever kmlock is current if any step fails.
         try:
             await KeymasterCoordinator._unsubscribe_listeners(old)
+            if old.autolock_timer:
+                await old.autolock_timer.detach()
             # _LOGGER.debug("[update_lock] %s: old: %s", new.lock_name, old)
             del_code_slots: list[int] = [
                 old.starting_code_slot + i for i in range(old.number_of_code_slots)

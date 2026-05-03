@@ -1494,12 +1494,14 @@ async def test_keymaster_timer_setup_recovery_removes_entry_atomically(
     assert "test_timer" not in state, "entry must be removed by the recovering setup"
 
 
-async def test_keymaster_timer_setup_resets_detached_flag(hass, mock_store, store_lock):
-    """Test setup() resets _detached so a previously-detached instance is reusable.
+async def test_keymaster_timer_setup_resets_detached_and_state(hass, mock_store, store_lock):
+    """Test setup() resets _detached AND clears _end_time/_duration.
 
-    Without this reset, _update_lock's rollback path reuses the detached
-    timer object via _setup_timer(current); subsequent cancel() calls
-    would silently no-op and the user couldn't stop the autolock.
+    Without resetting _detached, cancel() would silently no-op on the
+    rebound instance. Without clearing _end_time/_duration (which detach
+    intentionally preserves), is_running could stay True even though no
+    callback is scheduled — making the coordinator think autolock is
+    active when nothing will fire.
     """
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
@@ -1515,14 +1517,24 @@ async def test_keymaster_timer_setup_resets_detached_flag(hass, mock_store, stor
     await timer.setup(
         hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
     )
+    with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+        await timer.start()
+    assert timer._end_time is not None
     await timer.detach()
     assert timer._detached is True
+    assert timer._end_time is not None  # detach preserves these
+    assert timer._duration is not None
 
-    # Re-setup the same instance (simulating rollback)
+    # Empty store so setup's load returns nothing — exercise the early-return path
+    mock_store.async_load = AsyncMock(return_value={})
+
     await timer.setup(
         hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
     )
     assert timer._detached is False
+    assert timer._end_time is None
+    assert timer._duration is None
+    assert not timer.is_running
 
 
 async def test_keymaster_timer_persist_raises_if_store_lock_missing(hass, mock_store):

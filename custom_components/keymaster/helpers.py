@@ -103,10 +103,15 @@ class KeymasterTimer:
         self._timer_id = timer_id
         self._store_lock = store_lock
         self._store = store
-        # Reset detached state — setup() may be called on a previously-detached
-        # instance (e.g. _update_lock rollback reuses the old timer object);
-        # without this reset, future cancel() calls would silently no-op.
+        # Reset state that detach() preserved — setup() may be called on a
+        # previously-detached instance (e.g. _update_lock rollback reuses the
+        # old timer object). Without this reset:
+        #   - cancel() would silently no-op (_detached=True)
+        #   - is_running could stay True with no callback scheduled
+        #     (_end_time still set from before detach)
         self._detached = False
+        self._end_time = None
+        self._duration = None
 
         # Hold the lock across load + cleanup so we don't race a concurrent
         # persist from the outgoing timer during config entry reload.
