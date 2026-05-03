@@ -106,8 +106,7 @@ class KeymasterTimer:
         # Recover persisted timer under the lock so any in-flight persist/cancel
         # from an outgoing timer (e.g. config entry reload) finishes first. This
         # prevents reading a stale empty store while the old timer is mid-save.
-        # _resume is sync w.r.t. the store; _remove_from_store is inlined here
-        # because asyncio.Lock isn't reentrant.
+        # We call the _locked helper directly since asyncio.Lock isn't reentrant.
         async with self._store_lock:
             data = await store.async_load() or {}
             timer_data = data.get(timer_id)
@@ -120,8 +119,7 @@ class KeymasterTimer:
                     "[KeymasterTimer] %s: Invalid persisted timer data, removing",
                     timer_id,
                 )
-                del data[timer_id]
-                await store.async_save(data)
+                await self._remove_from_store_locked()
                 return
             duration = timer_data.get("duration", 0)
             if end_time <= dt_util.utcnow():
@@ -129,8 +127,7 @@ class KeymasterTimer:
                     "[KeymasterTimer] %s: Persisted timer expired during downtime, firing",
                     timer_id,
                 )
-                del data[timer_id]
-                await store.async_save(data)
+                await self._remove_from_store_locked()
                 hass.async_create_task(call_action(dt_util.utcnow()))
             else:
                 _LOGGER.debug(
@@ -211,18 +208,24 @@ class KeymasterTimer:
         async def _on_expired(now: dt) -> None:
             """Fire the action and clean up timer state.
 
-            Removes the store entry BEFORE calling the action so that a
-            concurrent detach()/reload can't preserve a fired entry that
-            would replay on the replacement timer. The action snapshot is
-            taken before the store await so detach can't deny the firing
-            after we've committed to it.
+            Removes the store entry BEFORE calling the action so a concurrent
+            detach()/reload can't preserve a fired entry that would replay on
+            the replacement timer. After the remove await we re-check whether
+            detach() ran during the yield — if so, the action would target an
+            orphaned kmlock, so we hand off to the replacement timer instead.
             """
             if self._call_action is None:
-                # Detached before the callback could start; replacement timer
-                # owns the store entry and will fire it.
+                return
+            await self._remove_from_store()
+            # Re-check after the await: if detach() ran during the remove, the
+            # captured kmlock is now orphaned. The replacement timer's setup()
+            # already loaded the (now-removed) entry under the same lock and
+            # will handle firing if it loaded before we removed.
+            if self._detached:
                 return
             action = self._call_action
-            await self._remove_from_store()
+            if action is None:
+                return
             try:
                 await action(now)
             except Exception:
@@ -251,14 +254,14 @@ class KeymasterTimer:
         if not self._store or not self._timer_id or not self._end_time:
             return
         if not self._store_lock:
-            _LOGGER.error(
-                "[KeymasterTimer] %s: store_lock missing; setup() was not called. "
-                "Persist skipped, autolock will not survive restart",
-                self._timer_id,
+            # store_lock is set in setup(); a missing lock here is a programming
+            # error. Silently no-opping would silently lose the autolock across
+            # the next restart.
+            raise RuntimeError(
+                f"[KeymasterTimer] {self._timer_id}: store_lock missing; setup() was not called"
             )
-            return
         async with self._store_lock:
-            # Re-check after lock acquisition: detach() can null _end_time
+            # Re-check after lock acquisition: cancel() can null _end_time
             # while we were queued, in which case there's nothing to persist.
             end_time = self._end_time
             duration = self._duration
@@ -276,17 +279,22 @@ class KeymasterTimer:
         if not self._store or not self._timer_id:
             return
         if not self._store_lock:
-            _LOGGER.error(
-                "[KeymasterTimer] %s: store_lock missing; setup() was not called. "
-                "Remove skipped, stale entry will resume on restart",
-                self._timer_id,
+            # store_lock is set in setup(); silently no-opping would leave a
+            # stale entry that fires a phantom autolock on the next restart.
+            raise RuntimeError(
+                f"[KeymasterTimer] {self._timer_id}: store_lock missing; setup() was not called"
             )
-            return
         async with self._store_lock:
-            data = await self._store.async_load() or {}
-            if self._timer_id in data:
-                del data[self._timer_id]
-                await self._store.async_save(data)
+            await self._remove_from_store_locked()
+
+    async def _remove_from_store_locked(self) -> None:
+        """Remove this timer's entry from the store. Caller MUST hold _store_lock."""
+        if not self._store or not self._timer_id:
+            return
+        data = await self._store.async_load() or {}
+        if self._timer_id in data:
+            del data[self._timer_id]
+            await self._store.async_save(data)
 
     @property
     def is_running(self) -> bool:

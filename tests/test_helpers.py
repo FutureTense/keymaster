@@ -1238,6 +1238,98 @@ async def test_keymaster_timer_persist_after_detach_still_saves(hass, mock_store
     assert "test_timer" in saved_data
 
 
+async def test_keymaster_timer_on_expired_skips_action_if_detached_during_remove(
+    hass, mock_store, store_lock
+):
+    """Test _on_expired doesn't fire action against orphaned kmlock.
+
+    If detach() runs during the `await self._remove_from_store()` inside
+    _on_expired, the captured kmlock is now orphaned and firing the action
+    against it would mutate dead state. The post-remove _detached re-check
+    must catch this and skip the firing.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    action_called = False
+
+    async def mock_action(*args):
+        nonlocal action_called
+        action_called = True
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
+        with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+            await timer.start()
+        callback_fn = mock_call_later.call_args[1]["action"]
+
+    # Make async_load yield once so we can detach during the remove
+    async def yielding_load():
+        await asyncio.sleep(0)
+        return {"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
+
+    mock_store.async_load = AsyncMock(side_effect=yielding_load)
+
+    # Kick off _on_expired; it'll yield inside _remove_from_store
+    expire_task = asyncio.create_task(callback_fn(dt_util.utcnow()))
+    await asyncio.sleep(0)
+    # Detach during the remove-await
+    timer.detach()
+    await expire_task
+
+    # Action must NOT have fired against the orphaned kmlock
+    assert not action_called
+
+
+async def test_keymaster_timer_persist_recheck_aborts_after_cancel(hass, mock_store, store_lock):
+    """Test _persist_to_store's post-lock recheck aborts when cancel nulled _end_time.
+
+    Scenario: persist is queued behind another lock holder. While queued,
+    cancel() nulls _end_time. When persist acquires the lock, the recheck
+    must catch the now-None _end_time and bail out without saving.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    timer._end_time = dt_util.utcnow() + timedelta(minutes=5)
+    timer._duration = 300
+    mock_store.async_save.reset_mock()
+
+    # Hold the lock externally so persist queues behind us
+    async with store_lock:
+        persist_task = asyncio.create_task(timer._persist_to_store())
+        # Yield to let persist enter, hit the pre-guard (passes), and block on lock
+        await asyncio.sleep(0)
+        assert not persist_task.done(), "persist should be blocked on the lock"
+        # Simulate cancel() nulling _end_time while persist waits
+        timer._end_time = None
+        timer._duration = None
+
+    # Lock released; persist resumes, recheck sees None, returns without saving
+    await persist_task
+    mock_store.async_save.assert_not_called()
+
+
 async def test_keymaster_timer_remove_from_store_missing_key(hass, mock_store, store_lock):
     """Test _remove_from_store is a no-op when timer_id is not in the store."""
     timer = KeymasterTimer()
