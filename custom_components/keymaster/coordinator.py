@@ -1125,21 +1125,24 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     "restoring autolock timer and listeners to keep state from being silently lost",
                     new.lock_name,
                 )
-                # Re-attach listeners — _unsubscribe_listeners runs early in
-                # the try block, so a later failure leaves the surviving
-                # kmlock with no event listeners until another reload.
-                try:
-                    await self._update_listeners(current)
-                except Exception:
-                    _LOGGER.exception(
-                        "[update_lock] %s: Failed to restore listeners after rollback",
-                        new.lock_name,
-                    )
+                # Restore in REVERSE order of the teardown (mirror the
+                # listeners-then-detach order in the try block):
+                #   1. _setup_timer first so the rebound timer is fully
+                #      attached before any listener callback can reach it.
+                #   2. _update_listeners last so callbacks only fire after
+                #      both the timer and listeners exist.
                 try:
                     await self._setup_timer(current)
                 except Exception:
                     _LOGGER.exception(
                         "[update_lock] %s: Failed to restore autolock timer after rollback",
+                        new.lock_name,
+                    )
+                try:
+                    await self._update_listeners(current)
+                except Exception:
+                    _LOGGER.exception(
+                        "[update_lock] %s: Failed to restore listeners after rollback",
                         new.lock_name,
                     )
             raise

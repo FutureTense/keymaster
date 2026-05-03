@@ -1494,14 +1494,45 @@ async def test_keymaster_timer_setup_recovery_removes_entry_atomically(
     assert "test_timer" not in state, "entry must be removed by the recovering setup"
 
 
-async def test_keymaster_timer_setup_resets_detached_and_state(hass, mock_store, store_lock):
-    """Test setup() resets _detached AND clears _end_time/_duration.
+async def test_keymaster_timer_setup_resets_detached_flag(hass, mock_store, store_lock):
+    """Test setup() resets _detached so the rebound instance's cancel() works.
 
-    Without resetting _detached, cancel() would silently no-op on the
-    rebound instance. Without clearing _end_time/_duration (which detach
-    intentionally preserves), is_running could stay True even though no
-    callback is scheduled — making the coordinator think autolock is
-    active when nothing will fire.
+    Without this reset, cancel() would silently no-op on the rebound timer
+    (used by _update_lock's rollback path).
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    await timer.detach()
+    assert timer._detached is True
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    assert timer._detached is False
+
+
+async def test_keymaster_timer_setup_rescues_preserved_state(hass, mock_store, store_lock):
+    """Test setup() rescues a preserved _end_time when the store has no entry.
+
+    Scenario: start() called just before reload sets _end_time and queues
+    a persist behind the shared store lock. detach() preserves _end_time
+    but doesn't await the persist. If the queued persist hadn't run by
+    the time setup() acquires the lock, the store would still be empty
+    — but the in-memory _end_time is the valid pending autolock state.
+    setup() must claim that state (write it back, _resume from it) so
+    the autolock isn't silently dropped.
     """
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
@@ -1519,19 +1550,57 @@ async def test_keymaster_timer_setup_resets_detached_and_state(hass, mock_store,
     )
     with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
         await timer.start()
-    assert timer._end_time is not None
+    preserved_end_time = timer._end_time
+    preserved_duration = timer._duration
     await timer.detach()
-    assert timer._detached is True
-    assert timer._end_time is not None  # detach preserves these
-    assert timer._duration is not None
+    assert timer._end_time == preserved_end_time
+    assert timer._duration == preserved_duration
 
-    # Empty store so setup's load returns nothing — exercise the early-return path
+    # Simulate the queued persist never having written: store returns empty
+    mock_store.async_load = AsyncMock(return_value={})
+    mock_store.async_save.reset_mock()
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    # Rescue: the preserved state was claimed (saved + resumed)
+    mock_store.async_save.assert_called_once()
+    saved = mock_store.async_save.call_args[0][0]
+    assert "test_timer" in saved
+    assert timer.is_running
+
+
+async def test_keymaster_timer_setup_clears_state_when_no_pending(hass, mock_store, store_lock):
+    """Test setup() clears stale fields when nothing to rescue.
+
+    If the timer was idle (no _end_time) before detach AND store is
+    empty, setup() must leave fields cleared so is_running doesn't
+    lie. (Detach only preserves what was set, but a never-started
+    timer that gets detached and re-setup should look idle.)
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+
+    async def mock_action(*args):
+        pass
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+    # Manually leave stale state to simulate a degenerate detach
+    timer._end_time = None
+    timer._duration = None
+    await timer.detach()
     mock_store.async_load = AsyncMock(return_value={})
 
     await timer.setup(
         hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
     )
-    assert timer._detached is False
     assert timer._end_time is None
     assert timer._duration is None
     assert not timer.is_running

@@ -103,15 +103,12 @@ class KeymasterTimer:
         self._timer_id = timer_id
         self._store_lock = store_lock
         self._store = store
-        # Reset state that detach() preserved — setup() may be called on a
-        # previously-detached instance (e.g. _update_lock rollback reuses the
-        # old timer object). Without this reset:
-        #   - cancel() would silently no-op (_detached=True)
-        #   - is_running could stay True with no callback scheduled
-        #     (_end_time still set from before detach)
+        # Reset _detached so cancel() works on the rebound instance.
+        # _end_time/_duration are NOT cleared here — detach() preserved them
+        # for an in-flight persist that may still be queued behind the
+        # store lock; clearing pre-lock would let the queued persist see
+        # None and abort, dropping a start() from just before reload.
         self._detached = False
-        self._end_time = None
-        self._duration = None
 
         # Hold the lock across load + cleanup so we don't race a concurrent
         # persist from the outgoing timer during config entry reload.
@@ -119,6 +116,26 @@ class KeymasterTimer:
             data = await store.async_load() or {}
             timer_data = data.get(timer_id)
             if not timer_data:
+                # No persisted entry. If detach preserved an in-memory
+                # _end_time (a start() just before reload that hadn't yet
+                # persisted), claim it now by writing+resuming. Otherwise
+                # clear stale fields so is_running doesn't lie.
+                if self._end_time and self._duration is not None:
+                    _LOGGER.debug(
+                        "[KeymasterTimer] %s: Rescuing preserved timer state from "
+                        "pre-reload start(); ending %s",
+                        timer_id,
+                        self._end_time,
+                    )
+                    data[timer_id] = {
+                        "end_time": self._end_time.isoformat(),
+                        "duration": self._duration,
+                    }
+                    await store.async_save(data)
+                    await self._resume(self._end_time, self._duration)
+                else:
+                    self._end_time = None
+                    self._duration = None
                 return
             try:
                 end_time = dt.fromisoformat(timer_data["end_time"])
@@ -128,6 +145,8 @@ class KeymasterTimer:
                     timer_id,
                 )
                 await self._remove_from_store_locked()
+                self._end_time = None
+                self._duration = None
                 return
             duration = timer_data.get("duration", 0)
             if end_time <= dt_util.utcnow():
@@ -143,6 +162,8 @@ class KeymasterTimer:
                 # this startup-only edge case since the user's next lock
                 # interaction creates a fresh autolock cycle.
                 await self._remove_from_store_locked()
+                self._end_time = None
+                self._duration = None
                 hass.async_create_task(call_action(dt_util.utcnow()))
             else:
                 _LOGGER.debug(
