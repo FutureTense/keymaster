@@ -219,32 +219,31 @@ class KeymasterTimer:
         """Schedule a single callback that fires the action then cleans up."""
 
         async def _on_expired(now: dt) -> None:
-            """Fire the action and clean up timer state.
+            """Fire the action then clean up timer state.
 
-            Removes the store entry BEFORE calling the action so a concurrent
-            detach()/reload can't preserve a fired entry that would replay on
-            the replacement timer. After the remove await we re-check whether
-            detach() ran during the yield — if so, the action would target an
-            orphaned kmlock, so we hand off to the replacement timer instead.
+            Action runs FIRST so storage failures during cleanup can't
+            prevent the safety-critical lock from firing. We use
+            _remove_from_store directly (not cancel()) because cancel() is
+            a noop on detached timers; an in-flight callback racing with
+            detach() must still remove the entry or the replacement timer's
+            setup() will replay the action.
 
             Registers itself as self._on_expired_task so that detach() can
-            await its completion (any mutations the action made to the old
-            kmlock are then visible to _update_lock's state-copy).
+            await completion — any mutations the action made on the old
+            kmlock are then visible to _update_lock's state copy.
             """
             self._on_expired_task = asyncio.current_task()
             try:
                 if self._call_action is None:
                     return
-                await self._remove_from_store()
-                if self._detached:
-                    return
                 action = self._call_action
-                if action is None:
-                    return
                 try:
                     await action(now)
                 except Exception:
                     _LOGGER.exception("[KeymasterTimer] Action raised in _on_expired")
+                # Cleanup happens regardless of whether detach() ran during
+                # the action; we own the store entry until we finish here.
+                await self._remove_from_store()
                 self._cancel_callbacks()
                 self._end_time = None
                 self._duration = None

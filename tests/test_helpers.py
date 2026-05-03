@@ -1112,12 +1112,14 @@ async def test_keymaster_timer_setup_load_under_lock(hass, mock_store, store_loc
     mock_store.async_load.assert_called()
 
 
-async def test_keymaster_timer_on_expired_removes_store_before_action(hass, mock_store, store_lock):
-    """Test _on_expired removes store entry BEFORE calling the action.
+async def test_keymaster_timer_on_expired_action_before_remove(hass, mock_store, store_lock):
+    """Test _on_expired fires the action BEFORE store cleanup.
 
-    If detach() races during the action call, the store entry is already gone
-    so the replacement timer's setup() can't replay the same expired timer
-    and double-fire the lock action.
+    Action is the safety-critical operation; if storage cleanup raises
+    (e.g. transient async_load/async_save failure), the lock must still
+    have been locked. detach() awaits this task so the action can complete
+    even if reload races, and the in-flight callback removes the entry
+    before it returns so the replacement won't replay.
     """
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
@@ -1145,21 +1147,61 @@ async def test_keymaster_timer_on_expired_removes_store_before_action(hass, mock
         hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
     )
 
-    # Capture the real _on_expired by patching async_call_later
     with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
         with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
             await timer.start()
         callback_fn = mock_call_later.call_args[1]["action"]
 
-    # Make load return the entry so _remove_from_store actually saves
     mock_store.async_load = AsyncMock(
         return_value={"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
     )
 
     await callback_fn(dt_util.utcnow())
 
-    # Remove must have happened BEFORE the action call
-    assert call_order == ["remove", "action"]
+    # Action must fire before remove so storage failures can't block the lock
+    assert call_order == ["action", "remove"]
+
+
+async def test_keymaster_timer_on_expired_action_fires_even_if_remove_raises(
+    hass, mock_store, store_lock
+):
+    """Test the action fires even if store cleanup raises.
+
+    Action is safety-critical (locks the door). A transient storage error
+    must not prevent it. The next restart will replay the timer (entry
+    still in store), which is acceptable.
+    """
+    timer = KeymasterTimer()
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.autolock_min_day = 5
+
+    action_called = False
+
+    async def mock_action(*args):
+        nonlocal action_called
+        action_called = True
+
+    await timer.setup(
+        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+    )
+
+    with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
+        with patch("custom_components.keymaster.helpers.sun.is_up", return_value=True):
+            await timer.start()
+        callback_fn = mock_call_later.call_args[1]["action"]
+
+    # Make remove fail by having async_load raise
+    mock_store.async_load = AsyncMock(side_effect=OSError("transient disk error"))
+
+    # Callback should propagate the error but action should have fired first
+    with pytest.raises(OSError):
+        await callback_fn(dt_util.utcnow())
+
+    assert action_called, "action must fire even if storage cleanup fails"
 
 
 async def test_keymaster_timer_on_expired_skipped_after_detach(hass, mock_store, store_lock):
@@ -1296,15 +1338,14 @@ async def test_keymaster_timer_detach_awaits_in_flight_callback(hass, mock_store
     assert timer.hass is None  # detach finished its cleanup
 
 
-async def test_keymaster_timer_on_expired_skips_action_if_detached_during_remove(
+async def test_keymaster_timer_on_expired_remove_runs_when_detach_races(
     hass, mock_store, store_lock
 ):
-    """Test _on_expired doesn't fire action against orphaned kmlock.
+    """Test _on_expired removes the store entry even if detach races.
 
-    If detach() runs during the `await self._remove_from_store()` inside
-    _on_expired, the captured kmlock is now orphaned and firing the action
-    against it would mutate dead state. The post-remove _detached re-check
-    must catch this and skip the firing.
+    The in-flight callback owns the store entry and must remove it before
+    completing — otherwise the replacement timer's setup() would replay
+    the action. detach() awaits the callback so this remove always runs.
     """
     timer = KeymasterTimer()
     kmlock = KeymasterLock(
@@ -1314,14 +1355,24 @@ async def test_keymaster_timer_on_expired_skips_action_if_detached_during_remove
     )
     kmlock.autolock_min_day = 5
 
-    action_called = False
+    action_started = asyncio.Event()
+    action_release = asyncio.Event()
+    save_calls: list[dict] = []
 
-    async def mock_action(*args):
-        nonlocal action_called
-        action_called = True
+    async def slow_action(*args):
+        action_started.set()
+        await action_release.wait()
+
+    async def record_save(data):
+        save_calls.append(dict(data))
+
+    mock_store.async_save = AsyncMock(side_effect=record_save)
+    mock_store.async_load = AsyncMock(
+        return_value={"test_timer": {"end_time": "2099-01-01T00:00:00+00:00", "duration": 300}}
+    )
 
     await timer.setup(
-        hass, kmlock, mock_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
+        hass, kmlock, slow_action, timer_id="test_timer", store=mock_store, store_lock=store_lock
     )
 
     with patch("custom_components.keymaster.helpers.async_call_later") as mock_call_later:
@@ -1329,22 +1380,21 @@ async def test_keymaster_timer_on_expired_skips_action_if_detached_during_remove
             await timer.start()
         callback_fn = mock_call_later.call_args[1]["action"]
 
-    # Make async_load yield once so we can detach during the remove
-    async def yielding_load():
-        await asyncio.sleep(0)
-        return {"test_timer": {"end_time": timer._end_time.isoformat(), "duration": 300}}
-
-    mock_store.async_load = AsyncMock(side_effect=yielding_load)
-
-    # Kick off _on_expired; it'll yield inside _remove_from_store
+    save_calls.clear()  # ignore start()'s persist
     expire_task = asyncio.create_task(callback_fn(dt_util.utcnow()))
-    await asyncio.sleep(0)
-    # Detach during the remove-await
-    await timer.detach()
-    await expire_task
+    await action_started.wait()
 
-    # Action must NOT have fired against the orphaned kmlock
-    assert not action_called
+    # Reload arrives mid-action; detach must wait for the callback to finish
+    detach_task = asyncio.create_task(timer.detach())
+    await asyncio.sleep(0)
+    assert not detach_task.done()
+
+    action_release.set()
+    await asyncio.gather(expire_task, detach_task)
+
+    # Final save must be the cleanup with entry removed
+    assert save_calls, "remove must have called async_save"
+    assert "test_timer" not in save_calls[-1], "store entry must be removed"
 
 
 async def test_keymaster_timer_persist_recheck_aborts_after_cancel(hass, mock_store, store_lock):
