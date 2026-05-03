@@ -1091,7 +1091,73 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if old.autolock_timer:
             await old.autolock_timer.detach()
         try:
-            await self._update_lock_inner(old, new)
+            await KeymasterCoordinator._unsubscribe_listeners(old)
+            # _LOGGER.debug("[update_lock] %s: old: %s", new.lock_name, old)
+            del_code_slots: list[int] = [
+                old.starting_code_slot + i for i in range(old.number_of_code_slots)
+            ]
+            for code_slot_num in range(
+                new.starting_code_slot,
+                new.starting_code_slot + new.number_of_code_slots,
+            ):
+                if code_slot_num in del_code_slots:
+                    del_code_slots.remove(code_slot_num)
+
+            new.lock_state = old.lock_state
+            new.door_state = old.door_state
+            new.autolock_enabled = old.autolock_enabled
+            new.autolock_min_day = old.autolock_min_day
+            new.autolock_min_night = old.autolock_min_night
+            new.retry_lock = old.retry_lock
+            # Preserve transient retry state; the door-open retry path on the
+            # replacement won't fire its lock action otherwise.
+            new.pending_retry_lock = old.pending_retry_lock
+            for code_slot_num, new_kmslot in new.code_slots.items():
+                if code_slot_num not in old.code_slots:
+                    continue
+                old_kmslot: KeymasterCodeSlot = old.code_slots[code_slot_num]
+                new_kmslot.enabled = old_kmslot.enabled
+                new_kmslot.name = old_kmslot.name
+                new_kmslot.pin = old_kmslot.pin
+                new_kmslot.override_parent = old_kmslot.override_parent
+                new_kmslot.notifications = old_kmslot.notifications
+                new_kmslot.accesslimit_count_enabled = old_kmslot.accesslimit_count_enabled
+                new_kmslot.accesslimit_count = old_kmslot.accesslimit_count
+                new_kmslot.accesslimit_date_range_enabled = (
+                    old_kmslot.accesslimit_date_range_enabled
+                )
+                new_kmslot.accesslimit_date_range_start = old_kmslot.accesslimit_date_range_start
+                new_kmslot.accesslimit_date_range_end = old_kmslot.accesslimit_date_range_end
+                new_kmslot.accesslimit_day_of_week_enabled = (
+                    old_kmslot.accesslimit_day_of_week_enabled
+                )
+                if not new_kmslot.accesslimit_day_of_week:
+                    continue
+                for dow_num, new_dow in new_kmslot.accesslimit_day_of_week.items():
+                    if not old_kmslot.accesslimit_day_of_week:
+                        continue
+                    old_dow: KeymasterCodeSlotDayOfWeek = old_kmslot.accesslimit_day_of_week[
+                        dow_num
+                    ]
+                    new_dow.dow_enabled = old_dow.dow_enabled
+                    new_dow.limit_by_time = old_dow.limit_by_time
+                    new_dow.include_exclude = old_dow.include_exclude
+                    new_dow.time_start = old_dow.time_start
+                    new_dow.time_end = old_dow.time_end
+            self.kmlocks[new.keymaster_config_entry_id] = new
+            # _LOGGER.debug("[update_lock] %s: new: %s", new.lock_name, new)
+            _LOGGER.debug("[update_lock] Code slot entities to delete: %s", del_code_slots)
+            for code_slot_num in del_code_slots:
+                await delete_code_slot_entities(
+                    hass=self.hass,
+                    keymaster_config_entry_id=new.keymaster_config_entry_id,
+                    code_slot_num=code_slot_num,
+                )
+            await self._rebuild_lock_relationships()
+            await self._update_door_and_lock_state()
+            await self._update_listeners(self.kmlocks[new.keymaster_config_entry_id])
+            await self._setup_timer(self.kmlocks[new.keymaster_config_entry_id])
+            await self.async_refresh()
         except Exception:
             current = self.kmlocks.get(new.keymaster_config_entry_id)
             if current is not None:
@@ -1109,70 +1175,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     )
             raise
         return True
-
-    async def _update_lock_inner(self, old: KeymasterLock, new: KeymasterLock) -> None:
-        """Body of _update_lock after the old timer has been detached."""
-        await KeymasterCoordinator._unsubscribe_listeners(old)
-        # _LOGGER.debug("[update_lock] %s: old: %s", new.lock_name, old)
-        del_code_slots: list[int] = [
-            old.starting_code_slot + i for i in range(old.number_of_code_slots)
-        ]
-        for code_slot_num in range(
-            new.starting_code_slot,
-            new.starting_code_slot + new.number_of_code_slots,
-        ):
-            if code_slot_num in del_code_slots:
-                del_code_slots.remove(code_slot_num)
-
-        new.lock_state = old.lock_state
-        new.door_state = old.door_state
-        new.autolock_enabled = old.autolock_enabled
-        new.autolock_min_day = old.autolock_min_day
-        new.autolock_min_night = old.autolock_min_night
-        new.retry_lock = old.retry_lock
-        # Preserve transient retry state; the door-open retry path on the
-        # replacement won't fire its lock action otherwise.
-        new.pending_retry_lock = old.pending_retry_lock
-        for code_slot_num, new_kmslot in new.code_slots.items():
-            if code_slot_num not in old.code_slots:
-                continue
-            old_kmslot: KeymasterCodeSlot = old.code_slots[code_slot_num]
-            new_kmslot.enabled = old_kmslot.enabled
-            new_kmslot.name = old_kmslot.name
-            new_kmslot.pin = old_kmslot.pin
-            new_kmslot.override_parent = old_kmslot.override_parent
-            new_kmslot.notifications = old_kmslot.notifications
-            new_kmslot.accesslimit_count_enabled = old_kmslot.accesslimit_count_enabled
-            new_kmslot.accesslimit_count = old_kmslot.accesslimit_count
-            new_kmslot.accesslimit_date_range_enabled = old_kmslot.accesslimit_date_range_enabled
-            new_kmslot.accesslimit_date_range_start = old_kmslot.accesslimit_date_range_start
-            new_kmslot.accesslimit_date_range_end = old_kmslot.accesslimit_date_range_end
-            new_kmslot.accesslimit_day_of_week_enabled = old_kmslot.accesslimit_day_of_week_enabled
-            if not new_kmslot.accesslimit_day_of_week:
-                continue
-            for dow_num, new_dow in new_kmslot.accesslimit_day_of_week.items():
-                if not old_kmslot.accesslimit_day_of_week:
-                    continue
-                old_dow: KeymasterCodeSlotDayOfWeek = old_kmslot.accesslimit_day_of_week[dow_num]
-                new_dow.dow_enabled = old_dow.dow_enabled
-                new_dow.limit_by_time = old_dow.limit_by_time
-                new_dow.include_exclude = old_dow.include_exclude
-                new_dow.time_start = old_dow.time_start
-                new_dow.time_end = old_dow.time_end
-        self.kmlocks[new.keymaster_config_entry_id] = new
-        # _LOGGER.debug("[update_lock] %s: new: %s", new.lock_name, new)
-        _LOGGER.debug("[update_lock] Code slot entities to delete: %s", del_code_slots)
-        for code_slot_num in del_code_slots:
-            await delete_code_slot_entities(
-                hass=self.hass,
-                keymaster_config_entry_id=new.keymaster_config_entry_id,
-                code_slot_num=code_slot_num,
-            )
-        await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_state()
-        await self._update_listeners(self.kmlocks[new.keymaster_config_entry_id])
-        await self._setup_timer(self.kmlocks[new.keymaster_config_entry_id])
-        await self.async_refresh()
 
     async def _delete_lock(self, kmlock: KeymasterLock, _: dt) -> None:
         await self._initial_setup_done_event.wait()
