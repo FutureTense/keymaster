@@ -259,6 +259,8 @@ class TestDebouncedRefresh:
 
             assert coordinator._cancel_debounced_refresh is not None
 
+            # Cancel the pending async_call_later timer before manually triggering
+            coordinator._cancel_debounced_refresh()
             await coordinator._trigger_debounced_refresh(None)
 
             mock_refresh.assert_called_once()
@@ -276,6 +278,9 @@ class TestDebouncedRefresh:
         second_cancel = coordinator._cancel_debounced_refresh
         assert second_cancel is not None
         assert first_cancel is not second_cancel
+
+        # Clean up the pending async_call_later timer
+        second_cancel()
 
     async def test_trigger_debounced_refresh_clears_cancel(self, hass: HomeAssistant):
         """_trigger_debounced_refresh should clear _cancel_debounced_refresh."""
