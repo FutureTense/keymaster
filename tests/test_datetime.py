@@ -203,8 +203,10 @@ async def test_datetime_entity_async_set_value(
 
     entity = KeymasterDateTime(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
         test_datetime = datetime(2025, 1, 1, 0, 0, 0)
         await entity.async_set_value(test_datetime)
 
@@ -246,8 +248,10 @@ async def test_datetime_entity_child_lock_ignores_change_without_override(
 
     entity = KeymasterDateTime(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
         caplog.set_level(logging.DEBUG)
         test_datetime = datetime(2025, 1, 1, 0, 0, 0)
         await entity.async_set_value(test_datetime)

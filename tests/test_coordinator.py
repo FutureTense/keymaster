@@ -2851,7 +2851,8 @@ class TestSyncUsercodeRefreshMasked:
 
         # "0000000000" is not a mask pattern; refresh should NOT be called
         provider.async_refresh_usercode.assert_not_awaited()
-        # _sync_pin treats "0000000000" as a real numeric code and imports it
+        # Slot defaults to DISCONNECTED synced state, so the mismatch check
+        # (which requires SYNCED) is skipped and the lock code is accepted.
         assert km_slot.pin == "0000000000"
 
     async def test_subsequent_poll_skips_refresh(self, sync_coordinator):

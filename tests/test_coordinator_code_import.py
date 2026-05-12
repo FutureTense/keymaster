@@ -175,7 +175,12 @@ class TestSyncPinImport:
         assert slot.pin is None
 
     async def test_sync_pin_does_not_import_when_pin_is_set(self, mock_coordinator, kmlock):
-        """Existing local PIN should not be overwritten by import logic."""
+        """Existing local PIN should not be overwritten by import logic.
+
+        When the lock reports a different numeric PIN from ours and no grace
+        period is active, the slot is marked OUT_OF_SYNC and the local PIN
+        is preserved.
+        """
         slot = KeymasterCodeSlot(
             number=1, pin="1234", active=True, enabled=True, synced=Synced.SYNCED
         )
@@ -183,9 +188,9 @@ class TestSyncPinImport:
 
         await mock_coordinator._sync_pin(kmlock, 1, "5678")
 
-        # Should follow normal sync logic, not import
-        assert slot.pin == "5678"  # Normal sync overwrites
-        assert slot.synced == Synced.SYNCED
+        # Should follow mismatch logic — local PIN preserved, marked out of sync
+        assert slot.pin == "1234"
+        assert slot.synced == Synced.OUT_OF_SYNC
 
     async def test_sync_pin_empty_code_with_none_pin(self, mock_coordinator, kmlock):
         """Empty usercode with None pin should set DISCONNECTED."""

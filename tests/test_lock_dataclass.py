@@ -27,6 +27,7 @@ def test_type_lookup_consistency():
         "lock_config_entry_id",  # Often set dynamically or handled separately
         "provider",  # Provider instance, not serializable
         "masked_code_slots",  # Transient runtime-only field (init=False)
+        "last_code_set_at",  # Runtime-only grace period timestamp, not persisted
     }
 
     # Verify that significant fields are present in the lookup map.

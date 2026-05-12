@@ -196,4 +196,4 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             return
         if self._set_property_value(value):
             self._attr_native_value = value
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_request_debounced_refresh()

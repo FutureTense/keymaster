@@ -274,7 +274,7 @@ async def test_text_entity_async_set_pin_value(hass: HomeAssistant, text_config_
     # Mock coordinator methods
     with (
         patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
     ):
         await entity.async_set_value("1234")
 
@@ -317,7 +317,7 @@ async def test_text_entity_async_clear_pin_value(
     # Mock coordinator methods
     with (
         patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()) as mock_clear_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
     ):
         await entity.async_set_value("")
 
@@ -402,7 +402,7 @@ async def test_text_entity_name_change_repushes_code(
 
     with (
         patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
     ):
         await entity.async_set_value("New Name")
 
@@ -447,7 +447,7 @@ async def test_text_entity_name_change_no_repush_without_pin(
 
     with (
         patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
     ):
         await entity.async_set_value("New Name")
 
@@ -485,7 +485,7 @@ async def test_text_entity_name_change_no_repush_when_inactive(
 
     with (
         patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
     ):
         await entity.async_set_value("New Name")
 
@@ -527,8 +527,10 @@ async def test_text_entity_child_lock_ignores_name_change_without_override(
 
     entity = KeymasterText(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
         caplog.set_level(logging.DEBUG)
         await entity.async_set_value("New Name")
 

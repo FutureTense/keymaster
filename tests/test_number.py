@@ -442,9 +442,11 @@ async def test_number_entity_async_set_value(hass: HomeAssistant, number_config_
 
     entity = KeymasterNumber(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh and async_write_ha_state (entity not registered)
+    # Mock coordinator.async_request_debounced_refresh and async_write_ha_state (entity not registered)
     with (
-        patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh,
+        patch.object(
+            coordinator, "async_request_debounced_refresh", new=AsyncMock()
+        ) as mock_refresh,
         patch.object(entity, "async_write_ha_state") as mock_write_state,
     ):
         await entity.async_set_native_value(5)
@@ -494,8 +496,10 @@ async def test_number_entity_child_lock_ignores_change_without_override(
 
     entity = KeymasterNumber(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
         caplog.set_level(logging.DEBUG)
         await entity.async_set_native_value(5)
 
@@ -545,9 +549,9 @@ async def test_number_entity_converts_float_to_int_for_accesslimit_count(
 
     entity = KeymasterNumber(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh and async_write_ha_state (entity not registered)
+    # Mock coordinator.async_request_debounced_refresh and async_write_ha_state (entity not registered)
     with (
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
         patch.object(entity, "async_write_ha_state"),
     ):
         # Pass a float value (like NumberEntity would from the frontend)
@@ -599,7 +603,7 @@ async def test_number_entity_autolock_float_to_int(
     entity = KeymasterNumber(entity_description=entity_description)
 
     with (
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
         patch.object(entity, "async_write_ha_state"),
     ):
         await entity.async_set_native_value(5.0)

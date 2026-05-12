@@ -199,4 +199,4 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
         if self._set_property_value(value):
             self._attr_native_value = value
             self.async_write_ha_state()  # Immediate UI update
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_request_debounced_refresh()

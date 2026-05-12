@@ -143,8 +143,10 @@ async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, co
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = False
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
         await entity.async_turn_on()
 
         # Should update state and call refresh
@@ -183,7 +185,7 @@ async def test_switch_autolock_user_values_persist_after_disable_reenable(
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = False
 
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()):
         # First enable — defaults should be populated
         await entity.async_turn_on()
         assert kmlock.autolock_min_day == DEFAULT_AUTOLOCK_MIN_DAY
@@ -238,7 +240,7 @@ async def test_switch_autolock_starts_timer_when_lock_unlocked(
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = False
 
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()):
         await entity.async_turn_on()
 
     assert entity._attr_is_on is True
@@ -277,7 +279,7 @@ async def test_switch_autolock_does_not_start_timer_when_lock_locked(
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = False
 
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()):
         await entity.async_turn_on()
 
     assert entity._attr_is_on is True
@@ -313,7 +315,7 @@ async def test_switch_autolock_turn_off_cancels_running_timer(
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = True
 
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()):
         await entity.async_turn_off()
 
     assert entity._attr_is_on is False
@@ -350,7 +352,7 @@ async def test_switch_autolock_turn_off_does_not_cancel_stopped_timer(
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = True
 
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()):
         await entity.async_turn_off()
 
     assert entity._attr_is_on is False
@@ -385,7 +387,7 @@ async def test_switch_autolock_turn_off_no_timer(
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = True
 
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()):
+    with patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()):
         await entity.async_turn_off()
 
     assert entity._attr_is_on is False
@@ -418,8 +420,10 @@ async def test_switch_async_turn_off(hass: HomeAssistant, switch_config_entry, c
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = True
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
         await entity.async_turn_off()
 
         # Should update state and call refresh
@@ -465,7 +469,7 @@ async def test_switch_enabled_turn_on_sets_pin(
     with (
         patch.object(coordinator, "update_slot_active_state", new=AsyncMock()) as mock_update,
         patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
     ):
         await entity.async_turn_on()
 
@@ -518,7 +522,7 @@ async def test_switch_enabled_turn_off_clears_pin(
     with (
         patch.object(coordinator, "update_slot_active_state", new=AsyncMock()) as mock_update,
         patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()) as mock_clear_pin,
-        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
     ):
         await entity.async_turn_off()
 
@@ -561,8 +565,10 @@ async def test_switch_turn_on_no_op_when_already_on(
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = True
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
         await entity.async_turn_on()
 
         # Should not call refresh
@@ -597,8 +603,10 @@ async def test_switch_turn_off_no_op_when_already_off(
     entity = KeymasterSwitch(entity_description=entity_description)
     entity._attr_is_on = False
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh", new=AsyncMock()) as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
         await entity.async_turn_off()
 
         # Should not call refresh

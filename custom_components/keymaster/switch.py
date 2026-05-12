@@ -317,7 +317,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                         code_slot_num=self._code_slot,
                         pin=pin,
                     )
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_request_debounced_refresh()
 
     async def async_turn_off(self, **_: Any) -> None:
         """Turn the entity off."""
@@ -345,4 +345,4 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                     config_entry_id=self._config_entry.entry_id,
                     code_slot_num=self._code_slot,
                 )
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_request_debounced_refresh()

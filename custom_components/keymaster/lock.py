@@ -46,6 +46,7 @@ class KeymasterCodeSlot:
     accesslimit_date_range_end: dt | None = None
     accesslimit_day_of_week_enabled: bool = False
     accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
+    last_code_set_at: dt | None = None
 
 
 @dataclass

@@ -216,8 +216,8 @@ async def test_time_entity_async_set_value(hass: HomeAssistant, time_config_entr
 
     entity = KeymasterTime(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh") as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(coordinator, "async_request_debounced_refresh") as mock_refresh:
         test_time = dt_time(9, 30)
         await entity.async_set_value(test_time)
 
@@ -272,8 +272,8 @@ async def test_time_entity_child_lock_ignores_change_without_override(
 
     entity = KeymasterTime(entity_description=entity_description)
 
-    # Mock coordinator.async_refresh
-    with patch.object(coordinator, "async_refresh") as mock_refresh:
+    # Mock coordinator.async_request_debounced_refresh
+    with patch.object(coordinator, "async_request_debounced_refresh") as mock_refresh:
         caplog.set_level(logging.DEBUG)
         test_time = dt_time(9, 30)
         await entity.async_set_value(test_time)

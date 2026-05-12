@@ -184,4 +184,4 @@ class KeymasterText(KeymasterEntity, TextEntity):
                     pin=slot_pin,
                     override=True,
                 )
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_request_debounced_refresh()
