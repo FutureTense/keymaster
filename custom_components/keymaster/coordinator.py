@@ -435,10 +435,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 if not field.init:
                     continue
 
-                # Skip runtime-only fields that should not be persisted.
-                if field_name == "last_code_set_at":
-                    continue
-
                 field_value: Any = getattr(instance, field_name)
 
                 # Convert datetime object to ISO string
