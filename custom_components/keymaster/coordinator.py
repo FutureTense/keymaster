@@ -1947,6 +1947,20 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # No mismatch (or lock agrees with us) — safe to update local state
         if usercode.isdigit():
+            if slot.synced == Synced.OUT_OF_SYNC:
+                # Slot was previously marked out-of-sync.  Only accept the
+                # lock value if it now matches our desired local PIN;
+                # otherwise re-push our PIN to the lock.
+                if slot.pin == usercode:
+                    slot.synced = Synced.SYNCED
+                else:
+                    await self.set_pin_on_lock(
+                        config_entry_id=kmlock.keymaster_config_entry_id,
+                        code_slot_num=code_slot_num,
+                        pin=str(slot.pin),
+                        override=True,
+                    )
+                return
             slot.synced = Synced.SYNCED
             slot.pin = usercode
         else:
