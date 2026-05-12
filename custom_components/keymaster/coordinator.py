@@ -1961,6 +1961,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         override=True,
                     )
                 return
+            if slot.synced in (Synced.ADDING, Synced.DELETING):
+                # A set/clear operation is in flight — preserve local state
+                # to avoid overwriting the desired PIN with a stale lock value.
+                return
             slot.synced = Synced.SYNCED
             slot.pin = usercode
         else:
