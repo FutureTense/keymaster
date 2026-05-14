@@ -266,4 +266,6 @@ async def test_setup_entry_calls_add_lock_with_update_true(hass):
 
         assert await async_setup_entry(hass, entry)
 
-    assert mock_coordinator.add_lock.await_args.kwargs["update"] is True
+    add_lock_await_args = mock_coordinator.add_lock.await_args
+    assert add_lock_await_args is not None
+    assert add_lock_await_args.kwargs["update"] is True
