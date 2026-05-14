@@ -183,9 +183,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         lock_name=setup_data[CONF_LOCK_NAME],
         lock_entity_id=setup_data[CONF_LOCK_ENTITY_ID],
         keymaster_config_entry_id=config_entry.entry_id,
-        alarm_level_or_user_code_entity_id=setup_data.get(
-            CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
-        ),
+        alarm_level_or_user_code_entity_id=setup_data.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
         alarm_type_or_access_control_entity_id=setup_data.get(
             CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
         ),
