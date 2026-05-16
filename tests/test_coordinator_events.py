@@ -4,9 +4,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.keymaster.const import (
+    ATTR_CODE_SLOT,
+    ATTR_CODE_SLOT_NAME,
+    ATTR_NOTIFICATION_SOURCE,
+    EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+)
 from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.helpers import Throttle
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from homeassistant.components.lock.const import LockState
+from homeassistant.const import ATTR_STATE
 
 
 @pytest.fixture
@@ -402,3 +410,320 @@ async def test_lock_unlocked_does_not_decrement_when_count_zero(hass, coordinato
 
         # Count should remain at 0 (not go negative)
         assert kmlock.code_slots[1].accesslimit_count == 0
+
+
+async def test_lock_unlocked_supersedes_slot_zero_with_slot_info(hass, coordinator_for_unlock_test):
+    """Test that a slot>0 event supersedes a prior slot=0 unlock.
+
+    When relay_a_triggered (slot=0) arrives first and then valid_code_entered
+    (slot=N) arrives, two keymaster_lock_state_changed events should fire:
+    the first with code_slot=0, the second with code_slot=N.
+    """
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.code_slots = {
+        3: KeymasterCodeSlot(
+            number=3,
+            name="Alice",
+            enabled=True,
+        )
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    fired_events: list[dict] = []
+
+    def _capture_event(event):
+        fired_events.append(event.data)
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _capture_event)
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+    ):
+        # First event: relay_a_triggered with slot=0
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        # Second event: valid_code_entered with slot=3
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=3,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    assert len(fired_events) == 2
+    assert fired_events[0][ATTR_CODE_SLOT] == 0
+    assert fired_events[0][ATTR_CODE_SLOT_NAME] == ""
+    assert fired_events[1][ATTR_CODE_SLOT] == 3
+    assert fired_events[1][ATTR_CODE_SLOT_NAME] == "Alice"
+    assert fired_events[1][ATTR_NOTIFICATION_SOURCE] == "valid_code_entered"
+    assert fired_events[1][ATTR_STATE] == LockState.UNLOCKED
+
+
+async def test_lock_unlocked_does_not_supersede_when_already_has_slot(
+    hass, coordinator_for_unlock_test
+):
+    """Test that a second slot>0 event is dropped when first had slot>0.
+
+    If the first unlock event already had slot=5, a second event with slot=3
+    should be short-circuited (no superseding).
+    """
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.code_slots = {
+        3: KeymasterCodeSlot(number=3, name="Alice", enabled=True),
+        5: KeymasterCodeSlot(number=5, name="Bob", enabled=True),
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    fired_events: list[dict] = []
+
+    def _capture_event(event):
+        fired_events.append(event.data)
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _capture_event)
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+    ):
+        # First event: slot=5
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=5,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        # Second event: slot=3 — should be dropped (already unlocked with slot>0)
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=3,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    # Only the first event should fire
+    assert len(fired_events) == 1
+    assert fired_events[0][ATTR_CODE_SLOT] == 5
+    assert fired_events[0][ATTR_CODE_SLOT_NAME] == "Bob"
+
+
+async def test_lock_unlocked_side_effects_not_duplicated(hass, coordinator_for_unlock_test):
+    """Test that superseding slot>0 event does not re-run side effects.
+
+    When a slot>0 event supersedes a prior slot=0 unlock, autolock timer
+    should NOT be restarted, access limits should NOT be decremented, and
+    notifications should NOT be re-sent.
+    """
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.autolock_enabled = True
+    kmlock.autolock_timer = MagicMock()
+    kmlock.autolock_timer.start = AsyncMock()
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "script.notify_test"
+    kmlock.code_slots = {
+        2: KeymasterCodeSlot(
+            number=2,
+            name="Charlie",
+            enabled=True,
+            accesslimit_count_enabled=True,
+            accesslimit_count=5,
+            notifications=True,
+        )
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        # First event: slot=0 — triggers autolock and notification
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        autolock_call_count = kmlock.autolock_timer.start.call_count
+        notify_call_count = mock_notify.call_count
+        access_count_after_first = kmlock.code_slots[2].accesslimit_count
+
+        # Second event: slot=2 — supersedes, but should NOT re-run side effects
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=2,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    # Autolock timer should not be started again
+    assert kmlock.autolock_timer.start.call_count == autolock_call_count
+    # Notification should not be sent again
+    assert mock_notify.call_count == notify_call_count
+    # Access limit should not be decremented
+    assert kmlock.code_slots[2].accesslimit_count == access_count_after_first == 5
+
+
+async def test_lock_unlocked_drops_second_slot_zero(hass, coordinator_for_unlock_test):
+    """Test that a second slot=0 event is dropped normally.
+
+    Two consecutive slot=0 events — the second should be short-circuited
+    without firing an additional bus event.
+    """
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    fired_events: list[dict] = []
+
+    def _capture_event(event):
+        fired_events.append(event.data)
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _capture_event)
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+    ):
+        # First slot=0 event
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        # Second slot=0 event — should be dropped
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+    # Only one event should fire
+    assert len(fired_events) == 1
+    assert fired_events[0][ATTR_CODE_SLOT] == 0
+
+
+async def test_lock_unlocked_supersede_bypasses_throttle(hass, coordinator_for_unlock_test):
+    """Test that the supersede path works even when the throttle would block.
+
+    In real usage, the slot=0 event sets the throttle cooldown. The slot>0
+    event arrives within THROTTLE_SECONDS but must still supersede because the
+    supersede check runs before the throttle gate.
+    """
+    coordinator = coordinator_for_unlock_test
+    # Use a real Throttle instead of a mock
+    coordinator._throttle = Throttle()
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.code_slots = {
+        3: KeymasterCodeSlot(
+            number=3,
+            name="Alice",
+            enabled=True,
+        )
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    fired_events: list[dict] = []
+
+    def _capture_event(event):
+        fired_events.append(event.data)
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _capture_event)
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+    ):
+        # First event: relay_a_triggered with slot=0 (sets throttle cooldown)
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        # Second event: valid_code_entered with slot=3 — arrives within
+        # THROTTLE_SECONDS but should still supersede
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=3,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    # Both events should fire despite throttle
+    assert len(fired_events) == 2
+    assert fired_events[0][ATTR_CODE_SLOT] == 0
+    assert fired_events[1][ATTR_CODE_SLOT] == 3
+    assert fired_events[1][ATTR_CODE_SLOT_NAME] == "Alice"
