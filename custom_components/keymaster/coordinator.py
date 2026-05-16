@@ -1342,6 +1342,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         kmlock.code_slots[code_slot_num].synced = Synced.ADDING
+        kmlock.code_slots[code_slot_num].sync_op_started_at = utcnow()
         self._quick_refresh = True
         # Immediately notify entities of sync status change
         self.async_set_updated_data(dict(self.kmlocks))
@@ -1356,6 +1357,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     kmlock.lock_name,
                     code_slot_num,
                 )
+                kmlock.code_slots[code_slot_num].synced = Synced.OUT_OF_SYNC
+                self.async_set_updated_data(dict(self.kmlocks))
                 return False
             _LOGGER.debug(
                 "[set_pin_on_lock] %s: Code Slot %s: PIN set to %s",
@@ -1395,6 +1398,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return False
 
+        prior_pin = kmlock.code_slots[code_slot_num].pin
+
         if clear_from_kmlock:
             kmlock.code_slots[code_slot_num].pin = ""
 
@@ -1418,6 +1423,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         kmlock.code_slots[code_slot_num].synced = Synced.DELETING
+        kmlock.code_slots[code_slot_num].sync_op_started_at = utcnow()
         self._quick_refresh = True
         # Immediately notify entities of sync status change
         self.async_set_updated_data(dict(self.kmlocks))
@@ -1431,6 +1437,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     kmlock.lock_name,
                     code_slot_num,
                 )
+                # Restore prior PIN to preserve local state after failed clear
+                kmlock.code_slots[code_slot_num].pin = prior_pin
+                kmlock.code_slots[code_slot_num].synced = Synced.OUT_OF_SYNC
+                self.async_set_updated_data(dict(self.kmlocks))
                 return False
             _LOGGER.debug(
                 "[clear_pin_from_lock] %s: Code Slot %s: PIN cleared via provider",
@@ -1919,6 +1929,26 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         slot = kmlock.code_slots[code_slot_num]
 
+        # If an operation is in flight (ADDING/DELETING), check whether it's
+        # still within the grace period. If so, preserve the state and skip
+        # sync entirely to avoid conflicting with the in-flight operation.
+        if slot.synced in (Synced.ADDING, Synced.DELETING):
+            if (
+                slot.sync_op_started_at is not None
+                and (utcnow() - slot.sync_op_started_at).total_seconds() < PIN_SET_GRACE_SECONDS
+            ):
+                # Operation is genuinely in flight — skip sync
+                return
+            # Operation is stale — reset for recovery below
+            _LOGGER.warning(
+                "[_sync_pin] Slot %s: Stuck in %s state with no recent "
+                "operation. Resetting to OUT_OF_SYNC for recovery.",
+                code_slot_num,
+                slot.synced,
+            )
+            slot.synced = Synced.OUT_OF_SYNC
+            slot.sync_op_started_at = None
+
         # Lock reports empty/no code
         if not usercode:
             if (not slot.enabled) or (not slot.active) or (not slot.pin):
@@ -2006,9 +2036,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if slot.synced == Synced.OUT_OF_SYNC:
                 # Slot was previously marked out-of-sync.  Only accept the
                 # lock value if it now matches our desired local PIN;
-                # otherwise re-push our PIN to the lock.
+                # otherwise re-push our PIN (or retry clear if PIN is empty).
                 if slot.pin == usercode:
                     slot.synced = Synced.SYNCED
+                elif not slot.pin:
+                    # Slot intended to be cleared — retry the clear
+                    await self.clear_pin_from_lock(
+                        config_entry_id=kmlock.keymaster_config_entry_id,
+                        code_slot_num=code_slot_num,
+                        override=True,
+                    )
                 else:
                     await self.set_pin_on_lock(
                         config_entry_id=kmlock.keymaster_config_entry_id,
@@ -2016,10 +2053,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         pin=str(slot.pin),
                         override=True,
                     )
-                return
-            if slot.synced in (Synced.ADDING, Synced.DELETING):
-                # A set/clear operation is in flight — preserve local state
-                # to avoid overwriting the desired PIN with a stale lock value.
                 return
             slot.synced = Synced.SYNCED
             slot.pin = usercode

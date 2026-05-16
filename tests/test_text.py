@@ -612,3 +612,42 @@ async def test_text_entity_unavailable_when_code_slot_missing(
         entity._handle_coordinator_update()
 
     assert not entity._attr_available
+
+
+async def test_text_entity_clear_pin_failure_does_not_overwrite_restored_pin(
+    hass: HomeAssistant, text_config_entry, coordinator
+):
+    """When clear_pin_from_lock fails, the text entity does not overwrite the restored PIN."""
+
+    # Create a connected lock with code slot that has a PIN
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, pin="1234", enabled=True)}
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:1.pin",
+        name="Code Slot 1: PIN",
+        icon="mdi:lock-smart",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+    entity._attr_native_value = "1234"
+
+    # Mock clear_pin_from_lock to return False (provider failure)
+    with (
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock(return_value=False)),
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
+    ):
+        await entity.async_set_value("")
+
+        # The entity should NOT update its displayed value on failure
+        assert entity._attr_native_value == "1234"

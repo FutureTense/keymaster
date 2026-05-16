@@ -28,6 +28,7 @@ def test_type_lookup_consistency():
         "provider",  # Provider instance, not serializable
         "masked_code_slots",  # Transient runtime-only field (init=False)
         "last_code_set_at",  # Transient runtime-only field (init=False)
+        "sync_op_started_at",  # Transient runtime-only field (init=False)
     }
 
     # Verify that significant fields are present in the lookup map.
