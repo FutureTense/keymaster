@@ -1856,6 +1856,43 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         for usercode_slot in usercodes:
             await self._sync_usercode(kmlock=kmlock, usercode_slot=usercode_slot)
 
+        # Retry OUT_OF_SYNC slots not covered by provider usercodes.
+        # Name-based providers (Akuvox, Schlage) only return slots with
+        # tagged users on the device. If the initial set_pin_on_lock()
+        # failed, no tagged user exists and _sync_pin() is never called.
+        provider_slots = {uc.slot_num for uc in usercodes}
+        if kmlock.code_slots:
+            for code_slot_num, kmslot in kmlock.code_slots.items():
+                if code_slot_num in provider_slots:
+                    continue  # Already handled by _sync_usercode
+                if kmslot.synced != Synced.OUT_OF_SYNC:
+                    continue
+                if kmslot.enabled and kmslot.active and kmslot.pin:
+                    _LOGGER.debug(
+                        "[_update_code_slots] %s Slot %s: Retrying set_pin "
+                        "(OUT_OF_SYNC, not returned by provider)",
+                        kmlock.lock_name,
+                        code_slot_num,
+                    )
+                    await self.set_pin_on_lock(
+                        config_entry_id=kmlock.keymaster_config_entry_id,
+                        code_slot_num=code_slot_num,
+                        pin=str(kmslot.pin),
+                        override=True,
+                    )
+                elif not kmslot.pin and kmslot.enabled:
+                    _LOGGER.debug(
+                        "[_update_code_slots] %s Slot %s: Retrying clear_pin "
+                        "(OUT_OF_SYNC, not returned by provider)",
+                        kmlock.lock_name,
+                        code_slot_num,
+                    )
+                    await self.clear_pin_from_lock(
+                        config_entry_id=kmlock.keymaster_config_entry_id,
+                        code_slot_num=code_slot_num,
+                        override=True,
+                    )
+
     async def _update_slot(
         self,
         kmlock: KeymasterLock,
@@ -2202,10 +2239,26 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 pin_mismatch,
             )
 
+            child_slot = child_kmlock.code_slots[code_slot_num]
+            child_needs_retry = (
+                child_slot.synced == Synced.OUT_OF_SYNC
+                and kmslot.enabled
+                and kmslot.active
+                and kmslot.pin
+            )
+
+            if child_needs_retry:
+                _LOGGER.debug(
+                    "[_sync_child_locks] %s Slot %s: Retrying sync (child is OUT_OF_SYNC)",
+                    child_kmlock.lock_name,
+                    code_slot_num,
+                )
+
             if (
                 pin_mismatch
-                or prev_enabled != child_kmlock.code_slots[code_slot_num].enabled
-                or prev_active != child_kmlock.code_slots[code_slot_num].active
+                or prev_enabled != child_slot.enabled
+                or prev_active != child_slot.active
+                or child_needs_retry
             ):
                 self._quick_refresh = True
                 if not kmslot.enabled or not kmslot.active or not kmslot.pin:
