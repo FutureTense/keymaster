@@ -112,6 +112,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._prev_kmlocks_dict: MutableMapping[str, Any] = {}
         self._initial_setup_done_event = asyncio.Event()
         self._throttle = Throttle()
+        self._last_unlock_code_slot: dict[str, int | None] = {}
         self._sync_status_counter: int = 0
         self._quick_refresh: bool = False
         self._cancel_quick_refresh: Callable | None = None
@@ -669,6 +670,30 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 functools.partial(self._create_listeners, kmlock),
             )
 
+    def _fire_unlock_state_changed(
+        self,
+        kmlock: KeymasterLock,
+        code_slot_num: int,
+        source: str | None,
+        event_label: str | None,
+        action_code: int | None,
+    ) -> None:
+        """Fire the keymaster_lock_state_changed bus event for an unlock."""
+        slot = kmlock.code_slots.get(code_slot_num) if kmlock.code_slots else None
+        self.hass.bus.fire(
+            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+            event_data={
+                ATTR_NOTIFICATION_SOURCE: source,
+                ATTR_NAME: kmlock.lock_name,
+                ATTR_ENTITY_ID: kmlock.lock_entity_id,
+                ATTR_STATE: LockState.UNLOCKED,
+                ATTR_ACTION_CODE: action_code,
+                ATTR_ACTION_TEXT: event_label,
+                ATTR_CODE_SLOT: code_slot_num,
+                ATTR_CODE_SLOT_NAME: slot.name if slot and code_slot_num != 0 else "",
+            },
+        )
+
     async def _lock_unlocked(
         self,
         kmlock: KeymasterLock,
@@ -677,15 +702,34 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         event_label: str | None = None,
         action_code: int | None = None,
     ) -> None:
+        # Check for supersede condition before throttle: when the lock is already
+        # unlocked with slot=0 and a more informative slot>0 event arrives, we
+        # must let it through regardless of throttle state.
+        if kmlock.lock_state == LockState.UNLOCKED:
+            prior_slot = self._last_unlock_code_slot.get(kmlock.keymaster_config_entry_id)
+            if isinstance(code_slot_num, int) and code_slot_num > 0 and prior_slot == 0:
+                # A more informative event arrived after an initial slot=0 unlock.
+                # Re-fire the bus event with the correct slot info so downstream
+                # consumers get it, but skip side effects (autolock, notifications,
+                # access limits) that already ran from the first event.
+                _LOGGER.debug(
+                    "[lock_unlocked] %s: Superseding prior slot=0 unlock with slot=%s. source: %s",
+                    kmlock.lock_name,
+                    code_slot_num,
+                    source,
+                )
+                self._last_unlock_code_slot[kmlock.keymaster_config_entry_id] = code_slot_num
+                self._fire_unlock_state_changed(
+                    kmlock, code_slot_num, source, event_label, action_code
+                )
+            return
+
         if not self._throttle.is_allowed(
             "lock_unlocked",
             kmlock.keymaster_config_entry_id,
             THROTTLE_SECONDS,
         ):
             _LOGGER.debug("[lock_unlocked] %s: Throttled. source: %s", kmlock.lock_name, source)
-            return
-
-        if kmlock.lock_state == LockState.UNLOCKED:
             return
 
         kmlock.lock_state = LockState.UNLOCKED
@@ -701,6 +745,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         if not isinstance(code_slot_num, int):
             code_slot_num = 0
+
+        self._last_unlock_code_slot[kmlock.keymaster_config_entry_id] = code_slot_num
 
         if kmlock.autolock_enabled and kmlock.autolock_timer:
             await kmlock.autolock_timer.start(duration=self.autolock_duration_seconds(kmlock))
@@ -782,23 +828,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 )
 
         # Fire state change event
-        self.hass.bus.fire(
-            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-            event_data={
-                ATTR_NOTIFICATION_SOURCE: source,
-                ATTR_NAME: kmlock.lock_name,
-                ATTR_ENTITY_ID: kmlock.lock_entity_id,
-                ATTR_STATE: LockState.UNLOCKED,
-                ATTR_ACTION_CODE: action_code,
-                ATTR_ACTION_TEXT: event_label,
-                ATTR_CODE_SLOT: code_slot_num,
-                ATTR_CODE_SLOT_NAME: (
-                    kmlock.code_slots[code_slot_num].name
-                    if kmlock.code_slots and code_slot_num != 0
-                    else ""
-                ),
-            },
-        )
+        self._fire_unlock_state_changed(kmlock, code_slot_num, source, event_label, action_code)
 
     async def _lock_locked(
         self,
@@ -821,6 +851,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.lock_state = LockState.LOCKED
         kmlock.pending_retry_lock = False
         self._throttle.reset("lock_unlocked", kmlock.keymaster_config_entry_id)
+        self._last_unlock_code_slot.pop(kmlock.keymaster_config_entry_id, None)
         _LOGGER.debug(
             "[lock_locked] %s: Running. source: %s, event_label: %s, action_code: %s",
             kmlock.lock_name,
@@ -1213,6 +1244,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self.kmlocks[kmlock.keymaster_config_entry_id],
         )
         self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
+        self._last_unlock_code_slot.pop(kmlock.keymaster_config_entry_id, None)
         await self._rebuild_lock_relationships()
         await self._async_save_data()
         await self.async_refresh()

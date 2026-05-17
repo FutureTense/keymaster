@@ -107,6 +107,7 @@ def mock_coordinator(mock_hass) -> Any:
         # Set up the necessary attributes manually
         coordinator.hass = mock_hass
         coordinator.kmlocks = {}
+        coordinator._last_unlock_code_slot = {}
         # Use setattr to safely add the mock method
         setattr(coordinator, "delete_lock_by_config_entry_id", AsyncMock())
         setattr(coordinator, "async_set_updated_data", Mock())
