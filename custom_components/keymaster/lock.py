@@ -63,6 +63,8 @@ class KeymasterCodeSlot:
     accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
     # Transient runtime-only field; excluded from persistence (init=False).
     last_code_set_at: dt | None = field(default=None, init=False, repr=False)
+    # Tracks when the slot entered ADDING/DELETING state for grace-period recovery.
+    sync_op_started_at: dt | None = field(default=None, init=False, repr=False)
 
     def inherit_state_from(self, old: KeymasterCodeSlot) -> None:
         """Carry user state from `old` into `self`.

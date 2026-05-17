@@ -1,12 +1,16 @@
 """Tests for parent-child lock synchronization in coordinator."""
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from custom_components.keymaster.const import PIN_SET_GRACE_SECONDS, Synced
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
+from custom_components.keymaster.providers._base import BaseLockProvider
 from homeassistant.core import HomeAssistant
+from homeassistant.util.dt import utcnow
 
 
 @pytest.fixture
@@ -869,3 +873,284 @@ class TestChildLockBehavior:
 
         # Assert: Child name should update
         assert child_slot.name == "Updated Name"
+
+
+class TestProviderFailureSyncReset:
+    """Tests that provider failures reset sync state instead of leaving it stuck."""
+
+    @pytest.fixture
+    def real_coordinator(self, mock_hass):
+        """Coordinator with real set_pin_on_lock/clear_pin_from_lock (not mocked)."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._quick_refresh = False
+            coordinator._initial_setup_done_event = AsyncMock()
+            coordinator._initial_setup_done_event.wait = AsyncMock()
+            coordinator.async_set_updated_data = Mock()
+            return coordinator
+
+    @pytest.fixture
+    def lock_with_provider(self):
+        """Create a lock with a mocked provider and one code slot."""
+        provider = Mock(spec=BaseLockProvider)
+        lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry",
+        )
+        lock.connected = True
+        lock.provider = provider
+        lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, pin="1234", name="Guest", active=True, enabled=True),
+        }
+        return lock, provider
+
+    async def test_set_pin_on_lock_resets_sync_on_provider_failure(
+        self, real_coordinator, lock_with_provider
+    ):
+        """When async_set_usercode returns False, synced resets to OUT_OF_SYNC."""
+        lock, provider = lock_with_provider
+        provider.async_set_usercode = AsyncMock(return_value=False)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        result = await real_coordinator.set_pin_on_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            pin="5678",
+            override=True,
+        )
+
+        assert result is False
+        assert lock.code_slots[1].synced == Synced.OUT_OF_SYNC
+
+    async def test_clear_pin_from_lock_resets_sync_on_provider_failure(
+        self, real_coordinator, lock_with_provider
+    ):
+        """When async_clear_usercode returns False, synced resets to OUT_OF_SYNC."""
+        lock, provider = lock_with_provider
+        provider.async_clear_usercode = AsyncMock(return_value=False)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        result = await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+        )
+
+        assert result is False
+        assert lock.code_slots[1].synced == Synced.OUT_OF_SYNC
+
+    async def test_set_pin_on_lock_success_sets_synced(self, real_coordinator, lock_with_provider):
+        """When async_set_usercode succeeds, synced transitions to SYNCED."""
+        lock, provider = lock_with_provider
+        provider.async_set_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        result = await real_coordinator.set_pin_on_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            pin="5678",
+            override=True,
+        )
+
+        assert result is True
+        assert lock.code_slots[1].synced == Synced.SYNCED
+
+    async def test_clear_pin_from_lock_success_sets_disconnected(
+        self, real_coordinator, lock_with_provider
+    ):
+        """When async_clear_usercode succeeds, synced transitions to DISCONNECTED."""
+        lock, provider = lock_with_provider
+        provider.async_clear_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        result = await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+        )
+
+        assert result is True
+        assert lock.code_slots[1].synced == Synced.DISCONNECTED
+
+    async def test_failed_add_notifies_entities(self, real_coordinator, lock_with_provider):
+        """On provider failure, async_set_updated_data is called to notify UI."""
+        lock, provider = lock_with_provider
+        provider.async_set_usercode = AsyncMock(return_value=False)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        await real_coordinator.set_pin_on_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            pin="5678",
+            override=True,
+        )
+
+        # Should be called twice: once for ADDING state, once for OUT_OF_SYNC reset
+        assert real_coordinator.async_set_updated_data.call_count == 2
+
+    async def test_failed_clear_notifies_entities(self, real_coordinator, lock_with_provider):
+        """On provider failure, async_set_updated_data is called to notify UI."""
+        lock, provider = lock_with_provider
+        provider.async_clear_usercode = AsyncMock(return_value=False)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+        )
+
+        # Should be called twice: once for DELETING state, once for OUT_OF_SYNC reset
+        assert real_coordinator.async_set_updated_data.call_count == 2
+
+    async def test_clear_pin_restores_prior_pin_on_provider_failure(
+        self, real_coordinator, lock_with_provider
+    ):
+        """When clear fails, prior PIN is restored so _sync_pin can retry the clear."""
+        lock, provider = lock_with_provider
+        provider.async_clear_usercode = AsyncMock(return_value=False)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        # Slot starts with pin "1234"
+        assert lock.code_slots[1].pin == "1234"
+
+        result = await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+            clear_from_kmlock=True,
+        )
+
+        assert result is False
+        # PIN should be restored to original value so _sync_pin can detect mismatch
+        assert lock.code_slots[1].pin == "1234"
+        assert lock.code_slots[1].synced == Synced.OUT_OF_SYNC
+
+
+class TestSyncPinStuckStateRecovery:
+    """Tests that _sync_pin recovers slots stuck in ADDING/DELETING after grace period."""
+
+    @pytest.fixture
+    def real_coordinator(self, mock_hass):
+        """Coordinator with real _sync_pin (not mocked)."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._quick_refresh = False
+            coordinator._initial_setup_done_event = AsyncMock()
+            coordinator._initial_setup_done_event.wait = AsyncMock()
+            coordinator.async_set_updated_data = Mock()
+            coordinator.set_pin_on_lock = AsyncMock(return_value=True)
+            coordinator.clear_pin_from_lock = AsyncMock(return_value=True)
+            return coordinator
+
+    @pytest.fixture
+    def lock_with_slot(self):
+        """Create a lock with one code slot."""
+        lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry",
+        )
+        lock.connected = True
+        lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, pin="1234", name="Guest", active=True, enabled=True),
+        }
+        return lock
+
+    async def test_stuck_adding_recovers_after_grace_period(self, real_coordinator, lock_with_slot):
+        """Slot stuck in ADDING with stale sync_op_started_at resets to OUT_OF_SYNC."""
+
+        lock = lock_with_slot
+        slot = lock.code_slots[1]
+        slot.synced = Synced.ADDING
+        # Set sync_op_started_at to well past the grace period
+        slot.sync_op_started_at = utcnow() - timedelta(seconds=PIN_SET_GRACE_SECONDS + 10)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        # Lock reports the same code as our local PIN
+        await real_coordinator._sync_pin(lock, 1, "1234")
+
+        # Should recover: pin matches lock so it transitions to SYNCED
+        assert slot.synced == Synced.SYNCED
+
+    async def test_stuck_adding_no_sync_op_started_at_recovers(
+        self, real_coordinator, lock_with_slot
+    ):
+        """Slot stuck in ADDING with no sync_op_started_at resets to OUT_OF_SYNC."""
+        lock = lock_with_slot
+        slot = lock.code_slots[1]
+        slot.synced = Synced.ADDING
+        slot.sync_op_started_at = None
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        # Lock reports a different code
+        await real_coordinator._sync_pin(lock, 1, "5678")
+
+        # Should recover: pin mismatch so it re-pushes local PIN
+        real_coordinator.set_pin_on_lock.assert_called_once_with(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            pin="1234",
+            override=True,
+        )
+
+    async def test_stuck_deleting_recovers_after_grace_period(
+        self, real_coordinator, lock_with_slot
+    ):
+        """Slot stuck in DELETING with stale sync_op_started_at resets to OUT_OF_SYNC."""
+
+        lock = lock_with_slot
+        slot = lock.code_slots[1]
+        slot.synced = Synced.DELETING
+        slot.sync_op_started_at = utcnow() - timedelta(seconds=PIN_SET_GRACE_SECONDS + 10)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        # Lock still reports the code (clear didn't actually work)
+        await real_coordinator._sync_pin(lock, 1, "1234")
+
+        # pin matches usercode so it should transition to SYNCED
+        assert slot.synced == Synced.SYNCED
+
+    async def test_stuck_deleting_empty_pin_retries_clear(self, real_coordinator, lock_with_slot):
+        """Slot stuck in DELETING with empty PIN retries clear_pin_from_lock."""
+
+        lock = lock_with_slot
+        slot = lock.code_slots[1]
+        slot.synced = Synced.DELETING
+        slot.pin = ""  # PIN was already cleared locally
+        slot.sync_op_started_at = utcnow() - timedelta(seconds=PIN_SET_GRACE_SECONDS + 10)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        # Lock still reports a code
+        await real_coordinator._sync_pin(lock, 1, "1234")
+
+        # Should retry the clear, not try to set an empty PIN
+        real_coordinator.clear_pin_from_lock.assert_called_once_with(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+        )
+        real_coordinator.set_pin_on_lock.assert_not_called()
+
+    async def test_adding_within_grace_period_preserves_state(
+        self, real_coordinator, lock_with_slot
+    ):
+        """Slot in ADDING within grace period is left alone (operation in flight)."""
+
+        lock = lock_with_slot
+        slot = lock.code_slots[1]
+        slot.synced = Synced.ADDING
+        # Set sync_op_started_at to just now (within grace period)
+        slot.sync_op_started_at = utcnow()
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        await real_coordinator._sync_pin(lock, 1, "5678")
+
+        # Should NOT recover — operation is genuinely in flight
+        assert slot.synced == Synced.ADDING
+        real_coordinator.set_pin_on_lock.assert_not_called()
