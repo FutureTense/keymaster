@@ -1309,14 +1309,17 @@ class TestUpdateCodeSlotsRetryUncovered:
         )
         lock.code_slots = {
             1: KeymasterCodeSlot(number=1, pin="1234", name="Guest", active=True, enabled=True),
+            2: KeymasterCodeSlot(number=2, pin="5678", name="Other", active=True, enabled=True),
         }
         lock.code_slots[1].synced = Synced.OUT_OF_SYNC
+        # Slot 2 stays SYNCED (default) — should be skipped by retry pass
 
-        # Provider returns NO usercodes for slot 1 (name-based provider)
+        # Provider returns NO usercodes for either slot (name-based provider)
         usercodes: list[CodeSlot] = []
 
         await coordinator_for_update._update_code_slots(kmlock=lock, usercodes=usercodes)
 
+        # Only slot 1 (OUT_OF_SYNC) should be retried; slot 2 (SYNCED) is skipped
         coordinator_for_update.set_pin_on_lock.assert_called_once_with(
             config_entry_id="test_entry",
             code_slot_num=1,
