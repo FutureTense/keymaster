@@ -1249,6 +1249,38 @@ class TestChildSyncRetryOnOutOfSync:
         )
         assert child_slot.pin is None
 
+    async def test_child_sync_out_of_sync_clear_retry_matching_state(
+        self, mock_coordinator, parent_lock, child_lock
+    ):
+        """OUT_OF_SYNC child with disabled parent retries clear even when states match."""
+        parent_slot = Mock(spec=KeymasterCodeSlot)
+        parent_slot.code_slot_num = 1
+        parent_slot.enabled = False  # Parent disabled
+        parent_slot.active = True
+        parent_slot.pin = "1234"
+        parent_slot.name = "Test Slot"
+
+        # Child already has matching disabled state (prev_enabled == child_slot.enabled)
+        child_slot = Mock(spec=KeymasterCodeSlot)
+        child_slot.code_slot_num = 1
+        child_slot.enabled = False  # Already disabled — no enabled change
+        child_slot.active = True  # Same active
+        child_slot.pin = None  # PIN already cleared locally
+        child_slot.override_parent = False
+        child_slot.synced = Synced.OUT_OF_SYNC
+
+        parent_lock.code_slots = {1: parent_slot}
+        child_lock.code_slots = {1: child_slot}
+
+        await mock_coordinator._update_child_code_slots(parent_lock, child_lock)
+
+        # OUT_OF_SYNC clear retry should fire even though states match
+        mock_coordinator.clear_pin_from_lock.assert_called_once_with(
+            config_entry_id="child_id",
+            code_slot_num=1,
+            override=True,
+        )
+
 
 class TestUpdateCodeSlotsRetryUncovered:
     """Tests that _update_code_slots retries OUT_OF_SYNC slots not returned by provider."""
@@ -1327,6 +1359,31 @@ class TestUpdateCodeSlotsRetryUncovered:
         )
         lock.code_slots = {
             1: KeymasterCodeSlot(number=1, pin=None, name="Guest", active=True, enabled=True),
+        }
+        lock.code_slots[1].synced = Synced.OUT_OF_SYNC
+
+        usercodes: list[CodeSlot] = []
+
+        await coordinator_for_update._update_code_slots(kmlock=lock, usercodes=usercodes)
+
+        coordinator_for_update.clear_pin_from_lock.assert_called_once_with(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+        )
+        coordinator_for_update.set_pin_on_lock.assert_not_called()
+
+    async def test_update_code_slots_retries_clear_for_disabled_out_of_sync(
+        self, coordinator_for_update
+    ):
+        """OUT_OF_SYNC slot that is disabled retries clear_pin even with PIN in memory."""
+        lock = KeymasterLock(
+            lock_name="Test Lock",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="test_entry",
+        )
+        lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, pin="1234", name="Guest", active=True, enabled=False),
         }
         lock.code_slots[1].synced = Synced.OUT_OF_SYNC
 

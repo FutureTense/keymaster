@@ -1892,6 +1892,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         code_slot_num=code_slot_num,
                         override=True,
                     )
+                elif not kmslot.enabled or not kmslot.active:
+                    _LOGGER.debug(
+                        "[_update_code_slots] %s Slot %s: Retrying clear_pin "
+                        "(OUT_OF_SYNC, disabled/inactive, not returned by provider)",
+                        kmlock.lock_name,
+                        code_slot_num,
+                    )
+                    await self.clear_pin_from_lock(
+                        config_entry_id=kmlock.keymaster_config_entry_id,
+                        code_slot_num=code_slot_num,
+                        override=True,
+                    )
 
     async def _update_slot(
         self,
@@ -2240,12 +2252,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
 
             child_slot = child_kmlock.code_slots[code_slot_num]
-            child_needs_retry = (
+            child_needs_set_retry = (
                 child_slot.synced == Synced.OUT_OF_SYNC
                 and kmslot.enabled
                 and kmslot.active
                 and kmslot.pin
             )
+            child_needs_clear_retry = child_slot.synced == Synced.OUT_OF_SYNC and (
+                not kmslot.enabled or not kmslot.active or not kmslot.pin
+            )
+            child_needs_retry = child_needs_set_retry or child_needs_clear_retry
 
             if child_needs_retry:
                 _LOGGER.debug(
