@@ -128,13 +128,37 @@ class TestHelperFunctions:
 
     # -- _is_local_user -------------------------------------------------------
 
+    def test_is_local_user_tagged_always_passes(self):
+        """Tagged [KM:XX] users are always considered local."""
+        assert _is_local_user({"name": "[KM:1] Test", "source_type": "2", "user_type": "0"}) is True
+
+    def test_is_local_user_tagged_no_source_type(self):
+        """Tagged user with no source_type still passes."""
+        assert _is_local_user({"name": "[KM:5] Foo", "user_type": "0"}) is True
+
     def test_is_local_user_source_type_1(self):
         """A08S/E18C pattern: source_type '1' is local."""
         assert _is_local_user({"source_type": "1", "user_type": "0"}) is True
 
+    def test_is_local_user_source_type_local(self):
+        """E18C alternate firmware: source_type 'local' is local."""
+        assert _is_local_user({"source_type": "local", "user_type": "0"}) is True
+
     def test_is_local_user_source_type_2(self):
-        """A08S/E18C pattern: source_type '2' is cloud."""
+        """A08S/E18C pattern: source_type '2' is cloud (numeric variant)."""
         assert _is_local_user({"source_type": "2", "user_type": "0"}) is False
+
+    def test_is_local_user_source_type_cloud_lowercase(self):
+        """E18C pattern: source_type 'cloud' is cloud."""
+        assert _is_local_user({"source_type": "cloud", "user_type": "0"}) is False
+
+    def test_is_local_user_source_type_cloud_capitalized(self):
+        """E18C pattern: source_type 'Cloud' is cloud (case-insensitive)."""
+        assert _is_local_user({"source_type": "Cloud", "user_type": "0"}) is False
+
+    def test_is_local_user_source_type_local_capitalized(self):
+        """E18C pattern: source_type 'Local' is local (case-insensitive)."""
+        assert _is_local_user({"source_type": "Local", "user_type": "0"}) is True
 
     def test_is_local_user_none_source_local_user_type(self):
         """X916 pattern: source_type None, user_type '-1' is local."""
@@ -483,7 +507,7 @@ class TestAsyncGetUsercodes:
             "lock.akuvox_relay_a": {
                 "users": [
                     _make_user("10", "[KM:1] Local", "1234", source_type="1"),
-                    _make_user("20", "[KM:2] Cloud", "5678", source_type="2"),
+                    _make_user("20", "Cloud User", "5678", source_type="2"),
                 ]
             }
         }
@@ -634,7 +658,7 @@ class TestAsyncGetUsercode:
         provider.hass.services.async_call.return_value = {
             "lock.akuvox_relay_a": {
                 "users": [
-                    _make_user("10", "[KM:1] Cloud", "1234", source_type="2"),
+                    _make_user("10", "Cloud User", "1234", source_type="2"),
                 ]
             }
         }
@@ -647,7 +671,7 @@ class TestAsyncGetUsercode:
         provider.hass.services.async_call.return_value = {
             "lock.akuvox_relay_a": {
                 "users": [
-                    _make_user("10", "[KM:1] Cloud", "1234", source_type=None, user_type="0"),
+                    _make_user("10", "Cloud User", "1234", source_type=None, user_type="0"),
                 ]
             }
         }
@@ -759,7 +783,7 @@ class TestAsyncSetUsercode:
             {
                 "lock.akuvox_relay_a": {
                     "users": [
-                        _make_user("10", "[KM:1] Cloud", "1234", source_type="2"),
+                        _make_user("10", "Cloud User", "1234", source_type="2"),
                     ]
                 }
             },
@@ -781,7 +805,7 @@ class TestAsyncSetUsercode:
                     "users": [
                         _make_user(
                             "10",
-                            "[KM:1] Cloud",
+                            "Cloud User",
                             "1234",
                             source_type=None,
                             user_type="0",
@@ -847,7 +871,7 @@ class TestAsyncClearUsercode:
         provider.hass.services.async_call.return_value = {
             "lock.akuvox_relay_a": {
                 "users": [
-                    _make_user("10", "[KM:1] Cloud", "1234", source_type="2"),
+                    _make_user("10", "Cloud User", "1234", source_type="2"),
                 ]
             }
         }
@@ -864,7 +888,7 @@ class TestAsyncClearUsercode:
                 "users": [
                     _make_user(
                         "10",
-                        "[KM:1] Cloud",
+                        "Cloud User",
                         "1234",
                         source_type=None,
                         user_type="0",

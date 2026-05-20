@@ -46,17 +46,25 @@ _DEFAULT_SCHEDULE_IDS = "1001"  # "Always" schedule on Akuvox devices
 _DEFAULT_LIFT_FLOOR_NUM = "1"
 
 # Akuvox firmware varies in how it marks local vs cloud users:
-#   A08S / E18C: source_type "1" = local, "2" = cloud, user_type "0" for both
+#   A08S / E18C: source_type "1" or "local" = local, "2" or "cloud" = cloud
 #   X916:        source_type None for all, user_type "-1" = local, "0" = cloud
-_LOCAL_SOURCE_TYPE = "1"
+# Strategy: tagged [KM:XX] users always pass; for untagged users, exclude
+# known cloud source_types (case-insensitive) when present, else fall back
+# to user_type.
+_CLOUD_SOURCE_TYPES = {"2", "cloud"}
 _LOCAL_USER_TYPE = "-1"
 
 
 def _is_local_user(user: dict[str, Any]) -> bool:
-    """Return True if *user* was created locally on the device."""
+    """Return True if *user* appears manageable via the local API."""
+    # Tagged users are always managed by Keymaster regardless of source/type.
+    name = str(user.get("name") or "")
+    if _parse_tag(name)[0] is not None:
+        return True
+    # If source_type is present, exclude known cloud values (case-insensitive).
     source_type = user.get("source_type")
     if source_type is not None:
-        return str(source_type) == _LOCAL_SOURCE_TYPE
+        return str(source_type).lower() not in _CLOUD_SOURCE_TYPES
     # source_type absent — fall back to user_type (X916 pattern)
     return str(user.get("user_type", "")) == _LOCAL_USER_TYPE
 
