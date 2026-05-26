@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
@@ -112,6 +113,7 @@ class KeymasterSensor(KeymasterEntity, SensorEntity):
         super().__init__(
             entity_description=entity_description,
         )
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_native_value: Any | None = None
 
     @callback
@@ -147,6 +149,7 @@ class KeymasterAutoLockSensor(KeymasterEntity, SensorEntity):
         super().__init__(
             entity_description=entity_description,
         )
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
         self._attr_native_value: dt | None = None
 

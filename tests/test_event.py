@@ -30,6 +30,7 @@ from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from homeassistant.components.lock.const import LockState
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_STATE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_EVENT = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.fake",
@@ -79,6 +80,7 @@ async def test_event_entity_initialization(hass: HomeAssistant):
 
     assert entity.event_types == [EVENT_TYPE_UNLOCKED]
     assert entity._code_slot == 1
+    assert entity.entity_category is EntityCategory.DIAGNOSTIC
     assert entity.state is None
 
 

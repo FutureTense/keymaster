@@ -24,6 +24,7 @@ from custom_components.keymaster.const import (
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_BUTTON = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -98,6 +99,7 @@ async def test_button_entity_initialization(hass: HomeAssistant, button_config_e
     entity = KeymasterButton(entity_description=entity_description)
 
     assert entity._attr_available is True
+    assert entity.entity_category is EntityCategory.DIAGNOSTIC
     assert entity.entity_description.key == "button.code_slots:1.reset"
     assert entity.entity_description.name == "Code Slot 1: Reset"
 

@@ -27,6 +27,7 @@ from custom_components.keymaster.number import (
 from homeassistant.components.number import NumberDeviceClass, NumberMode
 from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_NUMBER = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -158,6 +159,7 @@ async def test_number_entity_initialization(hass: HomeAssistant, number_config_e
     entity = KeymasterNumber(entity_description=entity_description)
 
     assert entity._attr_native_value is None
+    assert entity.entity_category is EntityCategory.CONFIG
     assert entity.entity_description.key == "number.code_slots:1.accesslimit_count"
     assert entity.entity_description.name == "Code Slot 1: Uses Remaining"
 
