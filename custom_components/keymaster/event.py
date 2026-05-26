@@ -9,7 +9,6 @@ from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_STATE
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -75,7 +74,6 @@ class KeymasterCodeSlotEventEntity(KeymasterEntity, EventEntity):
     ) -> None:
         """Initialize code slot event entity."""
         KeymasterEntity.__init__(self, entity_description=entity_description)
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     async def async_added_to_hass(self) -> None:
         """Register event listeners when added to hass."""
