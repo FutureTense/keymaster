@@ -481,18 +481,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     async def _rebuild_lock_relationships(self) -> None:
         for keymaster_config_entry_id, kmlock in self.kmlocks.items():
-            if (
-                kmlock.parent_config_entry_id is not None
-                and kmlock.parent_config_entry_id in self.kmlocks
-            ):
-                parent_lock = self.kmlocks[kmlock.parent_config_entry_id]
+            parent_config_entry_id = kmlock.parent_config_entry_id
+            if parent_config_entry_id is not None and parent_config_entry_id in self.kmlocks:
+                parent_lock = self.kmlocks[parent_config_entry_id]
                 if keymaster_config_entry_id not in parent_lock.child_config_entry_ids:
                     parent_lock.child_config_entry_ids.append(keymaster_config_entry_id)
             elif kmlock.parent_name is not None:
                 for parent_config_entry_id, parent_lock in self.kmlocks.items():
                     if kmlock.parent_name == parent_lock.lock_name:
-                        if kmlock.parent_config_entry_id is None:
-                            kmlock.parent_config_entry_id = parent_config_entry_id
+                        kmlock.parent_config_entry_id = parent_config_entry_id
                         if keymaster_config_entry_id not in parent_lock.child_config_entry_ids:
                             parent_lock.child_config_entry_ids.append(keymaster_config_entry_id)
                         break

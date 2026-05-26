@@ -128,10 +128,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
 
-    # Use normalized values for the rest of setup so runtime objects are created
-    # with resolved parent relationships in the same setup pass.
-    setup_data = updated_config
-
     # _LOGGER.debug(f"[init async_setup_entry] updated config_entry.data: {config_entry.data}")
 
     await async_setup_services(hass)
@@ -149,7 +145,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     device_registry = dr.async_get(hass)
 
     via_device: tuple[str, str] | None = None
-    if parent_entry_id := setup_data.get(CONF_PARENT_ENTRY_ID):
+    if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
         via_device = (DOMAIN, parent_entry_id)
 
     # _LOGGER.debug(
@@ -162,7 +158,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
         identifiers={(DOMAIN, config_entry.entry_id)},
-        name=setup_data.get(CONF_LOCK_NAME),
+        name=config_entry.data.get(CONF_LOCK_NAME),
         configuration_url="https://github.com/FutureTense/keymaster",
         via_device=via_device,
     )
@@ -171,8 +167,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     code_slots: MutableMapping[int, KeymasterCodeSlot] = {}
     for x in range(
-        setup_data[CONF_START],
-        setup_data[CONF_START] + setup_data[CONF_SLOTS],
+        config_entry.data[CONF_START],
+        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
     ):
         dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
         for i, dow in enumerate(DAY_NAMES):
@@ -180,40 +176,43 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
 
     kmlock = KeymasterLock(
-        lock_name=setup_data[CONF_LOCK_NAME],
-        lock_entity_id=setup_data[CONF_LOCK_ENTITY_ID],
+        lock_name=config_entry.data[CONF_LOCK_NAME],
+        lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
         keymaster_config_entry_id=config_entry.entry_id,
-        alarm_level_or_user_code_entity_id=setup_data.get(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID),
-        alarm_type_or_access_control_entity_id=setup_data.get(
+        alarm_level_or_user_code_entity_id=config_entry.data.get(
+            CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
+        ),
+        alarm_type_or_access_control_entity_id=config_entry.data.get(
             CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
         ),
-        door_sensor_entity_id=setup_data.get(CONF_DOOR_SENSOR_ENTITY_ID),
-        number_of_code_slots=setup_data[CONF_SLOTS],
-        starting_code_slot=setup_data[CONF_START],
+        door_sensor_entity_id=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
+        number_of_code_slots=config_entry.data[CONF_SLOTS],
+        starting_code_slot=config_entry.data[CONF_START],
         code_slots=code_slots,
-        parent_name=setup_data.get(CONF_PARENT),
-        parent_config_entry_id=setup_data.get(CONF_PARENT_ENTRY_ID),
-        notify_script_name=setup_data.get(CONF_NOTIFY_SCRIPT_NAME),
+        parent_name=config_entry.data.get(CONF_PARENT),
+        parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+        notify_script_name=config_entry.data.get(CONF_NOTIFY_SCRIPT_NAME),
     )
 
+    needs_update = config_entry.entry_id in coordinator.kmlocks
     try:
-        await coordinator.add_lock(kmlock=kmlock, update=True)
+        await coordinator.add_lock(kmlock=kmlock, update=needs_update)
     except asyncio.exceptions.CancelledError as e:
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
     await async_generate_lovelace(
         hass=hass,
-        kmlock_name=setup_data[CONF_LOCK_NAME],
+        kmlock_name=config_entry.data[CONF_LOCK_NAME],
         keymaster_config_entry_id=config_entry.entry_id,
-        parent_config_entry_id=setup_data.get(CONF_PARENT_ENTRY_ID),
-        code_slot_start=setup_data[CONF_START],
-        code_slots=setup_data[CONF_SLOTS],
-        lock_entity=setup_data[CONF_LOCK_ENTITY_ID],
-        advanced_date_range=setup_data[CONF_ADVANCED_DATE_RANGE],
-        advanced_day_of_week=setup_data[CONF_ADVANCED_DAY_OF_WEEK],
-        door_sensor=setup_data.get(CONF_DOOR_SENSOR_ENTITY_ID),
-        hide_pins=setup_data.get(CONF_HIDE_PINS, False),
+        parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+        code_slot_start=config_entry.data[CONF_START],
+        code_slots=config_entry.data[CONF_SLOTS],
+        lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
+        advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
+        advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
+        door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
+        hide_pins=config_entry.data.get(CONF_HIDE_PINS, False),
     )
 
     return True

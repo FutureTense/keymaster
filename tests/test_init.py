@@ -179,8 +179,8 @@ async def test_notify_script_name_slugified(hass):
     assert entry.data[CONF_NOTIFY_SCRIPT_NAME] == "keymaster_akuvox_relay_a_manual_notify"
 
 
-async def test_parent_title_resolves_to_parent_entry_id_and_setup_data_flow(hass):
-    """Test parent title resolution and normalized setup_data propagation."""
+async def test_parent_title_resolves_to_parent_entry_id_during_setup(hass):
+    """Test parent title resolution is used during setup."""
     parent_data = _build_entry_data("front_door", "lock.front_door")
     parent_entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=parent_data, version=4)
     parent_entry.add_to_hass(hass)
@@ -222,20 +222,24 @@ async def test_parent_title_resolves_to_parent_entry_id_and_setup_data_flow(hass
 
     assert child_entry.data[CONF_PARENT_ENTRY_ID] == parent_entry.entry_id
 
-    add_lock_call = mock_coordinator.add_lock.await_args.kwargs
-    assert add_lock_call["update"] is True
+    add_lock_await_args = mock_coordinator.add_lock.await_args
+    assert add_lock_await_args is not None
+    add_lock_call = add_lock_await_args.kwargs
+    assert add_lock_call["update"] is False
     assert add_lock_call["kmlock"].parent_name == "Front Door"
     assert add_lock_call["kmlock"].parent_config_entry_id == parent_entry.entry_id
 
     device_registry_call = mock_device_registry.async_get_or_create.call_args.kwargs
     assert device_registry_call["via_device"] == (DOMAIN, parent_entry.entry_id)
 
-    lovelace_call = mock_generate_lovelace.await_args.kwargs
+    lovelace_await_args = mock_generate_lovelace.await_args
+    assert lovelace_await_args is not None
+    lovelace_call = lovelace_await_args.kwargs
     assert lovelace_call["parent_config_entry_id"] == parent_entry.entry_id
 
 
-async def test_setup_entry_calls_add_lock_with_update_true(hass):
-    """Test that setup always calls add_lock with update=True."""
+async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(hass):
+    """Test setup calls add_lock with update=True for an existing lock."""
     entry_data = _build_entry_data("front_door", "lock.front_door")
     entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=entry_data, version=4)
     entry.add_to_hass(hass)
@@ -268,4 +272,5 @@ async def test_setup_entry_calls_add_lock_with_update_true(hass):
 
     add_lock_await_args = mock_coordinator.add_lock.await_args
     assert add_lock_await_args is not None
-    assert add_lock_await_args.kwargs["update"] is True
+    add_lock_kwargs = add_lock_await_args.kwargs
+    assert add_lock_kwargs["update"] is True
