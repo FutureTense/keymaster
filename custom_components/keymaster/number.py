@@ -12,6 +12,7 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
@@ -111,6 +112,7 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
         super().__init__(
             entity_description=entity_description,
         )
+        self._attr_entity_category = EntityCategory.CONFIG
         self._attr_native_value: float | None = None
 
     @property

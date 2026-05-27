@@ -11,6 +11,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import PlatformNotReady
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
@@ -96,6 +97,7 @@ class KeymasterBinarySensor(KeymasterEntity, BinarySensorEntity):
         super().__init__(
             entity_description=entity_description,
         )
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_is_on: bool = False
         self._attr_available: bool = True
 

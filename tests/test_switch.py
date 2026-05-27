@@ -25,6 +25,7 @@ from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
 from homeassistant.components.lock.const import LockState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_SWITCH = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -80,6 +81,7 @@ async def test_switch_entity_initialization(hass: HomeAssistant, switch_config_e
     entity = KeymasterSwitch(entity_description=entity_description)
 
     assert entity._attr_is_on is False
+    assert entity.entity_category is EntityCategory.CONFIG
     assert entity.entity_description.key == "switch.autolock_enabled"
     assert entity.entity_description.name == "Auto Lock"
 

@@ -27,6 +27,7 @@ from custom_components.keymaster.sensor import (
 )
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_SENSOR = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -79,6 +80,7 @@ async def test_sensor_entity_initialization(hass: HomeAssistant, sensor_config_e
     entity = KeymasterSensor(entity_description=entity_description)
 
     assert entity._attr_native_value is None
+    assert entity.entity_category is EntityCategory.DIAGNOSTIC
     assert entity.entity_description.key == "sensor.lock_name"
     assert entity.entity_description.name == "Lock Name"
 
@@ -285,6 +287,7 @@ async def test_autolock_sensor_initialization(
 
     assert entity._attr_native_value is None
     assert entity._attr_device_class == SensorDeviceClass.TIMESTAMP
+    assert entity.entity_category is EntityCategory.DIAGNOSTIC
     assert entity.entity_description.key == "sensor.autolock_timer"
     assert entity.entity_description.name == "Auto Lock Timer"
 

@@ -7,6 +7,7 @@ import logging
 from homeassistant.components.datetime import DateTimeEntity, DateTimeEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_ADVANCED_DATE_RANGE, CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
@@ -83,6 +84,7 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         super().__init__(
             entity_description=entity_description,
         )
+        self._attr_entity_category = EntityCategory.CONFIG
         self._attr_native_value: dt | None = None
 
     @callback

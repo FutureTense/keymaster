@@ -27,6 +27,7 @@ from custom_components.keymaster.datetime import (
 )
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_DATETIME = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -140,6 +141,7 @@ async def test_datetime_entity_initialization(
     entity = KeymasterDateTime(entity_description=entity_description)
 
     assert entity._attr_native_value is None
+    assert entity.entity_category is EntityCategory.CONFIG
     assert entity.entity_description.key == "datetime.code_slots:1.accesslimit_date_range_start"
     assert isinstance(entity.entity_description.name, str)
     assert "Date Range Start" in entity.entity_description.name

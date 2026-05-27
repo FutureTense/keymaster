@@ -27,6 +27,7 @@ from custom_components.keymaster.text import (
 )
 from homeassistant.components.text import TextMode
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_TEXT = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -174,6 +175,7 @@ async def test_text_entity_initialization(hass: HomeAssistant, text_config_entry
     entity = KeymasterText(entity_description=entity_description)
 
     assert entity._attr_native_value is None
+    assert entity.entity_category is EntityCategory.CONFIG
     assert entity.entity_description.key == "text.code_slots:1.name"
     assert entity.entity_description.name == "Code Slot 1: Name"
 

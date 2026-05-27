@@ -11,6 +11,7 @@ from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATO
 from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.helpers.entity import EntityCategory
 
 from .const import CONFIG_DATA_910
 
@@ -52,6 +53,7 @@ async def test_setup_entry_creates_connection_sensor_when_provider_none(hass):
     slot_sensors = [e for e in added_entities if "code_slots" in e.entity_description.key]
     assert len(connection_sensors) == 1
     assert len(slot_sensors) == 3
+    assert all(entity.entity_category is EntityCategory.DIAGNOSTIC for entity in added_entities)
 
 
 async def test_setup_entry_creates_connection_sensor_when_provider_supports_it(hass):

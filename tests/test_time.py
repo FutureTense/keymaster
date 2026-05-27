@@ -31,6 +31,7 @@ from custom_components.keymaster.time import (
     async_setup_entry,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_TIME = {
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
@@ -135,6 +136,7 @@ async def test_time_entity_initialization(hass: HomeAssistant, time_config_entry
     entity = KeymasterTime(entity_description=entity_description)
 
     assert entity._attr_native_value is None
+    assert entity.entity_category is EntityCategory.CONFIG
     assert entity.entity_description.key == "time.code_slots:1.accesslimit_day_of_week:0.time_start"
     assert isinstance(entity.entity_description.name, str)
     assert "Monday - Start Time" in entity.entity_description.name

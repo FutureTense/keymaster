@@ -6,6 +6,7 @@ import logging
 from homeassistant.components.text import TextEntity, TextEntityDescription, TextMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_HIDE_PINS, CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
@@ -82,6 +83,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
         super().__init__(
             entity_description=entity_description,
         )
+        self._attr_entity_category = EntityCategory.CONFIG
         self._attr_native_value: str | None = None
 
     @callback

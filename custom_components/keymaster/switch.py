@@ -10,6 +10,7 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import PlatformNotReady
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -180,6 +181,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         super().__init__(
             entity_description=entity_description,
         )
+        self._attr_entity_category = EntityCategory.CONFIG
         self._attr_is_on: bool = False
 
     @callback
