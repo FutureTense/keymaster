@@ -250,7 +250,7 @@ def mock_client_fixture(
         client.connect = AsyncMock(side_effect=connect)
         client.listen = AsyncMock(side_effect=listen)
         client.disconnect = AsyncMock(side_effect=disconnect)
-        client.disable_server_logging = MagicMock()
+        client.disable_server_logging = AsyncMock(return_value=None)
         client.driver = Driver(
             client, copy.deepcopy(controller_state), copy.deepcopy(log_config_state)
         )
@@ -381,9 +381,12 @@ def mock_async_call_later():
     with patch("homeassistant.helpers.event.async_call_later") as mock:
 
         def immediate_call(hass, delay, callback):
-            # Immediately call the callback with a mock `hass` object
-            del hass, delay  # Parameters not used in immediate callback
-            return callback(None)
+            del hass, delay, callback  # Parameters not used in the no-op mock
+
+            def _unsubscribe() -> None:
+                return None
+
+            return _unsubscribe
 
         mock.side_effect = immediate_call
         yield mock

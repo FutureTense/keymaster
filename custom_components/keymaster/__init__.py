@@ -110,7 +110,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         updated_config[CONF_PARENT_ENTRY_ID] = None
     elif updated_config.get(CONF_PARENT_ENTRY_ID) is None:
         for entry in hass.config_entries.async_entries(DOMAIN):
-            if updated_config.get(CONF_PARENT) == entry.data.get(CONF_LOCK_NAME):
+            if updated_config.get(CONF_PARENT) in (entry.title, entry.data.get(CONF_LOCK_NAME)):
                 updated_config[CONF_PARENT_ENTRY_ID] = entry.entry_id
                 break
 
@@ -194,8 +194,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         notify_script_name=config_entry.data.get(CONF_NOTIFY_SCRIPT_NAME),
     )
 
+    needs_update = config_entry.entry_id in coordinator.kmlocks
     try:
-        await coordinator.add_lock(kmlock=kmlock)
+        await coordinator.add_lock(kmlock=kmlock, update=needs_update)
     except asyncio.exceptions.CancelledError as e:
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 

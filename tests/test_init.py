@@ -1,13 +1,15 @@
 """Test keymaster init."""
 
 import logging
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster import async_setup_entry
 from custom_components.keymaster.const import (
+    CONF_ADVANCED_DATE_RANGE,
+    CONF_ADVANCED_DAY_OF_WEEK,
     CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_DOOR_SENSOR_ENTITY_ID,
@@ -15,8 +17,12 @@ from custom_components.keymaster.const import (
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
     CONF_NOTIFY_SCRIPT_NAME,
+    CONF_PARENT,
+    CONF_PARENT_ENTRY_ID,
     CONF_SLOTS,
     CONF_START,
+    DEFAULT_ADVANCED_DATE_RANGE,
+    DEFAULT_ADVANCED_DAY_OF_WEEK,
     DOMAIN,
 )
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -33,6 +39,23 @@ _LOGGER = logging.getLogger(__name__)
 # CONFIG_DATA has 6 slots → 2 + 6 = 8 keymaster sensors
 # (last_used moved from sensor to event platform)
 KEYMASTER_SENSOR_COUNT = 8
+
+
+def _build_entry_data(lock_name: str, lock_entity_id: str) -> dict:
+    """Build minimal config entry data for async_setup_entry tests."""
+    return {
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: None,
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: None,
+        CONF_LOCK_ENTITY_ID: lock_entity_id,
+        CONF_LOCK_NAME: lock_name,
+        CONF_DOOR_SENSOR_ENTITY_ID: None,
+        CONF_SLOTS: 1,
+        CONF_START: 1,
+        CONF_NOTIFY_SCRIPT_NAME: None,
+        CONF_HIDE_PINS: False,
+        CONF_ADVANCED_DATE_RANGE: DEFAULT_ADVANCED_DATE_RANGE,
+        CONF_ADVANCED_DAY_OF_WEEK: DEFAULT_ADVANCED_DAY_OF_WEEK,
+    }
 
 
 async def test_setup_entry(
@@ -154,3 +177,100 @@ async def test_notify_script_name_slugified(hass):
             await async_setup_entry(hass, entry)
 
     assert entry.data[CONF_NOTIFY_SCRIPT_NAME] == "keymaster_akuvox_relay_a_manual_notify"
+
+
+async def test_parent_title_resolves_to_parent_entry_id_during_setup(hass):
+    """Test parent title resolution is used during setup."""
+    parent_data = _build_entry_data("front_door", "lock.front_door")
+    parent_entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=parent_data, version=4)
+    parent_entry.add_to_hass(hass)
+
+    child_data = _build_entry_data("garage_door", "lock.garage_door")
+    child_data[CONF_PARENT] = "Front Door"
+    child_data[CONF_PARENT_ENTRY_ID] = None
+    child_entry = MockConfigEntry(domain=DOMAIN, title="Garage Door", data=child_data, version=4)
+    child_entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+        patch("custom_components.keymaster.dr.async_get") as mock_device_registry_get,
+        patch(
+            "custom_components.keymaster.async_generate_lovelace",
+            new_callable=AsyncMock,
+        ) as mock_generate_lovelace,
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+        ),
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = True
+        mock_coordinator.kmlocks = {}
+        mock_coordinator.add_lock = AsyncMock()
+
+        mock_device_registry = Mock()
+        mock_device_registry.async_get_or_create = Mock()
+        mock_device_registry_get.return_value = mock_device_registry
+
+        assert await async_setup_entry(hass, child_entry)
+
+    assert child_entry.data[CONF_PARENT_ENTRY_ID] == parent_entry.entry_id
+
+    add_lock_await_args = mock_coordinator.add_lock.await_args
+    assert add_lock_await_args is not None
+    add_lock_call = add_lock_await_args.kwargs
+    assert add_lock_call["update"] is False
+    assert add_lock_call["kmlock"].parent_name == "Front Door"
+    assert add_lock_call["kmlock"].parent_config_entry_id == parent_entry.entry_id
+
+    device_registry_call = mock_device_registry.async_get_or_create.call_args.kwargs
+    assert device_registry_call["via_device"] == (DOMAIN, parent_entry.entry_id)
+
+    lovelace_await_args = mock_generate_lovelace.await_args
+    assert lovelace_await_args is not None
+    lovelace_call = lovelace_await_args.kwargs
+    assert lovelace_call["parent_config_entry_id"] == parent_entry.entry_id
+
+
+async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(hass):
+    """Test setup calls add_lock with update=True for an existing lock."""
+    entry_data = _build_entry_data("front_door", "lock.front_door")
+    entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=entry_data, version=4)
+    entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+        patch("custom_components.keymaster.dr.async_get") as mock_device_registry_get,
+        patch("custom_components.keymaster.async_generate_lovelace", new_callable=AsyncMock),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+        ),
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = True
+        mock_coordinator.add_lock = AsyncMock()
+        mock_coordinator.kmlocks = {entry.entry_id: Mock()}
+
+        mock_device_registry = Mock()
+        mock_device_registry.async_get_or_create = Mock()
+        mock_device_registry_get.return_value = mock_device_registry
+
+        assert await async_setup_entry(hass, entry)
+
+    add_lock_await_args = mock_coordinator.add_lock.await_args
+    assert add_lock_await_args is not None
+    add_lock_kwargs = add_lock_await_args.kwargs
+    assert add_lock_kwargs["update"] is True

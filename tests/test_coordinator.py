@@ -513,6 +513,64 @@ class TestRebuildLockRelationships:
         assert "child_id" in parent_lock.child_config_entry_ids
         assert child_lock.parent_config_entry_id == "parent_id"
 
+    async def test_rebuild_prefers_explicit_parent_id_over_parent_name(self, mock_coordinator):
+        """Test that explicit parent_config_entry_id wins over stale parent_name."""
+        parent_a = Mock(spec=KeymasterLock)
+        parent_a.keymaster_config_entry_id = "parent_a"
+        parent_a.lock_name = "Front Door"
+        parent_a.child_config_entry_ids = []
+        parent_a.parent_config_entry_id = None
+        parent_a.parent_name = None
+
+        parent_b = Mock(spec=KeymasterLock)
+        parent_b.keymaster_config_entry_id = "parent_b"
+        parent_b.lock_name = "Back Door"
+        parent_b.child_config_entry_ids = []
+        parent_b.parent_config_entry_id = None
+        parent_b.parent_name = None
+
+        child = Mock(spec=KeymasterLock)
+        child.keymaster_config_entry_id = "child"
+        child.lock_name = "Child"
+        child.child_config_entry_ids = []
+        child.parent_config_entry_id = "parent_b"
+        child.parent_name = "Front Door"
+
+        mock_coordinator.kmlocks = {
+            "parent_a": parent_a,
+            "parent_b": parent_b,
+            "child": child,
+        }
+
+        await mock_coordinator._rebuild_lock_relationships()
+
+        assert child.parent_config_entry_id == "parent_b"
+        assert "child" not in parent_a.child_config_entry_ids
+        assert "child" in parent_b.child_config_entry_ids
+
+    async def test_rebuild_falls_back_to_name_when_parent_entry_stale(self, mock_coordinator):
+        """Test stale parent_config_entry_id falls back to parent_name matching."""
+        parent = Mock(spec=KeymasterLock)
+        parent.keymaster_config_entry_id = "parent_id"
+        parent.lock_name = "Front Door"
+        parent.child_config_entry_ids = []
+        parent.parent_config_entry_id = None
+        parent.parent_name = None
+
+        child = Mock(spec=KeymasterLock)
+        child.keymaster_config_entry_id = "child_id"
+        child.lock_name = "Child Lock"
+        child.child_config_entry_ids = []
+        child.parent_config_entry_id = "deleted_parent_id"
+        child.parent_name = "Front Door"
+
+        mock_coordinator.kmlocks = {"parent_id": parent, "child_id": child}
+
+        await mock_coordinator._rebuild_lock_relationships()
+
+        assert child.parent_config_entry_id == "parent_id"
+        assert "child_id" in parent.child_config_entry_ids
+
     async def test_rebuild_with_mismatched_parent(self, mock_coordinator):
         """Test that child with mismatched parent is removed from old parent."""
         # Arrange: Parent claims child, but child points to different parent
