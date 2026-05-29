@@ -1,5 +1,8 @@
 """Tests for the Z-Wave JS lock provider."""
 
+from dataclasses import dataclass
+from enum import Enum
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,13 +12,86 @@ from zwave_js_server.event import Event
 from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
 
 from custom_components.keymaster.const import DOMAIN
-from custom_components.keymaster.providers import create_provider, get_provider_class_for_lock
+from custom_components.keymaster.providers import (
+    create_provider,
+    get_provider_class_for_lock,
+    zwave_js as zwave_js_provider,
+)
 from custom_components.keymaster.providers.zwave_js import ZWaveJSLockProvider
 from homeassistant.components.lock.const import LockState
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 from tests.common import async_capture_events
 from tests.const import CONFIG_DATA_910
+
+
+class FakeSetCredentialResult(Enum):
+    """Fake User Credential CC credential result values."""
+
+    OK = "ok"
+    ERROR_MODIFY_REJECTED_LOCATION_EMPTY = "empty"
+    ERROR_INVALID = "invalid"
+
+
+class FakeSetUserResult(Enum):
+    """Fake User Credential CC user result values."""
+
+    OK = "ok"
+    ERROR_MODIFY_REJECTED_LOCATION_EMPTY = "empty"
+    ERROR_INVALID = "invalid"
+
+
+class FakeUserCredentialType(Enum):
+    """Fake User Credential CC credential types."""
+
+    PIN_CODE = "pin_code"
+    RFID = "rfid"
+
+
+@dataclass
+class FakeSetUserOptions:
+    """Fake SetUserOptions value."""
+
+    active: bool
+    user_name: str | None = None
+
+
+class OldLibraryNode:
+    """Node without the access_control API."""
+
+    node_id = 14
+    status = NodeStatus.ALIVE
+
+
+def enable_fake_credential_cc(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch zwave_js provider to expose fake User Credential CC imports."""
+    monkeypatch.setattr(zwave_js_provider, "_HAS_CREDENTIAL_CC", True)
+    monkeypatch.setattr(zwave_js_provider, "SetCredentialResult", FakeSetCredentialResult)
+    monkeypatch.setattr(zwave_js_provider, "SetUserOptions", FakeSetUserOptions)
+    monkeypatch.setattr(zwave_js_provider, "SetUserResult", FakeSetUserResult)
+    monkeypatch.setattr(zwave_js_provider, "UserCredentialType", FakeUserCredentialType)
+
+
+def setup_successful_connect(
+    zwave_provider: ZWaveJSLockProvider,
+    mock_zwave_client: MagicMock,
+) -> MagicMock:
+    """Set up registry mocks for a successful Z-Wave JS connection."""
+    mock_entity = MagicMock()
+    mock_entity.config_entry_id = "zwave_entry_id"
+    mock_entity.device_id = "device_id"
+    zwave_provider.entity_registry.async_get.return_value = mock_entity
+
+    mock_zwave_entry = MagicMock()
+    mock_zwave_entry.runtime_data = MagicMock()
+    mock_zwave_entry.runtime_data.client = mock_zwave_client
+    zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
+
+    mock_device = MagicMock()
+    mock_device.identifiers = {("zwave_js", "12345-14")}
+    mock_device.id = "device_id"
+    zwave_provider.device_registry.async_get.return_value = mock_device
+    return mock_device
 
 
 @pytest.fixture
@@ -191,26 +267,70 @@ class TestZWaveJSLockProviderConnect:
 
     async def test_connect_success(self, zwave_provider, mock_zwave_client, mock_zwave_node):
         """Test successful connection."""
-        mock_entity = MagicMock()
-        mock_entity.config_entry_id = "zwave_entry_id"
-        mock_entity.device_id = "device_id"
-        zwave_provider.entity_registry.async_get.return_value = mock_entity
-
-        mock_zwave_entry = MagicMock()
-        mock_zwave_entry.runtime_data = MagicMock()
-        mock_zwave_entry.runtime_data.client = mock_zwave_client
-        zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
-
-        mock_device = MagicMock()
-        mock_device.identifiers = {("zwave_js", "12345-14")}  # Node ID 14
-        mock_device.id = "device_id"
-        zwave_provider.device_registry.async_get.return_value = mock_device
+        mock_device = setup_successful_connect(zwave_provider, mock_zwave_client)
 
         result = await zwave_provider.async_connect()
 
         assert result is True
         assert zwave_provider.node is mock_zwave_node
         assert zwave_provider.device is mock_device
+
+    async def test_connect_detects_credential_cc(
+        self, zwave_provider, mock_zwave_client, mock_zwave_node, monkeypatch
+    ):
+        """Test connect enables credential path when User Credential CC is supported."""
+        enable_fake_credential_cc(monkeypatch)
+        setup_successful_connect(zwave_provider, mock_zwave_client)
+        mock_zwave_node.access_control = MagicMock()
+        mock_zwave_node.access_control.is_supported = AsyncMock(return_value=True)
+
+        result = await zwave_provider.async_connect()
+
+        assert result is True
+        assert zwave_provider._uses_credential_cc is True
+
+    async def test_connect_uses_legacy_when_credential_cc_unsupported(
+        self, zwave_provider, mock_zwave_client, mock_zwave_node, monkeypatch
+    ):
+        """Test connect keeps legacy path when User Credential CC is unsupported."""
+        enable_fake_credential_cc(monkeypatch)
+        setup_successful_connect(zwave_provider, mock_zwave_client)
+        mock_zwave_node.access_control = MagicMock()
+        mock_zwave_node.access_control.is_supported = AsyncMock(return_value=False)
+
+        result = await zwave_provider.async_connect()
+
+        assert result is True
+        assert zwave_provider._uses_credential_cc is False
+
+    async def test_connect_probe_falls_back_on_error(
+        self, zwave_provider, mock_zwave_client, mock_zwave_node, monkeypatch
+    ):
+        """Test connect keeps legacy path when credential support probe raises."""
+        enable_fake_credential_cc(monkeypatch)
+        setup_successful_connect(zwave_provider, mock_zwave_client)
+        mock_zwave_node.access_control = MagicMock()
+        mock_zwave_node.access_control.is_supported = AsyncMock(side_effect=RuntimeError("boom"))
+
+        result = await zwave_provider.async_connect()
+
+        assert result is True
+        assert zwave_provider._uses_credential_cc is False
+
+    async def test_connect_falls_back_without_access_control(
+        self, zwave_provider, mock_zwave_client, monkeypatch
+    ):
+        """Test connect keeps legacy path when zwave-js-server lacks access_control."""
+        enable_fake_credential_cc(monkeypatch)
+        old_node = OldLibraryNode()
+        mock_zwave_client.driver.controller.nodes = {14: old_node}
+        setup_successful_connect(zwave_provider, mock_zwave_client)
+
+        result = await zwave_provider.async_connect()
+
+        assert result is True
+        assert zwave_provider.node is old_node
+        assert zwave_provider._uses_credential_cc is False
 
 
 class TestZWaveJSLockProviderIsConnected:
@@ -437,6 +557,278 @@ class TestZWaveJSLockProviderUsercodes:
             result = await zwave_provider.async_clear_usercode(1)
 
         assert result is True
+
+
+class TestZWaveJSLockProviderCredentialCC:
+    """Test Z-Wave JS User Credential CC code operations."""
+
+    @pytest.fixture
+    def credential_provider(self, zwave_provider, mock_zwave_node, monkeypatch):
+        """Create a provider using the credential CC path."""
+        enable_fake_credential_cc(monkeypatch)
+        access_control = MagicMock()
+        mock_zwave_node.access_control = access_control
+        zwave_provider._node = mock_zwave_node
+        zwave_provider._uses_credential_cc = True
+        return zwave_provider, access_control
+
+    async def test_set_usercode_success(self, credential_provider):
+        """Test credential CC set creates an active user then PIN credential."""
+        zwave_provider, access_control = credential_provider
+        access_control.set_user = AsyncMock(return_value=FakeSetUserResult.OK)
+        access_control.set_credential = AsyncMock(return_value=FakeSetCredentialResult.OK)
+
+        result = await zwave_provider.async_set_usercode(2, "2468", name="Guest")
+
+        assert result is True
+        access_control.set_user.assert_awaited_once()
+        slot_num, options = access_control.set_user.await_args.args
+        assert slot_num == 2
+        assert options == FakeSetUserOptions(active=True, user_name="Guest")
+        access_control.set_credential.assert_awaited_once_with(
+            2,
+            FakeUserCredentialType.PIN_CODE,
+            1,
+            "2468",
+        )
+
+    async def test_set_usercode_fails_when_set_user_fails(self, credential_provider):
+        """Test credential CC set stops when setting the user fails."""
+        zwave_provider, access_control = credential_provider
+        access_control.set_user = AsyncMock(return_value=FakeSetUserResult.ERROR_INVALID)
+        access_control.set_credential = AsyncMock(return_value=FakeSetCredentialResult.OK)
+
+        result = await zwave_provider.async_set_usercode(2, "2468")
+
+        assert result is False
+        access_control.set_credential.assert_not_awaited()
+
+    async def test_set_usercode_fails_when_set_credential_fails(self, credential_provider):
+        """Test credential CC set fails when setting the PIN fails."""
+        zwave_provider, access_control = credential_provider
+        access_control.set_user = AsyncMock(return_value=FakeSetUserResult.OK)
+        access_control.set_credential = AsyncMock(
+            return_value=FakeSetCredentialResult.ERROR_INVALID
+        )
+
+        result = await zwave_provider.async_set_usercode(2, "2468")
+
+        assert result is False
+
+    async def test_clear_usercode_success(self, credential_provider):
+        """Test credential CC clear deletes PIN credential then user."""
+        zwave_provider, access_control = credential_provider
+        access_control.delete_credential = AsyncMock(return_value=FakeSetCredentialResult.OK)
+        access_control.delete_user = AsyncMock(return_value=FakeSetUserResult.OK)
+
+        result = await zwave_provider.async_clear_usercode(3)
+
+        assert result is True
+        access_control.delete_credential.assert_awaited_once_with(
+            3,
+            FakeUserCredentialType.PIN_CODE,
+            1,
+        )
+        access_control.delete_user.assert_awaited_once_with(3)
+
+    async def test_clear_usercode_tolerates_empty_slot(self, credential_provider):
+        """Test credential CC clear accepts already-empty result codes."""
+        zwave_provider, access_control = credential_provider
+        access_control.delete_credential = AsyncMock(
+            return_value=FakeSetCredentialResult.ERROR_MODIFY_REJECTED_LOCATION_EMPTY
+        )
+        access_control.delete_user = AsyncMock(
+            return_value=FakeSetUserResult.ERROR_MODIFY_REJECTED_LOCATION_EMPTY
+        )
+
+        result = await zwave_provider.async_clear_usercode(3)
+
+        assert result is True
+
+    async def test_clear_usercode_fails_on_delete_credential_error(self, credential_provider):
+        """Test credential CC clear fails when deleting the credential fails."""
+        zwave_provider, access_control = credential_provider
+        access_control.delete_credential = AsyncMock(
+            return_value=FakeSetCredentialResult.ERROR_INVALID
+        )
+        access_control.delete_user = AsyncMock(return_value=FakeSetUserResult.OK)
+
+        result = await zwave_provider.async_clear_usercode(3)
+
+        assert result is False
+        access_control.delete_user.assert_not_awaited()
+
+    async def test_clear_usercode_fails_on_delete_user_error(self, credential_provider):
+        """Test credential CC clear fails when deleting the user fails."""
+        zwave_provider, access_control = credential_provider
+        access_control.delete_credential = AsyncMock(return_value=FakeSetCredentialResult.OK)
+        access_control.delete_user = AsyncMock(return_value=FakeSetUserResult.ERROR_INVALID)
+
+        result = await zwave_provider.async_clear_usercode(3)
+
+        assert result is False
+
+    async def test_get_usercodes_reconstructs_slots(self, credential_provider):
+        """Test credential CC get all combines users and PIN credentials."""
+        zwave_provider, access_control = credential_provider
+        users = [
+            SimpleNamespace(user_id=1, active=True),
+            SimpleNamespace(user_id=2, active=False),
+            SimpleNamespace(user_id=3, active=True),
+        ]
+        credentials = [
+            SimpleNamespace(user_id=1, type=FakeUserCredentialType.PIN_CODE, data="1111"),
+            SimpleNamespace(user_id=2, type=FakeUserCredentialType.PIN_CODE, data="2222"),
+            SimpleNamespace(user_id=3, type=FakeUserCredentialType.RFID, data="tag"),
+        ]
+        access_control.get_users_cached = AsyncMock(return_value=users)
+        access_control.get_all_credentials_cached = AsyncMock(return_value=credentials)
+
+        result = await zwave_provider.async_get_usercodes()
+
+        assert result[0].slot_num == 1
+        assert result[0].code == "1111"
+        assert result[0].in_use is True
+        assert result[1].slot_num == 2
+        assert result[1].code == "2222"
+        assert result[1].in_use is False
+        assert result[2].slot_num == 3
+        assert result[2].code is None
+        assert result[2].in_use is False
+
+    async def test_get_usercodes_handles_exception(self, credential_provider):
+        """Test credential CC get all handles server errors."""
+        zwave_provider, access_control = credential_provider
+        access_control.get_users_cached = AsyncMock(side_effect=BaseZwaveJSServerError("error"))
+
+        result = await zwave_provider.async_get_usercodes()
+
+        assert result == []
+
+    async def test_get_usercode_existing_and_missing_user(self, credential_provider):
+        """Test credential CC get slot returns code or inactive slot for missing user."""
+        zwave_provider, access_control = credential_provider
+        access_control.get_user_cached = AsyncMock(
+            side_effect=[SimpleNamespace(user_id=4, active=True), None]
+        )
+        access_control.get_credentials_cached = AsyncMock(
+            return_value=[
+                SimpleNamespace(user_id=4, type=FakeUserCredentialType.PIN_CODE, data="4444")
+            ]
+        )
+
+        existing = await zwave_provider.async_get_usercode(4)
+        missing = await zwave_provider.async_get_usercode(5)
+
+        assert existing is not None
+        assert existing.slot_num == 4
+        assert existing.code == "4444"
+        assert existing.in_use is True
+        assert missing is not None
+        assert missing.slot_num == 5
+        assert missing.code is None
+        assert missing.in_use is False
+        access_control.get_credentials_cached.assert_awaited_once_with(4)
+
+    async def test_get_usercode_handles_exception(self, credential_provider):
+        """Test credential CC get slot handles server errors."""
+        zwave_provider, access_control = credential_provider
+        access_control.get_user_cached = AsyncMock(side_effect=BaseZwaveJSServerError("error"))
+
+        result = await zwave_provider.async_get_usercode(5)
+
+        assert result is None
+
+    async def test_refresh_usercode_uses_non_cached_getters(self, credential_provider):
+        """Test credential CC refresh reads user and credentials from the node."""
+        zwave_provider, access_control = credential_provider
+        access_control.get_user = AsyncMock(return_value=SimpleNamespace(user_id=6, active=True))
+        access_control.get_credentials = AsyncMock(
+            return_value=[
+                SimpleNamespace(user_id=6, type=FakeUserCredentialType.PIN_CODE, data="6666")
+            ]
+        )
+        access_control.get_user_cached = AsyncMock()
+        access_control.get_credentials_cached = AsyncMock()
+
+        result = await zwave_provider.async_refresh_usercode(6)
+
+        assert result is not None
+        assert result.code == "6666"
+        access_control.get_user.assert_awaited_once_with(6)
+        access_control.get_credentials.assert_awaited_once_with(6)
+        access_control.get_user_cached.assert_not_called()
+        access_control.get_credentials_cached.assert_not_called()
+
+    async def test_refresh_usercode_handles_exception(self, credential_provider):
+        """Test credential CC refresh handles server errors."""
+        zwave_provider, access_control = credential_provider
+        access_control.get_user = AsyncMock(side_effect=BaseZwaveJSServerError("error"))
+
+        result = await zwave_provider.async_refresh_usercode(6)
+
+        assert result is None
+
+    async def test_set_usercode_handles_set_user_exception(self, credential_provider):
+        """Test credential CC set handles set_user server errors."""
+        zwave_provider, access_control = credential_provider
+        access_control.set_user = AsyncMock(side_effect=BaseZwaveJSServerError("error"))
+        access_control.set_credential = AsyncMock(return_value=FakeSetCredentialResult.OK)
+
+        result = await zwave_provider.async_set_usercode(2, "2468")
+
+        assert result is False
+        access_control.set_credential.assert_not_awaited()
+
+    async def test_set_usercode_handles_set_credential_exception(self, credential_provider):
+        """Test credential CC set handles set_credential server errors."""
+        zwave_provider, access_control = credential_provider
+        access_control.set_user = AsyncMock(return_value=FakeSetUserResult.OK)
+        access_control.set_credential = AsyncMock(side_effect=BaseZwaveJSServerError("error"))
+
+        result = await zwave_provider.async_set_usercode(2, "2468")
+
+        assert result is False
+
+    async def test_clear_usercode_handles_delete_credential_exception(self, credential_provider):
+        """Test credential CC clear handles delete_credential server errors."""
+        zwave_provider, access_control = credential_provider
+        access_control.delete_credential = AsyncMock(side_effect=BaseZwaveJSServerError("error"))
+        access_control.delete_user = AsyncMock(return_value=FakeSetUserResult.OK)
+
+        result = await zwave_provider.async_clear_usercode(3)
+
+        assert result is False
+        access_control.delete_user.assert_not_awaited()
+
+    async def test_clear_usercode_handles_delete_user_exception(self, credential_provider):
+        """Test credential CC clear handles delete_user server errors."""
+        zwave_provider, access_control = credential_provider
+        access_control.delete_credential = AsyncMock(return_value=FakeSetCredentialResult.OK)
+        access_control.delete_user = AsyncMock(side_effect=BaseZwaveJSServerError("error"))
+
+        result = await zwave_provider.async_clear_usercode(3)
+
+        assert result is False
+
+    async def test_legacy_path_with_credential_cc_imports(
+        self, zwave_provider, mock_zwave_node, monkeypatch
+    ):
+        """Test legacy User Code CC path still works when credential imports exist."""
+        enable_fake_credential_cc(monkeypatch)
+        mock_zwave_node.access_control = MagicMock()
+        mock_zwave_node.access_control.is_supported = AsyncMock(return_value=False)
+        zwave_provider._node = mock_zwave_node
+        zwave_provider._uses_credential_cc = False
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.set_usercode",
+            new_callable=AsyncMock,
+        ) as mock_set_usercode:
+            result = await zwave_provider.async_set_usercode(7, "7777")
+
+        assert result is True
+        mock_set_usercode.assert_awaited_once_with(mock_zwave_node, 7, "7777")
 
 
 class TestZWaveJSLockProviderEventSubscription:

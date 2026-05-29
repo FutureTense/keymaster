@@ -41,6 +41,31 @@ from homeassistant.util import dt as dt_util
 from ._base import BaseLockProvider, CodeSlot, LockEventCallback
 from .const import ACCESS_CONTROL, ALARM_TYPE, UNKNOWN
 
+SetCredentialResult: Any
+SetUserOptions: Any
+SetUserResult: Any
+UserCredentialType: Any
+
+try:
+    from zwave_js_server.const.command_class.access_control import (
+        SetCredentialResult as _SetCredentialResult,
+        SetUserResult as _SetUserResult,
+        UserCredentialType as _UserCredentialType,
+    )
+    from zwave_js_server.model.access_control import SetUserOptions as _SetUserOptions
+except ImportError:
+    _HAS_CREDENTIAL_CC = False
+    SetCredentialResult = None
+    SetUserOptions = None
+    SetUserResult = None
+    UserCredentialType = None
+else:
+    _HAS_CREDENTIAL_CC = True
+    SetCredentialResult = _SetCredentialResult
+    SetUserOptions = _SetUserOptions
+    SetUserResult = _SetUserResult
+    UserCredentialType = _UserCredentialType
+
 if TYPE_CHECKING:
     from custom_components.keymaster.lock import KeymasterLock
 
@@ -298,6 +323,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
     _node: ZwaveJSNode | None = field(default=None, init=False, repr=False)
     _device: DeviceEntry | None = field(default=None, init=False, repr=False)
     _client: ZwaveJSClient | None = field(default=None, init=False, repr=False)
+    _uses_credential_cc: bool = field(default=False, init=False, repr=False)
 
     def _is_node_alive(self) -> bool:
         """Check if the Z-Wave node is alive (not dead).
@@ -447,6 +473,18 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 node_id,
             )
 
+        self._uses_credential_cc = False
+        if _HAS_CREDENTIAL_CC and hasattr(self._node, "access_control"):
+            try:
+                self._uses_credential_cc = await self._node.access_control.is_supported()
+            except Exception:  # noqa: BLE001
+                self._uses_credential_cc = False
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Node %s uses %s CC for PIN",
+                node_id,
+                "User Credential" if self._uses_credential_cc else "User Code",
+            )
+
         self._connected = True
         _LOGGER.debug(
             "[ZWaveJSProvider] Connected to lock %s (node %s)",
@@ -471,11 +509,54 @@ class ZWaveJSLockProvider(BaseLockProvider):
         self._connected = connected
         return connected
 
+    def _credential_to_code_slot(
+        self, user: Any | None, credentials: list[Any], slot_num: int
+    ) -> CodeSlot:
+        """Convert User Credential CC data to a provider code slot."""
+        pin = next(
+            (
+                credential
+                for credential in credentials
+                if credential.type == UserCredentialType.PIN_CODE
+            ),
+            None,
+        )
+        return CodeSlot(
+            slot_num=slot_num,
+            code=pin.data if pin else None,
+            in_use=bool(user and user.active and pin),
+        )
+
     async def async_get_usercodes(self) -> list[CodeSlot]:
         """Get all user codes from the Z-Wave JS lock."""
         if not self._node:
             _LOGGER.error("[ZWaveJSProvider] No node available for get_usercodes")
             return []
+
+        if self._uses_credential_cc:
+            try:
+                users = await self._node.access_control.get_users_cached()
+                credentials = await self._node.access_control.get_all_credentials_cached()
+            except BaseZwaveJSServerError as e:
+                _LOGGER.error(
+                    "[ZWaveJSProvider] Failed to get credentials: %s: %s",
+                    e.__class__.__qualname__,
+                    e,
+                )
+                return []
+
+            credentials_by_user: dict[int, list[Any]] = {}
+            for credential in credentials:
+                if credential.type == UserCredentialType.PIN_CODE:
+                    credentials_by_user.setdefault(credential.user_id, []).append(credential)
+            return [
+                self._credential_to_code_slot(
+                    user,
+                    credentials_by_user.get(user.user_id, []),
+                    user.user_id,
+                )
+                for user in users
+            ]
 
         try:
             zwave_codes = get_usercodes(self._node)
@@ -509,6 +590,22 @@ class ZWaveJSLockProvider(BaseLockProvider):
         if not self._node:
             return None
 
+        if self._uses_credential_cc:
+            try:
+                user = await self._node.access_control.get_user_cached(slot_num)
+                if user is None:
+                    return CodeSlot(slot_num=slot_num, code=None, in_use=False)
+                credentials = await self._node.access_control.get_credentials_cached(slot_num)
+            except BaseZwaveJSServerError as e:
+                _LOGGER.error(
+                    "[ZWaveJSProvider] Failed to get credential for slot %s: %s: %s",
+                    slot_num,
+                    e.__class__.__qualname__,
+                    e,
+                )
+                return None
+            return self._credential_to_code_slot(user, credentials, slot_num)
+
         try:
             zw_slot: ZwaveJSCodeSlot = get_usercode(self._node, slot_num)
             return CodeSlot(
@@ -532,6 +629,22 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         if not self._is_node_alive():
             return None
+
+        if self._uses_credential_cc:
+            try:
+                user = await self._node.access_control.get_user(slot_num)
+                if user is None:
+                    return CodeSlot(slot_num=slot_num, code=None, in_use=False)
+                credentials = await self._node.access_control.get_credentials(slot_num)
+            except BaseZwaveJSServerError as e:
+                _LOGGER.error(
+                    "[ZWaveJSProvider] Failed to refresh credential for slot %s: %s: %s",
+                    slot_num,
+                    e.__class__.__qualname__,
+                    e,
+                )
+                return None
+            return self._credential_to_code_slot(user, credentials, slot_num)
 
         try:
             zw_slot: ZwaveJSCodeSlot = await get_usercode_from_node(self._node, slot_num)
@@ -558,6 +671,48 @@ class ZWaveJSLockProvider(BaseLockProvider):
         if not self._is_node_alive():
             return False
 
+        if self._uses_credential_cc:
+            try:
+                user_result = await self._node.access_control.set_user(
+                    slot_num,
+                    SetUserOptions(active=True, user_name=name),
+                )
+                if user_result != SetUserResult.OK:
+                    _LOGGER.error(
+                        "[ZWaveJSProvider] Failed to set user on slot %s: %s",
+                        slot_num,
+                        user_result,
+                    )
+                    return False
+
+                credential_result = await self._node.access_control.set_credential(
+                    slot_num,
+                    UserCredentialType.PIN_CODE,
+                    1,
+                    code,
+                )
+                if credential_result != SetCredentialResult.OK:
+                    _LOGGER.error(
+                        "[ZWaveJSProvider] Failed to set credential on slot %s: %s",
+                        slot_num,
+                        credential_result,
+                    )
+                    return False
+            except BaseZwaveJSServerError as e:
+                _LOGGER.error(
+                    "[ZWaveJSProvider] Failed to set credential on slot %s: %s: %s",
+                    slot_num,
+                    e.__class__.__qualname__,
+                    e,
+                )
+                return False
+            else:
+                _LOGGER.debug(
+                    "[ZWaveJSProvider] Set credential on slot %s",
+                    slot_num,
+                )
+                return True
+
         try:
             await set_usercode(self._node, slot_num, code)
         except BaseZwaveJSServerError as e:
@@ -583,6 +738,49 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         if not self._is_node_alive():
             return False
+
+        if self._uses_credential_cc:
+            try:
+                credential_result = await self._node.access_control.delete_credential(
+                    slot_num,
+                    UserCredentialType.PIN_CODE,
+                    1,
+                )
+                ok_credential_results = (
+                    SetCredentialResult.OK,
+                    SetCredentialResult.ERROR_MODIFY_REJECTED_LOCATION_EMPTY,
+                )
+                if credential_result not in ok_credential_results:
+                    _LOGGER.error(
+                        "[ZWaveJSProvider] Failed to delete credential on slot %s: %s",
+                        slot_num,
+                        credential_result,
+                    )
+                    return False
+
+                user_result = await self._node.access_control.delete_user(slot_num)
+                ok_user_results = (
+                    SetUserResult.OK,
+                    SetUserResult.ERROR_MODIFY_REJECTED_LOCATION_EMPTY,
+                )
+                if user_result not in ok_user_results:
+                    _LOGGER.error(
+                        "[ZWaveJSProvider] Failed to delete user on slot %s: %s",
+                        slot_num,
+                        user_result,
+                    )
+                    return False
+            except BaseZwaveJSServerError as e:
+                _LOGGER.error(
+                    "[ZWaveJSProvider] Failed to clear credential on slot %s: %s: %s",
+                    slot_num,
+                    e.__class__.__qualname__,
+                    e,
+                )
+                return False
+            else:
+                # User Credential CC delete result codes are authoritative.
+                return True
 
         try:
             await clear_usercode(self._node, slot_num)
