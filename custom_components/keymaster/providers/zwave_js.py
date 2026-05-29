@@ -527,6 +527,27 @@ class ZWaveJSLockProvider(BaseLockProvider):
             in_use=bool(user and user.active and pin),
         )
 
+    async def _verify_credential_state(self, slot_num: int, expect_present: bool) -> bool:
+        """Re-read a credential slot after a transient write result."""
+        if not self._node:
+            return False
+
+        try:
+            user = await self._node.access_control.get_user(slot_num)
+            credentials = await self._node.access_control.get_credentials(slot_num)
+        except BaseZwaveJSServerError as e:
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Verify failed for slot %s: %s",
+                slot_num,
+                e,
+            )
+            return False
+
+        has_pin = any(credential.type == UserCredentialType.PIN_CODE for credential in credentials)
+        if not expect_present:
+            return user is None and not has_pin
+        return user is not None and has_pin
+
     async def async_get_usercodes(self) -> list[CodeSlot]:
         """Get all user codes from the Z-Wave JS lock."""
         if not self._node:
@@ -673,31 +694,12 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         if self._uses_credential_cc:
             try:
-                user_result = await self._node.access_control.set_user(
-                    slot_num,
-                    SetUserOptions(active=True, user_name=name),
-                )
-                if user_result != SetUserResult.OK:
-                    _LOGGER.error(
-                        "[ZWaveJSProvider] Failed to set user on slot %s: %s",
-                        slot_num,
-                        user_result,
-                    )
-                    return False
-
                 credential_result = await self._node.access_control.set_credential(
                     slot_num,
                     UserCredentialType.PIN_CODE,
-                    1,
+                    slot_num,
                     code,
                 )
-                if credential_result != SetCredentialResult.OK:
-                    _LOGGER.error(
-                        "[ZWaveJSProvider] Failed to set credential on slot %s: %s",
-                        slot_num,
-                        credential_result,
-                    )
-                    return False
             except BaseZwaveJSServerError as e:
                 _LOGGER.error(
                     "[ZWaveJSProvider] Failed to set credential on slot %s: %s: %s",
@@ -706,12 +708,50 @@ class ZWaveJSLockProvider(BaseLockProvider):
                     e,
                 )
                 return False
-            else:
+
+            if credential_result == SetCredentialResult.ERROR_UNKNOWN:
+                if not await self._verify_credential_state(slot_num, expect_present=True):
+                    _LOGGER.error(
+                        "[ZWaveJSProvider] Failed to verify credential set on slot %s",
+                        slot_num,
+                    )
+                    return False
                 _LOGGER.debug(
-                    "[ZWaveJSProvider] Set credential on slot %s",
-                    slot_num,
+                    "[ZWaveJSProvider] Credential set verified post-op despite ERROR_UNKNOWN",
                 )
-                return True
+            elif credential_result != SetCredentialResult.OK:
+                _LOGGER.error(
+                    "[ZWaveJSProvider] Failed to set credential on slot %s: %s",
+                    slot_num,
+                    credential_result,
+                )
+                return False
+
+            if name:
+                try:
+                    user_result = await self._node.access_control.set_user(
+                        slot_num,
+                        SetUserOptions(user_name=name),
+                    )
+                except BaseZwaveJSServerError as e:
+                    _LOGGER.debug(
+                        "[ZWaveJSProvider] Could not set user_name on slot %s: %s",
+                        slot_num,
+                        e,
+                    )
+                else:
+                    if user_result != SetUserResult.OK:
+                        _LOGGER.debug(
+                            "[ZWaveJSProvider] Could not set user_name on slot %s: %s",
+                            slot_num,
+                            user_result,
+                        )
+
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Set credential on slot %s",
+                slot_num,
+            )
+            return True
 
         try:
             await set_usercode(self._node, slot_num, code)
@@ -744,11 +784,14 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 credential_result = await self._node.access_control.delete_credential(
                     slot_num,
                     UserCredentialType.PIN_CODE,
-                    1,
+                    slot_num,
                 )
+                # LOCATION_EMPTY means the slot was already empty, which is the
+                # desired post-condition for a clear operation.
                 ok_credential_results = (
                     SetCredentialResult.OK,
                     SetCredentialResult.ERROR_MODIFY_REJECTED_LOCATION_EMPTY,
+                    SetCredentialResult.ERROR_UNKNOWN,
                 )
                 if credential_result not in ok_credential_results:
                     _LOGGER.error(
@@ -759,9 +802,12 @@ class ZWaveJSLockProvider(BaseLockProvider):
                     return False
 
                 user_result = await self._node.access_control.delete_user(slot_num)
+                # LOCATION_EMPTY means the user was already absent, which is the
+                # desired post-condition for a clear operation.
                 ok_user_results = (
                     SetUserResult.OK,
                     SetUserResult.ERROR_MODIFY_REJECTED_LOCATION_EMPTY,
+                    SetUserResult.ERROR_UNKNOWN,
                 )
                 if user_result not in ok_user_results:
                     _LOGGER.error(
@@ -778,9 +824,22 @@ class ZWaveJSLockProvider(BaseLockProvider):
                     e,
                 )
                 return False
-            else:
-                # User Credential CC delete result codes are authoritative.
+
+            if await self._verify_credential_state(slot_num, expect_present=False):
+                if (
+                    credential_result == SetCredentialResult.ERROR_UNKNOWN
+                    or user_result == SetUserResult.ERROR_UNKNOWN
+                ):
+                    _LOGGER.debug(
+                        "[ZWaveJSProvider] Credential clear verified post-op despite ERROR_UNKNOWN",
+                    )
                 return True
+
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Failed to verify credential clear on slot %s",
+                slot_num,
+            )
+            return False
 
         try:
             await clear_usercode(self._node, slot_num)
