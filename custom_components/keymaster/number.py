@@ -149,22 +149,6 @@ class KeymasterNumber(KeymasterEntity, NumberEntity):
             self.async_write_ha_state()
             return
 
-        if self._is_accesslimit_count and (
-            not self._kmlock.code_slots
-            or not self._code_slot
-            or not self._kmlock.code_slots[self._code_slot].accesslimit_count_enabled
-        ):
-            self._attr_available = False
-            self.async_write_ha_state()
-            return
-
-        if (
-            self._property.split(".")[-1].startswith("autolock")
-        ) and not self._kmlock.autolock_enabled:
-            self._attr_available = False
-            self.async_write_ha_state()
-            return
-
         self._attr_available = True
         self._attr_native_value = self._get_property_value()
         self.async_write_ha_state()

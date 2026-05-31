@@ -323,10 +323,10 @@ async def test_autolock_sensor_unavailable_when_not_connected(
     assert not entity._attr_available
 
 
-async def test_autolock_sensor_unavailable_when_autolock_disabled(
+async def test_autolock_sensor_available_when_autolock_disabled(
     hass: HomeAssistant, sensor_config_entry, coordinator
 ):
-    """Test auto-lock timer sensor becomes unavailable when autolock is not enabled."""
+    """Test auto-lock timer sensor stays available when autolock is not enabled."""
     kmlock = KeymasterLock(
         lock_name="frontdoor",
         lock_entity_id="lock.test",
@@ -351,7 +351,9 @@ async def test_autolock_sensor_unavailable_when_autolock_disabled(
     with patch.object(entity, "async_write_ha_state"):
         entity._handle_coordinator_update()
 
-    assert not entity._attr_available
+    assert entity._attr_available
+    assert entity._attr_native_value is None
+    assert entity._attr_extra_state_attributes["is_running"] is False
 
 
 async def test_autolock_sensor_idle_when_timer_not_running(
@@ -527,3 +529,45 @@ async def test_autolock_sensor_created_in_setup(hass: HomeAssistant):
 def test_autolock_sensor_seconds_to_hhmmss(seconds, expected):
     """Test _seconds_to_hhmmss formats correctly."""
     assert KeymasterAutoLockSensor._seconds_to_hhmmss(seconds) == expected
+
+
+async def test_autolock_sensor_keeps_value_when_autolock_disabled(
+    hass: HomeAssistant, sensor_config_entry, coordinator
+):
+    """Test auto-lock timer sensor remains available after disabling autolock."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=sensor_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.autolock_enabled = True
+
+    end_time = dt.now(tz=UTC) + timedelta(minutes=5)
+    mock_timer = Mock()
+    mock_timer.is_running = True
+    mock_timer.end_time = end_time
+    mock_timer.remaining_seconds = 300
+    mock_timer.duration = 600
+    kmlock.autolock_timer = mock_timer
+    coordinator.kmlocks[sensor_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSensorEntityDescription(
+        key="sensor.autolock_timer",
+        name="Auto Lock Timer",
+        icon="mdi:lock-clock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=sensor_config_entry,
+        coordinator=coordinator,
+    )
+    entity = KeymasterAutoLockSensor(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state"):
+        entity._handle_coordinator_update()
+        kmlock.autolock_enabled = False
+        entity._handle_coordinator_update()
+
+    assert entity._attr_available
+    assert entity._attr_native_value == end_time
+    assert entity._attr_extra_state_attributes["is_running"] is True

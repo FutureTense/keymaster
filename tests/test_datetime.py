@@ -375,3 +375,58 @@ async def test_datetime_entity_available_with_valid_code_slot(
     # Should be available and have the value
     assert entity._attr_available
     assert entity._attr_native_value == datetime(2024, 1, 1, 0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    ("key", "attr_name", "value"),
+    [
+        (
+            "datetime.code_slots:1.accesslimit_date_range_start",
+            "accesslimit_date_range_start",
+            datetime(2025, 1, 1, 8, 0, 0),
+        ),
+        (
+            "datetime.code_slots:1.accesslimit_date_range_end",
+            "accesslimit_date_range_end",
+            datetime(2025, 1, 2, 18, 0, 0),
+        ),
+    ],
+)
+async def test_datetime_entities_can_be_preset_when_feature_disabled(
+    hass: HomeAssistant, datetime_config_entry, coordinator, key, attr_name, value
+):
+    """Test date range datetimes are available and writable while disabled."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=datetime_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            accesslimit_date_range_enabled=False,
+        )
+    }
+    coordinator.kmlocks[datetime_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterDateTimeEntityDescription(
+        key=key,
+        name="Date Range",
+        icon="mdi:calendar",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=datetime_config_entry,
+        coordinator=coordinator,
+    )
+    entity = KeymasterDateTime(entity_description=entity_description)
+
+    with patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()):
+        await entity.async_set_value(value)
+    with patch.object(entity, "async_write_ha_state"):
+        entity._handle_coordinator_update()
+
+    assert entity._attr_available
+    assert entity._attr_native_value == value
+    assert getattr(kmlock.code_slots[1], attr_name) == value

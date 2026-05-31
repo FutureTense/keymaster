@@ -170,11 +170,6 @@ class KeymasterAutoLockSensor(KeymasterEntity, SensorEntity):
             self.async_write_ha_state()
             return
 
-        if not self._kmlock.autolock_enabled:
-            self._attr_available = False
-            self.async_write_ha_state()
-            return
-
         self._attr_available = True
         timer = self._kmlock.autolock_timer
 
