@@ -120,15 +120,6 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             self.async_write_ha_state()
             return
 
-        if ".accesslimit_day_of_week" in self._property and (
-            not self._kmlock.code_slots
-            or not self._code_slot
-            or not self._kmlock.code_slots[self._code_slot].accesslimit_day_of_week_enabled
-        ):
-            self._attr_available = False
-            self.async_write_ha_state()
-            return
-
         if self._property.endswith(".time_start") or self._property.endswith(".time_end"):
             # code_slots and _code_slot validation already handled by lines 117-121 above
             # Safe to assert these are not None here
@@ -145,29 +136,6 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
                 self._attr_available = False
                 self.async_write_ha_state()
                 return
-
-            day_of_week: KeymasterCodeSlotDayOfWeek | None = accesslimit_day_of_week[
-                self._day_of_week_num
-            ]
-            if day_of_week is None or not day_of_week.dow_enabled or not day_of_week.limit_by_time:
-                self._attr_available = False
-                self.async_write_ha_state()
-                return
-
-        # if (
-        #     self._property.endswith(".time_start")
-        #     or self._property.endswith(".time_end")
-        # ) and (
-        #     not self._kmlock.code_slots[self._code_slot]
-        #     .accesslimit_day_of_week[self._day_of_week_num]
-        #     .dow_enabled
-        #     or not self._kmlock.code_slots[self._code_slot]
-        #     .accesslimit_day_of_week[self._day_of_week_num]
-        #     .limit_by_time
-        # ):
-        #     self._attr_available = False
-        #     self.async_write_ha_state()
-        #     return
 
         self._attr_available = True
         self._attr_native_value = self._get_property_value()

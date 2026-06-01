@@ -285,8 +285,8 @@ async def test_time_entity_child_lock_ignores_change_without_override(
         assert "not set to override parent. Ignoring change" in caplog.text
 
 
-async def test_time_entity_unavailable_when_dow_not_enabled(hass: HomeAssistant, time_config_entry):
-    """Test time entity is unavailable when day of week is not enabled."""
+async def test_time_entity_available_when_dow_not_enabled(hass: HomeAssistant, time_config_entry):
+    """Test time entity stays available when day of week is not enabled."""
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -332,13 +332,14 @@ async def test_time_entity_unavailable_when_dow_not_enabled(hass: HomeAssistant,
     with patch.object(entity, "async_write_ha_state"):
         entity._handle_coordinator_update()
 
-    assert not entity._attr_available
+    assert entity._attr_available
+    assert entity._attr_native_value is None
 
 
-async def test_time_entity_unavailable_when_limit_by_time_disabled(
+async def test_time_entity_available_when_limit_by_time_disabled(
     hass: HomeAssistant, time_config_entry
 ):
-    """Test time entity is unavailable when limit_by_time is disabled."""
+    """Test time entity stays available when limit_by_time is disabled."""
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
 
@@ -384,7 +385,8 @@ async def test_time_entity_unavailable_when_limit_by_time_disabled(
     with patch.object(entity, "async_write_ha_state"):
         entity._handle_coordinator_update()
 
-    assert not entity._attr_available
+    assert entity._attr_available
+    assert entity._attr_native_value is None
 
 
 async def test_time_entity_child_lock_unavailable_without_code_slots(
@@ -606,3 +608,58 @@ async def test_time_entity_available_with_valid_configuration(
     # Should be available with proper native_value set
     assert entity._attr_available
     assert entity._attr_native_value == test_time
+
+
+@pytest.mark.parametrize(
+    ("key", "attr_name", "value"),
+    [
+        ("time.code_slots:1.accesslimit_day_of_week:0.time_start", "time_start", dt_time(8, 30)),
+        ("time.code_slots:1.accesslimit_day_of_week:0.time_end", "time_end", dt_time(17, 45)),
+    ],
+)
+async def test_time_entities_can_be_preset_when_feature_disabled(
+    hass: HomeAssistant, time_config_entry, key, attr_name, value
+):
+    """Test day-of-week time entities are available and writable while disabled."""
+    coordinator = hass.data[DOMAIN][COORDINATOR]
+    day_of_week = KeymasterCodeSlotDayOfWeek(
+        day_of_week_num=0,
+        day_of_week_name="Monday",
+        dow_enabled=False,
+        limit_by_time=False,
+    )
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=time_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            accesslimit_day_of_week_enabled=False,
+            accesslimit_day_of_week={0: day_of_week},
+        )
+    }
+    coordinator.kmlocks[time_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTimeEntityDescription(
+        key=key,
+        name="Code Slot 1: Monday Time",
+        icon="mdi:clock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=time_config_entry,
+        coordinator=coordinator,
+    )
+    entity = KeymasterTime(entity_description=entity_description)
+
+    with patch.object(coordinator, "async_request_debounced_refresh"):
+        await entity.async_set_value(value)
+    with patch.object(entity, "async_write_ha_state"):
+        entity._handle_coordinator_update()
+
+    assert entity._attr_available
+    assert entity._attr_native_value == value
+    assert getattr(day_of_week, attr_name) == value

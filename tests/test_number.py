@@ -284,10 +284,10 @@ async def test_number_entity_unavailable_when_code_slot_missing(
     assert not entity._attr_available
 
 
-async def test_number_entity_unavailable_when_accesslimit_not_enabled(
+async def test_number_entity_available_when_accesslimit_not_enabled(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
-    """Test number entity becomes unavailable when accesslimit_count is not enabled."""
+    """Test number entity stays available when accesslimit_count is not enabled."""
 
     # Create a lock with code slot but accesslimit_count_enabled is False
     kmlock = KeymasterLock(
@@ -325,13 +325,14 @@ async def test_number_entity_unavailable_when_accesslimit_not_enabled(
     with patch.object(entity, "async_write_ha_state"):
         entity._handle_coordinator_update()
 
-    assert not entity._attr_available
+    assert entity._attr_available
+    assert entity._attr_native_value is None
 
 
-async def test_number_entity_unavailable_when_autolock_not_enabled(
+async def test_number_entity_available_when_autolock_not_enabled(
     hass: HomeAssistant, number_config_entry, coordinator
 ):
-    """Test autolock number entity becomes unavailable when autolock is not enabled."""
+    """Test autolock number entity stays available when autolock is not enabled."""
 
     # Create a lock with autolock disabled
     kmlock = KeymasterLock(
@@ -364,7 +365,8 @@ async def test_number_entity_unavailable_when_autolock_not_enabled(
     with patch.object(entity, "async_write_ha_state"):
         entity._handle_coordinator_update()
 
-    assert not entity._attr_available
+    assert entity._attr_available
+    assert entity._attr_native_value is None
 
 
 async def test_number_entity_available_when_autolock_enabled(
@@ -614,3 +616,61 @@ async def test_number_entity_autolock_float_to_int(
         assert isinstance(entity._attr_native_value, int)
         assert getattr(kmlock, attr_name) == 5
         assert isinstance(getattr(kmlock, attr_name), int)
+
+
+@pytest.mark.parametrize(
+    ("key", "slot_kwargs", "lock_attr", "value"),
+    [
+        ("number.autolock_min_day", None, "autolock_min_day", 15),
+        ("number.autolock_min_night", None, "autolock_min_night", 20),
+        (
+            "number.code_slots:1.accesslimit_count",
+            {"accesslimit_count_enabled": False},
+            "accesslimit_count",
+            7,
+        ),
+    ],
+)
+async def test_number_entities_can_be_preset_when_feature_disabled(
+    hass: HomeAssistant, number_config_entry, coordinator, key, slot_kwargs, lock_attr, value
+):
+    """Test number entities remain available and writable while feature is disabled."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=number_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.autolock_enabled = False
+    if slot_kwargs is not None:
+        kmlock.code_slots = {1: KeymasterCodeSlot(number=1, enabled=True, **slot_kwargs)}
+    coordinator.kmlocks[number_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterNumberEntityDescription(
+        key=key,
+        name="Preset Number",
+        icon="mdi:numeric",
+        mode=NumberMode.BOX,
+        native_min_value=0,
+        native_step=1,
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=number_config_entry,
+        coordinator=coordinator,
+    )
+    entity = KeymasterNumber(entity_description=entity_description)
+
+    with (
+        patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
+        patch.object(entity, "async_write_ha_state"),
+    ):
+        await entity.async_set_native_value(value)
+        entity._handle_coordinator_update()
+
+    assert entity._attr_available
+    assert entity._attr_native_value == value
+    target: object = kmlock
+    if slot_kwargs is not None:
+        assert kmlock.code_slots is not None
+        target = kmlock.code_slots[1]
+    assert getattr(target, lock_attr) == value
