@@ -139,13 +139,15 @@ async def test_register_strategy_resource_yaml_mode_already_exists(
     assert "YAML mode" not in caplog.text
 
 
-async def test_register_strategy_resource_no_resources(hass: HomeAssistant):
-    """Test registering when no resources available."""
+async def test_register_strategy_resource_no_resources(hass: HomeAssistant, caplog):
+    """Test registering when no resources available logs a warning."""
     # No lovelace domain
     hass.data[DOMAIN] = {}
 
-    # Should not raise
-    await async_register_strategy_resource(hass)
+    with caplog.at_level(logging.WARNING):
+        await async_register_strategy_resource(hass)
+
+    assert "Lovelace integration not available" in caplog.text
 
 
 async def test_cleanup_strategy_resource_removes(hass: HomeAssistant, mock_storage_resources):

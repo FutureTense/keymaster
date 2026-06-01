@@ -31,6 +31,11 @@ async def async_register_strategy_resource(hass: HomeAssistant) -> None:
     """Register the Lovelace strategy resource when supported."""
     resources = get_lovelace_resources(hass)
     if not resources:
+        _LOGGER.warning(
+            "Lovelace integration not available; skipping strategy module "
+            "registration. The keymaster dashboard strategy will not work "
+            "until Lovelace is loaded and Home Assistant is restarted."
+        )
         return
 
     if isinstance(resources, ResourceStorageCollection) and not resources.loaded:
