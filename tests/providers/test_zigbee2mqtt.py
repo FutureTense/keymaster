@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.keymaster.const import CONF_SLOTS, CONF_START
+from custom_components.keymaster.exceptions import LockDisconnected, LockOperationFailed
 from custom_components.keymaster.providers._base import CodeSlot
 from custom_components.keymaster.providers.zigbee2mqtt import Zigbee2MQTTLockProvider
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 
@@ -41,13 +44,17 @@ def mock_hass():
 @pytest.fixture
 def mock_entity_registry():
     """Create a mock entity registry."""
-    return MagicMock(spec=er.EntityRegistry)
+    reg = MagicMock(spec=er.EntityRegistry)
+    reg.async_get.return_value = None
+    return reg
 
 
 @pytest.fixture
 def mock_device_registry():
     """Create a mock device registry."""
-    return MagicMock(spec=dr.DeviceRegistry)
+    reg = MagicMock(spec=dr.DeviceRegistry)
+    reg.async_get.return_value = None
+    return reg
 
 
 @pytest.fixture
@@ -55,7 +62,7 @@ def mock_config_entry():
     """Create a mock keymaster config entry."""
     entry = MagicMock()
     entry.entry_id = "keymaster_test_entry"
-    entry.data = {"start_from": 1, "slots": 6}
+    entry.data = {CONF_START: 1, CONF_SLOTS: 6}
     return entry
 
 
@@ -71,30 +78,50 @@ def provider(mock_hass, mock_entity_registry, mock_device_registry, mock_config_
     )
 
 
+@pytest.fixture(autouse=True)
+def mock_mqtt_enabled():
+    """Mock mqtt_config_entry_enabled to return True by default."""
+    with patch(
+        "custom_components.keymaster.providers.zigbee2mqtt.mqtt_config_entry_enabled",
+        return_value=True,
+    ) as mock:
+        yield mock
+
+
 def setup_successful_connect(
     provider,
     mock_hass,
-    command_topic="zigbee2mqtt/my_lock/set",
-    state_topic="zigbee2mqtt/my_lock",
+    device_name="my_lock",
+    identifiers=None,
 ):
     """Set up registry and entity mocks for a successful connection."""
+    if identifiers is None:
+        identifiers = {("mqtt", "zigbee2mqtt_my_lock")}
+
     # 1. Entity Registry Setup
     lock_entry = MagicMock()
     lock_entry.config_entry_id = "mqtt_config_entry_id"
     lock_entry.platform = "mqtt"
+    lock_entry.device_id = "my_lock_device_id"
     provider.entity_registry.async_get.return_value = lock_entry
 
-    # 2. Lock Entity Setup
-    lock_entity = MagicMock()
-    lock_entity._config = {
-        "command_topic": command_topic,
-        "state_topic": state_topic,
-    }
+    # 2. Device Registry Setup
+    device_entry = MagicMock()
+    device_entry.identifiers = identifiers
+    device_entry.name = device_name
+    provider.device_registry.async_get.return_value = device_entry
 
-    lock_component = MagicMock()
-    lock_component.get_entity.return_value = lock_entity
 
-    mock_hass.data["entity_components"] = {"lock": lock_component}
+async def connect_provider(provider, mock_hass):
+    """Successfully connect the provider in tests."""
+    setup_successful_connect(provider, mock_hass)
+    with patch(
+        "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
+    ) as mock_subscribe:
+        mock_subscribe.return_value = lambda: None
+        result = await provider.async_connect()
+        assert result is True
+        return mock_subscribe
 
 
 class TestProperties:
@@ -116,48 +143,30 @@ class TestProperties:
 class TestConnect:
     """Test Zigbee2MQTTLockProvider async_connect."""
 
-    async def test_connect_success_with_set_suffix(self, provider, mock_hass):
-        """Test successful connection where command topic ends with /set."""
-        setup_successful_connect(
-            provider,
-            mock_hass,
-            command_topic="zigbee2mqtt/my_lock/set",
-            state_topic="zigbee2mqtt/my_lock",
-        )
+    async def test_connect_success(self, provider, mock_hass):
+        """Test successful connection and dynamic topic derivation."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
 
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
+        assert provider.connected is True
+        assert provider.base_topic == "zigbee2mqtt/my_lock"
+        assert provider.set_topic == "zigbee2mqtt/my_lock/set"
+        assert provider.get_topic == "zigbee2mqtt/my_lock/get"
+        assert provider.state_topic == "zigbee2mqtt/my_lock"
+        mock_subscribe.assert_called_once_with(mock_hass, "zigbee2mqtt/my_lock", ANY)
 
-            result = await provider.async_connect()
+    async def test_connect_success_rename_device(self, provider, mock_hass):
+        """Test that device rename changes the topics dynamically."""
+        await connect_provider(provider, mock_hass)
+        assert provider.base_topic == "zigbee2mqtt/my_lock"
 
-            assert result is True
-            assert provider.connected is True
-            assert provider._command_topic == "zigbee2mqtt/my_lock/set"
-            assert provider._state_topic == "zigbee2mqtt/my_lock"
-            assert provider._base_topic == "zigbee2mqtt/my_lock"
-            mock_subscribe.assert_called_once_with(mock_hass, "zigbee2mqtt/my_lock", ANY)
+        # Now simulate a device rename in registry
+        device_entry = provider.device_registry.async_get.return_value
+        device_entry.name = "new_lock_name"
 
-    async def test_connect_success_without_set_suffix(self, provider, mock_hass):
-        """Test successful connection where command topic does not end with /set."""
-        setup_successful_connect(
-            provider,
-            mock_hass,
-            command_topic="zigbee2mqtt/my_lock",
-            state_topic="zigbee2mqtt/my_lock",
-        )
-
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-
-            result = await provider.async_connect()
-
-            assert result is True
-            assert provider.connected is True
-            assert provider._base_topic == "zigbee2mqtt/my_lock"
+        assert provider.base_topic == "zigbee2mqtt/new_lock_name"
+        assert provider.set_topic == "zigbee2mqtt/new_lock_name/set"
+        assert provider.get_topic == "zigbee2mqtt/new_lock_name/get"
+        assert provider.state_topic == "zigbee2mqtt/new_lock_name"
 
     async def test_connect_entity_not_found(self, provider):
         """Test connection fails when lock entity is not found in Entity Registry."""
@@ -179,69 +188,24 @@ class TestConnect:
         assert result is False
         assert provider.connected is False
 
-    async def test_connect_lock_component_missing(self, provider, mock_hass):
-        """Test connection fails when lock component is missing from Home Assistant."""
+    async def test_connect_device_not_found(self, provider):
+        """Test connection fails when lock device is not found in registry."""
         lock_entry = MagicMock()
+        lock_entry.config_entry_id = "mqtt_config_entry_id"
         lock_entry.platform = "mqtt"
+        lock_entry.device_id = "my_lock_device_id"
         provider.entity_registry.async_get.return_value = lock_entry
-        mock_hass.data["entity_components"] = {}
+        provider.device_registry.async_get.return_value = None
 
         result = await provider.async_connect()
 
         assert result is False
         assert provider.connected is False
 
-    async def test_connect_lock_entity_missing(self, provider, mock_hass):
-        """Test connection fails when lock entity is missing from lock component."""
-        lock_entry = MagicMock()
-        lock_entry.platform = "mqtt"
-        provider.entity_registry.async_get.return_value = lock_entry
-
-        lock_component = MagicMock()
-        lock_component.get_entity.return_value = None
-        mock_hass.data["entity_components"] = {"lock": lock_component}
-
+    async def test_connect_platform_not_z2m(self, provider, mock_hass):
+        """Test connection fails when lock device is not a Z2M device."""
+        setup_successful_connect(provider, mock_hass, identifiers={("mqtt", "not_z2m_device")})
         result = await provider.async_connect()
-
-        assert result is False
-        assert provider.connected is False
-
-    async def test_connect_lock_entity_lacks_config(self, provider, mock_hass):
-        """Test connection fails when lock entity lacks _config attribute."""
-        lock_entry = MagicMock()
-        lock_entry.platform = "mqtt"
-        provider.entity_registry.async_get.return_value = lock_entry
-
-        lock_entity = MagicMock()
-        del lock_entity._config
-
-        lock_component = MagicMock()
-        lock_component.get_entity.return_value = lock_entity
-        mock_hass.data["entity_components"] = {"lock": lock_component}
-
-        result = await provider.async_connect()
-
-        assert result is False
-        assert provider.connected is False
-
-    async def test_connect_lock_entity_missing_topics(self, provider, mock_hass):
-        """Test connection fails when command or state topics are missing."""
-        lock_entry = MagicMock()
-        lock_entry.platform = "mqtt"
-        provider.entity_registry.async_get.return_value = lock_entry
-
-        lock_entity = MagicMock()
-        lock_entity._config = {
-            "command_topic": None,
-            "state_topic": "zigbee2mqtt/my_lock",
-        }
-
-        lock_component = MagicMock()
-        lock_component.get_entity.return_value = lock_entity
-        mock_hass.data["entity_components"] = {"lock": lock_component}
-
-        result = await provider.async_connect()
-
         assert result is False
         assert provider.connected is False
 
@@ -249,26 +213,30 @@ class TestConnect:
         """Test that incoming bulk users messages update the cache."""
         setup_successful_connect(provider, mock_hass)
 
-        callback_captured = None
+        callback_captured: Any = None
 
         def mock_subscribe(hass, topic, callback_fn):
             nonlocal callback_captured
             callback_captured = callback_fn
             return lambda: None
 
-        with patch("homeassistant.components.mqtt.async_subscribe", side_effect=mock_subscribe):
+        with patch(
+            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
+        ) as mock_sub:
+            mock_sub.side_effect = mock_subscribe
             await provider.async_connect()
 
         assert callback_captured is not None
-
-        # Construct a mock ReceiveMessage
 
         # Test bulk update
         payload = {
             "users": {
                 "1": {"pin_code": "1234", "status": "enabled"},
                 "2": {"pin_code": "", "status": "disabled"},
-                "invalid": {"pin_code": "0000", "status": "enabled"},
+                "3": {"status": "disabled"},
+                "4": {"status": "enabled"},
+                "5": {"pin_code": 0, "status": "enabled"},
+                "6": {"pin_code": True, "status": "enabled"},
             }
         }
         msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload), 0, False)
@@ -276,39 +244,50 @@ class TestConnect:
         callback_captured(msg)
 
         # Check cache
-        assert len(provider._usercodes_cache) == 2
         assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="1234", in_use=True)
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=False)
+        assert provider._usercodes_cache[3] == CodeSlot(slot_num=3, code=None, in_use=False)
+        assert 4 not in provider._usercodes_cache
+        assert provider._usercodes_cache[5] == CodeSlot(slot_num=5, code="0", in_use=True)
+        assert provider._usercodes_cache[6] == CodeSlot(slot_num=6, code=None, in_use=False)
 
     async def test_connect_handles_single_pin_code_message(self, provider, mock_hass):
         """Test that incoming single pin code messages update the cache."""
         setup_successful_connect(provider, mock_hass)
 
-        callback_captured = None
+        callback_captured: Any = None
 
         def mock_subscribe(hass, topic, callback_fn):
             nonlocal callback_captured
             callback_captured = callback_fn
             return lambda: None
 
-        with patch("homeassistant.components.mqtt.async_subscribe", side_effect=mock_subscribe):
+        with patch(
+            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
+        ) as mock_sub:
+            mock_sub.side_effect = mock_subscribe
             await provider.async_connect()
 
-        # Test single update
-        payload = {
-            "pin_code": {
-                "user": 3,
-                "pin_code": "5678",
-                "user_enabled": True,
-            }
-        }
-        msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload), 0, False)
+        # Test single updates
+        payload1 = {"pin_code": {"user": 1, "pin_code": "5678", "user_enabled": True}}
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload1), 0, False))
+        assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="5678", in_use=True)
 
-        assert callback_captured is not None
-        callback_captured(msg)
+        payload2 = {"pin_code": {"user": 2, "user_enabled": True}}
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload2), 0, False))
+        assert 2 not in provider._usercodes_cache
 
-        # Check cache
-        assert provider._usercodes_cache[3] == CodeSlot(slot_num=3, code="5678", in_use=True)
+        payload3 = {"pin_code": {"user": 3, "user_enabled": False}}
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload3), 0, False))
+        assert provider._usercodes_cache[3] == CodeSlot(slot_num=3, code=None, in_use=False)
+
+        payload4 = {"pin_code": {"user": 4, "pin_code": 0, "user_enabled": True}}
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload4), 0, False))
+        assert provider._usercodes_cache[4] == CodeSlot(slot_num=4, code="0", in_use=True)
+
+        payload5 = {"pin_code": {"user": 5, "pin_code": False, "user_enabled": True}}
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload5), 0, False))
+        assert provider._usercodes_cache[5] == CodeSlot(slot_num=5, code=None, in_use=False)
 
     async def test_connect_ignores_invalid_json(self, provider, mock_hass):
         """Test that invalid json payloads are handled gracefully."""
@@ -321,12 +300,14 @@ class TestConnect:
             callback_captured = callback_fn
             return lambda: None
 
-        with patch("homeassistant.components.mqtt.async_subscribe", side_effect=mock_subscribe):
+        with patch(
+            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
+        ) as mock_sub:
+            mock_sub.side_effect = mock_subscribe
             await provider.async_connect()
 
         msg = ReceiveMessage("zigbee2mqtt/my_lock", "invalid json", 0, False)
 
-        # Should not raise exception
         assert callback_captured is not None
         callback_captured(msg)
         assert len(provider._usercodes_cache) == 0
@@ -341,30 +322,12 @@ class TestIsConnected:
 
     async def test_is_connected_success(self, provider, mock_hass):
         """Test it returns True when connected and registry confirms."""
-        setup_successful_connect(provider, mock_hass)
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-            await provider.async_connect()
-
-        # Mock registry entry is still there
-        lock_entry = MagicMock()
-        lock_entry.platform = "mqtt"
-        provider.entity_registry.async_get.return_value = lock_entry
-
+        await connect_provider(provider, mock_hass)
         assert await provider.async_is_connected() is True
 
     async def test_is_connected_registry_missing(self, provider, mock_hass):
         """Test it returns False if entity is removed from registry."""
-        setup_successful_connect(provider, mock_hass)
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-            await provider.async_connect()
-
-        # Entity missing now
+        await connect_provider(provider, mock_hass)
         provider.entity_registry.async_get.return_value = None
 
         assert await provider.async_is_connected() is False
@@ -372,14 +335,7 @@ class TestIsConnected:
 
     async def test_is_connected_platform_changed(self, provider, mock_hass):
         """Test it returns False if entity platform changes."""
-        setup_successful_connect(provider, mock_hass)
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-            await provider.async_connect()
-
-        # Platform changed now
+        await connect_provider(provider, mock_hass)
         lock_entry = MagicMock()
         lock_entry.platform = "other"
         provider.entity_registry.async_get.return_value = lock_entry
@@ -392,39 +348,56 @@ class TestUsercodeOperations:
     """Test user code operations in Zigbee2MQTTLockProvider."""
 
     async def test_get_usercodes_not_connected(self, provider):
-        """Test get_usercodes returns empty list and logs error when not connected."""
+        """Test get_usercodes returns empty list when not connected."""
         result = await provider.async_get_usercodes()
         assert result == []
 
     async def test_get_usercodes_success(self, provider, mock_hass):
-        """Test get_usercodes publishes to get topic and returns slot range."""
-        setup_successful_connect(provider, mock_hass)
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-            await provider.async_connect()
+        """Test get_usercodes queries slots concurrently and resolves futures."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
 
-        # Populate cache for slot 1
-        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="1234", in_use=True)
+        publish_calls = []
 
-        with (
-            patch(
-                "homeassistant.components.mqtt.async_publish", new_callable=AsyncMock
-            ) as mock_publish,
-            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-        ):
+        async def mock_publish(hass, topic, payload, qos=0, retain=False):
+            publish_calls.append((topic, payload))
+            parsed = json.loads(payload)
+            slot_num = parsed["pin_code"]["user"]
+
+            response_payload = {
+                "pin_code": {
+                    "user": slot_num,
+                    "pin_code": f"pin_{slot_num}",
+                    "user_enabled": True,
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+        with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
             result = await provider.async_get_usercodes()
 
-            mock_publish.assert_called_once_with(
-                mock_hass, "zigbee2mqtt/my_lock/get", '{"pin_code": ""}'
-            )
-            mock_sleep.assert_called_once_with(2.0)
+            assert len(publish_calls) == 6
+            for i in range(1, 7):
+                assert (
+                    "zigbee2mqtt/my_lock/get",
+                    json.dumps({"pin_code": {"user": i}}),
+                ) in publish_calls
 
-            # mock_config_entry configures start: 1, slots: 6
             assert len(result) == 6
-            assert result[0] == CodeSlot(slot_num=1, code="1234", in_use=True)
-            assert result[1] == CodeSlot(slot_num=2, code=None, in_use=False)
+            assert result[0] == CodeSlot(slot_num=1, code="pin_1", in_use=True)
+            assert result[5] == CodeSlot(slot_num=6, code="pin_6", in_use=True)
+
+    async def test_get_usercodes_timeout(self, provider, mock_hass):
+        """Test that get_usercodes raises LockOperationFailed when query times out."""
+        await connect_provider(provider, mock_hass)
+
+        with (
+            patch("homeassistant.components.mqtt.async_publish", new_callable=AsyncMock),
+            patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
+            pytest.raises(LockOperationFailed),
+        ):
+            await provider.async_get_usercodes()
 
     async def test_get_usercode_cached(self, provider):
         """Test get_usercode retrieves from cache."""
@@ -443,12 +416,7 @@ class TestUsercodeOperations:
 
     async def test_set_usercode_success(self, provider, mock_hass):
         """Test set_usercode publishes correct payload and updates cache."""
-        setup_successful_connect(provider, mock_hass)
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-            await provider.async_connect()
+        await connect_provider(provider, mock_hass)
 
         with patch(
             "homeassistant.components.mqtt.async_publish", new_callable=AsyncMock
@@ -473,8 +441,45 @@ class TestUsercodeOperations:
                 qos=1,
                 retain=False,
             )
-            # Optimistically updated
             assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code="4321", in_use=True)
+
+    async def test_set_usercode_publish_failure_oserror(self, provider, mock_hass):
+        """Test that OSError on publish raises LockDisconnected."""
+        await connect_provider(provider, mock_hass)
+
+        with patch(
+            "homeassistant.components.mqtt.async_publish", side_effect=OSError("Network down")
+        ):
+            with pytest.raises(LockDisconnected):
+                await provider.async_set_usercode(2, "1234")
+
+            assert 2 not in provider._usercodes_cache
+
+    async def test_set_usercode_publish_failure_haerror(self, provider, mock_hass):
+        """Test that HomeAssistantError on publish raises LockOperationFailed."""
+        await connect_provider(provider, mock_hass)
+
+        with patch(
+            "homeassistant.components.mqtt.async_publish",
+            side_effect=HomeAssistantError("Publish failed"),
+        ):
+            with pytest.raises(LockOperationFailed):
+                await provider.async_set_usercode(2, "1234")
+
+            assert 2 not in provider._usercodes_cache
+
+    async def test_set_usercode_mqtt_disabled(self, provider, mock_hass):
+        """Test that set_usercode raises LockDisconnected when MQTT is disabled."""
+        await connect_provider(provider, mock_hass)
+
+        with patch(
+            "custom_components.keymaster.providers.zigbee2mqtt.mqtt_config_entry_enabled",
+            return_value=False,
+        ):
+            with pytest.raises(LockDisconnected):
+                await provider.async_set_usercode(2, "1234")
+
+            assert 2 not in provider._usercodes_cache
 
     async def test_clear_usercode_not_connected(self, provider):
         """Test clear_usercode returns False when not connected."""
@@ -482,15 +487,9 @@ class TestUsercodeOperations:
         assert result is False
 
     async def test_clear_usercode_success(self, provider, mock_hass):
-        """Test clear_usercode publishes correct payload and updates cache."""
-        setup_successful_connect(provider, mock_hass)
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-            await provider.async_connect()
+        """Test clear_usercode publishes correct full shape payload and updates cache."""
+        await connect_provider(provider, mock_hass)
 
-        # Set it first in cache
         provider._usercodes_cache[2] = CodeSlot(slot_num=2, code="4321", in_use=True)
 
         with patch(
@@ -503,6 +502,9 @@ class TestUsercodeOperations:
                 {
                     "pin_code": {
                         "user": 2,
+                        "user_type": "unrestricted",
+                        "user_enabled": False,
+                        "pin_code": None,
                     }
                 }
             )
@@ -513,7 +515,6 @@ class TestUsercodeOperations:
                 qos=1,
                 retain=False,
             )
-            # Optimistically cleared
             assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=False)
 
 
@@ -521,15 +522,9 @@ class TestLockEvents:
     """Test lock event subscription."""
 
     async def test_subscribe_lock_events(self, provider, mock_hass):
-        """Test subscribing to keypad unlock events works and triggers callback."""
-        setup_successful_connect(provider, mock_hass)
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-            await provider.async_connect()
+        """Test subscribing to keypad unlock/lock events works and triggers callback."""
+        await connect_provider(provider, mock_hass)
 
-        # Capture the callback passed to async_subscribe inside subscribe_lock_events
         captured_callback = None
         unsub_mock = MagicMock()
 
@@ -545,42 +540,39 @@ class TestLockEvents:
             "homeassistant.components.mqtt.async_subscribe", side_effect=mock_subscribe_events
         ):
             unsubscribe_fn = provider.subscribe_lock_events(mock_kmlock, mock_callback)
-
-            # Let the event loop run scheduled tasks (since subscribe is called inside async_create_task)
             await asyncio.sleep(0.01)
 
         assert captured_callback is not None
 
-        # Build mock ReceiveMessage
-
-        # Construct a keypad unlock event
-        payload = {
-            "action": "unlock",
-            "action_source_name": "keypad",
+        # 1. Keypad unlock event
+        payload_unlock = {
+            "action": "keypad_unlock",
             "action_user": 2,
         }
-        msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload), 0, False)
-
-        # Trigger captured callback
-        captured_callback(msg)
-
-        # Let the event loop run scheduled tasks (since handle_lock_message is called inside async_create_task)
+        msg_unlock = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload_unlock), 0, False)
+        captured_callback(msg_unlock)
         await asyncio.sleep(0.01)
 
         mock_callback.assert_called_once_with(2, "Unlocked via Keypad", 1)
+        mock_callback.reset_mock()
 
-        # Unsubscribe
+        # 2. Keypad lock event
+        payload_lock = {
+            "action": "keypad_lock",
+            "action_user": 3,
+        }
+        msg_lock = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload_lock), 0, False)
+        captured_callback(msg_lock)
+        await asyncio.sleep(0.01)
+
+        mock_callback.assert_called_once_with(3, "Keypad Lock", 5)
+
         unsubscribe_fn()
         unsub_mock.assert_called_once()
 
-    async def test_subscribe_lock_events_ignores_non_keypad_unlock(self, provider, mock_hass):
-        """Test subscribing to keypad unlock events ignores other actions/sources."""
-        setup_successful_connect(provider, mock_hass)
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
-        ) as mock_subscribe:
-            mock_subscribe.return_value = lambda: None
-            await provider.async_connect()
+    async def test_subscribe_lock_events_ignores_other_actions(self, provider, mock_hass):
+        """Test subscribing to keypad unlock/lock events ignores other actions."""
+        await connect_provider(provider, mock_hass)
 
         captured_callback = None
 
@@ -598,16 +590,18 @@ class TestLockEvents:
             provider.subscribe_lock_events(mock_kmlock, mock_callback)
             await asyncio.sleep(0.01)
 
-        # Non-keypad source
-        payload1 = {"action": "unlock", "action_source_name": "rf", "action_user": 2}
         assert captured_callback is not None
+
+        # RF unlock/lock action
+        payload1 = {"action": "unlock", "action_user": 2}
         captured_callback(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload1), 0, False))
 
-        # Lock action instead of unlock
-        payload2 = {"action": "lock", "action_source_name": "keypad", "action_user": 2}
+        payload2 = {"action": "keypad_unlock"}  # Missing user
         captured_callback(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload2), 0, False))
 
-        # Invalid json
+        payload3 = {"action": "keypad_lock", "action_user": "invalid"}  # User not int
+        captured_callback(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload3), 0, False))
+
         captured_callback(ReceiveMessage("zigbee2mqtt/my_lock", "invalid json", 0, False))
 
         await asyncio.sleep(0.01)

@@ -21,3 +21,11 @@ class NotFoundError(HomeAssistantError):
 
 class NotSupportedError(HomeAssistantError):
     """Raised when action is not supported."""
+
+
+class LockDisconnected(HomeAssistantError):
+    """Raised when the lock is disconnected or unavailable."""
+
+
+class LockOperationFailed(HomeAssistantError):
+    """Raised when a lock operation fails."""
