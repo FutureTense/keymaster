@@ -115,7 +115,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             """Handle incoming state updates."""
             try:
                 payload = json.loads(msg.payload)
-            except (json.JSONDecodeError, TypeError):
+            except ValueError:
                 return
 
             # Parse bulk users list if available
@@ -267,7 +267,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             """Handle unlock events from MQTT state topic."""
             try:
                 payload = json.loads(msg.payload)
-            except (json.JSONDecodeError, TypeError):
+            except ValueError:
                 return
 
             action = payload.get("action")
