@@ -289,6 +289,10 @@ class TestZWaveJSLockProviderConnect:
         mock_zwave_node.access_control = MagicMock()
         mock_zwave_node.access_control.is_supported = AsyncMock(return_value=True)
 
+        mock_cc = MagicMock()
+        mock_cc.id = 18
+        mock_zwave_node.command_classes = [mock_cc]
+
         result = await zwave_provider.async_connect()
 
         assert result is True
