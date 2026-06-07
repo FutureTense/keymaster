@@ -13,6 +13,7 @@ from custom_components.keymaster.const import CONF_SLOTS, CONF_START
 from custom_components.keymaster.exceptions import LockDisconnected, LockOperationFailed
 from homeassistant.components import mqtt
 from homeassistant.components.mqtt import mqtt_config_entry_enabled
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 
@@ -67,7 +68,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
     @property
     def supports_connection_status(self) -> bool:
         """Zigbee2MQTT can report connection status."""
-        return False
+        return True
 
     @property
     def base_topic(self) -> str | None:
@@ -255,6 +256,12 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         # Verify entity exists and is still registered as mqtt domain
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
         if not lock_entry or lock_entry.platform != "mqtt":
+            self._connected = False
+            return False
+
+        # Verify lock entity state is available
+        state = self.hass.states.get(self.lock_entity_id)
+        if not state or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             self._connected = False
             return False
 

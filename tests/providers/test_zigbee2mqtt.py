@@ -17,6 +17,7 @@ from custom_components.keymaster.providers.zigbee2mqtt import (
     _get_pin_code_value,
     _mqtt_payload_pin_has_code_value,
 )
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -37,6 +38,7 @@ def mock_hass():
     hass = MagicMock(spec=HomeAssistant)
     hass.config_entries = MagicMock()
     hass.data = {}
+    hass.states = MagicMock()
 
     def async_create_task(coro):
         return asyncio.create_task(coro)
@@ -141,7 +143,7 @@ class TestProperties:
 
     def test_supports_connection_status(self, provider):
         """Test supports_connection_status property."""
-        assert provider.supports_connection_status is False
+        assert provider.supports_connection_status is True
 
 
 class TestConnect:
@@ -329,7 +331,35 @@ class TestIsConnected:
     async def test_is_connected_success(self, provider, mock_hass):
         """Test it returns True when connected and registry confirms."""
         await connect_provider(provider, mock_hass)
+        mock_state = MagicMock()
+        mock_state.state = "locked"
+        mock_hass.states.get.return_value = mock_state
         assert await provider.async_is_connected() is True
+
+    async def test_is_connected_state_unavailable(self, provider, mock_hass):
+        """Test it returns False when state is unavailable."""
+        await connect_provider(provider, mock_hass)
+        mock_state = MagicMock()
+        mock_state.state = STATE_UNAVAILABLE
+        mock_hass.states.get.return_value = mock_state
+        assert await provider.async_is_connected() is False
+        assert provider.connected is False
+
+    async def test_is_connected_state_unknown(self, provider, mock_hass):
+        """Test it returns False when state is unknown."""
+        await connect_provider(provider, mock_hass)
+        mock_state = MagicMock()
+        mock_state.state = STATE_UNKNOWN
+        mock_hass.states.get.return_value = mock_state
+        assert await provider.async_is_connected() is False
+        assert provider.connected is False
+
+    async def test_is_connected_state_none(self, provider, mock_hass):
+        """Test it returns False when state is None."""
+        await connect_provider(provider, mock_hass)
+        mock_hass.states.get.return_value = None
+        assert await provider.async_is_connected() is False
+        assert provider.connected is False
 
     async def test_is_connected_registry_missing(self, provider, mock_hass):
         """Test it returns False if entity is removed from registry."""
