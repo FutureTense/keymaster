@@ -52,6 +52,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
     _pending_usercode_futures: dict[int, asyncio.Future[CodeSlot]] = field(
         default_factory=dict, init=False, repr=False
     )
+    _lock_event_callback: LockEventCallback | None = field(default=None, init=False, repr=False)
 
     @property
     def domain(self) -> str:
@@ -66,7 +67,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
     @property
     def supports_connection_status(self) -> bool:
         """Zigbee2MQTT can report connection status."""
-        return True
+        return False
 
     @property
     def base_topic(self) -> str | None:
@@ -159,6 +160,12 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             except ValueError:
                 return
 
+            # Check for keypad actions
+            action = payload.get("action")
+            slot_num = payload.get("action_user")
+            if action or slot_num:
+                self.hass.async_create_task(self._async_handle_action(action, slot_num))
+
             # Parse bulk users list if available
             if "users" in payload and isinstance(payload["users"], dict):
                 for slot_str, info in payload["users"].items():
@@ -169,10 +176,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
                     status = info.get("status")
                     if "pin_code" not in info:
-                        if status == "enabled":
-                            # Skip slot if it's enabled but code is not exposed (pin_code key is missing)
-                            continue
-                        in_use = False
+                        in_use = status == "enabled"
                         code = None
                     else:
                         code_val = info["pin_code"]
@@ -199,21 +203,16 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
                 if isinstance(user_slot, int):
                     user_enabled = pin_data.get("user_enabled", True)
                     if "pin_code" not in pin_data:
-                        if user_enabled:
-                            # Skip if enabled but code is not exposed (pin_code key is missing)
-                            pass
-                        else:
-                            # If disabled, it's not in use
-                            slot_data = CodeSlot(
-                                slot_num=user_slot,
-                                code=None,
-                                in_use=False,
-                            )
-                            self._usercodes_cache[user_slot] = slot_data
-                            if user_slot in self._pending_usercode_futures:
-                                fut = self._pending_usercode_futures[user_slot]
-                                if not fut.done():
-                                    fut.set_result(slot_data)
+                        slot_data = CodeSlot(
+                            slot_num=user_slot,
+                            code=None,
+                            in_use=bool(user_enabled),
+                        )
+                        self._usercodes_cache[user_slot] = slot_data
+                        if user_slot in self._pending_usercode_futures:
+                            fut = self._pending_usercode_futures[user_slot]
+                            if not fut.done():
+                                fut.set_result(slot_data)
                     else:
                         code_val = pin_data["pin_code"]
                         code = _get_pin_code_value(code_val)
@@ -357,52 +356,35 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         )
         return True
 
+    async def _async_handle_action(self, action: Any, slot_num: Any) -> None:
+        """Handle keypad action events."""
+        if not isinstance(slot_num, int):
+            return
+
+        if self._lock_event_callback:
+            if action == "keypad_unlock":
+                await self._lock_event_callback(slot_num, "Unlocked via Keypad", 1)
+            elif action == "keypad_lock":
+                await self._lock_event_callback(slot_num, "Keypad Lock", 5)
+
+        if action in ("pin_code_added", "pin_code_deleted"):
+            # Re-query the slot so the cache reflects the keypad-side change.
+            get_topic = self.get_topic
+            if get_topic:
+                await self._async_publish(get_topic, json.dumps({"pin_code": {"user": slot_num}}))
+
     def subscribe_lock_events(
         self, kmlock: KeymasterLock, callback: LockEventCallback
     ) -> Callable[[], None]:
         """Subscribe to keypad lock/unlock events."""
-        unsub_list: list[Callable[[], None]] = []
+        self._lock_event_callback = callback
 
-        async def handle_lock_message(msg: mqtt.ReceiveMessage) -> None:
-            """Handle lock events from MQTT state topic."""
-            try:
-                payload = json.loads(msg.payload)
-            except ValueError:
-                return
+        def unsubscribe() -> None:
+            """Unsubscribe from lock events."""
+            if self._lock_event_callback == callback:
+                self._lock_event_callback = None
 
-            action = payload.get("action")
-            slot_num = payload.get("action_user")
-
-            if action == "keypad_unlock" and isinstance(slot_num, int):
-                # Trigger Keymaster callback (user code slot unlocked keypad)
-                # action_code 1 represents keypad unlock in Keymaster
-                await callback(slot_num, "Unlocked via Keypad", 1)
-            elif action == "keypad_lock" and isinstance(slot_num, int):
-                # action_code 5 represents keypad lock in Keymaster
-                await callback(slot_num, "Keypad Lock", 5)
-
-        # Subscribe using HAs MQTT API and wrap in task to execute callback safely
-        async def subscribe() -> None:
-            state_topic = self.state_topic
-            if not state_topic:
-                _LOGGER.error("[Zigbee2MQTTProvider] State topic not available for subscribe")
-                return
-            unsub = await mqtt.async_subscribe(
-                self.hass,
-                state_topic,
-                lambda msg: self.hass.async_create_task(handle_lock_message(msg)),
-            )
-            unsub_list.append(unsub)
-            self._listeners.append(unsub)
-
-        self.hass.async_create_task(subscribe())
-
-        def unsubscribe_all() -> None:
-            """Unsubscribe all listeners."""
-            for unsub_fn in unsub_list:
-                unsub_fn()
-
-        return unsubscribe_all
+        return unsubscribe
 
     def subscribe_connection_events(self, callback: ConnectionCallback) -> Callable[[], None]:
         """Subscribe to availability events (connection status monitoring)."""

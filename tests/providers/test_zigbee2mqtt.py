@@ -141,7 +141,7 @@ class TestProperties:
 
     def test_supports_connection_status(self, provider):
         """Test supports_connection_status property."""
-        assert provider.supports_connection_status is True
+        assert provider.supports_connection_status is False
 
 
 class TestConnect:
@@ -252,7 +252,7 @@ class TestConnect:
         assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="1234", in_use=True)
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=False)
         assert provider._usercodes_cache[3] == CodeSlot(slot_num=3, code=None, in_use=False)
-        assert 4 not in provider._usercodes_cache
+        assert provider._usercodes_cache[4] == CodeSlot(slot_num=4, code=None, in_use=True)
         assert provider._usercodes_cache[5] == CodeSlot(slot_num=5, code="0", in_use=True)
         assert provider._usercodes_cache[6] == CodeSlot(slot_num=6, code=None, in_use=False)
         assert "invalid" not in provider._usercodes_cache
@@ -281,7 +281,7 @@ class TestConnect:
 
         payload2 = {"pin_code": {"user": 2, "user_enabled": True}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload2), 0, False))
-        assert 2 not in provider._usercodes_cache
+        assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=True)
 
         payload3 = {"pin_code": {"user": 3, "user_enabled": False}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload3), 0, False))
@@ -529,26 +529,13 @@ class TestLockEvents:
 
     async def test_subscribe_lock_events(self, provider, mock_hass):
         """Test subscribing to keypad unlock/lock events works and triggers callback."""
-        await connect_provider(provider, mock_hass)
-
-        captured_callback = None
-        unsub_mock = MagicMock()
-
-        async def mock_subscribe_events(hass, topic, callback_fn):
-            nonlocal captured_callback
-            captured_callback = callback_fn
-            return unsub_mock
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        captured_callback = mock_subscribe.call_args[0][2]
 
         mock_callback = AsyncMock()
         mock_kmlock = MagicMock()
 
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", side_effect=mock_subscribe_events
-        ):
-            unsubscribe_fn = provider.subscribe_lock_events(mock_kmlock, mock_callback)
-            await asyncio.sleep(0.01)
-
-        assert captured_callback is not None
+        unsubscribe_fn = provider.subscribe_lock_events(mock_kmlock, mock_callback)
 
         # 1. Keypad unlock event
         payload_unlock = {
@@ -574,29 +561,16 @@ class TestLockEvents:
         mock_callback.assert_called_once_with(3, "Keypad Lock", 5)
 
         unsubscribe_fn()
-        unsub_mock.assert_called_once()
 
     async def test_subscribe_lock_events_ignores_other_actions(self, provider, mock_hass):
         """Test subscribing to keypad unlock/lock events ignores other actions."""
-        await connect_provider(provider, mock_hass)
-
-        captured_callback = None
-
-        async def mock_subscribe_events(hass, topic, callback_fn):
-            nonlocal captured_callback
-            captured_callback = callback_fn
-            return lambda: None
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        captured_callback = mock_subscribe.call_args[0][2]
 
         mock_callback = AsyncMock()
         mock_kmlock = MagicMock()
 
-        with patch(
-            "homeassistant.components.mqtt.async_subscribe", side_effect=mock_subscribe_events
-        ):
-            provider.subscribe_lock_events(mock_kmlock, mock_callback)
-            await asyncio.sleep(0.01)
-
-        assert captured_callback is not None
+        provider.subscribe_lock_events(mock_kmlock, mock_callback)
 
         # RF unlock/lock action
         payload1 = {"action": "unlock", "action_user": 2}
@@ -612,6 +586,34 @@ class TestLockEvents:
 
         await asyncio.sleep(0.01)
         mock_callback.assert_not_called()
+
+    async def test_keypad_pin_changed_requeries_slot(self, provider, mock_hass):
+        """Test that pin_code_added/deleted triggers a get request to query the slot."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        captured_callback = mock_subscribe.call_args[0][2]
+
+        mock_callback = AsyncMock()
+        mock_kmlock = MagicMock()
+        provider.subscribe_lock_events(mock_kmlock, mock_callback)
+
+        payload = {
+            "action": "pin_code_added",
+            "action_user": 4,
+        }
+        msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload), 0, False)
+
+        with patch(
+            "homeassistant.components.mqtt.async_publish", new_callable=AsyncMock
+        ) as mock_pub:
+            captured_callback(msg)
+            await asyncio.sleep(0.01)
+            mock_pub.assert_called_once_with(
+                mock_hass,
+                "zigbee2mqtt/my_lock/get",
+                json.dumps({"pin_code": {"user": 4}}),
+                qos=1,
+                retain=False,
+            )
 
     def test_subscribe_connection_events(self, provider):
         """Test subscribing to connection events returns a dummy unsubscribe function."""
@@ -695,21 +697,16 @@ class TestCoverageExtra:
             assert len(result) == 6
             assert result[0] == CodeSlot(slot_num=1, code=None, in_use=False)
 
-    async def test_subscribe_lock_events_missing_state_topic(self, provider, mock_hass):
-        """Test subscribing to events returns dummy unsubscribe when state topic is missing."""
+    async def test_subscribe_lock_events_returns_unsubscribe(self, provider, mock_hass):
+        """Test subscribing to events returns unsubscribe function."""
         await connect_provider(provider, mock_hass)
-
-        with patch(
-            "custom_components.keymaster.providers.zigbee2mqtt.Zigbee2MQTTLockProvider.state_topic",
-            new_callable=PropertyMock,
-        ) as mock_state_topic:
-            mock_state_topic.return_value = None
-            mock_callback = AsyncMock()
-            mock_kmlock = MagicMock()
-            unsubscribe_fn = provider.subscribe_lock_events(mock_kmlock, mock_callback)
-            await asyncio.sleep(0.01)
-
-            assert callable(unsubscribe_fn)
+        mock_callback = AsyncMock()
+        mock_kmlock = MagicMock()
+        unsubscribe_fn = provider.subscribe_lock_events(mock_kmlock, mock_callback)
+        assert provider._lock_event_callback == mock_callback
+        assert callable(unsubscribe_fn)
+        unsubscribe_fn()
+        assert provider._lock_event_callback is None
 
     async def test_async_query_slot_missing_get_topic(self, provider, mock_hass):
         """Test that _async_query_slot raises LockDisconnected when get_topic is missing."""
