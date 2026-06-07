@@ -476,7 +476,9 @@ class ZWaveJSLockProvider(BaseLockProvider):
         self._uses_credential_cc = False
         if _HAS_CREDENTIAL_CC and hasattr(self._node, "access_control"):
             try:
-                self._uses_credential_cc = await self._node.access_control.is_supported()
+                self._uses_credential_cc = await self._node.access_control.is_supported() and any(
+                    cc.id == 18 for cc in self._node.command_classes
+                )
             except Exception:  # noqa: BLE001
                 self._uses_credential_cc = False
             _LOGGER.debug(
