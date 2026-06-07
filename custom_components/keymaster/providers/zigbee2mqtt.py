@@ -162,9 +162,9 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
             # Check for keypad actions
             action = payload.get("action")
-            slot_num = payload.get("action_user")
-            if action or slot_num:
-                self.hass.async_create_task(self._async_handle_action(action, slot_num))
+            action_slot_num = payload.get("action_user")
+            if action or action_slot_num:
+                self.hass.async_create_task(self._async_handle_action(action, action_slot_num))
 
             # Parse bulk users list if available
             if "users" in payload and isinstance(payload["users"], dict):
@@ -201,7 +201,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
                 pin_data = payload["pin_code"]
                 user_slot = pin_data.get("user")
                 if isinstance(user_slot, int):
-                    user_enabled = pin_data.get("user_enabled", True)
+                    user_enabled = pin_data.get("user_enabled", False)
                     if "pin_code" not in pin_data:
                         slot_data = CodeSlot(
                             slot_num=user_slot,
