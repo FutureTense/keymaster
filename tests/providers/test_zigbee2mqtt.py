@@ -5,14 +5,18 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any, NamedTuple
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START
 from custom_components.keymaster.exceptions import LockDisconnected, LockOperationFailed
 from custom_components.keymaster.providers._base import CodeSlot
-from custom_components.keymaster.providers.zigbee2mqtt import Zigbee2MQTTLockProvider
+from custom_components.keymaster.providers.zigbee2mqtt import (
+    Zigbee2MQTTLockProvider,
+    _get_pin_code_value,
+    _mqtt_payload_pin_has_code_value,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -237,6 +241,7 @@ class TestConnect:
                 "4": {"status": "enabled"},
                 "5": {"pin_code": 0, "status": "enabled"},
                 "6": {"pin_code": True, "status": "enabled"},
+                "invalid": {"pin_code": "0000", "status": "enabled"},
             }
         }
         msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload), 0, False)
@@ -250,6 +255,7 @@ class TestConnect:
         assert 4 not in provider._usercodes_cache
         assert provider._usercodes_cache[5] == CodeSlot(slot_num=5, code="0", in_use=True)
         assert provider._usercodes_cache[6] == CodeSlot(slot_num=6, code=None, in_use=False)
+        assert "invalid" not in provider._usercodes_cache
 
     async def test_connect_handles_single_pin_code_message(self, provider, mock_hass):
         """Test that incoming single pin code messages update the cache."""
@@ -613,3 +619,134 @@ class TestLockEvents:
         unsub = provider.subscribe_connection_events(callback)
         assert callable(unsub)
         unsub()
+
+
+def test_pin_has_code_value():
+    """Test the standalone pin helper functions."""
+
+    assert _mqtt_payload_pin_has_code_value(None) is False
+    assert _mqtt_payload_pin_has_code_value(True) is False
+    assert _mqtt_payload_pin_has_code_value(False) is False
+    assert _mqtt_payload_pin_has_code_value([]) is False
+    assert _mqtt_payload_pin_has_code_value("   ") is False
+    assert _mqtt_payload_pin_has_code_value(0) is True
+    assert _mqtt_payload_pin_has_code_value("1234") is True
+
+    assert _get_pin_code_value(None) is None
+    assert _get_pin_code_value(True) is None
+    assert _get_pin_code_value("1234") == "1234"
+
+
+class TestCoverageExtra:
+    """Extra tests to achieve 100% test coverage."""
+
+    async def test_get_usercodes_success_bulk(self, provider, mock_hass):
+        """Test get_usercodes queries slots concurrently and resolves futures via bulk users message."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        publish_calls = []
+
+        async def mock_publish(hass, topic, payload, qos=0, retain=False):
+            publish_calls.append((topic, payload))
+            parsed = json.loads(payload)
+            slot_num = parsed["pin_code"]["user"]
+
+            # Send bulk update response back containing this user
+            response_payload = {
+                "users": {
+                    str(slot_num): {
+                        "pin_code": f"pin_{slot_num}",
+                        "status": "enabled",
+                    }
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+        with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
+            result = await provider.async_get_usercodes()
+
+            assert len(result) == 6
+            assert result[0] == CodeSlot(slot_num=1, code="pin_1", in_use=True)
+            assert result[5] == CodeSlot(slot_num=6, code="pin_6", in_use=True)
+
+    async def test_get_usercodes_disabled_no_pin_resolves_future(self, provider, mock_hass):
+        """Test that single pin update with user_enabled=False and no pin_code resolves future."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        async def mock_publish(hass, topic, payload, qos=0, retain=False):
+            parsed = json.loads(payload)
+            slot_num = parsed["pin_code"]["user"]
+
+            # Response without pin_code key but user_enabled=False
+            response_payload = {
+                "pin_code": {
+                    "user": slot_num,
+                    "user_enabled": False,
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+        with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
+            result = await provider.async_get_usercodes()
+            assert len(result) == 6
+            assert result[0] == CodeSlot(slot_num=1, code=None, in_use=False)
+
+    async def test_subscribe_lock_events_missing_state_topic(self, provider, mock_hass):
+        """Test subscribing to events returns dummy unsubscribe when state topic is missing."""
+        await connect_provider(provider, mock_hass)
+
+        with patch(
+            "custom_components.keymaster.providers.zigbee2mqtt.Zigbee2MQTTLockProvider.state_topic",
+            new_callable=PropertyMock,
+        ) as mock_state_topic:
+            mock_state_topic.return_value = None
+            mock_callback = AsyncMock()
+            mock_kmlock = MagicMock()
+            unsubscribe_fn = provider.subscribe_lock_events(mock_kmlock, mock_callback)
+            await asyncio.sleep(0.01)
+
+            assert callable(unsubscribe_fn)
+
+    async def test_async_query_slot_missing_get_topic(self, provider, mock_hass):
+        """Test that _async_query_slot raises LockDisconnected when get_topic is missing."""
+        await connect_provider(provider, mock_hass)
+
+        with patch(
+            "custom_components.keymaster.providers.zigbee2mqtt.Zigbee2MQTTLockProvider.get_topic",
+            new_callable=PropertyMock,
+        ) as mock_get_topic:
+            mock_get_topic.return_value = None
+            with pytest.raises(LockDisconnected):
+                await provider._async_query_slot(1)
+
+    async def test_connect_missing_state_topic(self, provider, mock_hass):
+        """Test that async_connect returns False when state_topic cannot be derived."""
+        setup_successful_connect(provider, mock_hass, device_name="")
+        result = await provider.async_connect()
+        assert result is False
+
+    async def test_handles_single_pin_code_message_with_null(self, provider, mock_hass):
+        """Test that incoming single pin code messages with null pin_code update the cache correctly."""
+        setup_successful_connect(provider, mock_hass)
+
+        callback_captured: Any = None
+
+        def mock_subscribe(hass, topic, callback_fn):
+            nonlocal callback_captured
+            callback_captured = callback_fn
+            return lambda: None
+
+        with patch(
+            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
+        ) as mock_sub:
+            mock_sub.side_effect = mock_subscribe
+            await provider.async_connect()
+
+        # Test single updates with null pin_code
+        payload1 = {"pin_code": {"user": 1, "pin_code": None, "user_enabled": True}}
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload1), 0, False))
+        assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code=None, in_use=False)
