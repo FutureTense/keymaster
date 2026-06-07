@@ -293,10 +293,16 @@ async def test_unload_vs_remove_lock_preservation(
     coordinator = hass.data[DOMAIN][COORDINATOR]
     assert entry.entry_id in coordinator.kmlocks
 
+    # Set up a mock provider to ensure line 240 is covered
+    kmlock = coordinator.kmlocks[entry.entry_id]
+    mock_provider = AsyncMock()
+    kmlock.provider = mock_provider
+
     # Unload should NOT delete the lock from the coordinator
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.entry_id in coordinator.kmlocks
+    mock_provider.async_unload.assert_awaited_once()
 
     # Remove should delete the lock from the coordinator
     assert await hass.config_entries.async_remove(entry.entry_id)
