@@ -219,7 +219,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Handle removal of an entry."""
+    """Handle unloading of an entry."""
     lockname: str = config_entry.data[CONF_LOCK_NAME]
     _LOGGER.info("Unloading %s", lockname)
     unload_ok: bool = all(
@@ -233,19 +233,11 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
     if unload_ok and DOMAIN in hass.data and COORDINATOR in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-        await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id, immediate=True)
-
-        if coordinator.count_locks_not_pending_delete == 0:
-            delay = 0 if "pytest" in sys.modules else 20
-            _LOGGER.debug(
-                "[async_unload_entry] Possibly empty coordinator. Will evaluate for removal at %s",
-                dt.now().astimezone() + timedelta(seconds=delay),
-            )
-            async_call_later(
-                hass=hass,
-                delay=delay,
-                action=functools.partial(delete_coordinator, hass, config_entry.entry_id),
-            )
+        kmlock = coordinator.sync_get_lock_by_config_entry_id(config_entry.entry_id)
+        if kmlock:
+            await KeymasterCoordinator._unsubscribe_listeners(kmlock)  # noqa: SLF001
+            if kmlock.provider:
+                await kmlock.provider.async_unload()
 
     # Clean up strategy resource if no other keymaster entries need it
     remaining_entries = [
@@ -261,6 +253,25 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         await async_cleanup_strategy_resource(hass, hass_data)
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    """Handle removal of an entry."""
+    if DOMAIN in hass.data and COORDINATOR in hass.data[DOMAIN]:
+        coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+        await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id, immediate=True)
+
+        if coordinator.count_locks_not_pending_delete == 0:
+            delay = 0 if "pytest" in sys.modules else 20
+            _LOGGER.debug(
+                "[async_remove_entry] Possibly empty coordinator. Will evaluate for removal at %s",
+                dt.now().astimezone() + timedelta(seconds=delay),
+            )
+            async_call_later(
+                hass=hass,
+                delay=delay,
+                action=functools.partial(delete_coordinator, hass, config_entry.entry_id),
+            )
 
 
 async def delete_coordinator(hass: HomeAssistant, unloaded_entry_id: str, _: dt) -> None:

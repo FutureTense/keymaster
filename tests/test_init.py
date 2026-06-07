@@ -21,6 +21,7 @@ from custom_components.keymaster.const import (
     CONF_PARENT_ENTRY_ID,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
     DEFAULT_ADVANCED_DATE_RANGE,
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DOMAIN,
@@ -274,3 +275,36 @@ async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(has
     assert add_lock_await_args is not None
     add_lock_kwargs = add_lock_await_args.kwargs
     assert add_lock_kwargs["update"] is True
+
+
+async def test_unload_vs_remove_lock_preservation(
+    hass,
+    mock_async_call_later,
+    lock_kwikset_910,
+    integration,
+):
+    """Test that unloading does not delete the lock, but removing does."""
+
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][COORDINATOR]
+    assert entry.entry_id in coordinator.kmlocks
+
+    # Set up a mock provider to ensure line 240 is covered
+    kmlock = coordinator.kmlocks[entry.entry_id]
+    mock_provider = AsyncMock()
+    kmlock.provider = mock_provider
+
+    # Unload should NOT delete the lock from the coordinator
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.entry_id in coordinator.kmlocks
+    mock_provider.async_unload.assert_awaited_once()
+
+    # Remove should delete the lock from the coordinator
+    assert await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.entry_id not in coordinator.kmlocks
