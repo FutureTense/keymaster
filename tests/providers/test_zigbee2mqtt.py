@@ -697,6 +697,31 @@ class TestCoverageExtra:
             assert len(result) == 6
             assert result[0] == CodeSlot(slot_num=1, code=None, in_use=False)
 
+    async def test_get_usercodes_enabled_no_pin_resolves_future(self, provider, mock_hass):
+        """Test that single pin update with user_enabled=True and no pin_code resolves future."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        async def mock_publish(hass, topic, payload, qos=0, retain=False):
+            parsed = json.loads(payload)
+            slot_num = parsed["pin_code"]["user"]
+
+            # Response without pin_code key but user_enabled=True
+            response_payload = {
+                "pin_code": {
+                    "user": slot_num,
+                    "user_enabled": True,
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+        with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
+            result = await provider.async_get_usercodes()
+            assert len(result) == 6
+            assert result[0] == CodeSlot(slot_num=1, code=None, in_use=True)
+            assert result[5] == CodeSlot(slot_num=6, code=None, in_use=True)
+
     async def test_subscribe_lock_events_returns_unsubscribe(self, provider, mock_hass):
         """Test subscribing to events returns unsubscribe function."""
         await connect_provider(provider, mock_hass)
