@@ -33,3 +33,22 @@ wiki page for setup instructions and configuration options.
 Please visit this project's
 [Wiki](https://github.com/FutureTense/keymaster/wiki) for the latest
 installation and update procedure.
+
+## Zigbee2MQTT Support
+
+Keymaster supports Zigbee locks integrated via Zigbee2MQTT. Because Keymaster
+needs to read and write PIN codes directly from the lock, you **must** enable
+PIN code exposure in Zigbee2MQTT.
+
+To do this, ensure `expose_pin` is set to `true` in your Zigbee2MQTT settings
+for the lock. For example, in your `configuration.yaml` for Zigbee2MQTT:
+
+```yaml
+devices:
+  '0x000d6f000d6f000d':
+    friendly_name: front_door_lock
+    expose_pin: true
+```
+
+Without this setting, Keymaster will not be able to retrieve or set user codes
+on the lock.
