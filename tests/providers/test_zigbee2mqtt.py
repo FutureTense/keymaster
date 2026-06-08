@@ -115,6 +115,7 @@ def setup_successful_connect(
     device_entry = MagicMock()
     device_entry.identifiers = identifiers
     device_entry.name = device_name
+    device_entry.original_name = device_name
     provider.device_registry.async_get.return_value = device_entry
 
 
@@ -167,7 +168,7 @@ class TestConnect:
 
         # Now simulate a device rename in registry
         device_entry = provider.device_registry.async_get.return_value
-        device_entry.name = "new_lock_name"
+        device_entry.original_name = "new_lock_name"
 
         assert provider.base_topic == "zigbee2mqtt/new_lock_name"
         assert provider.set_topic == "zigbee2mqtt/new_lock_name/set"

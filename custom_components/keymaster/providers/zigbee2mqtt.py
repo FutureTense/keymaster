@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START
 from custom_components.keymaster.exceptions import LockDisconnected, LockOperationFailed
 from homeassistant.components import mqtt
-from homeassistant.components.mqtt import mqtt_config_entry_enabled
+from homeassistant.components.mqtt import DOMAIN as MQTT_DOMAIN, mqtt_config_entry_enabled
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
@@ -58,7 +58,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
     @property
     def domain(self) -> str:
         """Return the integration domain."""
-        return "mqtt"
+        return MQTT_DOMAIN
 
     @property
     def supports_push_updates(self) -> bool:
@@ -74,9 +74,12 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
     def base_topic(self) -> str | None:
         """Get the base topic dynamically from the device name."""
         device_entry = self.get_device_entry()
-        if not device_entry or not device_entry.name:
+        if not device_entry:
             return None
-        return f"zigbee2mqtt/{device_entry.name}"
+        name = device_entry.original_name or device_entry.name
+        if not name:
+            return None
+        return f"zigbee2mqtt/{name}"
 
     @property
     def set_topic(self) -> str | None:
@@ -120,7 +123,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             )
             return False
 
-        if lock_entry.platform != "mqtt":
+        if lock_entry.platform != MQTT_DOMAIN:
             _LOGGER.error(
                 "[Zigbee2MQTTProvider] Lock platform is not mqtt: %s (%s)",
                 self.lock_entity_id,
@@ -141,7 +144,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
         is_z2m = False
         for domain, identifier in device_entry.identifiers:
-            if domain == "mqtt" and identifier.startswith("zigbee2mqtt_"):
+            if domain == MQTT_DOMAIN and identifier.startswith("zigbee2mqtt_"):
                 is_z2m = True
                 break
 
@@ -255,7 +258,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
         # Verify entity exists and is still registered as mqtt domain
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
-        if not lock_entry or lock_entry.platform != "mqtt":
+        if not lock_entry or lock_entry.platform != MQTT_DOMAIN:
             self._connected = False
             return False
 
