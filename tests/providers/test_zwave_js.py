@@ -1157,7 +1157,7 @@ class TestProviderFactory:
         """Test get_provider_class_for_lock returns None for unsupported platform."""
         mock_registry = MagicMock()
         mock_entity = MagicMock()
-        mock_entity.platform = "mqtt"
+        mock_entity.platform = "unsupported"
         mock_registry.async_get.return_value = mock_entity
 
         with patch(
