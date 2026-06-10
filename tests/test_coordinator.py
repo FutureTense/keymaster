@@ -1486,6 +1486,53 @@ class TestLockStateEventHandlers:
         mock_coordinator._lock_unlocked.assert_not_called()
         mock_coordinator._lock_locked.assert_not_called()
 
+    async def test_handle_lock_state_change_no_event(self, mock_coordinator, mock_kmlock):
+        """Test _handle_lock_state_change does nothing when event is None."""
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+
+        await mock_coordinator._handle_lock_state_change(mock_kmlock, None)
+
+        mock_coordinator._lock_unlocked.assert_not_called()
+        mock_coordinator._lock_locked.assert_not_called()
+
+    async def test_handle_lock_state_change_missing_states(self, mock_coordinator, mock_kmlock):
+        """Test _handle_lock_state_change handles missing old_state and new_state gracefully."""
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+
+        event = Mock()
+        event.data = {
+            "entity_id": "lock.front_door",
+        }
+
+        await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
+
+        mock_coordinator._lock_unlocked.assert_not_called()
+        mock_coordinator._lock_locked.assert_not_called()
+
+    async def test_handle_lock_state_change_no_change_locked(self, mock_coordinator, mock_kmlock):
+        """Test _handle_lock_state_change does nothing when lock is already locked."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+
+        mock_old = Mock()
+        mock_old.state = LockState.UNLOCKED
+        mock_new = Mock()
+        mock_new.state = LockState.LOCKED
+        event = Mock()
+        event.data = {
+            "entity_id": "lock.front_door",
+            "old_state": mock_old,
+            "new_state": mock_new,
+        }
+
+        await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
+
+        mock_coordinator._lock_unlocked.assert_not_called()
+        mock_coordinator._lock_locked.assert_not_called()
+
 
 # ============================================================================
 # Timer Setup Tests
