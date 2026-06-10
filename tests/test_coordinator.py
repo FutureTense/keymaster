@@ -1390,6 +1390,102 @@ class TestLockStateEventHandlers:
             await mock_coordinator._door_opened(mock_kmlock)
             assert mock_kmlock.door_state == STATE_OPEN
 
+    async def test_handle_lock_state_change_unlocked(self, mock_coordinator, mock_kmlock):
+        """Test _handle_lock_state_change triggers _lock_unlocked when lock transitions to UNLOCKED."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+
+        mock_old = Mock()
+        mock_old.state = LockState.LOCKED
+        mock_new = Mock()
+        mock_new.state = LockState.UNLOCKED
+        event = Mock()
+        event.data = {
+            "entity_id": "lock.front_door",
+            "old_state": mock_old,
+            "new_state": mock_new,
+        }
+
+        await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
+
+        mock_coordinator._lock_unlocked.assert_called_once_with(
+            kmlock=mock_kmlock,
+            source="state_change",
+            event_label="State Change Update Unlock",
+        )
+        mock_coordinator._lock_locked.assert_not_called()
+
+    async def test_handle_lock_state_change_locked(self, mock_coordinator, mock_kmlock):
+        """Test _handle_lock_state_change triggers _lock_locked when lock transitions to LOCKED."""
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+
+        mock_old = Mock()
+        mock_old.state = LockState.UNLOCKED
+        mock_new = Mock()
+        mock_new.state = LockState.LOCKED
+        event = Mock()
+        event.data = {
+            "entity_id": "lock.front_door",
+            "old_state": mock_old,
+            "new_state": mock_new,
+        }
+
+        await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
+
+        mock_coordinator._lock_locked.assert_called_once_with(
+            kmlock=mock_kmlock,
+            source="state_change",
+            event_label="State Change Update Lock",
+        )
+        mock_coordinator._lock_unlocked.assert_not_called()
+
+    async def test_handle_lock_state_change_no_change(self, mock_coordinator, mock_kmlock):
+        """Test _handle_lock_state_change does nothing when state has not changed from kmlock's state."""
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+
+        mock_old = Mock()
+        mock_old.state = LockState.LOCKED
+        mock_new = Mock()
+        mock_new.state = LockState.UNLOCKED
+        event = Mock()
+        event.data = {
+            "entity_id": "lock.front_door",
+            "old_state": mock_old,
+            "new_state": mock_new,
+        }
+
+        await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
+
+        mock_coordinator._lock_unlocked.assert_not_called()
+        mock_coordinator._lock_locked.assert_not_called()
+
+    async def test_handle_lock_state_change_wrong_entity(self, mock_coordinator, mock_kmlock):
+        """Test _handle_lock_state_change does nothing when the entity_id does not match."""
+        mock_kmlock.lock_state = LockState.LOCKED
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+
+        mock_old = Mock()
+        mock_old.state = LockState.LOCKED
+        mock_new = Mock()
+        mock_new.state = LockState.UNLOCKED
+        event = Mock()
+        event.data = {
+            "entity_id": "lock.wrong_door",
+            "old_state": mock_old,
+            "new_state": mock_new,
+        }
+
+        await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
+
+        mock_coordinator._lock_unlocked.assert_not_called()
+        mock_coordinator._lock_locked.assert_not_called()
+
 
 # ============================================================================
 # Timer Setup Tests

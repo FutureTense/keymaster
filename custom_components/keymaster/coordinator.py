@@ -572,6 +572,50 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 inferred_action,
             )
 
+    async def _handle_lock_state_change(
+        self,
+        kmlock: KeymasterLock,
+        event: Event[EventStateChangedData],
+    ) -> None:
+        """Track state changes to lock entities."""
+        _LOGGER.debug("[handle_lock_state_change] %s: event: %s", kmlock.lock_name, event)
+        if not event:
+            return
+
+        changed_entity: str = event.data["entity_id"]
+
+        # Don't do anything if the changed entity is not this lock
+        if changed_entity != kmlock.lock_entity_id:
+            return
+
+        old_state: str | None = None
+        if temp_old_state := event.data.get("old_state"):
+            old_state = temp_old_state.state
+        new_state: str | None = None
+        if temp_new_state := event.data.get("new_state"):
+            new_state = temp_new_state.state
+        _LOGGER.debug(
+            "[handle_lock_state_change] %s: old_state: %s, new_state: %s",
+            kmlock.lock_name,
+            old_state,
+            new_state,
+        )
+
+        if new_state == LockState.UNLOCKED:
+            if kmlock.lock_state != LockState.UNLOCKED:
+                await self._lock_unlocked(
+                    kmlock=kmlock,
+                    source="state_change",
+                    event_label="State Change Update Unlock",
+                )
+        elif new_state == LockState.LOCKED:
+            if kmlock.lock_state != LockState.LOCKED:
+                await self._lock_locked(
+                    kmlock=kmlock,
+                    source="state_change",
+                    event_label="State Change Update Lock",
+                )
+
     async def _handle_door_state_change(
         self,
         kmlock: KeymasterLock,
@@ -644,6 +688,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     action=functools.partial(self._handle_door_state_change, kmlock),
                 ),
             )
+
+        _LOGGER.debug(
+            "[create_listeners] %s: Creating handle_lock_state_change listener",
+            kmlock.lock_name,
+        )
+        kmlock.listeners.append(
+            async_track_state_change_event(
+                hass=self.hass,
+                entity_ids=kmlock.lock_entity_id,
+                action=functools.partial(self._handle_lock_state_change, kmlock),
+            ),
+        )
 
     @staticmethod
     async def _unsubscribe_listeners(kmlock: KeymasterLock) -> None:
