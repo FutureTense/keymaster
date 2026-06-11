@@ -477,6 +477,253 @@ async def test_lock_unlocked_supersedes_slot_zero_with_slot_info(hass, coordinat
     assert fired_events[1][ATTR_STATE] == LockState.UNLOCKED
 
 
+async def test_lock_unlocked_supersede_sends_per_slot_notification(
+    hass, coordinator_for_unlock_test
+):
+    """Test that superseding a slot=0 unlock sends per-slot notification."""
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.notify_script_name = "notify_test"
+    kmlock.code_slots = {
+        2: KeymasterCodeSlot(number=2, name="Charlie", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        mock_notify.assert_not_called()
+
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=2,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    mock_notify.assert_called_once_with(
+        hass=hass,
+        script_name="notify_test",
+        title="test_lock",
+        message="Unlock by Charlie [2]",
+    )
+
+
+async def test_lock_unlocked_supersede_skips_per_slot_when_global_enabled(
+    hass, coordinator_for_unlock_test
+):
+    """Test that global notifications suppress per-slot notification on supersede."""
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "notify_test"
+    kmlock.code_slots = {
+        2: KeymasterCodeSlot(number=2, name="Charlie", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=2,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    mock_notify.assert_called_once_with(
+        hass=hass,
+        script_name="notify_test",
+        title="test_lock",
+        message="Unlock",
+    )
+
+
+async def test_lock_unlocked_supersede_skips_disabled_per_slot_notification(
+    hass, coordinator_for_unlock_test
+):
+    """Test that disabled per-slot notifications do not fire on supersede."""
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.notify_script_name = "notify_test"
+    kmlock.code_slots = {
+        2: KeymasterCodeSlot(number=2, name="Charlie", enabled=True, notifications=False)
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=2,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    mock_notify.assert_not_called()
+
+
+async def test_lock_unlocked_supersede_skips_missing_slot_notification(
+    hass, coordinator_for_unlock_test
+):
+    """Test that supersede notification handling ignores missing code slots."""
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.notify_script_name = "notify_test"
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Alice", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=2,
+            source="valid_code_entered",
+            event_label="Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    mock_notify.assert_not_called()
+
+
+async def test_lock_unlocked_sends_per_slot_notification_without_supersede(
+    hass, coordinator_for_unlock_test
+):
+    """Test that first unlock event with a slot still sends per-slot notification."""
+    coordinator = coordinator_for_unlock_test
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.notify_script_name = "notify_test"
+    kmlock.code_slots = {4: KeymasterCodeSlot(number=4, enabled=True, notifications=True)}
+    coordinator.kmlocks["test_entry"] = kmlock
+
+    with (
+        patch.object(coordinator, "async_refresh", new=AsyncMock()),
+        patch.object(coordinator, "update_slot_active_state", new=AsyncMock()),
+        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock()),
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=4,
+            source="valid_code_entered",
+            event_label="Keypad Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+    mock_notify.assert_called_once_with(
+        hass=hass,
+        script_name="notify_test",
+        title="test_lock",
+        message="Keypad Unlock by Code Slot 4",
+    )
+
+
 async def test_lock_unlocked_does_not_supersede_when_already_has_slot(
     hass, coordinator_for_unlock_test
 ):

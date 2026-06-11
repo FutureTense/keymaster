@@ -754,6 +754,28 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             },
         )
 
+    async def _send_code_slot_unlock_notification(
+        self,
+        kmlock: KeymasterLock,
+        code_slot_num: int,
+        event_label: str | None,
+    ) -> None:
+        """Send a per-code-slot unlock notification when enabled."""
+        slot = kmlock.code_slots.get(code_slot_num) if kmlock.code_slots else None
+        if not slot or not slot.notifications or kmlock.lock_notifications:
+            return
+
+        if slot.name:
+            message = f"{event_label} by {slot.name} [{code_slot_num}]"
+        else:
+            message = f"{event_label} by Code Slot {code_slot_num}"
+        await send_manual_notification(
+            hass=self.hass,
+            script_name=kmlock.notify_script_name,
+            title=kmlock.lock_name,
+            message=message,
+        )
+
     async def _lock_unlocked(
         self,
         kmlock: KeymasterLock,
@@ -782,6 +804,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self._fire_unlock_state_changed(
                     kmlock, code_slot_num, source, event_label, action_code
                 )
+                await self._send_code_slot_unlock_notification(kmlock, code_slot_num, event_label)
             return
 
         if not self._throttle.is_allowed(
@@ -872,20 +895,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     # Check if slot should be deactivated (e.g., count reached 0)
                     await self._update_slot(kmlock, kmlock.code_slots[code_slot_num], code_slot_num)
 
-            if kmlock.code_slots[code_slot_num].notifications and not kmlock.lock_notifications:
-                if kmlock.code_slots[code_slot_num].name:
-                    message = event_label
-                    message = (
-                        f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
-                    )
-                else:
-                    message = f"{message} by Code Slot {code_slot_num}"
-                await send_manual_notification(
-                    hass=self.hass,
-                    script_name=kmlock.notify_script_name,
-                    title=kmlock.lock_name,
-                    message=message,
-                )
+            await self._send_code_slot_unlock_notification(kmlock, code_slot_num, event_label)
 
         # Fire state change event
         self._fire_unlock_state_changed(kmlock, code_slot_num, source, event_label, action_code)
