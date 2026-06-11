@@ -895,3 +895,54 @@ async def test_entity_get_x_num_code_slots_no_segment_starts_with_code_slots(
     # Should return None because no segment starts with "code_slots"
     code_slot_num = entity._get_x_num("code_slots")
     assert code_slot_num is None
+
+
+async def test_entity_dynamic_kmlock_replacement(
+    hass: HomeAssistant, entity_config_entry, coordinator
+):
+    """Test that KeymasterEntity dynamically retrieves the live KeymasterLock instance from coordinator."""
+
+    # Create first lock instance
+    kmlock1 = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=entity_config_entry.entry_id,
+    )
+    kmlock1.autolock_enabled = False
+    coordinator.kmlocks[entity_config_entry.entry_id] = kmlock1
+
+    entity_description = KeymasterEntityDescription(
+        key="switch.autolock_enabled",
+        name="Auto Lock",
+        hass=hass,
+        config_entry=entity_config_entry,
+        coordinator=coordinator,
+    )
+
+    class MockEntity(KeymasterEntity):
+        def _handle_coordinator_update(self):
+            pass
+
+    entity = MockEntity(entity_description=entity_description)
+
+    # Initial check: it should point to kmlock1
+    assert entity._kmlock is kmlock1
+    assert entity._get_property_value() is False
+
+    # Now replace the lock in the coordinator with a new instance
+    kmlock2 = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=entity_config_entry.entry_id,
+    )
+    kmlock2.autolock_enabled = True
+    coordinator.kmlocks[entity_config_entry.entry_id] = kmlock2
+
+    # The entity should dynamically resolve to kmlock2 and reflect its values
+    assert entity._kmlock is kmlock2
+    assert entity._get_property_value() is True
+
+    # Mutating the property should also mutate kmlock2, not kmlock1
+    entity._set_property_value(False)
+    assert kmlock2.autolock_enabled is False
+    assert kmlock1.autolock_enabled is False  # untouched
