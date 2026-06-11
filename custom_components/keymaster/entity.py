@@ -36,9 +36,6 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
         self._config_entry: ConfigEntry = entity_description.config_entry
         self.entity_description: KeymasterEntityDescription = entity_description
         self._property: str = entity_description.key  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
-        self._kmlock: KeymasterLock | None = self.coordinator.sync_get_lock_by_config_entry_id(
-            self._config_entry.entry_id
-        )
         self._code_slot = self._get_x_num("code_slots")
         self._day_of_week_num = self._get_x_num("accesslimit_day_of_week")
 
@@ -68,6 +65,11 @@ class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
     def available(self) -> bool:
         """Return whether entity is available."""
         return self._attr_available
+
+    @property
+    def _kmlock(self) -> KeymasterLock | None:
+        """Get the live KeymasterLock instance."""
+        return self.coordinator.sync_get_lock_by_config_entry_id(self._config_entry.entry_id)
 
     def _get_property_value(self) -> Any:
         if "." not in self._property:
