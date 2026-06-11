@@ -792,8 +792,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if isinstance(code_slot_num, int) and code_slot_num > 0 and prior_slot == 0:
                 # A more informative event arrived after an initial slot=0 unlock.
                 # Re-fire the bus event with the correct slot info so downstream
-                # consumers get it, but skip side effects (autolock, notifications,
-                # access limits) that already ran from the first event.
+                # consumers get it, but skip side effects (autolock,
+                # global notifications, access limits) that already ran
+                # from the first event. Per-slot notifications are checked
+                # below because they need this corrected slot number.
                 _LOGGER.debug(
                     "[lock_unlocked] %s: Superseding prior slot=0 unlock with slot=%s. source: %s",
                     kmlock.lock_name,
