@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime as dt, time as dt_time
 import logging
 from typing import TYPE_CHECKING
@@ -61,10 +61,26 @@ class KeymasterCodeSlot:
     accesslimit_date_range_end: dt | None = None
     accesslimit_day_of_week_enabled: bool = False
     accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
+    redact_slot_names: bool = True
+    redact_pins: bool = True
     # Transient runtime-only field; excluded from persistence (init=False).
     last_code_set_at: dt | None = field(default=None, init=False, repr=False)
     # Tracks when the slot entered ADDING/DELETING state for grace-period recovery.
     sync_op_started_at: dt | None = field(default=None, init=False, repr=False)
+
+    def __repr__(self) -> str:
+        """Return representation with redactions applied if enabled."""
+        parts = []
+        for f in fields(self):
+            if not f.repr:
+                continue
+            val = getattr(self, f.name)
+            if (f.name == "name" and self.redact_slot_names and val) or (
+                f.name == "pin" and self.redact_pins and val
+            ):
+                val = "[REDACTED]"
+            parts.append(f"{f.name}={val!r}")
+        return f"{self.__class__.__name__}({', '.join(parts)})"
 
     def inherit_state_from(self, old: KeymasterCodeSlot) -> None:
         """Carry user state from `old` into `self`.
@@ -129,8 +145,17 @@ class KeymasterLock:
     child_config_entry_ids: list = field(default_factory=list)
     listeners: list[Callable] = field(default_factory=list)
     pending_delete: bool = False
+    redact_slot_names: bool = True
+    redact_pins: bool = True
     # Transient runtime-only field; excluded from persistence (init=False).
     masked_code_slots: set[int] = field(default_factory=set, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Initialize slot settings."""
+        if self.code_slots:
+            for slot in self.code_slots.values():
+                slot.redact_slot_names = self.redact_slot_names
+                slot.redact_pins = self.redact_pins
 
     def inherit_state_from(self, old: KeymasterLock) -> None:
         """Carry user/runtime state from a previous instance into this one.
@@ -199,6 +224,8 @@ keymasterlock_type_lookup: MutableMapping[str, type] = {
     "child_config_entry_ids": list,
     # "listeners": list,
     "pending_delete": bool,
+    "redact_slot_names": bool,
+    "redact_pins": bool,
     "day_of_week_num": int,
     "day_of_week_name": str,
     "dow_enabled": bool,

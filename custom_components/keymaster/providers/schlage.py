@@ -308,12 +308,15 @@ class SchlageLockProvider(BaseLockProvider):
                 )
                 continue
             if slot_num in seen_slots:
+                friendly_name_log = (
+                    "[REDACTED]" if self.redact_slot_names and friendly_name else friendly_name
+                )
                 _LOGGER.warning(
                     "[SchlageProvider] Duplicate tag for slot %d (code_id=%s, name='%s'); "
                     "skipping in favor of earlier entry",
                     slot_num,
                     code_id,
-                    friendly_name,
+                    friendly_name_log,
                 )
                 continue
             seen_slots.add(slot_num)
@@ -340,10 +343,13 @@ class SchlageLockProvider(BaseLockProvider):
             while next_slot in assigned_slots and next_slot in managed_range:
                 next_slot += 1
             if next_slot not in managed_range:
+                original_name_log = (
+                    "[REDACTED]" if self.redact_slot_names and original_name else original_name
+                )
                 _LOGGER.debug(
                     "[SchlageProvider] No managed slot available for untagged code '%s'; "
                     "leaving untouched",
-                    original_name,
+                    original_name_log,
                 )
                 continue
 
@@ -351,10 +357,13 @@ class SchlageLockProvider(BaseLockProvider):
             tagged_name = _make_tagged_name(prospective_slot, original_name)
 
             if _is_masked_pin(pin):
+                original_name_log = (
+                    "[REDACTED]" if self.redact_slot_names and original_name else original_name
+                )
                 _LOGGER.debug(
                     "[SchlageProvider] Skipping untaggable code '%s' (slot %d): "
                     "PIN appears masked or empty",
-                    original_name,
+                    original_name_log,
                     prospective_slot,
                 )
                 continue
@@ -362,9 +371,12 @@ class SchlageLockProvider(BaseLockProvider):
             try:
                 await self._async_add_code(tagged_name, pin)
             except HomeAssistantError as e:
+                original_name_log = (
+                    "[REDACTED]" if self.redact_slot_names and original_name else original_name
+                )
                 _LOGGER.error(
                     "[SchlageProvider] Failed to tag code '%s' for slot %d: %s: %s",
-                    original_name,
+                    original_name_log,
                     prospective_slot,
                     e.__class__.__qualname__,
                     e,
@@ -374,31 +386,43 @@ class SchlageLockProvider(BaseLockProvider):
             try:
                 await self._async_delete_code(original_name)
             except HomeAssistantError as e:
+                original_name_log = (
+                    "[REDACTED]" if self.redact_slot_names and original_name else original_name
+                )
                 _LOGGER.warning(
                     "[SchlageProvider] Tagged code added but failed to delete "
                     "original '%s' for slot %d: %s. Attempting rollback.",
-                    original_name,
+                    original_name_log,
                     prospective_slot,
                     e,
                 )
                 try:
                     await self._async_delete_code(tagged_name)
                 except HomeAssistantError:
+                    tagged_name_log = (
+                        "[REDACTED]" if self.redact_slot_names and tagged_name else tagged_name
+                    )
                     _LOGGER.error(
                         "[SchlageProvider] Rollback failed for tagged code '%s'. "
                         "Lock may have duplicate entries.",
-                        tagged_name,
+                        tagged_name_log,
                     )
                 continue
 
             slot_num = prospective_slot
             assigned_slots.add(slot_num)
             next_slot += 1
+            original_name_log = (
+                "[REDACTED]" if self.redact_slot_names and original_name else original_name
+            )
+            tagged_name_log = (
+                "[REDACTED]" if self.redact_slot_names and tagged_name else tagged_name
+            )
             _LOGGER.debug(
                 "[SchlageProvider] Tagged code '%s' as slot %d: '%s'",
-                original_name,
+                original_name_log,
                 slot_num,
-                tagged_name,
+                tagged_name_log,
             )
             result.append(
                 CodeSlot(

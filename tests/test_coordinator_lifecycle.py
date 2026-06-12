@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.lock import KeymasterLock
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -169,3 +169,45 @@ async def test_delete_lock_not_pending(hass, mock_coordinator, mock_lock):
 
         mock_delete_lovelace.assert_not_called()
         assert "test_entry" in mock_coordinator.kmlocks
+
+
+async def test_redaction_behavior():
+    """Test redaction behavior on KeymasterCodeSlot and KeymasterLock."""
+    # Test KeymasterCodeSlot __repr__ with redaction enabled (default)
+    slot1 = KeymasterCodeSlot(number=1, name="John Doe", pin="1234")
+    assert slot1.redact_slot_names is True
+    assert slot1.redact_pins is True
+    repr_str = repr(slot1)
+    assert "John Doe" not in repr_str
+    assert "1234" not in repr_str
+    assert "[REDACTED]" in repr_str
+
+    # Test KeymasterCodeSlot __repr__ with redaction disabled
+    slot2 = KeymasterCodeSlot(
+        number=2,
+        name="Jane Smith",
+        pin="5678",
+        redact_slot_names=False,
+        redact_pins=False,
+    )
+    repr_str2 = repr(slot2)
+    assert "Jane Smith" in repr_str2
+    assert "5678" in repr_str2
+    assert "[REDACTED]" not in repr_str2
+
+    # Test KeymasterLock post_init propagation
+    _lock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.frontdoor",
+        keymaster_config_entry_id="test_entry",
+        code_slots={1: slot1},
+        redact_slot_names=False,
+        redact_pins=False,
+    )
+    # The __post_init__ should have propagated the values to slot1
+    assert slot1.redact_slot_names is False
+    assert slot1.redact_pins is False
+    repr_str_propagated = repr(slot1)
+    assert "John Doe" in repr_str_propagated
+    assert "1234" in repr_str_propagated
+    assert "[REDACTED]" not in repr_str_propagated

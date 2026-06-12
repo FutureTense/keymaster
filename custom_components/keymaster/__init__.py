@@ -35,6 +35,8 @@ from .const import (
     CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
     CONF_PARENT_ENTRY_ID,
+    CONF_REDACT_PINS,
+    CONF_REDACT_SLOT_NAMES,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
@@ -42,6 +44,8 @@ from .const import (
     DEFAULT_ADVANCED_DATE_RANGE,
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_HIDE_PINS,
+    DEFAULT_REDACT_PINS,
+    DEFAULT_REDACT_SLOT_NAMES,
     DOMAIN,
     NONE_TEXT,
     PLATFORMS,
@@ -192,6 +196,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         parent_name=config_entry.data.get(CONF_PARENT),
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
         notify_script_name=config_entry.data.get(CONF_NOTIFY_SCRIPT_NAME),
+        redact_slot_names=config_entry.options.get(
+            CONF_REDACT_SLOT_NAMES,
+            config_entry.data.get(CONF_REDACT_SLOT_NAMES, DEFAULT_REDACT_SLOT_NAMES),
+        ),
+        redact_pins=config_entry.options.get(
+            CONF_REDACT_PINS,
+            config_entry.data.get(CONF_REDACT_PINS, DEFAULT_REDACT_PINS),
+        ),
     )
 
     needs_update = config_entry.entry_id in coordinator.kmlocks
@@ -215,7 +227,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         hide_pins=config_entry.data.get(CONF_HIDE_PINS, False),
     )
 
+    config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
+
     return True
+
+
+async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    """Handle options update."""
+    await hass.config_entries.async_reload(config_entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

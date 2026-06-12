@@ -271,3 +271,38 @@ async def test_get_entities(hass):
         hass, LOCK_DOMAIN, extra_entities=["lock.fake"], exclude_entities=["lock.fake"]
     )
     assert "(none)" in _get_entities(hass, SCRIPT_DOMAIN, extra_entities=[NONE_TEXT])
+
+
+async def test_options_flow(hass):
+    """Test the options flow."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="frontdoor",
+        data=CONFIG_DATA,
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    result2 = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "redact_slot_names": False,
+            "redact_pins": False,
+        },
+    )
+
+    assert result2["type"] is FlowResultType.CREATE_ENTRY
+    assert result2["data"] == {
+        "redact_slot_names": False,
+        "redact_pins": False,
+    }
+
+    assert entry.options == {
+        "redact_slot_names": False,
+        "redact_pins": False,
+    }

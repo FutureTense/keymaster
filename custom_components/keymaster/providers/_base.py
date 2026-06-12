@@ -7,6 +7,12 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from custom_components.keymaster.const import (
+    CONF_REDACT_PINS,
+    CONF_REDACT_SLOT_NAMES,
+    DEFAULT_REDACT_PINS,
+    DEFAULT_REDACT_SLOT_NAMES,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -266,3 +272,19 @@ class BaseLockProvider(ABC):
             "lock_entity_id": self.lock_entity_id,
             "connected": self._connected,
         }
+
+    @property
+    def redact_slot_names(self) -> bool:
+        """Return if slot names should be redacted."""
+        return self.keymaster_config_entry.options.get(
+            CONF_REDACT_SLOT_NAMES,
+            self.keymaster_config_entry.data.get(CONF_REDACT_SLOT_NAMES, DEFAULT_REDACT_SLOT_NAMES),
+        )
+
+    @property
+    def redact_pins(self) -> bool:
+        """Return if PINs should be redacted."""
+        return self.keymaster_config_entry.options.get(
+            CONF_REDACT_PINS,
+            self.keymaster_config_entry.data.get(CONF_REDACT_PINS, DEFAULT_REDACT_PINS),
+        )
