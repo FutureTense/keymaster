@@ -24,67 +24,85 @@ on:
 
 jobs:
   tests:
-    needs: prek
     runs-on: ubuntu-latest
     name: Pytest
     strategy:
       matrix:
         python-version:
+          - "3.13"
           - "3.14"
 
     steps:
       - name: 📥 Checkout the repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2
       - name: 🛠️ Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: 🚀 Install uv
-        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
-      - name: 📦 Install tox
-        run: uv pip install --system tox tox-gh-actions
-      - name: 🏃 Run tox
-        run: tox
+        uses: astral-sh/setup-uv@v5
+      - name: 📦 Install requirements
+        run: uv pip install --system ".[test]"
+      - name: 🏃 Run pytest
+        run: pytest tests --cov=custom_components/keymaster --cov-report=xml
       - name: 📤 Upload coverage artifact
-        if: matrix.python-version == '3.14'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-data
           path: coverage.xml
 
-  prek:
+  lint:
     runs-on: ubuntu-latest
-    name: Prek
+    name: Lint (ruff)
     steps:
       - name: 📥 Checkout the repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: 🛠️ Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/checkout@v4
+      - name: 🛠️ Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: "lts/iron"
-      - name: 📦 Install dependencies
-        run: yarn install
-      - name: 🔍 Run prek
-        uses: j178/prek-action@6ad80277337ad479fe43bd70701c3f7f8aa74db3 # v2.0.3
+          python-version: "3.13"
+      - name: 🚀 Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: 📦 Install requirements
+        run: uv pip install --system ".[test]"
+      - name: 🧹 Run ruff format check
+        run: ruff format --check custom_components/ tests/
+      - name: 🔍 Run ruff check
+        run: ruff check custom_components/ tests/
+
+  mypy:
+    runs-on: ubuntu-latest
+    name: Type check (mypy)
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v4
+      - name: 🛠️ Set up Python
+        uses: actions/setup-python@v5
         with:
-          extra-args: --all-files --skip no-commit-to-branch
+          python-version: "3.13"
+      - name: 🚀 Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: 📦 Install requirements
+        run: uv pip install --system ".[test]"
+      - name: 🔎 Run mypy
+        run: mypy custom_components/keymaster
 
   coverage:
     runs-on: ubuntu-latest
     needs: tests
     steps:
       - name: 📥 Checkout the repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2
       - name: 📥 Download coverage data
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@v4
         with:
           name: coverage-data
       - name: 📤 Upload coverage report
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: python
