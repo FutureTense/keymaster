@@ -11,12 +11,10 @@
     "local_akuvox",
     "lovelace",
     "mqtt",
-    "ozw",
     "schlage",
     "script",
     "template",
     "zha",
-    "zwave",
     "zwave_js"
   ],
   "codeowners": ["@FutureTense", "@firstof9", "@raman325", "@tykeal"],

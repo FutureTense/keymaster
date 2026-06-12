@@ -1,18 +1,29 @@
+# ruff: noqa: E402
 """Tests for the ZHA lock provider."""
 
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from zigpy.zcl.clusters.closures import DoorLock
 
-from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN, Synced
+# Mock homeassistant.components.zha before imports run
+mock_zha_helpers = MagicMock()
+mock_zha_const = MagicMock()
+mock_zha_const.DOMAIN = "zha"
+
+sys.modules["homeassistant.components.zha"] = MagicMock()
+sys.modules["homeassistant.components.zha.helpers"] = mock_zha_helpers
+sys.modules["homeassistant.components.zha.const"] = mock_zha_const
+
+from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from custom_components.keymaster.providers._base import CodeSlot
 from custom_components.keymaster.providers.zha import ZHALockProvider
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 
@@ -28,7 +39,7 @@ def mock_hass():
     hass.bus = MagicMock()
     hass.bus.async_listen = MagicMock()
 
-    def async_create_task(coro):
+    def async_create_task(coro, name=None):
         return asyncio.create_task(coro)
 
     hass.async_create_task = MagicMock(side_effect=async_create_task)
@@ -72,6 +83,48 @@ def provider(mock_hass, mock_entity_registry, mock_device_registry, mock_config_
     )
 
 
+@pytest.fixture
+def mock_zha_cluster():
+    """Create a mock DoorLock cluster."""
+    cluster = AsyncMock()
+    cluster.cluster_id = DoorLock.cluster_id
+    return cluster
+
+
+@pytest.fixture
+def mock_zha_gateway(mock_hass, mock_zha_cluster):
+    """Create a mock ZHA gateway proxy."""
+    gateway = MagicMock()
+    entity_ref = MagicMock()
+    gateway.get_entity_reference.return_value = entity_ref
+
+    device_proxy = MagicMock()
+    entity_ref.device_proxy = device_proxy
+    entity_ref.entity_data.device_proxy = device_proxy
+
+    device = MagicMock()
+    device_proxy.device = device
+    device.available = True
+
+    zigpy_device = MagicMock()
+    device.device = zigpy_device
+
+    endpoint = MagicMock()
+    endpoint.in_clusters = {DoorLock.cluster_id: mock_zha_cluster}
+    zigpy_device.endpoints = {1: endpoint}
+
+    mock_zha_helpers.get_zha_gateway_proxy.return_value = gateway
+
+    return {
+        "gateway": gateway,
+        "entity_ref": entity_ref,
+        "device_proxy": device_proxy,
+        "zigpy_device": zigpy_device,
+        "cluster": mock_zha_cluster,
+        "get_gateway_proxy": mock_zha_helpers.get_zha_gateway_proxy,
+    }
+
+
 def setup_successful_connect(provider, identifiers=None):
     """Set up registry mocks for a successful connection."""
     if identifiers is None:
@@ -107,41 +160,14 @@ class TestProperties:
 class TestConnect:
     """Test ZHALockProvider async_connect."""
 
-    async def test_connect_success(self, provider):
-        """Test successful connection and IEEE lookup."""
+    async def test_connect_success(self, provider, mock_zha_gateway):
+        """Test successful connection, IEEE lookup, and cluster caching."""
         setup_successful_connect(provider)
         result = await provider.async_connect()
         assert result is True
         assert provider.connected is True
         assert provider._device_ieee == "00:0d:6f:00:0b:90:57:f6"
-
-    async def test_connect_success_with_cache_populate(self, provider, mock_hass):
-        """Test that we pre-populate the cache from coordinator on connect."""
-        setup_successful_connect(provider)
-
-        # Setup mock coordinator
-        mock_kmlock = MagicMock()
-        mock_slot1 = MagicMock()
-        mock_slot1.synced = Synced.SYNCED
-        mock_slot1.pin = "1234"
-        mock_slot2 = MagicMock()
-        mock_slot2.synced = Synced.OUT_OF_SYNC
-        mock_slot2.pin = "5678"
-
-        mock_kmlock.code_slots = {1: mock_slot1, 2: mock_slot2}
-
-        mock_coordinator = MagicMock()
-        mock_coordinator.kmlocks = {"keymaster_test_entry": mock_kmlock}
-
-        mock_hass.data = {DOMAIN: {COORDINATOR: mock_coordinator}}
-
-        result = await provider.async_connect()
-        assert result is True
-
-        # Slot 1 should be cached (synced and has pin)
-        assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="1234", in_use=True)
-        # Slot 2 should not be cached (not synced)
-        assert 2 not in provider._usercodes_cache
+        assert provider._door_lock_cluster == mock_zha_gateway["cluster"]
 
     async def test_connect_entity_not_found(self, provider):
         """Test connection fails when lock entity is not found."""
@@ -197,7 +223,7 @@ class TestIsConnected:
         """Test it returns False before connection."""
         assert await provider.async_is_connected() is False
 
-    async def test_is_connected_success(self, provider, mock_hass):
+    async def test_is_connected_success(self, provider, mock_hass, mock_zha_gateway):
         """Test it returns True when connected and lock entity is available."""
         setup_successful_connect(provider)
         await provider.async_connect()
@@ -208,7 +234,7 @@ class TestIsConnected:
 
         assert await provider.async_is_connected() is True
 
-    async def test_is_connected_state_unavailable(self, provider, mock_hass):
+    async def test_is_connected_state_unavailable(self, provider, mock_hass, mock_zha_gateway):
         """Test it returns False when state is unavailable."""
         setup_successful_connect(provider)
         await provider.async_connect()
@@ -219,7 +245,7 @@ class TestIsConnected:
 
         assert await provider.async_is_connected() is False
 
-    async def test_is_connected_state_unknown(self, provider, mock_hass):
+    async def test_is_connected_state_unknown(self, provider, mock_hass, mock_zha_gateway):
         """Test it returns False when state is unknown."""
         setup_successful_connect(provider)
         await provider.async_connect()
@@ -230,7 +256,7 @@ class TestIsConnected:
 
         assert await provider.async_is_connected() is False
 
-    async def test_is_connected_state_none(self, provider, mock_hass):
+    async def test_is_connected_state_none(self, provider, mock_hass, mock_zha_gateway):
         """Test it returns False when state is None."""
         setup_successful_connect(provider)
         await provider.async_connect()
@@ -238,7 +264,7 @@ class TestIsConnected:
 
         assert await provider.async_is_connected() is False
 
-    async def test_is_connected_registry_missing(self, provider, mock_hass):
+    async def test_is_connected_registry_missing(self, provider, mock_hass, mock_zha_gateway):
         """Test it returns False if entity is removed from registry."""
         setup_successful_connect(provider)
         await provider.async_connect()
@@ -246,7 +272,7 @@ class TestIsConnected:
 
         assert await provider.async_is_connected() is False
 
-    async def test_is_connected_platform_changed(self, provider, mock_hass):
+    async def test_is_connected_platform_changed(self, provider, mock_hass, mock_zha_gateway):
         """Test it returns False if entity platform changes."""
         setup_successful_connect(provider)
         await provider.async_connect()
@@ -266,21 +292,60 @@ class TestUsercodeOperations:
         result = await provider.async_get_usercodes()
         assert result == []
 
-    async def test_get_usercodes_success(self, provider):
-        """Test get_usercodes returns cached slots and default slots."""
+    async def test_get_usercodes_success(self, provider, mock_zha_gateway):
+        """Test get_usercodes queries cluster directly for each slot."""
         setup_successful_connect(provider)
         await provider.async_connect()
 
-        # Cache slot 2
-        provider._usercodes_cache[2] = CodeSlot(slot_num=2, code="5678", in_use=True)
+        # Mock cluster responses
+        # Slot 1: Enabled with string code "1234"
+        res1 = MagicMock()
+        res1.user_status = DoorLock.UserStatus.Enabled
+        res1.code = "1234"
+
+        # Slot 2: Enabled with bytes code b"5678"
+        res2 = MagicMock()
+        res2.user_status = DoorLock.UserStatus.Enabled
+        res2.code = b"5678"
+
+        # Slot 3: Disabled/Available
+        res3 = MagicMock()
+        res3.user_status = DoorLock.UserStatus.Available
+        res3.code = ""
+
+        # Setup side effect
+        mock_zha_gateway["cluster"].get_pin_code.side_effect = [res1, res2, res3]
 
         result = await provider.async_get_usercodes()
         assert len(result) == 3
-        # Slot 1 defaults to empty
-        assert result[0] == CodeSlot(slot_num=1, code=None, in_use=False)
-        # Slot 2 comes from cache
+
+        # Verify cluster was called for slots 1, 2, and 3
+        assert mock_zha_gateway["cluster"].get_pin_code.call_count == 3
+        mock_zha_gateway["cluster"].get_pin_code.assert_any_call(1)
+        mock_zha_gateway["cluster"].get_pin_code.assert_any_call(2)
+        mock_zha_gateway["cluster"].get_pin_code.assert_any_call(3)
+
+        assert result[0] == CodeSlot(slot_num=1, code="1234", in_use=True)
         assert result[1] == CodeSlot(slot_num=2, code="5678", in_use=True)
-        # Slot 3 defaults to empty
+        assert result[2] == CodeSlot(slot_num=3, code=None, in_use=False)
+
+    async def test_get_usercodes_fallback_to_cache_on_error(self, provider, mock_zha_gateway):
+        """Test that get_usercodes falls back to cached values on query exception."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # Populate cache initially
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="9999", in_use=True)
+
+        # Force query to raise an exception
+        mock_zha_gateway["cluster"].get_pin_code.side_effect = Exception("Communication error")
+
+        result = await provider.async_get_usercodes()
+        assert len(result) == 3
+        # Slot 1 retrieved from cache
+        assert result[0] == CodeSlot(slot_num=1, code="9999", in_use=True)
+        # Slots 2 & 3 return default empty
+        assert result[1] == CodeSlot(slot_num=2, code=None, in_use=False)
         assert result[2] == CodeSlot(slot_num=3, code=None, in_use=False)
 
     async def test_get_usercode_cached(self, provider):
@@ -291,90 +356,104 @@ class TestUsercodeOperations:
         )
         assert await provider.async_get_usercode(2) is None
 
-    async def test_set_usercode_success(self, provider, mock_hass):
-        """Test set_usercode calls service and updates cache."""
+    async def test_refresh_usercode_success(self, provider, mock_zha_gateway):
+        """Test refresh_usercode bypasses cache, queries device, and updates cache."""
         setup_successful_connect(provider)
         await provider.async_connect()
 
-        mock_call = AsyncMock()
-        mock_hass.services.async_call = mock_call
+        res = MagicMock()
+        res.user_status = DoorLock.UserStatus.Enabled
+        res.code = "4321"
+        mock_zha_gateway["cluster"].get_pin_code.return_value = res
+
+        result = await provider.async_refresh_usercode(2)
+        assert result == CodeSlot(slot_num=2, code="4321", in_use=True)
+        mock_zha_gateway["cluster"].get_pin_code.assert_called_once_with(2)
+        assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code="4321", in_use=True)
+
+    async def test_set_usercode_success(self, provider, mock_zha_gateway):
+        """Test set_usercode calls cluster directly and updates cache on success."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # Mock set_pin_code command returning status 0
+        cmd_result = MagicMock()
+        cmd_result.status = 0
+        mock_zha_gateway["cluster"].set_pin_code.return_value = cmd_result
 
         result = await provider.async_set_usercode(2, "4321", "User 2")
         assert result is True
-        mock_call.assert_called_once_with(
-            "zha",
-            "set_lock_user_code",
-            {
-                "entity_id": "lock.test_lock",
-                "code_slot": 2,
-                "user_code": "4321",
-            },
-            blocking=True,
+        mock_zha_gateway["cluster"].set_pin_code.assert_called_once_with(
+            2,
+            DoorLock.UserStatus.Enabled,
+            DoorLock.UserType.Unrestricted,
+            "4321",
         )
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code="4321", in_use=True)
 
-    async def test_set_usercode_haerror(self, provider, mock_hass):
-        """Test that set_usercode handles HomeAssistantError."""
+    async def test_set_usercode_status_rejection(self, provider, mock_zha_gateway):
+        """Test that set_usercode returns False and does not cache when ZCL status != 0."""
         setup_successful_connect(provider)
         await provider.async_connect()
 
-        mock_hass.services.async_call = AsyncMock(side_effect=HomeAssistantError("Service failed"))
+        # Mock set_pin_code returning status 1 (rejection/duplicate PIN)
+        cmd_result = MagicMock()
+        cmd_result.status = 1
+        mock_zha_gateway["cluster"].set_pin_code.return_value = cmd_result
 
         result = await provider.async_set_usercode(2, "4321")
         assert result is False
         assert 2 not in provider._usercodes_cache
 
-    async def test_set_usercode_generic_error(self, provider, mock_hass):
-        """Test that set_usercode handles unexpected exceptions."""
+    async def test_set_usercode_exception(self, provider, mock_zha_gateway):
+        """Test that set_usercode handles exceptions gracefully and does not cache."""
         setup_successful_connect(provider)
         await provider.async_connect()
 
-        mock_hass.services.async_call = AsyncMock(side_effect=Exception("Crash"))
+        mock_zha_gateway["cluster"].set_pin_code.side_effect = Exception("Write Timeout")
 
         result = await provider.async_set_usercode(2, "4321")
         assert result is False
         assert 2 not in provider._usercodes_cache
 
-    async def test_clear_usercode_success(self, provider, mock_hass):
-        """Test clear_usercode calls service and updates cache."""
+    async def test_clear_usercode_success(self, provider, mock_zha_gateway):
+        """Test clear_usercode calls cluster directly and updates cache on success."""
         setup_successful_connect(provider)
         await provider.async_connect()
 
         # Cache slot 2 initially
         provider._usercodes_cache[2] = CodeSlot(slot_num=2, code="4321", in_use=True)
 
-        mock_call = AsyncMock()
-        mock_hass.services.async_call = mock_call
+        cmd_result = MagicMock()
+        cmd_result.status = 0
+        mock_zha_gateway["cluster"].clear_pin_code.return_value = cmd_result
 
         result = await provider.async_clear_usercode(2)
         assert result is True
-        mock_call.assert_called_once_with(
-            "zha",
-            "clear_lock_user_code",
-            {
-                "entity_id": "lock.test_lock",
-                "code_slot": 2,
-            },
-            blocking=True,
-        )
+        mock_zha_gateway["cluster"].clear_pin_code.assert_called_once_with(2)
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=False)
 
-    async def test_clear_usercode_haerror(self, provider, mock_hass):
-        """Test that clear_usercode handles HomeAssistantError."""
+    async def test_clear_usercode_status_rejection(self, provider, mock_zha_gateway):
+        """Test that clear_usercode returns False and does not modify cache when ZCL status != 0."""
         setup_successful_connect(provider)
         await provider.async_connect()
 
-        mock_hass.services.async_call = AsyncMock(side_effect=HomeAssistantError("Service failed"))
+        provider._usercodes_cache[2] = CodeSlot(slot_num=2, code="4321", in_use=True)
+
+        cmd_result = MagicMock()
+        cmd_result.status = 1
+        mock_zha_gateway["cluster"].clear_pin_code.return_value = cmd_result
 
         result = await provider.async_clear_usercode(2)
         assert result is False
+        assert provider._usercodes_cache[2].in_use is True
 
-    async def test_clear_usercode_generic_error(self, provider, mock_hass):
-        """Test that clear_usercode handles unexpected exceptions."""
+    async def test_clear_usercode_exception(self, provider, mock_zha_gateway):
+        """Test that clear_usercode handles exceptions gracefully."""
         setup_successful_connect(provider)
         await provider.async_connect()
 
-        mock_hass.services.async_call = AsyncMock(side_effect=Exception("Crash"))
+        mock_zha_gateway["cluster"].clear_pin_code.side_effect = Exception("Write Timeout")
 
         result = await provider.async_clear_usercode(2)
         assert result is False
@@ -383,8 +462,8 @@ class TestUsercodeOperations:
 class TestLockEvents:
     """Test lock event subscription and parsing."""
 
-    async def test_subscribe_lock_events(self, provider, mock_hass):
-        """Test event subscription registers listener and parses event args."""
+    async def test_subscribe_lock_events(self, provider, mock_hass, mock_zha_gateway):
+        """Test event subscription registers listener and parses event args using ZCL names."""
         setup_successful_connect(provider)
         await provider.async_connect()
 
@@ -409,56 +488,62 @@ class TestLockEvents:
             captured_callback(event)
             await asyncio.sleep(0.01)
 
-        # 1. Unlocked via keypad (dict args)
+        # 1. Unlocked via keypad (dict args with ZCL names)
+        # DoorLock.OperationEventSource.Keypad = 0
+        # DoorLock.OperationEvent.Unlock = 2
         await trigger_event(
             {
                 "device_ieee": "00:0d:6f:00:0b:90:57:f6",
                 "command": "operation_event_notification",
                 "args": {
-                    "source": "Keypad",
-                    "operation": "Unlock",
-                    "code_slot": 2,
+                    "operation_event_source": 0,
+                    "operation_event_code": 2,
+                    "user_id": 2,
                 },
             }
         )
         mock_callback.assert_called_once_with(2, "Unlocked via Keypad", 1)
         mock_callback.reset_mock()
 
-        # 2. Keypad Lock (dict args)
+        # 2. Keypad Lock (dict args with ZCL names)
+        # DoorLock.OperationEventSource.Keypad = 0
+        # DoorLock.OperationEvent.Lock = 1
         await trigger_event(
             {
                 "device_ieee": "00:0d:6f:00:0b:90:57:f6",
                 "command": "operation_event_notification",
                 "args": {
-                    "source": "Keypad",
-                    "operation": "Lock",
-                    "code_slot": 3,
+                    "operation_event_source": 0,
+                    "operation_event_code": 1,
+                    "user_id": 3,
                 },
             }
         )
         mock_callback.assert_called_once_with(3, "Keypad Lock", 5)
         mock_callback.reset_mock()
 
-        # 3. Unlocked via keypad (list args)
+        # 3. Unlocked via keypad (list args fallback)
         await trigger_event(
             {
                 "device_ieee": "00:0d:6f:00:0b:90:57:f6",
                 "command": "operation_event_notification",
-                "args": ["Unlock", "Keypad", 4],
+                "args": [2, 0, 4],  # Unlock (2), Keypad (0), Slot 4
             }
         )
         mock_callback.assert_called_once_with(4, "Unlocked via Keypad", 1)
         mock_callback.reset_mock()
 
-        # 4. Other operation (dict args)
+        # 4. Other operation (dict args with RF source)
+        # DoorLock.OperationEventSource.RF = 1
+        # DoorLock.OperationEvent.Unlock = 2
         await trigger_event(
             {
                 "device_ieee": "00:0d:6f:00:0b:90:57:f6",
                 "command": "operation_event_notification",
                 "args": {
-                    "source": "RFID",
-                    "operation": "Unlock",
-                    "code_slot": 1,
+                    "operation_event_source": 1,
+                    "operation_event_code": 2,
+                    "user_id": 1,
                 },
             }
         )
@@ -471,9 +556,9 @@ class TestLockEvents:
                 "device_ieee": "other_ieee",
                 "command": "operation_event_notification",
                 "args": {
-                    "source": "Keypad",
-                    "operation": "Unlock",
-                    "code_slot": 2,
+                    "operation_event_source": 0,
+                    "operation_event_code": 1,
+                    "user_id": 2,
                 },
             }
         )
@@ -485,89 +570,44 @@ class TestLockEvents:
                 "device_ieee": "00:0d:6f:00:0b:90:57:f6",
                 "command": "other_command",
                 "args": {
-                    "source": "Keypad",
-                    "operation": "Unlock",
-                    "code_slot": 2,
+                    "operation_event_source": 0,
+                    "operation_event_code": 1,
+                    "user_id": 2,
                 },
             }
         )
         mock_callback.assert_not_called()
 
-        # 7. Missing code_slot
+        # 7. user_id == 0 (Master / System Event, filtered out)
         await trigger_event(
             {
                 "device_ieee": "00:0d:6f:00:0b:90:57:f6",
                 "command": "operation_event_notification",
                 "args": {
-                    "source": "Keypad",
-                    "operation": "Unlock",
+                    "operation_event_source": 0,
+                    "operation_event_code": 1,
+                    "user_id": 0,
                 },
             }
         )
         mock_callback.assert_not_called()
 
-        # 8. Invalid args format (neither dict nor list/tuple)
+        # 8. programming_event_notification (triggers coordinator refresh)
+        mock_hass.async_create_task.reset_mock()
+        mock_coordinator = MagicMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_hass.data = {DOMAIN: {COORDINATOR: mock_coordinator}}
+
         await trigger_event(
             {
                 "device_ieee": "00:0d:6f:00:0b:90:57:f6",
-                "command": "operation_event_notification",
-                "args": "invalid",
+                "command": "programming_event_notification",
             }
         )
-        mock_callback.assert_not_called()
+        # Verify coordinator refresh was scheduled
+        mock_hass.async_create_task.assert_called_once()
+        mock_coordinator.async_refresh.assert_called_once()
 
-        # 9. Keypad other operation
-        await trigger_event(
-            {
-                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
-                "command": "operation_event_notification",
-                "args": {
-                    "source": "Keypad",
-                    "operation": "Other",
-                    "code_slot": 2,
-                },
-            }
-        )
-        mock_callback.assert_called_once_with(2, "Keypad Other", None)
-        mock_callback.reset_mock()
-
-        # 10. Non-keypad lock
-        await trigger_event(
-            {
-                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
-                "command": "operation_event_notification",
-                "args": {
-                    "source": "RF",
-                    "operation": "Lock",
-                    "code_slot": 2,
-                },
-            }
-        )
-        mock_callback.assert_called_once_with(2, "Locked via RF", None)
-        mock_callback.reset_mock()
-
-        # 11. Lock Event (other operation/source combination)
-        await trigger_event(
-            {
-                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
-                "command": "operation_event_notification",
-                "args": {
-                    "source": "Manual",
-                    "operation": "Toggle",
-                    "code_slot": 2,
-                },
-            }
-        )
-        mock_callback.assert_called_once_with(2, "Lock Event: Toggle via Manual", None)
-        mock_callback.reset_mock()
-
-        unsub()
-
-    def test_subscribe_connection_events(self, provider):
-        """Test subscribe_connection_events returns unsubscribe function."""
-        callback = MagicMock()
-        unsub = provider.subscribe_connection_events(callback)
-        assert callable(unsub)
         unsub()
 
     def test_get_platform_data(self, provider):
@@ -578,3 +618,55 @@ class TestLockEvents:
         assert data["domain"] == "zha"
         assert data["device_ieee"] == "00:0d:6f:00:0b:90:57:f6"
         assert data["lock_config_entry_id"] == "test_entry_id"
+
+
+class TestConnectionEvents:
+    """Test connection availability event tracking."""
+
+    async def test_subscribe_connection_events(self, provider, mock_hass, mock_zha_gateway):
+        """Test that subscribe_connection_events correctly monitors entity state changes."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        captured_callback = None
+
+        def mock_track(hass, entity_ids, callback_fn):
+            nonlocal captured_callback
+            captured_callback = callback_fn
+            return lambda: None
+
+        mock_callback = MagicMock()
+
+        with patch(
+            "homeassistant.helpers.event.async_track_state_change_event",
+            side_effect=mock_track,
+        ) as mock_track_state:
+            unsub = provider.subscribe_connection_events(mock_callback)
+
+            assert mock_track_state.call_count == 1
+            assert captured_callback is not None
+
+            # Trigger state change to unavailable
+            event_unavailable = Event(
+                "state_changed",
+                {
+                    "new_state": MagicMock(state=STATE_UNAVAILABLE),
+                },
+            )
+            captured_callback(event_unavailable)
+            mock_callback.assert_called_once_with(False)
+            assert provider.connected is False
+            mock_callback.reset_mock()
+
+            # Trigger state change to online/locked
+            event_locked = Event(
+                "state_changed",
+                {
+                    "new_state": MagicMock(state="locked"),
+                },
+            )
+            captured_callback(event_locked)
+            mock_callback.assert_called_once_with(True)
+            assert provider.connected is True
+
+            unsub()
