@@ -127,7 +127,9 @@ class ZHALockProvider(BaseLockProvider):
             return None
         try:
             return get_zha_gateway_proxy(self.hass)
-        except (KeyError, ValueError):
+        except KeyError:
+            return None
+        except ValueError:
             return None
 
     def _get_door_lock_cluster(self) -> DoorLock | None:
@@ -459,14 +461,20 @@ class ZHALockProvider(BaseLockProvider):
             if operation is not None:
                 try:
                     op_val = DoorLock.OperationEvent(int(operation))
-                except (TypeError, ValueError):
+                except TypeError:
+                    with contextlib.suppress(KeyError):
+                        op_val = DoorLock.OperationEvent[str(operation)]
+                except ValueError:
                     with contextlib.suppress(KeyError):
                         op_val = DoorLock.OperationEvent[str(operation)]
 
             if source is not None:
                 try:
                     src_val = DoorLock.OperationEventSource(int(source))
-                except (TypeError, ValueError):
+                except TypeError:
+                    with contextlib.suppress(KeyError):
+                        src_val = DoorLock.OperationEventSource[str(source)]
+                except ValueError:
                     with contextlib.suppress(KeyError):
                         src_val = DoorLock.OperationEventSource[str(source)]
 
