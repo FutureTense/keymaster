@@ -8,6 +8,11 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN, Synced
+
+try:
+    from homeassistant.components.zha.const import DOMAIN as ZHA_DOMAIN
+except (ImportError, ModuleNotFoundError):
+    ZHA_DOMAIN = "zha"
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, callback as ha_callback
 from homeassistant.exceptions import HomeAssistantError
@@ -18,8 +23,6 @@ if TYPE_CHECKING:
     from custom_components.keymaster.lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
-
-ZHA_DOMAIN = "zha"
 
 
 @dataclass
