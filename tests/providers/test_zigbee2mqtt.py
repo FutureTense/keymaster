@@ -115,7 +115,6 @@ def setup_successful_connect(
     device_entry = MagicMock()
     device_entry.identifiers = identifiers
     device_entry.name = device_name
-    device_entry.original_name = device_name
     provider.device_registry.async_get.return_value = device_entry
 
 
@@ -162,14 +161,18 @@ class TestConnect:
         mock_subscribe.assert_called_once_with(mock_hass, "zigbee2mqtt/my_lock", ANY)
 
     async def test_connect_success_rename_device(self, provider, mock_hass):
-        """Test that device rename changes the topics dynamically."""
+        """Test that device rename behavior handles identifiers and name fallbacks."""
+        # 1. With zigbee2mqtt identifier: renaming name does NOT change topics
         await connect_provider(provider, mock_hass)
         assert provider.base_topic == "zigbee2mqtt/my_lock"
 
-        # Now simulate a device rename in registry
         device_entry = provider.device_registry.async_get.return_value
-        device_entry.original_name = "new_lock_name"
+        device_entry.name = "new_lock_name"
 
+        assert provider.base_topic == "zigbee2mqtt/my_lock"
+
+        # 2. Without zigbee2mqtt identifier: renaming name DOES change topics
+        device_entry.identifiers = {("mqtt", "some_other_id")}
         assert provider.base_topic == "zigbee2mqtt/new_lock_name"
         assert provider.set_topic == "zigbee2mqtt/new_lock_name/set"
         assert provider.get_topic == "zigbee2mqtt/new_lock_name/get"
@@ -778,7 +781,7 @@ class TestCoverageExtra:
 
     async def test_connect_missing_state_topic(self, provider, mock_hass):
         """Test that async_connect returns False when state_topic cannot be derived."""
-        setup_successful_connect(provider, mock_hass, device_name="")
+        setup_successful_connect(provider, mock_hass, device_name="", identifiers=set())
         result = await provider.async_connect()
         assert result is False
 

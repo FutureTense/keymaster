@@ -72,11 +72,19 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
     @property
     def base_topic(self) -> str | None:
-        """Get the base topic dynamically from the device name."""
+        """Get the base topic dynamically from the device identifiers or name."""
         device_entry = self.get_device_entry()
         if not device_entry:
             return None
-        name = device_entry.original_name or device_entry.name
+
+        # Extract the original Z2M friendly name from device identifiers to support device renaming
+        for domain, identifier in device_entry.identifiers:
+            if domain == MQTT_DOMAIN and identifier.startswith("zigbee2mqtt_"):
+                friendly_name = identifier[len("zigbee2mqtt_") :]
+                if friendly_name:
+                    return f"zigbee2mqtt/{friendly_name}"
+
+        name = device_entry.name
         if not name:
             return None
         return f"zigbee2mqtt/{name}"
