@@ -172,19 +172,29 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             except ValueError:
                 return
 
-            # Check for keypad actions
+            # Check for keypad actions.
+            # Z2M action_user is 0-based; convert to 1-based Keymaster slot number.
             action = payload.get("action")
-            action_slot_num = payload.get("action_user")
+            action_slot_num_raw = payload.get("action_user")
+            action_slot_num = (
+                action_slot_num_raw + 1
+                if isinstance(action_slot_num_raw, int)
+                else action_slot_num_raw
+            )
             if action or action_slot_num:
                 self.hass.async_create_task(self._async_handle_action(action, action_slot_num))
 
-            # Parse bulk users list if available
+            # Parse bulk users list if available.
+            # Z2M user indices are 0-based; add 1 to get Keymaster slot numbers.
             if "users" in payload and isinstance(payload["users"], dict):
                 for slot_str, info in payload["users"].items():
                     try:
-                        slot_num = int(slot_str)
+                        z2m_slot = int(slot_str)
                     except ValueError:
                         continue
+
+                    # Convert Z2M 0-based index to Keymaster 1-based slot number
+                    km_slot_num = z2m_slot + 1
 
                     status = info.get("status")
                     if "pin_code" not in info:
@@ -196,33 +206,36 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
                         in_use = bool(code and status == "enabled")
 
                     slot_data = CodeSlot(
-                        slot_num=slot_num,
+                        slot_num=km_slot_num,
                         code=code,
                         in_use=in_use,
                     )
-                    self._usercodes_cache[slot_num] = slot_data
+                    self._usercodes_cache[km_slot_num] = slot_data
 
                     # Resolve pending future if any
-                    if slot_num in self._pending_usercode_futures:
-                        fut = self._pending_usercode_futures[slot_num]
+                    if km_slot_num in self._pending_usercode_futures:
+                        fut = self._pending_usercode_futures[km_slot_num]
                         if not fut.done():
                             fut.set_result(slot_data)
 
-            # Parse single user pin_code update
+            # Parse single user pin_code update.
+            # Z2M user field is 0-based; add 1 to get Keymaster slot number.
             if "pin_code" in payload and isinstance(payload["pin_code"], dict):
                 pin_data = payload["pin_code"]
-                user_slot = pin_data.get("user")
-                if isinstance(user_slot, int):
+                z2m_user_slot = pin_data.get("user")
+                if isinstance(z2m_user_slot, int):
+                    # Convert Z2M 0-based index to Keymaster 1-based slot number
+                    km_slot_num = z2m_user_slot + 1
                     user_enabled = pin_data.get("user_enabled", False)
                     if "pin_code" not in pin_data:
                         slot_data = CodeSlot(
-                            slot_num=user_slot,
+                            slot_num=km_slot_num,
                             code=None,
                             in_use=bool(user_enabled),
                         )
-                        self._usercodes_cache[user_slot] = slot_data
-                        if user_slot in self._pending_usercode_futures:
-                            fut = self._pending_usercode_futures[user_slot]
+                        self._usercodes_cache[km_slot_num] = slot_data
+                        if km_slot_num in self._pending_usercode_futures:
+                            fut = self._pending_usercode_futures[km_slot_num]
                             if not fut.done():
                                 fut.set_result(slot_data)
                     else:
@@ -230,13 +243,13 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
                         code = _get_pin_code_value(code_val)
                         in_use = bool(code and user_enabled)
                         slot_data = CodeSlot(
-                            slot_num=user_slot,
+                            slot_num=km_slot_num,
                             code=code,
                             in_use=in_use,
                         )
-                        self._usercodes_cache[user_slot] = slot_data
-                        if user_slot in self._pending_usercode_futures:
-                            fut = self._pending_usercode_futures[user_slot]
+                        self._usercodes_cache[km_slot_num] = slot_data
+                        if km_slot_num in self._pending_usercode_futures:
+                            fut = self._pending_usercode_futures[km_slot_num]
                             if not fut.done():
                                 fut.set_result(slot_data)
 
@@ -279,25 +292,42 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         self._connected = True
         return True
 
-    async def _async_query_slot(self, slot_num: int) -> CodeSlot:
-        """Query a single slot and wait for its response."""
+    async def _async_query_slot(self, km_slot_num: int) -> CodeSlot:
+        """Query a single slot and wait for its response.
+
+        Keymaster slot numbers are 1-based while Z2M user indices are 0-based.
+        This method translates km_slot_num to the Z2M index when publishing the
+        request, and the incoming state message handler translates back (adding 1)
+        so the cache and futures are always keyed by Keymaster slot number.
+        """
         get_topic = self.get_topic
         if not get_topic:
             raise LockDisconnected("No topic derived")
 
+        # Translate Keymaster 1-based slot to Z2M 0-based user index
+        z2m_user = km_slot_num - 1
+
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
-        self._pending_usercode_futures[slot_num] = fut
+        self._pending_usercode_futures[km_slot_num] = fut
 
         try:
-            payload = {"pin_code": {"user": slot_num}}
+            payload = {"pin_code": {"user": z2m_user}}
             await self._async_publish(get_topic, json.dumps(payload))
             return await asyncio.wait_for(fut, timeout=10.0)
         except TimeoutError as err:
-            _LOGGER.error("[Zigbee2MQTTProvider] Timeout querying slot %s", slot_num)
-            raise LockOperationFailed(f"Timeout querying slot {slot_num}") from err
+            _LOGGER.warning(
+                "[Zigbee2MQTTProvider] Timeout querying slot %s (Z2M user %s); "
+                "falling back to cache",
+                km_slot_num,
+                z2m_user,
+            )
+            # Return cached value if available, otherwise propagate the error
+            if km_slot_num in self._usercodes_cache:
+                return self._usercodes_cache[km_slot_num]
+            raise LockOperationFailed(f"Timeout querying slot {km_slot_num}") from err
         finally:
-            self._pending_usercode_futures.pop(slot_num, None)
+            self._pending_usercode_futures.pop(km_slot_num, None)
 
     async def async_get_usercodes(self) -> list[CodeSlot]:
         """Get all user codes from the Zigbee2MQTT lock."""
@@ -308,7 +338,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         slot_start = self.keymaster_config_entry.data.get(CONF_START, 1)
         slot_count = self.keymaster_config_entry.data.get(CONF_SLOTS, 0)
 
-        # Query all slots concurrently
+        # Query all slots concurrently using Keymaster slot numbers
         tasks = [self._async_query_slot(i) for i in range(slot_start, slot_start + slot_count)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -325,15 +355,22 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         return self._usercodes_cache.get(slot_num)
 
     async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
-        """Set user code on a slot."""
+        """Set user code on a slot.
+
+        slot_num is the Keymaster 1-based slot number.
+        Z2M uses 0-based user indices, so we subtract 1 when publishing.
+        """
         set_topic = self.set_topic
         if not set_topic:
             _LOGGER.error("[Zigbee2MQTTProvider] Not connected to lock")
             return False
 
+        # Translate Keymaster 1-based slot to Z2M 0-based user index
+        z2m_user = slot_num - 1
+
         payload = {
             "pin_code": {
-                "user": slot_num,
+                "user": z2m_user,
                 "user_type": "unrestricted",
                 "user_enabled": True,
                 "pin_code": code,
@@ -341,7 +378,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         }
         await self._async_publish(set_topic, json.dumps(payload))
 
-        # Update local cache optimistically
+        # Update local cache optimistically using Keymaster slot number
         self._usercodes_cache[slot_num] = CodeSlot(
             slot_num=slot_num,
             code=code,
@@ -350,15 +387,22 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         return True
 
     async def async_clear_usercode(self, slot_num: int) -> bool:
-        """Clear user code from a slot."""
+        """Clear user code from a slot.
+
+        slot_num is the Keymaster 1-based slot number.
+        Z2M uses 0-based user indices, so we subtract 1 when publishing.
+        """
         set_topic = self.set_topic
         if not set_topic:
             _LOGGER.error("[Zigbee2MQTTProvider] Not connected to lock")
             return False
 
+        # Translate Keymaster 1-based slot to Z2M 0-based user index
+        z2m_user = slot_num - 1
+
         payload = {
             "pin_code": {
-                "user": slot_num,
+                "user": z2m_user,
                 "user_type": "unrestricted",
                 "user_enabled": False,
                 "pin_code": None,
@@ -366,7 +410,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         }
         await self._async_publish(set_topic, json.dumps(payload))
 
-        # Update local cache optimistically
+        # Update local cache optimistically using Keymaster slot number
         self._usercodes_cache[slot_num] = CodeSlot(
             slot_num=slot_num,
             code=None,
@@ -375,7 +419,11 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         return True
 
     async def _async_handle_action(self, action: Any, slot_num: Any) -> None:
-        """Handle keypad action events."""
+        """Handle keypad action events.
+
+        slot_num here is already converted to Keymaster 1-based numbering
+        by the handle_state_message callback before this method is called.
+        """
         if not isinstance(slot_num, int):
             return
 
@@ -387,9 +435,11 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
         if action in ("pin_code_added", "pin_code_deleted"):
             # Re-query the slot so the cache reflects the keypad-side change.
+            # Translate back to Z2M 0-based index for the get request.
             get_topic = self.get_topic
             if get_topic:
-                await self._async_publish(get_topic, json.dumps({"pin_code": {"user": slot_num}}))
+                z2m_user = slot_num - 1
+                await self._async_publish(get_topic, json.dumps({"pin_code": {"user": z2m_user}}))
 
     def subscribe_lock_events(
         self, kmlock: KeymasterLock, callback: LockEventCallback
