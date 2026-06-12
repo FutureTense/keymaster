@@ -725,10 +725,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 "[update_listeners] %s: Setting create_listeners to run when HA starts",
                 kmlock.lock_name,
             )
-            self.hass.bus.async_listen_once(
+            unsub = self.hass.bus.async_listen_once(
                 EVENT_HOMEASSISTANT_STARTED,
                 functools.partial(self._create_listeners, kmlock),
             )
+            kmlock.listeners.append(unsub)
 
     def _fire_unlock_state_changed(
         self,
