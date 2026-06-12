@@ -1,23 +1,14 @@
-# ruff: noqa: E402
 """Tests for the ZHA lock provider."""
 
 from __future__ import annotations
 
 import asyncio
 import sys
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from zigpy.zcl.clusters.closures import DoorLock
-
-# Mock homeassistant.components.zha before imports run
-mock_zha_helpers = MagicMock()
-mock_zha_const = MagicMock()
-mock_zha_const.DOMAIN = "zha"
-
-sys.modules["homeassistant.components.zha"] = MagicMock()
-sys.modules["homeassistant.components.zha.helpers"] = mock_zha_helpers
-sys.modules["homeassistant.components.zha.const"] = mock_zha_const
 
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from custom_components.keymaster.providers._base import CodeSlot
@@ -25,6 +16,21 @@ from custom_components.keymaster.providers.zha import ZHALockProvider
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+
+# Retrieve pre-existing mock or create if not present
+mock_zha_helpers: Any = sys.modules.get("homeassistant.components.zha.helpers")
+if mock_zha_helpers is None:
+    mock_zha_helpers = MagicMock()
+    sys.modules["homeassistant.components.zha.helpers"] = mock_zha_helpers
+
+mock_zha_const: Any = sys.modules.get("homeassistant.components.zha.const")
+if mock_zha_const is None:
+    mock_zha_const = MagicMock()
+    mock_zha_const.DOMAIN = "zha"
+    sys.modules["homeassistant.components.zha.const"] = mock_zha_const
+
+if "homeassistant.components.zha" not in sys.modules:
+    sys.modules["homeassistant.components.zha"] = MagicMock()
 
 
 @pytest.fixture
@@ -638,7 +644,7 @@ class TestConnectionEvents:
         mock_callback = MagicMock()
 
         with patch(
-            "homeassistant.helpers.event.async_track_state_change_event",
+            "custom_components.keymaster.providers.zha.async_track_state_change_event",
             side_effect=mock_track,
         ) as mock_track_state:
             unsub = provider.subscribe_connection_events(mock_callback)
