@@ -11,7 +11,7 @@ from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATO
 
 try:
     from homeassistant.components.zha.const import DOMAIN as ZHA_DOMAIN
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     ZHA_DOMAIN = "zha"
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, callback as ha_callback
