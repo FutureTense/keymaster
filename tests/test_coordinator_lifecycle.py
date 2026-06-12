@@ -241,3 +241,66 @@ async def test_set_pin_on_lock_invalid_pin_no_redacted(mock_coordinator, mock_lo
     result = await mock_coordinator.set_pin_on_lock("test_entry", 1, "12")
 
     assert result is False
+
+
+async def test_update_listeners_startup_cleanup(hass, mock_lock):
+    """Test that startup listeners are correctly tracked and cleaned up."""
+    coordinator = KeymasterCoordinator(hass)
+
+    # Force HA to starting state (not running)
+    with patch.object(hass, "state", "starting"):
+        # Setup real or mock listeners on mock_lock
+        mock_unsub = MagicMock()
+        with patch(
+            "homeassistant.core.EventBus.async_listen_once", return_value=mock_unsub
+        ) as mock_listen:
+            await coordinator._update_listeners(mock_lock)
+            mock_listen.assert_called_once()
+            # The unsub callback should be stored in listeners
+            assert mock_unsub in mock_lock.listeners
+
+    # Unsubscribe should trigger the mock unsub callback
+    await KeymasterCoordinator._unsubscribe_listeners(mock_lock)
+    mock_unsub.assert_called_once()
+    assert len(mock_lock.listeners) == 0
+
+
+async def test_update_lock_unsubscribes_old_listeners(hass):
+    """Test that _update_lock unsubscribes the old lock's listeners."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator._rebuild_lock_relationships = AsyncMock()
+    coordinator._update_door_and_lock_state = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
+
+    old_lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_id",
+        code_slots={},
+    )
+    old_lock.number_of_code_slots = 1
+    old_lock.starting_code_slot = 1
+    old_lock.code_slots = {1: MagicMock()}
+
+    new_lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_id",
+        code_slots={},
+    )
+    new_lock.number_of_code_slots = 1
+    new_lock.starting_code_slot = 1
+    new_lock.code_slots = {1: MagicMock()}
+
+    coordinator.kmlocks["entry_id"] = old_lock
+
+    mock_unsub = MagicMock()
+    old_lock.listeners = [mock_unsub]
+
+    with patch.object(coordinator, "_update_listeners", new=AsyncMock()):
+        await coordinator._update_lock(new_lock)
+
+    # The old lock's listeners should be unsubscribed
+    mock_unsub.assert_called_once()
+    assert len(old_lock.listeners) == 0
