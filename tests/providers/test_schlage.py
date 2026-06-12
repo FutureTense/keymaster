@@ -124,6 +124,16 @@ class TestProperties:
         """Test connection status is supported."""
         assert schlage_provider.supports_connection_status is True
 
+    def test_redact_slot_names_default(self, schlage_provider):
+        """Test redact_slot_names property default."""
+        schlage_provider.keymaster_config_entry.options = {}
+        assert schlage_provider.redact_slot_names is True
+
+    def test_redact_pins_default(self, schlage_provider):
+        """Test redact_pins property default."""
+        schlage_provider.keymaster_config_entry.options = {}
+        assert schlage_provider.redact_pins is True
+
 
 # ---------------------------------------------------------------------------
 # Connection

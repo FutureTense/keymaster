@@ -211,3 +211,33 @@ async def test_redaction_behavior():
     assert "John Doe" in repr_str_propagated
     assert "1234" in repr_str_propagated
     assert "[REDACTED]" not in repr_str_propagated
+
+
+async def test_set_pin_on_lock_invalid_pin_redacted(mock_coordinator, mock_lock):
+    """Test set_pin_on_lock with an invalid PIN and verify redaction behavior."""
+    # Setup lock configuration
+    mock_lock.code_slots = {1: KeymasterCodeSlot(number=1, name="John Doe", pin="1234")}
+    mock_lock.redact_pins = True
+
+    # Store mock lock in coordinator
+    mock_coordinator.kmlocks["test_entry"] = mock_lock
+
+    # Call set_pin_on_lock with invalid pin (e.g., less than 4 digits)
+    result = await mock_coordinator.set_pin_on_lock("test_entry", 1, "12")
+
+    assert result is False
+
+
+async def test_set_pin_on_lock_invalid_pin_no_redacted(mock_coordinator, mock_lock):
+    """Test set_pin_on_lock with an invalid PIN and no redaction."""
+    # Setup lock configuration
+    mock_lock.code_slots = {1: KeymasterCodeSlot(number=1, name="John Doe", pin="1234")}
+    mock_lock.redact_pins = False
+
+    # Store mock lock in coordinator
+    mock_coordinator.kmlocks["test_entry"] = mock_lock
+
+    # Call set_pin_on_lock with invalid pin (e.g., less than 4 digits)
+    result = await mock_coordinator.set_pin_on_lock("test_entry", 1, "12")
+
+    assert result is False
