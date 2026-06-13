@@ -75,13 +75,15 @@ def mock_config_entry():
 @pytest.fixture
 def provider(mock_hass, mock_entity_registry, mock_device_registry, mock_config_entry):
     """Create a Zigbee2MQTTLockProvider instance."""
-    return Zigbee2MQTTLockProvider(
+    prov = Zigbee2MQTTLockProvider(
         hass=mock_hass,
         lock_entity_id="lock.test_lock",
         keymaster_config_entry=mock_config_entry,
         device_registry=mock_device_registry,
         entity_registry=mock_entity_registry,
     )
+    prov.query_delay = 0.0
+    return prov
 
 
 @pytest.fixture(autouse=True)

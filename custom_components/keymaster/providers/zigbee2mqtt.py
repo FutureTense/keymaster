@@ -54,6 +54,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         default_factory=dict, init=False, repr=False
     )
     _lock_event_callback: LockEventCallback | None = field(default=None, init=False, repr=False)
+    query_delay: float = field(default=0.5, init=False, repr=False)
 
     @property
     def domain(self) -> str:
@@ -338,21 +339,26 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         slot_start = self.keymaster_config_entry.data.get(CONF_START, 1)
         slot_count = self.keymaster_config_entry.data.get(CONF_SLOTS, 0)
 
-        # Query all slots concurrently using Keymaster slot numbers
-        tasks = [self._async_query_slot(i) for i in range(slot_start, slot_start + slot_count)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
         result: list[CodeSlot] = []
-        for res in results:
-            if isinstance(res, HomeAssistantError):
+        for i in range(slot_start, slot_start + slot_count):
+            try:
+                res = await self._async_query_slot(i)
+                result.append(res)
+                if self.query_delay > 0:
+                    await asyncio.sleep(self.query_delay)
+            except HomeAssistantError as err:
                 _LOGGER.warning(
-                    "[Zigbee2MQTTProvider] Error querying slot: %s",
-                    res,
+                    "[Zigbee2MQTTProvider] Error querying slot %s: %s",
+                    i,
+                    err,
                 )
-                continue
-            if isinstance(res, BaseException):
-                raise res
-            result.append(res)
+            except BaseException:
+                raise
+            except Exception:
+                _LOGGER.exception(
+                    "[Zigbee2MQTTProvider] Unexpected error querying slot %s",
+                    i,
+                )
 
         return result
 
