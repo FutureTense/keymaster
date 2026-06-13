@@ -344,6 +344,12 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
         result: list[CodeSlot] = []
         for res in results:
+            if isinstance(res, HomeAssistantError):
+                _LOGGER.warning(
+                    "[Zigbee2MQTTProvider] Error querying slot: %s",
+                    res,
+                )
+                continue
             if isinstance(res, BaseException):
                 raise res
             result.append(res)

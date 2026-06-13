@@ -440,16 +440,16 @@ class TestUsercodeOperations:
             # Z2M user 5 → km slot 6, pin "pin_5"
             assert result[5] == CodeSlot(slot_num=6, code="pin_5", in_use=True)
 
-    async def test_get_usercodes_timeout_no_cache_raises(self, provider, mock_hass):
-        """Test that get_usercodes raises LockOperationFailed when query times out with no cache."""
+    async def test_get_usercodes_timeout_no_cache_returns_empty(self, provider, mock_hass):
+        """Test that get_usercodes returns an empty list when query times out with no cache."""
         await connect_provider(provider, mock_hass)
 
         with (
             patch("homeassistant.components.mqtt.async_publish", new_callable=AsyncMock),
             patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
-            pytest.raises(LockOperationFailed),
         ):
-            await provider.async_get_usercodes()
+            result = await provider.async_get_usercodes()
+            assert result == []
 
     async def test_get_usercodes_timeout_with_cache_uses_cache(self, provider, mock_hass):
         """Test that get_usercodes falls back to cache when query times out."""
