@@ -288,3 +288,15 @@ class BaseLockProvider(ABC):
             CONF_REDACT_PINS,
             self.keymaster_config_entry.data.get(CONF_REDACT_PINS, DEFAULT_REDACT_PINS),
         )
+
+    def redact_name(self, name: str | None) -> str | None:
+        """Redact name if enabled."""
+        if not name:
+            return name
+        return "[REDACTED]" if self.redact_slot_names else name
+
+    def redact_pin(self, pin: str | None) -> str | None:
+        """Redact pin if enabled."""
+        if not pin:
+            return pin
+        return "[REDACTED]" if self.redact_pins else pin

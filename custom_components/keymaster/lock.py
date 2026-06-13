@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, fields
 from datetime import datetime as dt, time as dt_time
 import logging
 from typing import TYPE_CHECKING
+import weakref
 
 from .const import Synced
 
@@ -63,6 +64,11 @@ class KeymasterCodeSlot:
     accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
     redact_slot_names: bool = True
     redact_pins: bool = True
+    _redact_slot_names_val: bool = field(default=True, init=False, repr=False)
+    _redact_pins_val: bool = field(default=True, init=False, repr=False)
+    _lock_ref: weakref.ReferenceType[KeymasterLock] | None = field(
+        default=None, init=False, repr=False
+    )
     # Transient runtime-only field; excluded from persistence (init=False).
     last_code_set_at: dt | None = field(default=None, init=False, repr=False)
     # Tracks when the slot entered ADDING/DELETING state for grace-period recovery.
@@ -112,6 +118,62 @@ class KeymasterCodeSlot:
                 new_dow.inherit_state_from(old_dow)
 
 
+# Properties defined after class decoration to avoid dataclass default-value descriptor conflict:
+def _get_redact_slot_names(self: KeymasterCodeSlot) -> bool:
+    lock_ref = getattr(self, "_lock_ref", None)
+    lock = lock_ref() if lock_ref is not None else None
+    if lock is not None:
+        return lock.redact_slot_names
+    return getattr(self, "_redact_slot_names_val", True)
+
+
+def _set_redact_slot_names(self: KeymasterCodeSlot, value: bool) -> None:
+    self._redact_slot_names_val = value
+
+
+KeymasterCodeSlot.redact_slot_names = property(  # type: ignore[assignment]
+    _get_redact_slot_names, _set_redact_slot_names
+)
+
+
+def _get_redact_pins(self: KeymasterCodeSlot) -> bool:
+    lock_ref = getattr(self, "_lock_ref", None)
+    lock = lock_ref() if lock_ref is not None else None
+    if lock is not None:
+        return lock.redact_pins
+    return getattr(self, "_redact_pins_val", True)
+
+
+def _set_redact_pins(self: KeymasterCodeSlot, value: bool) -> None:
+    self._redact_pins_val = value
+
+
+KeymasterCodeSlot.redact_pins = property(  # type: ignore[assignment]
+    _get_redact_pins, _set_redact_pins
+)
+
+
+class KeymasterCodeSlotsDict(dict):
+    """Custom dict to automatically set the parent lock reference on slots."""
+
+    def __init__(self, lock: KeymasterLock, *args, **kwargs) -> None:
+        """Initialize."""
+        self._lock_ref = weakref.ref(lock)
+        super().__init__(*args, **kwargs)
+        for slot in self.values():
+            slot._lock_ref = self._lock_ref  # noqa: SLF001
+
+    def __setitem__(self, key: int, value: KeymasterCodeSlot) -> None:
+        """Set item."""
+        value._lock_ref = self._lock_ref  # noqa: SLF001
+        super().__setitem__(key, value)
+
+    def update(self, *args, **kwargs) -> None:
+        """Update items."""
+        for k, v in dict(*args, **kwargs).items():
+            self[k] = v
+
+
 @dataclass
 class KeymasterLock:
     """Class to represent a keymaster lock."""
@@ -152,10 +214,8 @@ class KeymasterLock:
 
     def __post_init__(self) -> None:
         """Initialize slot settings."""
-        if self.code_slots:
-            for slot in self.code_slots.values():
-                slot.redact_slot_names = self.redact_slot_names
-                slot.redact_pins = self.redact_pins
+        if self.code_slots is not None:
+            self.code_slots = KeymasterCodeSlotsDict(self, self.code_slots)
 
     def inherit_state_from(self, old: KeymasterLock) -> None:
         """Carry user/runtime state from a previous instance into this one.

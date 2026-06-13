@@ -29,6 +29,9 @@ def test_type_lookup_consistency():
         "masked_code_slots",  # Transient runtime-only field (init=False)
         "last_code_set_at",  # Transient runtime-only field (init=False)
         "sync_op_started_at",  # Transient runtime-only field (init=False)
+        "_lock_ref",  # Transient runtime-only field (init=False)
+        "_redact_slot_names_val",  # Transient runtime-only field (init=False)
+        "_redact_pins_val",  # Transient runtime-only field (init=False)
     }
 
     # Verify that significant fields are present in the lookup map.
