@@ -697,3 +697,332 @@ class TestConnectionEvents:
             assert provider.connected is True
 
             unsub()
+
+
+class TestZHAAdditionalCoverage:
+    """Test cases to cover remaining paths in ZHA provider."""
+
+    async def test_connect_cluster_not_found(self, provider, mock_zha_gateway):
+        """Test connect warns but succeeds when cluster is not found."""
+        setup_successful_connect(provider)
+        mock_zha_gateway["zigpy_device"].endpoints = {}
+        assert await provider.async_connect() is True
+
+    def test_get_gateway_errors(self, provider):
+        """Test _get_gateway under various fallback scenarios."""
+        # 1. get_zha_gateway_proxy is None
+        with patch("custom_components.keymaster.providers.zha.get_zha_gateway_proxy", None):
+            assert provider._get_gateway() is None
+
+        # 2. get_zha_gateway_proxy raises KeyError
+        with patch(
+            "custom_components.keymaster.providers.zha.get_zha_gateway_proxy",
+            side_effect=KeyError,
+        ):
+            assert provider._get_gateway() is None
+
+        # 3. get_zha_gateway_proxy raises ValueError
+        with patch(
+            "custom_components.keymaster.providers.zha.get_zha_gateway_proxy",
+            side_effect=ValueError,
+        ):
+            assert provider._get_gateway() is None
+
+    def test_get_door_lock_cluster_fallbacks(self, provider, mock_zha_gateway):
+        """Test _get_door_lock_cluster fallback paths."""
+        # Reset cache first
+        provider._door_lock_cluster = None
+
+        # 1. No gateway
+        with patch.object(provider, "_get_gateway", return_value=None):
+            assert provider._get_door_lock_cluster() is None
+
+        # 2. gateway.get_entity_reference raises AttributeError
+        mock_zha_gateway["gateway"].get_entity_reference.side_effect = AttributeError
+        assert provider._get_door_lock_cluster() is None
+        mock_zha_gateway["gateway"].get_entity_reference.side_effect = None
+
+        # 3. entity_ref is None
+        mock_zha_gateway["gateway"].get_entity_reference.return_value = None
+        assert provider._get_door_lock_cluster() is None
+        mock_zha_gateway["gateway"].get_entity_reference.return_value = mock_zha_gateway[
+            "entity_ref"
+        ]
+
+        # 4. device_proxy on entity_data fallback + endpoint 0 continue
+        endpoint_one = mock_zha_gateway["zigpy_device"].endpoints[1]
+        endpoint_zero = MagicMock()
+        mock_zha_gateway["zigpy_device"].endpoints = {0: endpoint_zero, 1: endpoint_one}
+
+        mock_zha_gateway["entity_ref"].device_proxy = None
+        mock_zha_gateway["entity_ref"].entity_data = MagicMock()
+        mock_zha_gateway["entity_ref"].entity_data.device_proxy = mock_zha_gateway["device_proxy"]
+        assert provider._get_door_lock_cluster() is not None
+
+        # Reset back
+        mock_zha_gateway["entity_ref"].device_proxy = mock_zha_gateway["device_proxy"]
+        provider._door_lock_cluster = None
+
+        # 5. device_proxy is None completely
+        mock_zha_gateway["entity_ref"].device_proxy = None
+        mock_zha_gateway["entity_ref"].entity_data = None
+        assert provider._get_door_lock_cluster() is None
+        mock_zha_gateway["entity_ref"].device_proxy = mock_zha_gateway["device_proxy"]
+        provider._door_lock_cluster = None
+
+        # 6. device is None
+        mock_zha_gateway["device_proxy"].device = None
+        assert provider._get_door_lock_cluster() is None
+        mock_zha_gateway["device_proxy"].device = MagicMock()
+        provider._door_lock_cluster = None
+
+        # 7. DoorLock cluster not found in endpoint
+        setup_successful_connect(provider)
+        endpoint_zero = MagicMock()
+        endpoint_zero.in_clusters = {}
+        mock_zha_gateway["zigpy_device"].endpoints = {0: endpoint_zero}
+        assert provider._get_door_lock_cluster() is None
+
+    async def test_async_is_connected_no_device_ieee(self, provider):
+        """Test async_is_connected returns False if device_ieee is missing."""
+        provider._device_ieee = None
+        assert await provider.async_is_connected() is False
+        assert provider.connected is False
+
+    async def test_get_usercodes_missing_config_slots(self, provider, mock_zha_gateway):
+        """Test get_usercodes defaults start/slots when missing from config entry."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+        provider.keymaster_config_entry.data = {}
+        result = await provider.async_get_usercodes()
+        assert result == []
+
+    async def test_get_usercodes_cluster_unavailable(self, provider):
+        """Test get_usercodes logs error and returns empty if cluster is not found."""
+        provider._connected = True
+        with patch.object(provider, "_get_door_lock_cluster", return_value=None):
+            assert await provider.async_get_usercodes() == []
+
+    async def test_refresh_usercode_not_connected(self, provider):
+        """Test refresh_usercode returns None if not connected."""
+        provider._connected = False
+        assert await provider.async_refresh_usercode(2) is None
+
+    async def test_refresh_usercode_cluster_unavailable(self, provider):
+        """Test refresh_usercode returns None if cluster is not found."""
+        provider._connected = True
+        with patch.object(provider, "_get_door_lock_cluster", return_value=None):
+            assert await provider.async_refresh_usercode(2) is None
+
+    async def test_refresh_usercode_error_paths(self, provider, mock_zha_gateway):
+        """Test async_refresh_usercode handles exceptions and non-enabled codes."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # 1. Exception path
+        mock_zha_gateway["cluster"].get_pin_code.side_effect = Exception("Read Timeout")
+        provider._usercodes_cache[2] = CodeSlot(slot_num=2, code="1234", in_use=True)
+        res = await provider.async_refresh_usercode(2)
+        assert res.code == "1234"
+
+        # 2. UserStatus.Available path (not Enabled)
+        mock_zha_gateway["cluster"].get_pin_code.side_effect = None
+        mock_zha_gateway["cluster"].get_pin_code.return_value = [
+            1,
+            DoorLock.UserStatus.Available,
+            1,
+            None,
+        ]
+        res = await provider.async_refresh_usercode(2)
+        assert res.in_use is False
+        assert res.code is None
+
+    async def test_set_usercode_cluster_unavailable(self, provider):
+        """Test set_usercode returns False if cluster is not found."""
+        with patch.object(provider, "_get_door_lock_cluster", return_value=None):
+            assert await provider.async_set_usercode(2, "1234") is False
+
+    async def test_clear_usercode_cluster_unavailable(self, provider):
+        """Test clear_usercode returns False if cluster is not found."""
+        with patch.object(provider, "_get_door_lock_cluster", return_value=None):
+            assert await provider.async_clear_usercode(2) is False
+
+    async def test_set_clear_usercode_list_tuple_rejections(self, provider, mock_zha_gateway):
+        """Test set_usercode and clear_usercode list/tuple status rejection format."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # 1. set_usercode status rejection in list
+        mock_zha_gateway["cluster"].set_pin_code.return_value = [1]
+        assert await provider.async_set_usercode(2, "4321") is False
+
+        # 2. clear_usercode status rejection in tuple
+        mock_zha_gateway["cluster"].clear_pin_code.return_value = (1,)
+        assert await provider.async_clear_usercode(2) is False
+
+    def test_parse_pin_response_fallback(self):
+        """Test _parse_pin_response fallback when response is invalid format."""
+        status, pin = ZHALockProvider._parse_pin_response("invalid_response_format")
+        assert status == DoorLock.UserStatus.Available
+        assert pin == ""
+
+    async def test_subscribe_lock_events_edge_cases(self, provider, mock_hass, mock_zha_gateway):
+        """Test ZHA events parsing with edge cases (errors, unknown enums, etc.)."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        captured_callback = None
+
+        def mock_listen(event_type, callback_fn):
+            nonlocal captured_callback
+            captured_callback = callback_fn
+            return lambda: None
+
+        mock_hass.bus.async_listen = MagicMock(side_effect=mock_listen)
+        mock_callback = AsyncMock()
+        mock_kmlock = MagicMock()
+
+        unsub = provider.subscribe_lock_events(mock_kmlock, mock_callback)
+        assert captured_callback is not None
+
+        async def trigger_event(data):
+            event = Event("zha_event", data)
+            captured_callback(event)
+            await asyncio.sleep(0.01)
+
+        # 1. operation as enum member name string (causes ValueError in int(operation) -> fallback ok)
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": 0,
+                    "operation_event_code": "Unlock",
+                    "user_id": 2,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(2, "Unlocked via Keypad", 1)
+        mock_callback.reset_mock()
+
+        # 2. source as enum member name string
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": "Keypad",
+                    "operation_event_code": 1,
+                    "user_id": 3,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(3, "Keypad Lock", 5)
+        mock_callback.reset_mock()
+
+        # 3. Invalid operation string (KeyError suppressed)
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": 0,
+                    "operation_event_code": "InvalidOp",
+                    "user_id": 2,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(2, "Keypad InvalidOp", None)
+        mock_callback.reset_mock()
+
+        # 4. Invalid source string (KeyError suppressed)
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": "InvalidSrc",
+                    "operation_event_code": 2,
+                    "user_id": 2,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(2, "Unlocked via RF", None)
+        mock_callback.reset_mock()
+
+        # 5. Keypad event that is neither lock nor unlock (operation code 3)
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": 0,
+                    "operation_event_code": 3,
+                    "user_id": 2,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(2, "Keypad 3", None)
+        mock_callback.reset_mock()
+
+        # 6. Event that is neither keypad, nor lock, nor unlock (source 2, operation 5)
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": 2,
+                    "operation_event_code": 5,
+                    "user_id": 2,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(2, "Lock Event: 5 via 2", None)
+        mock_callback.reset_mock()
+
+        # 7. TypeError block during operation parsing (causes TypeError in int(operation) -> fallback ok)
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": 0,
+                    "operation_event_code": [],
+                    "user_id": 2,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(2, "Keypad []", None)
+        mock_callback.reset_mock()
+
+        # 8. TypeError block during source parsing
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": [],
+                    "operation_event_code": 2,
+                    "user_id": 2,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(2, "Unlocked via RF", None)
+        mock_callback.reset_mock()
+
+        # 9. Locked via RF (source 1, operation 1)
+        await trigger_event(
+            {
+                "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                "command": "operation_event_notification",
+                "args": {
+                    "operation_event_source": 1,
+                    "operation_event_code": 1,
+                    "user_id": 2,
+                },
+            }
+        )
+        mock_callback.assert_called_once_with(2, "Locked via RF", None)
+        mock_callback.reset_mock()
+
+        unsub()
