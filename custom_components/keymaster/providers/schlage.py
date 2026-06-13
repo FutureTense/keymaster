@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 import re
-from typing import Any
+from typing import Any, cast
 
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START
 from homeassistant.exceptions import HomeAssistantError
@@ -228,7 +228,7 @@ class SchlageLockProvider(BaseLockProvider):
         # Platform entity services wrap the response per entity_id.
         entity_response = response.get(self.lock_entity_id, response)
         if isinstance(entity_response, dict):
-            return entity_response
+            return cast(dict[str, dict[str, str]], entity_response)
         return {}
 
     async def _async_delete_code(self, name: str) -> None:

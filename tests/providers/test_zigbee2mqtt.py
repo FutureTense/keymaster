@@ -75,13 +75,16 @@ def mock_config_entry():
 @pytest.fixture
 def provider(mock_hass, mock_entity_registry, mock_device_registry, mock_config_entry):
     """Create a Zigbee2MQTTLockProvider instance."""
-    return Zigbee2MQTTLockProvider(
+    prov = Zigbee2MQTTLockProvider(
         hass=mock_hass,
         lock_entity_id="lock.test_lock",
         keymaster_config_entry=mock_config_entry,
         device_registry=mock_device_registry,
         entity_registry=mock_entity_registry,
     )
+    prov.query_delay = 0.0
+    prov.state_wait_timeout = 0.0
+    return prov
 
 
 @pytest.fixture(autouse=True)
@@ -115,7 +118,6 @@ def setup_successful_connect(
     device_entry = MagicMock()
     device_entry.identifiers = identifiers
     device_entry.name = device_name
-    device_entry.original_name = device_name
     provider.device_registry.async_get.return_value = device_entry
 
 
@@ -162,14 +164,18 @@ class TestConnect:
         mock_subscribe.assert_called_once_with(mock_hass, "zigbee2mqtt/my_lock", ANY)
 
     async def test_connect_success_rename_device(self, provider, mock_hass):
-        """Test that device rename changes the topics dynamically."""
+        """Test that device rename behavior handles identifiers and name fallbacks."""
+        # 1. With zigbee2mqtt identifier: renaming name does NOT change topics
         await connect_provider(provider, mock_hass)
         assert provider.base_topic == "zigbee2mqtt/my_lock"
 
-        # Now simulate a device rename in registry
         device_entry = provider.device_registry.async_get.return_value
-        device_entry.original_name = "new_lock_name"
+        device_entry.name = "new_lock_name"
 
+        assert provider.base_topic == "zigbee2mqtt/my_lock"
+
+        # 2. Without zigbee2mqtt identifier: renaming name DOES change topics
+        device_entry.identifiers = {("mqtt", "some_other_id")}
         assert provider.base_topic == "zigbee2mqtt/new_lock_name"
         assert provider.set_topic == "zigbee2mqtt/new_lock_name/set"
         assert provider.get_topic == "zigbee2mqtt/new_lock_name/get"
@@ -235,15 +241,16 @@ class TestConnect:
 
         assert callback_captured is not None
 
-        # Test bulk update
+        # Test bulk update.
+        # Z2M sends 0-based user indices; Keymaster slots are 1-based (Z2M index + 1).
         payload = {
             "users": {
-                "1": {"pin_code": "1234", "status": "enabled"},
-                "2": {"pin_code": "", "status": "disabled"},
-                "3": {"status": "disabled"},
-                "4": {"status": "enabled"},
-                "5": {"pin_code": 0, "status": "enabled"},
-                "6": {"pin_code": True, "status": "enabled"},
+                "0": {"pin_code": "1234", "status": "enabled"},  # → km slot 1
+                "1": {"pin_code": "", "status": "disabled"},  # → km slot 2
+                "2": {"status": "disabled"},  # → km slot 3
+                "3": {"status": "enabled"},  # → km slot 4
+                "4": {"pin_code": 0, "status": "enabled"},  # → km slot 5
+                "5": {"pin_code": True, "status": "enabled"},  # → km slot 6
                 "invalid": {"pin_code": "0000", "status": "enabled"},
             }
         }
@@ -251,7 +258,7 @@ class TestConnect:
 
         callback_captured(msg)
 
-        # Check cache
+        # Check cache — keys are Keymaster slot numbers (Z2M index + 1)
         assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="1234", in_use=True)
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=False)
         assert provider._usercodes_cache[3] == CodeSlot(slot_num=3, code=None, in_use=False)
@@ -277,24 +284,25 @@ class TestConnect:
             mock_sub.side_effect = mock_subscribe
             await provider.async_connect()
 
-        # Test single updates
-        payload1 = {"pin_code": {"user": 1, "pin_code": "5678", "user_enabled": True}}
+        # Test single updates.
+        # Z2M sends 0-based user indices; Keymaster slots are 1-based (Z2M user + 1).
+        payload1 = {"pin_code": {"user": 0, "pin_code": "5678", "user_enabled": True}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload1), 0, False))
         assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="5678", in_use=True)
 
-        payload2 = {"pin_code": {"user": 2, "user_enabled": True}}
+        payload2 = {"pin_code": {"user": 1, "user_enabled": True}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload2), 0, False))
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=True)
 
-        payload3 = {"pin_code": {"user": 3, "user_enabled": False}}
+        payload3 = {"pin_code": {"user": 2, "user_enabled": False}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload3), 0, False))
         assert provider._usercodes_cache[3] == CodeSlot(slot_num=3, code=None, in_use=False)
 
-        payload4 = {"pin_code": {"user": 4, "pin_code": 0, "user_enabled": True}}
+        payload4 = {"pin_code": {"user": 3, "pin_code": 0, "user_enabled": True}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload4), 0, False))
         assert provider._usercodes_cache[4] == CodeSlot(slot_num=4, code="0", in_use=True)
 
-        payload5 = {"pin_code": {"user": 5, "pin_code": False, "user_enabled": True}}
+        payload5 = {"pin_code": {"user": 4, "pin_code": False, "user_enabled": True}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload5), 0, False))
         assert provider._usercodes_cache[5] == CodeSlot(slot_num=5, code=None, in_use=False)
 
@@ -390,7 +398,13 @@ class TestUsercodeOperations:
         assert result == []
 
     async def test_get_usercodes_success(self, provider, mock_hass):
-        """Test get_usercodes queries slots concurrently and resolves futures."""
+        """Test get_usercodes queries slots concurrently and resolves futures.
+
+        Keymaster slots are 1-based; Z2M user indices are 0-based.
+        _async_query_slot(km_slot) sends 'user: km_slot - 1' to Z2M.
+        The response carries the Z2M user index; the handler adds 1 to map
+        back to the Keymaster slot before resolving the future.
+        """
         mock_subscribe = await connect_provider(provider, mock_hass)
         callback_captured = mock_subscribe.call_args[0][2]
 
@@ -399,12 +413,13 @@ class TestUsercodeOperations:
         async def mock_publish(hass, topic, payload, qos=0, retain=False):
             publish_calls.append((topic, payload))
             parsed = json.loads(payload)
-            slot_num = parsed["pin_code"]["user"]
+            z2m_user = parsed["pin_code"]["user"]  # 0-based Z2M index
 
+            # Z2M responds with the same 0-based user index it was asked about
             response_payload = {
                 "pin_code": {
-                    "user": slot_num,
-                    "pin_code": f"pin_{slot_num}",
+                    "user": z2m_user,
+                    "pin_code": f"pin_{z2m_user}",
                     "user_enabled": True,
                 }
             }
@@ -414,27 +429,48 @@ class TestUsercodeOperations:
         with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
             result = await provider.async_get_usercodes()
 
+            # Keymaster slots 1-6 → Z2M users 0-5
             assert len(publish_calls) == 6
-            for i in range(1, 7):
+            for i in range(6):  # Z2M 0-based indices
                 assert (
                     "zigbee2mqtt/my_lock/get",
                     json.dumps({"pin_code": {"user": i}}),
                 ) in publish_calls
 
             assert len(result) == 6
-            assert result[0] == CodeSlot(slot_num=1, code="pin_1", in_use=True)
-            assert result[5] == CodeSlot(slot_num=6, code="pin_6", in_use=True)
+            # Z2M user 0 → km slot 1, pin "pin_0"
+            assert result[0] == CodeSlot(slot_num=1, code="pin_0", in_use=True)
+            # Z2M user 5 → km slot 6, pin "pin_5"
+            assert result[5] == CodeSlot(slot_num=6, code="pin_5", in_use=True)
 
-    async def test_get_usercodes_timeout(self, provider, mock_hass):
-        """Test that get_usercodes raises LockOperationFailed when query times out."""
+    async def test_get_usercodes_timeout_no_cache_returns_empty(self, provider, mock_hass):
+        """Test that get_usercodes returns an empty list when query times out with no cache."""
         await connect_provider(provider, mock_hass)
 
         with (
             patch("homeassistant.components.mqtt.async_publish", new_callable=AsyncMock),
             patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
-            pytest.raises(LockOperationFailed),
         ):
-            await provider.async_get_usercodes()
+            result = await provider.async_get_usercodes()
+            assert result == []
+
+    async def test_get_usercodes_timeout_with_cache_uses_cache(self, provider, mock_hass):
+        """Test that get_usercodes falls back to cache when query times out."""
+        await connect_provider(provider, mock_hass)
+
+        # Pre-populate cache for all 6 slots (Keymaster 1-based)
+        for i in range(1, 7):
+            provider._usercodes_cache[i] = CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+
+        with (
+            patch("homeassistant.components.mqtt.async_publish", new_callable=AsyncMock),
+            patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
+        ):
+            result = await provider.async_get_usercodes()
+
+        assert len(result) == 6
+        for i in range(1, 7):
+            assert result[i - 1] == CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
 
     async def test_get_usercode_cached(self, provider):
         """Test get_usercode retrieves from cache."""
@@ -452,7 +488,10 @@ class TestUsercodeOperations:
         assert result is False
 
     async def test_set_usercode_success(self, provider, mock_hass):
-        """Test set_usercode publishes correct payload and updates cache."""
+        """Test set_usercode publishes correct payload and updates cache.
+
+        Keymaster slot 2 → Z2M user 1 (0-based).
+        """
         await connect_provider(provider, mock_hass)
 
         with patch(
@@ -464,7 +503,7 @@ class TestUsercodeOperations:
             expected_payload = json.dumps(
                 {
                     "pin_code": {
-                        "user": 2,
+                        "user": 1,  # Z2M 0-based: km slot 2 - 1 = 1
                         "user_type": "unrestricted",
                         "user_enabled": True,
                         "pin_code": "4321",
@@ -478,6 +517,7 @@ class TestUsercodeOperations:
                 qos=1,
                 retain=False,
             )
+            # Cache is keyed by Keymaster slot number
             assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code="4321", in_use=True)
 
     async def test_set_usercode_publish_failure_oserror(self, provider, mock_hass):
@@ -524,7 +564,10 @@ class TestUsercodeOperations:
         assert result is False
 
     async def test_clear_usercode_success(self, provider, mock_hass):
-        """Test clear_usercode publishes correct full shape payload and updates cache."""
+        """Test clear_usercode publishes correct full shape payload and updates cache.
+
+        Keymaster slot 2 → Z2M user 1 (0-based).
+        """
         await connect_provider(provider, mock_hass)
 
         provider._usercodes_cache[2] = CodeSlot(slot_num=2, code="4321", in_use=True)
@@ -538,7 +581,7 @@ class TestUsercodeOperations:
             expected_payload = json.dumps(
                 {
                     "pin_code": {
-                        "user": 2,
+                        "user": 1,  # Z2M 0-based: km slot 2 - 1 = 1
                         "user_type": "unrestricted",
                         "user_enabled": False,
                         "pin_code": None,
@@ -552,7 +595,105 @@ class TestUsercodeOperations:
                 qos=1,
                 retain=False,
             )
+            # Cache is keyed by Keymaster slot number
             assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=False)
+
+    async def test_get_usercodes_uses_cache_directly(self, provider, mock_hass):
+        """Test that get_usercodes returns cache directly without publishing."""
+        await connect_provider(provider, mock_hass)
+
+        for i in range(1, 7):
+            provider._usercodes_cache[i] = CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+
+        with patch(
+            "homeassistant.components.mqtt.async_publish", new_callable=AsyncMock
+        ) as mock_publish:
+            result = await provider.async_get_usercodes()
+
+        assert mock_publish.call_count == 0
+        assert len(result) == 6
+        for i in range(1, 7):
+            assert result[i - 1] == CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+
+    async def test_get_usercodes_fallback_to_query_on_missing_cache_slot(self, provider, mock_hass):
+        """Test that get_usercodes falls back to query only for slots missing from cache."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        # Pre-populate slots 1-5
+        for i in range(1, 6):
+            provider._usercodes_cache[i] = CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+
+        publish_calls = []
+
+        async def mock_publish(hass, topic, payload, qos=0, retain=False):
+            publish_calls.append((topic, payload))
+            parsed = json.loads(payload)
+            z2m_user = parsed["pin_code"]["user"]
+            response_payload = {
+                "pin_code": {
+                    "user": z2m_user,
+                    "pin_code": f"queried_{z2m_user}",
+                    "user_enabled": True,
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+        with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
+            result = await provider.async_get_usercodes()
+
+        # Should only query slot 6 (Z2M user 5)
+        assert len(publish_calls) == 1
+        assert publish_calls[0] == (
+            "zigbee2mqtt/my_lock/get",
+            json.dumps({"pin_code": {"user": 5}}),
+        )
+        assert len(result) == 6
+        for i in range(1, 6):
+            assert result[i - 1] == CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+        assert result[5] == CodeSlot(slot_num=6, code="queried_5", in_use=True)
+
+    async def test_get_usercodes_waits_for_initial_state(self, provider, mock_hass):
+        """Test that get_usercodes waits for the initial state message to arrive."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        provider.state_wait_timeout = 0.5
+
+        async def run_get_usercodes():
+            return await provider.async_get_usercodes()
+
+        with patch(
+            "homeassistant.components.mqtt.async_publish", new_callable=AsyncMock
+        ) as mock_publish:
+            task = asyncio.create_task(run_get_usercodes())
+            await asyncio.sleep(0.1)
+
+            # Not finished yet because it is waiting for initial state message
+            assert not task.done()
+
+            # Now send the initial state message (containing users)
+            response_payload = {
+                "users": {
+                    "0": {"pin_code": "pin_0", "status": "enabled"},
+                    "1": {"pin_code": "pin_1", "status": "enabled"},
+                    "2": {"pin_code": "pin_2", "status": "enabled"},
+                    "3": {"pin_code": "pin_3", "status": "enabled"},
+                    "4": {"pin_code": "pin_4", "status": "enabled"},
+                    "5": {"pin_code": "pin_5", "status": "enabled"},
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+            result = await task
+
+        # Should not have published anything to get topic
+        assert mock_publish.call_count == 0
+        assert len(result) == 6
+        for i in range(1, 7):
+            assert result[i - 1] == CodeSlot(slot_num=i, code=f"pin_{i - 1}", in_use=True)
 
 
 class TestLockEvents:
@@ -568,7 +709,9 @@ class TestLockEvents:
 
         unsubscribe_fn = provider.subscribe_lock_events(mock_kmlock, mock_callback)
 
-        # 1. Keypad unlock event
+        # 1. Keypad unlock event.
+        # Z2M action_user is 0-based; Keymaster callback receives 1-based slot.
+        # action_user: 2 (Z2M) → slot 3 (Keymaster)
         payload_unlock = {
             "action": "keypad_unlock",
             "action_user": 2,
@@ -577,10 +720,11 @@ class TestLockEvents:
         captured_callback(msg_unlock)
         await asyncio.sleep(0.01)
 
-        mock_callback.assert_called_once_with(2, "Unlocked via Keypad", 1)
+        mock_callback.assert_called_once_with(3, "Unlocked via Keypad", 1)
         mock_callback.reset_mock()
 
-        # 2. Keypad lock event
+        # 2. Keypad lock event.
+        # action_user: 3 (Z2M) → slot 4 (Keymaster)
         payload_lock = {
             "action": "keypad_lock",
             "action_user": 3,
@@ -589,7 +733,7 @@ class TestLockEvents:
         captured_callback(msg_lock)
         await asyncio.sleep(0.01)
 
-        mock_callback.assert_called_once_with(3, "Keypad Lock", 5)
+        mock_callback.assert_called_once_with(4, "Keypad Lock", 5)
 
         unsubscribe_fn()
 
@@ -619,7 +763,11 @@ class TestLockEvents:
         mock_callback.assert_not_called()
 
     async def test_keypad_pin_changed_requeries_slot(self, provider, mock_hass):
-        """Test that pin_code_added/deleted triggers a get request to query the slot."""
+        """Test that pin_code_added/deleted triggers a get request to query the slot.
+
+        action_user: 4 (Z2M 0-based) → Keymaster slot 5.
+        The re-query get request uses Z2M user index: slot 5 - 1 = 4.
+        """
         mock_subscribe = await connect_provider(provider, mock_hass)
         captured_callback = mock_subscribe.call_args[0][2]
 
@@ -629,7 +777,7 @@ class TestLockEvents:
 
         payload = {
             "action": "pin_code_added",
-            "action_user": 4,
+            "action_user": 4,  # Z2M 0-based → km slot 5
         }
         msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload), 0, False)
 
@@ -638,6 +786,7 @@ class TestLockEvents:
         ) as mock_pub:
             captured_callback(msg)
             await asyncio.sleep(0.01)
+            # Re-query uses Z2M 0-based index: km slot 5 - 1 = 4
             mock_pub.assert_called_once_with(
                 mock_hass,
                 "zigbee2mqtt/my_lock/get",
@@ -674,7 +823,11 @@ class TestCoverageExtra:
     """Extra tests to achieve 100% test coverage."""
 
     async def test_get_usercodes_success_bulk(self, provider, mock_hass):
-        """Test get_usercodes queries slots concurrently and resolves futures via bulk users message."""
+        """Test get_usercodes queries slots concurrently and resolves futures via bulk users message.
+
+        Keymaster queries slot N → publishes Z2M user N-1.
+        Z2M bulk response key N-1 → Keymaster slot N.
+        """
         mock_subscribe = await connect_provider(provider, mock_hass)
         callback_captured = mock_subscribe.call_args[0][2]
 
@@ -683,13 +836,13 @@ class TestCoverageExtra:
         async def mock_publish(hass, topic, payload, qos=0, retain=False):
             publish_calls.append((topic, payload))
             parsed = json.loads(payload)
-            slot_num = parsed["pin_code"]["user"]
+            z2m_user = parsed["pin_code"]["user"]  # 0-based Z2M index
 
-            # Send bulk update response back containing this user
+            # Z2M responds with bulk update keyed by 0-based user index
             response_payload = {
                 "users": {
-                    str(slot_num): {
-                        "pin_code": f"pin_{slot_num}",
+                    str(z2m_user): {
+                        "pin_code": f"pin_{z2m_user}",
                         "status": "enabled",
                     }
                 }
@@ -701,8 +854,9 @@ class TestCoverageExtra:
             result = await provider.async_get_usercodes()
 
             assert len(result) == 6
-            assert result[0] == CodeSlot(slot_num=1, code="pin_1", in_use=True)
-            assert result[5] == CodeSlot(slot_num=6, code="pin_6", in_use=True)
+            # Z2M user 0 → km slot 1, Z2M user 5 → km slot 6
+            assert result[0] == CodeSlot(slot_num=1, code="pin_0", in_use=True)
+            assert result[5] == CodeSlot(slot_num=6, code="pin_5", in_use=True)
 
     async def test_get_usercodes_disabled_no_pin_resolves_future(self, provider, mock_hass):
         """Test that single pin update with user_enabled=False and no pin_code resolves future."""
@@ -711,12 +865,12 @@ class TestCoverageExtra:
 
         async def mock_publish(hass, topic, payload, qos=0, retain=False):
             parsed = json.loads(payload)
-            slot_num = parsed["pin_code"]["user"]
+            z2m_user = parsed["pin_code"]["user"]  # 0-based Z2M index
 
-            # Response without pin_code key but user_enabled=False
+            # Z2M response echoes the 0-based user index without pin_code (disabled)
             response_payload = {
                 "pin_code": {
-                    "user": slot_num,
+                    "user": z2m_user,
                     "user_enabled": False,
                 }
             }
@@ -726,6 +880,7 @@ class TestCoverageExtra:
         with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
             result = await provider.async_get_usercodes()
             assert len(result) == 6
+            # Z2M user 0 → km slot 1
             assert result[0] == CodeSlot(slot_num=1, code=None, in_use=False)
 
     async def test_get_usercodes_enabled_no_pin_resolves_future(self, provider, mock_hass):
@@ -735,12 +890,12 @@ class TestCoverageExtra:
 
         async def mock_publish(hass, topic, payload, qos=0, retain=False):
             parsed = json.loads(payload)
-            slot_num = parsed["pin_code"]["user"]
+            z2m_user = parsed["pin_code"]["user"]  # 0-based Z2M index
 
-            # Response without pin_code key but user_enabled=True
+            # Z2M response echoes the 0-based user index without pin_code (enabled)
             response_payload = {
                 "pin_code": {
-                    "user": slot_num,
+                    "user": z2m_user,
                     "user_enabled": True,
                 }
             }
@@ -750,6 +905,7 @@ class TestCoverageExtra:
         with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
             result = await provider.async_get_usercodes()
             assert len(result) == 6
+            # Z2M user 0 → km slot 1, Z2M user 5 → km slot 6
             assert result[0] == CodeSlot(slot_num=1, code=None, in_use=True)
             assert result[5] == CodeSlot(slot_num=6, code=None, in_use=True)
 
@@ -774,11 +930,13 @@ class TestCoverageExtra:
         ) as mock_get_topic:
             mock_get_topic.return_value = None
             with pytest.raises(LockDisconnected):
-                await provider._async_query_slot(1)
+                await provider._async_query_slot(1)  # km slot 1 → would use Z2M user 0
 
     async def test_connect_missing_state_topic(self, provider, mock_hass):
         """Test that async_connect returns False when state_topic cannot be derived."""
-        setup_successful_connect(provider, mock_hass, device_name="")
+        setup_successful_connect(
+            provider, mock_hass, device_name="", identifiers={("mqtt", "zigbee2mqtt_")}
+        )
         result = await provider.async_connect()
         assert result is False
 
@@ -799,7 +957,85 @@ class TestCoverageExtra:
             mock_sub.side_effect = mock_subscribe
             await provider.async_connect()
 
-        # Test single updates with null pin_code
-        payload1 = {"pin_code": {"user": 1, "pin_code": None, "user_enabled": True}}
+        # Test single updates with null pin_code.
+        # Z2M user 0 (0-based) → Keymaster slot 1 (1-based).
+        payload1 = {"pin_code": {"user": 0, "pin_code": None, "user_enabled": True}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload1), 0, False))
         assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code=None, in_use=False)
+
+    async def test_async_query_slot_timeout_with_cache(self, provider, mock_hass):
+        """Test that _async_query_slot returns cache directly on timeout if cache populated."""
+        await connect_provider(provider, mock_hass)
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="1234", in_use=True)
+        with (
+            patch("homeassistant.components.mqtt.async_publish", new_callable=AsyncMock),
+            patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
+        ):
+            res = await provider._async_query_slot(1)
+            assert res == CodeSlot(slot_num=1, code="1234", in_use=True)
+
+    async def test_get_usercodes_wait_for_initial_state_timeout(self, provider, mock_hass):
+        """Test that get_usercodes times out waiting for initial state and continues."""
+        await connect_provider(provider, mock_hass)
+        provider.state_wait_timeout = 0.05  # small timeout
+
+        with (
+            patch("homeassistant.components.mqtt.async_publish", new_callable=AsyncMock),
+            patch.object(
+                provider, "_async_query_slot", return_value=CodeSlot(1, "1111", True)
+            ) as mock_query,
+        ):
+            result = await provider.async_get_usercodes()
+            assert len(result) == 6
+            mock_query.assert_called()
+
+    async def test_get_usercodes_with_query_delay(self, provider, mock_hass):
+        """Test that get_usercodes respects query_delay."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        provider.query_delay = 0.05
+
+        async def mock_publish(hass, topic, payload, qos=0, retain=False):
+            parsed = json.loads(payload)
+            z2m_user = parsed["pin_code"]["user"]
+            response_payload = {
+                "pin_code": {
+                    "user": z2m_user,
+                    "pin_code": f"pin_{z2m_user}",
+                    "user_enabled": True,
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+        with (
+            patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish),
+            patch("asyncio.sleep", return_value=None) as mock_sleep,
+        ):
+            provider.keymaster_config_entry.data = {CONF_START: 1, CONF_SLOTS: 2}
+            result = await provider.async_get_usercodes()
+            assert len(result) == 2
+            mock_sleep.assert_called_with(0.05)
+
+    async def test_get_usercodes_unexpected_exceptions(self, provider, mock_hass):
+        """Test that get_usercodes handles unexpected exceptions and BaseException."""
+        await connect_provider(provider, mock_hass)
+
+        # 1. Test unexpected Exception
+        with (
+            patch.object(provider, "_async_query_slot", side_effect=ValueError("Unexpected")),
+            patch(
+                "custom_components.keymaster.providers.zigbee2mqtt._LOGGER.exception"
+            ) as mock_logger,
+        ):
+            result = await provider.async_get_usercodes()
+            assert result == []
+            mock_logger.assert_called()
+
+        # 2. Test BaseException
+        with (
+            patch.object(provider, "_async_query_slot", side_effect=KeyboardInterrupt),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            await provider.async_get_usercodes()

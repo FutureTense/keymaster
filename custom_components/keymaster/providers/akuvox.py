@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import functools
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START
 from homeassistant.core import Event
@@ -342,7 +342,7 @@ class AkuvoxLockProvider(BaseLockProvider):
         # Platform entity services wrap the response per entity_id.
         entity_response = response.get(self.lock_entity_id, response)
         if isinstance(entity_response, dict):
-            return entity_response.get("users", [])
+            return cast(list[dict[str, Any]], entity_response.get("users", []))
         return []
 
     async def _async_add_user(self, name: str, pin: str) -> None:
