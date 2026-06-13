@@ -47,6 +47,8 @@ body:
       options:
         - local_akuvox
         - schlage
+        - zha
+        - zigbee2mqtt
         - zwave_js
     validations:
       required: true

@@ -1,0 +1,41 @@
+name: 'Issue Autolabeler'
+
+on:
+  issues:
+    types:
+      - opened
+
+permissions:
+  issues: write
+
+jobs:
+  autolabel:
+    name: 'Label Issue by Provider'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: 🔍 Parse Issue Form
+        uses: stefanbuck/github-issue-parser@v3
+        id: issue-parser
+        with:
+          template-path: .github/ISSUE_TEMPLATE/bug_report.yml
+
+      - name: 🏷️ Apply Provider Label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueData = JSON.parse(`${{ steps.issue-parser.outputs.jsonString }}`);
+            const provider = issueData['lock-provider'];
+
+            if (provider) {
+              const labelName = `provider: ${provider}`;
+
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: [labelName]
+              });
+            }
