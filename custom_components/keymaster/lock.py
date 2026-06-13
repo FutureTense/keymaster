@@ -77,12 +77,14 @@ class KeymasterCodeSlot:
     def __repr__(self) -> str:
         """Return representation with redactions applied if enabled."""
         parts = []
+        redact_names = self.redact_slot_names
+        redact_pins = self.redact_pins
         for f in fields(self):
             if not f.repr:
                 continue
             val = getattr(self, f.name)
-            if (f.name == "name" and self.redact_slot_names and val) or (
-                f.name == "pin" and self.redact_pins and val
+            if (f.name == "name" and redact_names and val) or (
+                f.name == "pin" and redact_pins and val
             ):
                 val = "[REDACTED]"
             parts.append(f"{f.name}={val!r}")
