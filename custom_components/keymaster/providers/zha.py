@@ -34,6 +34,7 @@ class ZHALockProvider(BaseLockProvider):
     _door_lock_cluster: DoorLock | None = field(default=None, init=False, repr=False)
     _endpoint_id: int | None = field(default=None, init=False, repr=False)
     _usercodes_cache: dict[int, CodeSlot] = field(default_factory=dict, init=False, repr=False)
+    _event_unsub: Callable[[], None] | None = field(default=None, init=False, repr=False)
 
     @property
     def domain(self) -> str:
@@ -405,6 +406,8 @@ class ZHALockProvider(BaseLockProvider):
         self, kmlock: KeymasterLock, callback: LockEventCallback
     ) -> Callable[[], None]:
         """Subscribe to ZHA lock events."""
+        if self._event_unsub is not None:
+            return self._event_unsub
 
         @ha_callback
         def handle_zha_event(event: Event) -> None:
@@ -509,7 +512,15 @@ class ZHALockProvider(BaseLockProvider):
 
         unsub = self.hass.bus.async_listen("zha_event", handle_zha_event)
         self._listeners.append(unsub)
-        return unsub
+
+        def unsubscribe() -> None:
+            unsub()
+            if unsub in self._listeners:
+                self._listeners.remove(unsub)
+            self._event_unsub = None
+
+        self._event_unsub = unsubscribe
+        return unsubscribe
 
     def subscribe_connection_events(self, callback: ConnectionCallback) -> Callable[[], None]:
         """Notify on lock entity availability transitions."""

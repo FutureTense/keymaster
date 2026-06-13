@@ -635,7 +635,14 @@ class TestLockEvents:
         mock_hass.async_create_task.assert_called_once()
         mock_coordinator.async_refresh.assert_called_once()
 
+        # 10. Test idempotency (subscribing twice returns the same unsub and doesn't double-listen)
+        mock_hass.bus.async_listen.reset_mock()
+        unsub_dup = provider.subscribe_lock_events(mock_kmlock, mock_callback)
+        assert unsub_dup is unsub
+        mock_hass.bus.async_listen.assert_not_called()
+
         unsub()
+        assert provider._event_unsub is None
 
     def test_get_platform_data(self, provider):
         """Test get_platform_data returns ZHA specific data."""
