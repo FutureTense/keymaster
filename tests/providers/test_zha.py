@@ -335,6 +335,27 @@ class TestUsercodeOperations:
         assert result[1] == CodeSlot(slot_num=2, code="5678", in_use=True)
         assert result[2] == CodeSlot(slot_num=3, code=None, in_use=False)
 
+    async def test_get_usercodes_list_tuple_response(self, provider, mock_zha_gateway):
+        """Test get_usercodes with list/tuple format cluster responses."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # Mock list/tuple responses
+        # Slot 1: list response with string PIN
+        res1 = [1, DoorLock.UserStatus.Enabled, 1, "4321"]
+        # Slot 2: tuple response with bytes PIN
+        res2 = (1, DoorLock.UserStatus.Enabled, 1, b"8765")
+        # Slot 3: list response indicating available (empty PIN)
+        res3 = [1, DoorLock.UserStatus.Available, 1, None]
+
+        mock_zha_gateway["cluster"].get_pin_code.side_effect = [res1, res2, res3]
+
+        result = await provider.async_get_usercodes()
+        assert len(result) == 3
+        assert result[0] == CodeSlot(slot_num=1, code="4321", in_use=True)
+        assert result[1] == CodeSlot(slot_num=2, code="8765", in_use=True)
+        assert result[2] == CodeSlot(slot_num=3, code=None, in_use=False)
+
     async def test_get_usercodes_fallback_to_cache_on_error(self, provider, mock_zha_gateway):
         """Test that get_usercodes falls back to cached values on query exception."""
         setup_successful_connect(provider)

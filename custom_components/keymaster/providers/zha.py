@@ -14,12 +14,12 @@ try:
     from homeassistant.components.zha.const import DOMAIN as ZHA_DOMAIN
     from homeassistant.components.zha.helpers import get_zha_gateway_proxy
 except ImportError:
-    DoorLock = None  # type: ignore[assignment, unused-ignore]
+    DoorLock = None  # type: ignore[assignment, unused-ignore, misc]
     ZHA_DOMAIN = "zha"
     get_zha_gateway_proxy = None
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import Event, callback as ha_callback
+from homeassistant.core import Event, EventStateChangedData, callback as ha_callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ._base import BaseLockProvider, CodeSlot, ConnectionCallback, LockEventCallback
@@ -65,14 +65,14 @@ class ZHALockProvider(BaseLockProvider):
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
         if not lock_entry:
             _LOGGER.error(
-                "[ZHAProvider] Can't find lock in entity registry: %s",
+                "Can't find lock in entity registry: %s",
                 self.lock_entity_id,
             )
             return False
 
         if lock_entry.platform != ZHA_DOMAIN:
             _LOGGER.error(
-                "[ZHAProvider] Lock platform is not zha: %s (%s)",
+                "Lock platform is not zha: %s (%s)",
                 self.lock_entity_id,
                 lock_entry.platform,
             )
@@ -84,7 +84,7 @@ class ZHALockProvider(BaseLockProvider):
         device_entry = self.get_device_entry()
         if not device_entry:
             _LOGGER.error(
-                "[ZHAProvider] Can't find lock device in Device Registry: %s",
+                "Can't find lock device in Device Registry: %s",
                 self.lock_entity_id,
             )
             return False
@@ -98,7 +98,7 @@ class ZHALockProvider(BaseLockProvider):
 
         if not device_ieee:
             _LOGGER.error(
-                "[ZHAProvider] Lock device has no ZHA IEEE identifier: %s",
+                "Lock device has no ZHA IEEE identifier: %s",
                 self.lock_entity_id,
             )
             return False
@@ -109,13 +109,13 @@ class ZHALockProvider(BaseLockProvider):
         cluster = self._get_door_lock_cluster()
         if not cluster:
             _LOGGER.warning(
-                "[ZHAProvider] DoorLock cluster not found on connect for lock %s",
+                "DoorLock cluster not found on connect for lock %s",
                 self.lock_entity_id,
             )
 
         self._connected = True
         _LOGGER.debug(
-            "[ZHAProvider] Connected to lock %s (device_ieee: %s)",
+            "Connected to lock %s (device_ieee: %s)",
             self.lock_entity_id,
             self._device_ieee,
         )
@@ -147,9 +147,7 @@ class ZHALockProvider(BaseLockProvider):
             entity_ref = None
 
         if not entity_ref:
-            _LOGGER.debug(
-                "[ZHAProvider] Could not find entity reference for %s", self.lock_entity_id
-            )
+            _LOGGER.debug("Could not find entity reference for %s", self.lock_entity_id)
             return None
 
         device_proxy = getattr(entity_ref, "device_proxy", None)
@@ -159,14 +157,12 @@ class ZHALockProvider(BaseLockProvider):
                 device_proxy = getattr(entity_data, "device_proxy", None)
 
         if not device_proxy:
-            _LOGGER.debug("[ZHAProvider] Could not find device proxy for %s", self.lock_entity_id)
+            _LOGGER.debug("Could not find device proxy for %s", self.lock_entity_id)
             return None
 
         device = getattr(device_proxy, "device", None)
         if not device:
-            _LOGGER.debug(
-                "[ZHAProvider] Could not find device on device proxy for %s", self.lock_entity_id
-            )
+            _LOGGER.debug("Could not find device on device proxy for %s", self.lock_entity_id)
             return None
 
         zigpy_device = getattr(device, "device", device)
@@ -179,13 +175,13 @@ class ZHALockProvider(BaseLockProvider):
                     self._door_lock_cluster = cluster
                     self._endpoint_id = endpoint_id
                     _LOGGER.debug(
-                        "[ZHAProvider] Found DoorLock cluster on endpoint %s for %s",
+                        "Found DoorLock cluster on endpoint %s for %s",
                         endpoint_id,
                         self.lock_entity_id,
                     )
                     return cluster
 
-        _LOGGER.warning("[ZHAProvider] Could not find DoorLock cluster for %s", self.lock_entity_id)
+        _LOGGER.warning("Could not find DoorLock cluster for %s", self.lock_entity_id)
         return None
 
     async def async_is_connected(self) -> bool:
@@ -212,12 +208,12 @@ class ZHALockProvider(BaseLockProvider):
     async def async_get_usercodes(self) -> list[CodeSlot]:
         """Get all user codes from ZHA lock."""
         if not self._connected:
-            _LOGGER.error("[ZHAProvider] Not connected to lock")
+            _LOGGER.error("Not connected to lock")
             return []
 
         cluster = self._get_door_lock_cluster()
         if not cluster:
-            _LOGGER.error("[ZHAProvider] DoorLock cluster not available")
+            _LOGGER.error("DoorLock cluster not available")
             return []
 
         slot_start = self.keymaster_config_entry.data.get(CONF_START, 1)
@@ -228,7 +224,7 @@ class ZHALockProvider(BaseLockProvider):
             try:
                 res = await cluster.get_pin_code(slot_num)
                 _LOGGER.debug(
-                    "[ZHAProvider] Lock %s slot %s get_pin_code: %s",
+                    "Lock %s slot %s get_pin_code: %s",
                     self.lock_entity_id,
                     slot_num,
                     res,
@@ -250,7 +246,7 @@ class ZHALockProvider(BaseLockProvider):
                 result.append(slot)
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning(
-                    "[ZHAProvider] Lock %s: failed to read slot %s: %s",
+                    "Lock %s: failed to read slot %s: %s",
                     self.lock_entity_id,
                     slot_num,
                     e,
@@ -297,7 +293,7 @@ class ZHALockProvider(BaseLockProvider):
             self._usercodes_cache[slot_num] = slot
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning(
-                "[ZHAProvider] Lock %s: failed to refresh slot %s: %s",
+                "Lock %s: failed to refresh slot %s: %s",
                 self.lock_entity_id,
                 slot_num,
                 e,
@@ -310,7 +306,7 @@ class ZHALockProvider(BaseLockProvider):
         """Set user code on ZHA lock."""
         cluster = self._get_door_lock_cluster()
         if not cluster:
-            _LOGGER.error("[ZHAProvider] DoorLock cluster not available")
+            _LOGGER.error("DoorLock cluster not available")
             return False
 
         try:
@@ -321,7 +317,7 @@ class ZHALockProvider(BaseLockProvider):
                 code,
             )
             _LOGGER.debug(
-                "[ZHAProvider] Lock %s slot %s set_pin_code result: %s",
+                "Lock %s slot %s set_pin_code result: %s",
                 self.lock_entity_id,
                 slot_num,
                 result,
@@ -331,7 +327,7 @@ class ZHALockProvider(BaseLockProvider):
                 status = result[0]
             if status is not None and status != 0:
                 _LOGGER.error(
-                    "[ZHAProvider] Lock %s slot %s set_pin_code rejected: status %s",
+                    "Lock %s slot %s set_pin_code rejected: status %s",
                     self.lock_entity_id,
                     slot_num,
                     status,
@@ -345,7 +341,7 @@ class ZHALockProvider(BaseLockProvider):
             )
         except Exception:
             _LOGGER.exception(
-                "[ZHAProvider] Error setting user code on lock %s slot %s",
+                "Error setting user code on lock %s slot %s",
                 self.lock_entity_id,
                 slot_num,
             )
@@ -357,13 +353,13 @@ class ZHALockProvider(BaseLockProvider):
         """Clear user code from ZHA lock."""
         cluster = self._get_door_lock_cluster()
         if not cluster:
-            _LOGGER.error("[ZHAProvider] DoorLock cluster not available")
+            _LOGGER.error("DoorLock cluster not available")
             return False
 
         try:
             result = await cluster.clear_pin_code(slot_num)
             _LOGGER.debug(
-                "[ZHAProvider] Lock %s slot %s clear_pin_code result: %s",
+                "Lock %s slot %s clear_pin_code result: %s",
                 self.lock_entity_id,
                 slot_num,
                 result,
@@ -373,7 +369,7 @@ class ZHALockProvider(BaseLockProvider):
                 status = result[0]
             if status is not None and status != 0:
                 _LOGGER.error(
-                    "[ZHAProvider] Lock %s slot %s clear_pin_code rejected: status %s",
+                    "Lock %s slot %s clear_pin_code rejected: status %s",
                     self.lock_entity_id,
                     slot_num,
                     status,
@@ -387,7 +383,7 @@ class ZHALockProvider(BaseLockProvider):
             )
         except Exception:
             _LOGGER.exception(
-                "[ZHAProvider] Error clearing user code on lock %s slot %s",
+                "Error clearing user code on lock %s slot %s",
                 self.lock_entity_id,
                 slot_num,
             )
@@ -524,7 +520,7 @@ class ZHALockProvider(BaseLockProvider):
         """Notify on lock entity availability transitions."""
 
         @ha_callback
-        def _state_changed(event: Event) -> None:
+        def _state_changed(event: Event[EventStateChangedData]) -> None:
             new_state = event.data.get("new_state")
             connected = bool(
                 new_state and new_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
