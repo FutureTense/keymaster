@@ -934,7 +934,9 @@ class TestCoverageExtra:
 
     async def test_connect_missing_state_topic(self, provider, mock_hass):
         """Test that async_connect returns False when state_topic cannot be derived."""
-        setup_successful_connect(provider, mock_hass, device_name="", identifiers=set())
+        setup_successful_connect(
+            provider, mock_hass, device_name="", identifiers={("mqtt", "zigbee2mqtt_")}
+        )
         result = await provider.async_connect()
         assert result is False
 
@@ -960,3 +962,80 @@ class TestCoverageExtra:
         payload1 = {"pin_code": {"user": 0, "pin_code": None, "user_enabled": True}}
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload1), 0, False))
         assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code=None, in_use=False)
+
+    async def test_async_query_slot_timeout_with_cache(self, provider, mock_hass):
+        """Test that _async_query_slot returns cache directly on timeout if cache populated."""
+        await connect_provider(provider, mock_hass)
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="1234", in_use=True)
+        with (
+            patch("homeassistant.components.mqtt.async_publish", new_callable=AsyncMock),
+            patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
+        ):
+            res = await provider._async_query_slot(1)
+            assert res == CodeSlot(slot_num=1, code="1234", in_use=True)
+
+    async def test_get_usercodes_wait_for_initial_state_timeout(self, provider, mock_hass):
+        """Test that get_usercodes times out waiting for initial state and continues."""
+        await connect_provider(provider, mock_hass)
+        provider.state_wait_timeout = 0.05  # small timeout
+
+        with (
+            patch("homeassistant.components.mqtt.async_publish", new_callable=AsyncMock),
+            patch.object(
+                provider, "_async_query_slot", return_value=CodeSlot(1, "1111", True)
+            ) as mock_query,
+        ):
+            result = await provider.async_get_usercodes()
+            assert len(result) == 6
+            mock_query.assert_called()
+
+    async def test_get_usercodes_with_query_delay(self, provider, mock_hass):
+        """Test that get_usercodes respects query_delay."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        provider.query_delay = 0.05
+
+        async def mock_publish(hass, topic, payload, qos=0, retain=False):
+            parsed = json.loads(payload)
+            z2m_user = parsed["pin_code"]["user"]
+            response_payload = {
+                "pin_code": {
+                    "user": z2m_user,
+                    "pin_code": f"pin_{z2m_user}",
+                    "user_enabled": True,
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+        with (
+            patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish),
+            patch("asyncio.sleep", return_value=None) as mock_sleep,
+        ):
+            provider.keymaster_config_entry.data = {CONF_START: 1, CONF_SLOTS: 2}
+            result = await provider.async_get_usercodes()
+            assert len(result) == 2
+            mock_sleep.assert_called_with(0.05)
+
+    async def test_get_usercodes_unexpected_exceptions(self, provider, mock_hass):
+        """Test that get_usercodes handles unexpected exceptions and BaseException."""
+        await connect_provider(provider, mock_hass)
+
+        # 1. Test unexpected Exception
+        with (
+            patch.object(provider, "_async_query_slot", side_effect=ValueError("Unexpected")),
+            patch(
+                "custom_components.keymaster.providers.zigbee2mqtt._LOGGER.exception"
+            ) as mock_logger,
+        ):
+            result = await provider.async_get_usercodes()
+            assert result == []
+            mock_logger.assert_called()
+
+        # 2. Test BaseException
+        with (
+            patch.object(provider, "_async_query_slot", side_effect=KeyboardInterrupt),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            await provider.async_get_usercodes()
