@@ -55,6 +55,8 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
     )
     _lock_event_callback: LockEventCallback | None = field(default=None, init=False, repr=False)
     query_delay: float = field(default=0.5, init=False, repr=False)
+    _initial_state_received: asyncio.Event | None = field(default=None, init=False, repr=False)
+    state_wait_timeout: float = field(default=1.0, init=False, repr=False)
 
     @property
     def domain(self) -> str:
@@ -122,6 +124,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
     async def async_connect(self) -> bool:
         """Connect to the Zigbee2MQTT lock."""
         self._connected = False
+        self._initial_state_received = asyncio.Event()
 
         # Get lock entity registry entry
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
@@ -168,6 +171,8 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         @callback
         def handle_state_message(msg: mqtt.ReceiveMessage) -> None:
             """Handle incoming state updates."""
+            if self._initial_state_received:
+                self._initial_state_received.set()
             try:
                 payload = json.loads(msg.payload)
             except ValueError:
@@ -336,11 +341,28 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             _LOGGER.error("[Zigbee2MQTTProvider] Not connected to lock")
             return []
 
+        # Wait for the initial state message (retained message) to arrive and populate the cache
+        if (
+            self._initial_state_received
+            and not self._initial_state_received.is_set()
+            and self.state_wait_timeout > 0
+        ):
+            try:
+                await asyncio.wait_for(
+                    self._initial_state_received.wait(), timeout=self.state_wait_timeout
+                )
+            except TimeoutError:
+                _LOGGER.debug("[Zigbee2MQTTProvider] Timeout waiting for initial state message")
+
         slot_start = self.keymaster_config_entry.data.get(CONF_START, 1)
         slot_count = self.keymaster_config_entry.data.get(CONF_SLOTS, 0)
 
         result: list[CodeSlot] = []
         for i in range(slot_start, slot_start + slot_count):
+            # If the slot is already in the cache, use it directly to bypass OTA query
+            if i in self._usercodes_cache:
+                result.append(self._usercodes_cache[i])
+                continue
             try:
                 res = await self._async_query_slot(i)
                 result.append(res)

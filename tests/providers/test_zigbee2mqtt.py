@@ -83,6 +83,7 @@ def provider(mock_hass, mock_entity_registry, mock_device_registry, mock_config_
         entity_registry=mock_entity_registry,
     )
     prov.query_delay = 0.0
+    prov.state_wait_timeout = 0.0
     return prov
 
 
@@ -596,6 +597,103 @@ class TestUsercodeOperations:
             )
             # Cache is keyed by Keymaster slot number
             assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code=None, in_use=False)
+
+    async def test_get_usercodes_uses_cache_directly(self, provider, mock_hass):
+        """Test that get_usercodes returns cache directly without publishing."""
+        await connect_provider(provider, mock_hass)
+
+        for i in range(1, 7):
+            provider._usercodes_cache[i] = CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+
+        with patch(
+            "homeassistant.components.mqtt.async_publish", new_callable=AsyncMock
+        ) as mock_publish:
+            result = await provider.async_get_usercodes()
+
+        assert mock_publish.call_count == 0
+        assert len(result) == 6
+        for i in range(1, 7):
+            assert result[i - 1] == CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+
+    async def test_get_usercodes_fallback_to_query_on_missing_cache_slot(self, provider, mock_hass):
+        """Test that get_usercodes falls back to query only for slots missing from cache."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        # Pre-populate slots 1-5
+        for i in range(1, 6):
+            provider._usercodes_cache[i] = CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+
+        publish_calls = []
+
+        async def mock_publish(hass, topic, payload, qos=0, retain=False):
+            publish_calls.append((topic, payload))
+            parsed = json.loads(payload)
+            z2m_user = parsed["pin_code"]["user"]
+            response_payload = {
+                "pin_code": {
+                    "user": z2m_user,
+                    "pin_code": f"queried_{z2m_user}",
+                    "user_enabled": True,
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+        with patch("homeassistant.components.mqtt.async_publish", side_effect=mock_publish):
+            result = await provider.async_get_usercodes()
+
+        # Should only query slot 6 (Z2M user 5)
+        assert len(publish_calls) == 1
+        assert publish_calls[0] == (
+            "zigbee2mqtt/my_lock/get",
+            json.dumps({"pin_code": {"user": 5}}),
+        )
+        assert len(result) == 6
+        for i in range(1, 6):
+            assert result[i - 1] == CodeSlot(slot_num=i, code=f"cached_{i}", in_use=True)
+        assert result[5] == CodeSlot(slot_num=6, code="queried_5", in_use=True)
+
+    async def test_get_usercodes_waits_for_initial_state(self, provider, mock_hass):
+        """Test that get_usercodes waits for the initial state message to arrive."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+
+        provider.state_wait_timeout = 0.5
+
+        async def run_get_usercodes():
+            return await provider.async_get_usercodes()
+
+        with patch(
+            "homeassistant.components.mqtt.async_publish", new_callable=AsyncMock
+        ) as mock_publish:
+            task = asyncio.create_task(run_get_usercodes())
+            await asyncio.sleep(0.1)
+
+            # Not finished yet because it is waiting for initial state message
+            assert not task.done()
+
+            # Now send the initial state message (containing users)
+            response_payload = {
+                "users": {
+                    "0": {"pin_code": "pin_0", "status": "enabled"},
+                    "1": {"pin_code": "pin_1", "status": "enabled"},
+                    "2": {"pin_code": "pin_2", "status": "enabled"},
+                    "3": {"pin_code": "pin_3", "status": "enabled"},
+                    "4": {"pin_code": "pin_4", "status": "enabled"},
+                    "5": {"pin_code": "pin_5", "status": "enabled"},
+                }
+            }
+            msg = ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(response_payload), 0, False)
+            callback_captured(msg)
+
+            result = await task
+
+        # Should not have published anything to get topic
+        assert mock_publish.call_count == 0
+        assert len(result) == 6
+        for i in range(1, 7):
+            assert result[i - 1] == CodeSlot(slot_num=i, code=f"pin_{i - 1}", in_use=True)
 
 
 class TestLockEvents:
