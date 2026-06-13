@@ -8,16 +8,11 @@ from dataclasses import dataclass, field
 import logging
 from typing import TYPE_CHECKING, Any
 
-try:
-    from zigpy.zcl.clusters.closures import DoorLock
+from zigpy.zcl.clusters.closures import DoorLock
 
-    from homeassistant.components.zha.const import DOMAIN as ZHA_DOMAIN
-    from homeassistant.components.zha.helpers import get_zha_gateway_proxy
-except ImportError:
-    DoorLock = None  # type: ignore[assignment, unused-ignore, misc]
-    ZHA_DOMAIN = "zha"
-    get_zha_gateway_proxy = None
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from homeassistant.components.zha.const import DOMAIN as ZHA_DOMAIN
+from homeassistant.components.zha.helpers import get_zha_gateway_proxy
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, callback as ha_callback
 from homeassistant.helpers.event import async_track_state_change_event
