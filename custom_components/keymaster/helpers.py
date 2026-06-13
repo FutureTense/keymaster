@@ -167,11 +167,11 @@ async def call_hass_service(
     silently retiring the timer as if the action had succeeded.
     """
     _LOGGER.debug(
-        "[call_hass_service] service: %s.%s, target: %s, service_data: %s",
+        "[call_hass_service] service: %s.%s, target: %s, service_data_keys: %s",
         domain,
         service,
         target,
-        service_data,
+        list(service_data.keys()) if isinstance(service_data, dict) else None,
     )
 
     try:
@@ -190,11 +190,11 @@ async def send_manual_notification(
 ) -> None:
     """Send a manual notification to notify script."""
     _LOGGER.debug(
-        "[send_manual_notification] script: %s.%s, title: %s, message: %s",
+        "[send_manual_notification] script: %s.%s, has_title: %s, message_len: %s",
         SCRIPT_DOMAIN,
         script_name,
-        title,
-        message,
+        bool(title),
+        len(message) if message else 0,
     )
     if not script_name:
         return
@@ -214,9 +214,9 @@ async def send_persistent_notification(
 ) -> None:
     """Send a persistent notification."""
     _LOGGER.debug(
-        "[send_persistent_notification] title: %s, message: %s, notification_id: %s",
-        title,
-        message,
+        "[send_persistent_notification] has_title: %s, message_len: %s, notification_id: %s",
+        bool(title),
+        len(message) if message else 0,
         notification_id,
     )
     persistent_notification.async_create(

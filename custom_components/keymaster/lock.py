@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime as dt, time as dt_time
 import logging
 from typing import TYPE_CHECKING
+import weakref
 
 from .const import Synced
 
@@ -61,10 +62,33 @@ class KeymasterCodeSlot:
     accesslimit_date_range_end: dt | None = None
     accesslimit_day_of_week_enabled: bool = False
     accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
+    redact_slot_names: bool = True
+    redact_pins: bool = True
+    _redact_slot_names_val: bool = field(default=True, init=False, repr=False)
+    _redact_pins_val: bool = field(default=True, init=False, repr=False)
+    _lock_ref: weakref.ReferenceType[KeymasterLock] | None = field(
+        default=None, init=False, repr=False
+    )
     # Transient runtime-only field; excluded from persistence (init=False).
     last_code_set_at: dt | None = field(default=None, init=False, repr=False)
     # Tracks when the slot entered ADDING/DELETING state for grace-period recovery.
     sync_op_started_at: dt | None = field(default=None, init=False, repr=False)
+
+    def __repr__(self) -> str:
+        """Return representation with redactions applied if enabled."""
+        parts = []
+        redact_names = self.redact_slot_names
+        redact_pins = self.redact_pins
+        for f in fields(self):
+            if not f.repr:
+                continue
+            val = getattr(self, f.name)
+            if (f.name == "name" and redact_names and val) or (
+                f.name == "pin" and redact_pins and val
+            ):
+                val = "[REDACTED]"
+            parts.append(f"{f.name}={val!r}")
+        return f"{self.__class__.__name__}({', '.join(parts)})"
 
     def inherit_state_from(self, old: KeymasterCodeSlot) -> None:
         """Carry user state from `old` into `self`.
@@ -94,6 +118,62 @@ class KeymasterCodeSlot:
             old_dow = old.accesslimit_day_of_week.get(dow_num)
             if old_dow is not None:
                 new_dow.inherit_state_from(old_dow)
+
+
+# Properties defined after class decoration to avoid dataclass default-value descriptor conflict:
+def _get_redact_slot_names(self: KeymasterCodeSlot) -> bool:
+    lock_ref = getattr(self, "_lock_ref", None)
+    lock = lock_ref() if lock_ref is not None else None
+    if lock is not None:
+        return lock.redact_slot_names
+    return getattr(self, "_redact_slot_names_val", True)
+
+
+def _set_redact_slot_names(self: KeymasterCodeSlot, value: bool) -> None:
+    self._redact_slot_names_val = value
+
+
+KeymasterCodeSlot.redact_slot_names = property(  # type: ignore[assignment]
+    _get_redact_slot_names, _set_redact_slot_names
+)
+
+
+def _get_redact_pins(self: KeymasterCodeSlot) -> bool:
+    lock_ref = getattr(self, "_lock_ref", None)
+    lock = lock_ref() if lock_ref is not None else None
+    if lock is not None:
+        return lock.redact_pins
+    return getattr(self, "_redact_pins_val", True)
+
+
+def _set_redact_pins(self: KeymasterCodeSlot, value: bool) -> None:
+    self._redact_pins_val = value
+
+
+KeymasterCodeSlot.redact_pins = property(  # type: ignore[assignment]
+    _get_redact_pins, _set_redact_pins
+)
+
+
+class KeymasterCodeSlotsDict(dict):
+    """Custom dict to automatically set the parent lock reference on slots."""
+
+    def __init__(self, lock: KeymasterLock, *args, **kwargs) -> None:
+        """Initialize."""
+        self._lock_ref = weakref.ref(lock)
+        super().__init__(*args, **kwargs)
+        for slot in self.values():
+            slot._lock_ref = self._lock_ref  # noqa: SLF001
+
+    def __setitem__(self, key: int, value: KeymasterCodeSlot) -> None:
+        """Set item."""
+        value._lock_ref = self._lock_ref  # noqa: SLF001
+        super().__setitem__(key, value)
+
+    def update(self, *args, **kwargs) -> None:
+        """Update items."""
+        for k, v in dict(*args, **kwargs).items():
+            self[k] = v
 
 
 @dataclass
@@ -129,8 +209,15 @@ class KeymasterLock:
     child_config_entry_ids: list = field(default_factory=list)
     listeners: list[Callable] = field(default_factory=list)
     pending_delete: bool = False
+    redact_slot_names: bool = True
+    redact_pins: bool = True
     # Transient runtime-only field; excluded from persistence (init=False).
     masked_code_slots: set[int] = field(default_factory=set, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Initialize slot settings."""
+        if self.code_slots is not None:
+            self.code_slots = KeymasterCodeSlotsDict(self, self.code_slots)
 
     def inherit_state_from(self, old: KeymasterLock) -> None:
         """Carry user/runtime state from a previous instance into this one.
@@ -199,6 +286,8 @@ keymasterlock_type_lookup: MutableMapping[str, type] = {
     "child_config_entry_ids": list,
     # "listeners": list,
     "pending_delete": bool,
+    "redact_slot_names": bool,
+    "redact_pins": bool,
     "day_of_week_num": int,
     "day_of_week_name": str,
     "dow_enabled": bool,

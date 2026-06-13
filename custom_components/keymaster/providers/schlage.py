@@ -313,7 +313,7 @@ class SchlageLockProvider(BaseLockProvider):
                     "skipping in favor of earlier entry",
                     slot_num,
                     code_id,
-                    friendly_name,
+                    self.redact_name(friendly_name),
                 )
                 continue
             seen_slots.add(slot_num)
@@ -343,7 +343,7 @@ class SchlageLockProvider(BaseLockProvider):
                 _LOGGER.debug(
                     "[SchlageProvider] No managed slot available for untagged code '%s'; "
                     "leaving untouched",
-                    original_name,
+                    self.redact_name(original_name),
                 )
                 continue
 
@@ -354,7 +354,7 @@ class SchlageLockProvider(BaseLockProvider):
                 _LOGGER.debug(
                     "[SchlageProvider] Skipping untaggable code '%s' (slot %d): "
                     "PIN appears masked or empty",
-                    original_name,
+                    self.redact_name(original_name),
                     prospective_slot,
                 )
                 continue
@@ -364,7 +364,7 @@ class SchlageLockProvider(BaseLockProvider):
             except HomeAssistantError as e:
                 _LOGGER.error(
                     "[SchlageProvider] Failed to tag code '%s' for slot %d: %s: %s",
-                    original_name,
+                    self.redact_name(original_name),
                     prospective_slot,
                     e.__class__.__qualname__,
                     e,
@@ -377,7 +377,7 @@ class SchlageLockProvider(BaseLockProvider):
                 _LOGGER.warning(
                     "[SchlageProvider] Tagged code added but failed to delete "
                     "original '%s' for slot %d: %s. Attempting rollback.",
-                    original_name,
+                    self.redact_name(original_name),
                     prospective_slot,
                     e,
                 )
@@ -387,7 +387,7 @@ class SchlageLockProvider(BaseLockProvider):
                     _LOGGER.error(
                         "[SchlageProvider] Rollback failed for tagged code '%s'. "
                         "Lock may have duplicate entries.",
-                        tagged_name,
+                        self.redact_name(tagged_name),
                     )
                 continue
 
@@ -396,9 +396,9 @@ class SchlageLockProvider(BaseLockProvider):
             next_slot += 1
             _LOGGER.debug(
                 "[SchlageProvider] Tagged code '%s' as slot %d: '%s'",
-                original_name,
+                self.redact_name(original_name),
                 slot_num,
-                tagged_name,
+                self.redact_name(tagged_name),
             )
             result.append(
                 CodeSlot(
