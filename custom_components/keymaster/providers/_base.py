@@ -8,9 +8,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from custom_components.keymaster.const import (
-    CONF_REDACT_PINS,
+    CONF_REDACT_PIN_CODES,
     CONF_REDACT_SLOT_NAMES,
-    DEFAULT_REDACT_PINS,
+    DEFAULT_REDACT_PIN_CODES,
     DEFAULT_REDACT_SLOT_NAMES,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -282,11 +282,11 @@ class BaseLockProvider(ABC):
         )
 
     @property
-    def redact_pins(self) -> bool:
+    def redact_pin_codes(self) -> bool:
         """Return if PINs should be redacted."""
         return self.keymaster_config_entry.options.get(
-            CONF_REDACT_PINS,
-            self.keymaster_config_entry.data.get(CONF_REDACT_PINS, DEFAULT_REDACT_PINS),
+            CONF_REDACT_PIN_CODES,
+            self.keymaster_config_entry.data.get(CONF_REDACT_PIN_CODES, DEFAULT_REDACT_PIN_CODES),
         )
 
     def redact_name(self, name: str | None) -> str | None:
@@ -295,8 +295,8 @@ class BaseLockProvider(ABC):
             return name
         return "[REDACTED]" if self.redact_slot_names else name
 
-    def redact_pin(self, pin: str | None) -> str | None:
+    def redact_pin_code(self, pin: str | None) -> str | None:
         """Redact pin if enabled."""
         if not pin:
             return pin
-        return "[REDACTED]" if self.redact_pins else pin
+        return "[REDACTED]" if self.redact_pin_codes else pin

@@ -97,32 +97,32 @@ class TestBaseLockProviderRedaction:
         # 1. Test when 'not name' and 'not pin'
         assert provider.redact_name(None) is None
         assert provider.redact_name("") == ""
-        assert provider.redact_pin(None) is None
-        assert provider.redact_pin("") == ""
+        assert provider.redact_pin_code(None) is None
+        assert provider.redact_pin_code("") == ""
 
         # 2. Test when options/data are empty (uses defaults, which are True)
         assert provider.redact_slot_names is True
-        assert provider.redact_pins is True
+        assert provider.redact_pin_codes is True
         assert provider.redact_name("John Doe") == "[REDACTED]"
-        assert provider.redact_pin("1234") == "[REDACTED]"
+        assert provider.redact_pin_code("1234") == "[REDACTED]"
 
         # 3. Test when disabled via options
         mock_entry.options = {
             "redact_slot_names": False,
-            "redact_pins": False,
+            "redact_pin_codes": False,
         }
         assert provider.redact_slot_names is False
-        assert provider.redact_pins is False
+        assert provider.redact_pin_codes is False
         assert provider.redact_name("John Doe") == "John Doe"
-        assert provider.redact_pin("1234") == "1234"
+        assert provider.redact_pin_code("1234") == "1234"
 
         # 4. Test when disabled via data (options is empty)
         mock_entry.options = {}
         mock_entry.data = {
             "redact_slot_names": False,
-            "redact_pins": False,
+            "redact_pin_codes": False,
         }
         assert provider.redact_slot_names is False
-        assert provider.redact_pins is False
+        assert provider.redact_pin_codes is False
         assert provider.redact_name("John Doe") == "John Doe"
-        assert provider.redact_pin("1234") == "1234"
+        assert provider.redact_pin_code("1234") == "1234"

@@ -21,7 +21,7 @@ from custom_components.keymaster.const import (
     CONF_PARENT_ENTRY_ID,
     CONF_SLOTS,
     CONF_START,
-    DEFAULT_REDACT_PINS,
+    DEFAULT_REDACT_PIN_CODES,
     DEFAULT_REDACT_SLOT_NAMES,
     DOMAIN,
     NONE_TEXT,
@@ -295,19 +295,19 @@ async def test_options_flow(hass):
         result["flow_id"],
         {
             "redact_slot_names": False,
-            "redact_pins": False,
+            "redact_pin_codes": False,
         },
     )
 
     assert result2["type"] is FlowResultType.CREATE_ENTRY
     assert result2["data"] == {
         "redact_slot_names": False,
-        "redact_pins": False,
+        "redact_pin_codes": False,
     }
 
     assert entry.options == {
         "redact_slot_names": False,
-        "redact_pins": False,
+        "redact_pin_codes": False,
     }
 
 
@@ -344,7 +344,7 @@ async def test_options_flow_reload_and_precedence(hass):
         coordinator = hass.data[DOMAIN]["coordinator"]
         kmlock = coordinator.sync_get_lock_by_config_entry_id(entry.entry_id)
         assert kmlock.redact_slot_names is True
-        assert kmlock.redact_pins is True
+        assert kmlock.redact_pin_codes is True
 
         # Now trigger options flow to toggle options to False
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -358,7 +358,7 @@ async def test_options_flow_reload_and_precedence(hass):
                 result["flow_id"],
                 {
                     "redact_slot_names": False,
-                    "redact_pins": False,
+                    "redact_pin_codes": False,
                 },
             )
             assert result2["type"] is FlowResultType.CREATE_ENTRY
@@ -367,7 +367,7 @@ async def test_options_flow_reload_and_precedence(hass):
             # Verify the entry options were updated and async_reload was triggered by update_listener
             assert entry.options == {
                 "redact_slot_names": False,
-                "redact_pins": False,
+                "redact_pin_codes": False,
             }
             assert len(mock_reload.mock_calls) == 1
 
@@ -379,11 +379,13 @@ async def test_redact_defaults_precedence(hass):
     # Scenario B: Data has False, options is empty -> False
     data_false = CONFIG_DATA.copy()
     data_false["redact_slot_names"] = False
-    data_false["redact_pins"] = False
+    data_false["redact_pin_codes"] = False
     entry_data = MockConfigEntry(domain=DOMAIN, data=data_false, options={})
     # Scenario C: Options has True, Data has False -> True
     entry_options = MockConfigEntry(
-        domain=DOMAIN, data=data_false, options={"redact_slot_names": True, "redact_pins": True}
+        domain=DOMAIN,
+        data=data_false,
+        options={"redact_slot_names": True, "redact_pin_codes": True},
     )
     kmlock_none = KeymasterLock(
         lock_name="test",
@@ -392,12 +394,12 @@ async def test_redact_defaults_precedence(hass):
         redact_slot_names=entry_none.options.get(
             "redact_slot_names", entry_none.data.get("redact_slot_names", DEFAULT_REDACT_SLOT_NAMES)
         ),
-        redact_pins=entry_none.options.get(
-            "redact_pins", entry_none.data.get("redact_pins", DEFAULT_REDACT_PINS)
+        redact_pin_codes=entry_none.options.get(
+            "redact_pin_codes", entry_none.data.get("redact_pin_codes", DEFAULT_REDACT_PIN_CODES)
         ),
     )
     assert kmlock_none.redact_slot_names is True
-    assert kmlock_none.redact_pins is True
+    assert kmlock_none.redact_pin_codes is True
 
     kmlock_data = KeymasterLock(
         lock_name="test",
@@ -406,12 +408,12 @@ async def test_redact_defaults_precedence(hass):
         redact_slot_names=entry_data.options.get(
             "redact_slot_names", entry_data.data.get("redact_slot_names", DEFAULT_REDACT_SLOT_NAMES)
         ),
-        redact_pins=entry_data.options.get(
-            "redact_pins", entry_data.data.get("redact_pins", DEFAULT_REDACT_PINS)
+        redact_pin_codes=entry_data.options.get(
+            "redact_pin_codes", entry_data.data.get("redact_pin_codes", DEFAULT_REDACT_PIN_CODES)
         ),
     )
     assert kmlock_data.redact_slot_names is False
-    assert kmlock_data.redact_pins is False
+    assert kmlock_data.redact_pin_codes is False
 
     kmlock_options = KeymasterLock(
         lock_name="test",
@@ -421,9 +423,9 @@ async def test_redact_defaults_precedence(hass):
             "redact_slot_names",
             entry_options.data.get("redact_slot_names", DEFAULT_REDACT_SLOT_NAMES),
         ),
-        redact_pins=entry_options.options.get(
-            "redact_pins", entry_options.data.get("redact_pins", DEFAULT_REDACT_PINS)
+        redact_pin_codes=entry_options.options.get(
+            "redact_pin_codes", entry_options.data.get("redact_pin_codes", DEFAULT_REDACT_PIN_CODES)
         ),
     )
     assert kmlock_options.redact_slot_names is True
-    assert kmlock_options.redact_pins is True
+    assert kmlock_options.redact_pin_codes is True

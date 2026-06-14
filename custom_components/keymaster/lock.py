@@ -6,7 +6,7 @@ from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field, fields
 from datetime import datetime as dt, time as dt_time
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 import weakref
 
 from .const import Synced
@@ -63,9 +63,9 @@ class KeymasterCodeSlot:
     accesslimit_day_of_week_enabled: bool = False
     accesslimit_day_of_week: MutableMapping[int, KeymasterCodeSlotDayOfWeek] | None = None
     redact_slot_names: bool = True
-    redact_pins: bool = True
+    redact_pin_codes: bool = True
     _redact_slot_names_val: bool = field(default=True, init=False, repr=False)
-    _redact_pins_val: bool = field(default=True, init=False, repr=False)
+    _redact_pin_codes_val: bool = field(default=True, init=False, repr=False)
     _lock_ref: weakref.ReferenceType[KeymasterLock] | None = field(
         default=None, init=False, repr=False
     )
@@ -78,13 +78,13 @@ class KeymasterCodeSlot:
         """Return representation with redactions applied if enabled."""
         parts = []
         redact_names = self.redact_slot_names
-        redact_pins = self.redact_pins
+        redact_pin_codes = self.redact_pin_codes
         for f in fields(self):
             if not f.repr:
                 continue
             val = getattr(self, f.name)
             if (f.name == "name" and redact_names and val) or (
-                f.name == "pin" and redact_pins and val
+                f.name == "pin" and redact_pin_codes and val
             ):
                 val = "[REDACTED]"
             parts.append(f"{f.name}={val!r}")
@@ -138,20 +138,20 @@ KeymasterCodeSlot.redact_slot_names = property(  # type: ignore[assignment]
 )
 
 
-def _get_redact_pins(self: KeymasterCodeSlot) -> bool:
+def _get_redact_pin_codes(self: KeymasterCodeSlot) -> bool:
     lock_ref = getattr(self, "_lock_ref", None)
     lock = lock_ref() if lock_ref is not None else None
     if lock is not None:
-        return lock.redact_pins
-    return getattr(self, "_redact_pins_val", True)
+        return lock.redact_pin_codes
+    return getattr(self, "_redact_pin_codes_val", True)
 
 
-def _set_redact_pins(self: KeymasterCodeSlot, value: bool) -> None:
-    self._redact_pins_val = value
+def _set_redact_pin_codes(self: KeymasterCodeSlot, value: bool) -> None:
+    self._redact_pin_codes_val = value
 
 
-KeymasterCodeSlot.redact_pins = property(  # type: ignore[assignment]
-    _get_redact_pins, _set_redact_pins
+KeymasterCodeSlot.redact_pin_codes = property(  # type: ignore[assignment]
+    _get_redact_pin_codes, _set_redact_pin_codes
 )
 
 
@@ -174,6 +174,20 @@ class KeymasterCodeSlotsDict(dict):
         """Update items."""
         for k, v in dict(*args, **kwargs).items():
             self[k] = v
+
+    def setdefault(
+        self, key: int, default: KeymasterCodeSlot | None = None
+    ) -> KeymasterCodeSlot | None:
+        """Set the slot's `_lock_ref` before inserting via the default path."""
+        if key not in self and default is not None:
+            self[key] = default
+            return default
+        return super().setdefault(key, default)
+
+    def __ior__(self, other: object) -> Self:  # type: ignore[misc]
+        """In-place merge that routes through __setitem__."""
+        self.update(other)
+        return self
 
 
 @dataclass
@@ -210,7 +224,7 @@ class KeymasterLock:
     listeners: list[Callable] = field(default_factory=list)
     pending_delete: bool = False
     redact_slot_names: bool = True
-    redact_pins: bool = True
+    redact_pin_codes: bool = True
     # Transient runtime-only field; excluded from persistence (init=False).
     masked_code_slots: set[int] = field(default_factory=set, init=False, repr=False)
 
@@ -287,7 +301,7 @@ keymasterlock_type_lookup: MutableMapping[str, type] = {
     # "listeners": list,
     "pending_delete": bool,
     "redact_slot_names": bool,
-    "redact_pins": bool,
+    "redact_pin_codes": bool,
     "day_of_week_num": int,
     "day_of_week_name": str,
     "dow_enabled": bool,

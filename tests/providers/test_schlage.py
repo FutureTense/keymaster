@@ -129,10 +129,10 @@ class TestProperties:
         schlage_provider.keymaster_config_entry.options = {}
         assert schlage_provider.redact_slot_names is True
 
-    def test_redact_pins_default(self, schlage_provider):
-        """Test redact_pins property default."""
+    def test_redact_pin_codes_default(self, schlage_provider):
+        """Test redact_pin_codes property default."""
         schlage_provider.keymaster_config_entry.options = {}
-        assert schlage_provider.redact_pins is True
+        assert schlage_provider.redact_pin_codes is True
 
 
 # ---------------------------------------------------------------------------

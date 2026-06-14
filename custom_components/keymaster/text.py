@@ -90,7 +90,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
         """Redact the value if configured."""
         if not value:
             return value
-        if (self._property.endswith(".pin") and self._kmlock and self._kmlock.redact_pins) or (
+        if (self._property.endswith(".pin") and self._kmlock and self._kmlock.redact_pin_codes) or (
             self._property.endswith(".name") and self._kmlock and self._kmlock.redact_slot_names
         ):
             return "[REDACTED]"

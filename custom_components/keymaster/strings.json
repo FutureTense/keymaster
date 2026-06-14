@@ -56,7 +56,7 @@
       "init": {
         "data": {
           "redact_slot_names": "Redact slot names in debug logs",
-          "redact_pins": "Redact PINs in debug logs"
+          "redact_pin_codes": "Redact PIN codes in debug logs"
         }
       }
     }

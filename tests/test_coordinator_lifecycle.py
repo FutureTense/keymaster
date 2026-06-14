@@ -176,7 +176,7 @@ async def test_redaction_behavior():
     # Test KeymasterCodeSlot __repr__ with redaction enabled (default)
     slot1 = KeymasterCodeSlot(number=1, name="John Doe", pin="1234")
     assert slot1.redact_slot_names is True
-    assert slot1.redact_pins is True
+    assert slot1.redact_pin_codes is True
     repr_str = repr(slot1)
     assert "John Doe" not in repr_str
     assert "1234" not in repr_str
@@ -188,7 +188,7 @@ async def test_redaction_behavior():
         name="Jane Smith",
         pin="5678",
         redact_slot_names=False,
-        redact_pins=False,
+        redact_pin_codes=False,
     )
     repr_str2 = repr(slot2)
     assert "Jane Smith" in repr_str2
@@ -202,11 +202,11 @@ async def test_redaction_behavior():
         keymaster_config_entry_id="test_entry",
         code_slots={1: slot1},
         redact_slot_names=False,
-        redact_pins=False,
+        redact_pin_codes=False,
     )
     # The __post_init__ should have propagated the values to slot1
     assert slot1.redact_slot_names is False
-    assert slot1.redact_pins is False
+    assert slot1.redact_pin_codes is False
     repr_str_propagated = repr(slot1)
     assert "John Doe" in repr_str_propagated
     assert "1234" in repr_str_propagated
@@ -217,7 +217,7 @@ async def test_set_pin_on_lock_invalid_pin_redacted(mock_coordinator, mock_lock)
     """Test set_pin_on_lock with an invalid PIN and verify redaction behavior."""
     # Setup lock configuration
     mock_lock.code_slots = {1: KeymasterCodeSlot(number=1, name="John Doe", pin="1234")}
-    mock_lock.redact_pins = True
+    mock_lock.redact_pin_codes = True
 
     # Store mock lock in coordinator
     mock_coordinator.kmlocks["test_entry"] = mock_lock
@@ -232,7 +232,7 @@ async def test_set_pin_on_lock_invalid_pin_no_redacted(mock_coordinator, mock_lo
     """Test set_pin_on_lock with an invalid PIN and no redaction."""
     # Setup lock configuration
     mock_lock.code_slots = {1: KeymasterCodeSlot(number=1, name="John Doe", pin="1234")}
-    mock_lock.redact_pins = False
+    mock_lock.redact_pin_codes = False
 
     # Store mock lock in coordinator
     mock_coordinator.kmlocks["test_entry"] = mock_lock

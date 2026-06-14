@@ -27,7 +27,7 @@ from .const import (
     CONF_LOCK_NAME,
     CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
-    CONF_REDACT_PINS,
+    CONF_REDACT_PIN_CODES,
     CONF_REDACT_SLOT_NAMES,
     CONF_SLOTS,
     CONF_START,
@@ -36,7 +36,7 @@ from .const import (
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_CODE_SLOTS,
     DEFAULT_HIDE_PINS,
-    DEFAULT_REDACT_PINS,
+    DEFAULT_REDACT_PIN_CODES,
     DEFAULT_REDACT_SLOT_NAMES,
     DEFAULT_START,
     DOMAIN,
@@ -162,9 +162,9 @@ class KeymasterOptionsFlowHandler(OptionsFlow):
                         ),
                     ): bool,
                     vol.Required(
-                        CONF_REDACT_PINS,
+                        CONF_REDACT_PIN_CODES,
                         default=self.config_entry.options.get(
-                            CONF_REDACT_PINS, DEFAULT_REDACT_PINS
+                            CONF_REDACT_PIN_CODES, DEFAULT_REDACT_PIN_CODES
                         ),
                     ): bool,
                 }

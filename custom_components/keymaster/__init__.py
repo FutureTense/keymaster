@@ -35,7 +35,7 @@ from .const import (
     CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
     CONF_PARENT_ENTRY_ID,
-    CONF_REDACT_PINS,
+    CONF_REDACT_PIN_CODES,
     CONF_REDACT_SLOT_NAMES,
     CONF_SLOTS,
     CONF_START,
@@ -44,7 +44,7 @@ from .const import (
     DEFAULT_ADVANCED_DATE_RANGE,
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_HIDE_PINS,
-    DEFAULT_REDACT_PINS,
+    DEFAULT_REDACT_PIN_CODES,
     DEFAULT_REDACT_SLOT_NAMES,
     DOMAIN,
     NONE_TEXT,
@@ -200,9 +200,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             CONF_REDACT_SLOT_NAMES,
             config_entry.data.get(CONF_REDACT_SLOT_NAMES, DEFAULT_REDACT_SLOT_NAMES),
         ),
-        redact_pins=config_entry.options.get(
-            CONF_REDACT_PINS,
-            config_entry.data.get(CONF_REDACT_PINS, DEFAULT_REDACT_PINS),
+        redact_pin_codes=config_entry.options.get(
+            CONF_REDACT_PIN_CODES,
+            config_entry.data.get(CONF_REDACT_PIN_CODES, DEFAULT_REDACT_PIN_CODES),
         ),
     )
 

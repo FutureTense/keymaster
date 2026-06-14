@@ -32,7 +32,7 @@ def test_type_lookup_consistency():
         "sync_op_started_at",  # Transient runtime-only field (init=False)
         "_lock_ref",  # Transient runtime-only field (init=False)
         "_redact_slot_names_val",  # Transient runtime-only field (init=False)
-        "_redact_pins_val",  # Transient runtime-only field (init=False)
+        "_redact_pin_codes_val",  # Transient runtime-only field (init=False)
     }
 
     # Verify that significant fields are present in the lookup map.
