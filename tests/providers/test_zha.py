@@ -867,6 +867,27 @@ class TestZHAAdditionalCoverage:
         mock_zha_gateway["cluster"].clear_pin_code.return_value = (1,)
         assert await provider.async_clear_usercode(2) is False
 
+    async def test_reconnect_clears_and_rediscovers_cluster(self, provider, mock_zha_gateway):
+        """Test that reconnect clears the cached cluster and discovers the new one."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # Resolve cluster and check it is cached
+        cluster1 = provider._get_door_lock_cluster()
+        assert cluster1 is not None
+        assert provider._door_lock_cluster is cluster1
+
+        # Now mock a different cluster on the gateway
+        new_cluster = MagicMock()
+        new_cluster.cluster_id = 257  # Closures.DoorLock.cluster_id
+        mock_zha_gateway["zigpy_device"].endpoints[1].in_clusters[257] = new_cluster
+
+        # Call async_connect() again (reconnect)
+        await provider.async_connect()
+
+        # The cached cluster should now be updated to the new one
+        assert provider._door_lock_cluster is new_cluster
+
     def test_parse_pin_response_fallback(self):
         """Test _parse_pin_response fallback when response is invalid format."""
         status, pin = ZHALockProvider._parse_pin_response("invalid_response_format")
