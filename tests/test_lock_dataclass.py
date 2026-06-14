@@ -96,3 +96,23 @@ def test_code_slots_dict_operations():
     assert slot3._lock_ref is not None
     assert slot3._lock_ref() is lock
     assert slots[3] is slot3
+
+    # Test setdefault - key doesn't exist
+    slot4 = KeymasterCodeSlot(number=4)
+    res_set = slots.setdefault(4, slot4)
+    assert res_set is slot4
+    assert slot4._lock_ref is not None
+    assert slot4._lock_ref() is lock
+    assert slots[4] is slot4
+
+    # Test setdefault - key already exists
+    res_set_existing = slots.setdefault(4, KeymasterCodeSlot(number=4, name="Ignored"))
+    assert res_set_existing is slot4
+    assert slots[4].name is None
+
+    # Test __ior__ (|=)
+    slot5 = KeymasterCodeSlot(number=5)
+    slots |= {5: slot5}
+    assert slot5._lock_ref is not None
+    assert slot5._lock_ref() is lock
+    assert slots[5] is slot5
