@@ -11,6 +11,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from ._base import BaseLockProvider, CodeSlot, ConnectionCallback, LockEventCallback
 from .akuvox import AkuvoxLockProvider
 from .schlage import SchlageLockProvider
+from .zha import ZHALockProvider
 from .zigbee2mqtt import Zigbee2MQTTLockProvider
 from .zwave_js import ZWaveJSLockProvider
 
@@ -25,6 +26,7 @@ PROVIDER_MAP: dict[str, type[BaseLockProvider]] = {
     "local_akuvox": AkuvoxLockProvider,
     "mqtt": Zigbee2MQTTLockProvider,
     "schlage": SchlageLockProvider,
+    "zha": ZHALockProvider,
     "zwave_js": ZWaveJSLockProvider,
 }
 

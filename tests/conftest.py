@@ -1,4 +1,17 @@
+# ruff: noqa: E402
 """Fixtures for keymaster tests."""
+
+import sys
+from unittest.mock import MagicMock
+
+# Mock ZHA components before custom_components.keymaster is imported
+mock_zha_helpers = MagicMock()
+mock_zha_const = MagicMock()
+mock_zha_const.DOMAIN = "zha"
+
+sys.modules["homeassistant.components.zha"] = MagicMock()
+sys.modules["homeassistant.components.zha.helpers"] = mock_zha_helpers
+sys.modules["homeassistant.components.zha.const"] = mock_zha_const
 
 import asyncio
 import copy

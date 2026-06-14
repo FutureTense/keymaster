@@ -13,4 +13,5 @@ pytest-homeassistant-custom-component
 pyudev
 serialx
 zeroconf
+zigpy
 zwave-js-server-python
