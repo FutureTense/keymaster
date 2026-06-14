@@ -653,3 +653,36 @@ async def test_text_entity_clear_pin_failure_does_not_overwrite_restored_pin(
 
         # The entity should NOT update its displayed value on failure
         assert entity._attr_native_value == "1234"
+
+
+async def test_text_entity_redaction_behavior(hass: HomeAssistant, text_config_entry, coordinator):
+    """Test value redaction behavior on Text entities."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description_pin = KeymasterTextEntityDescription(
+        key="text.code_slots:1.pin",
+        name="Code Slot 1: PIN",
+        icon="mdi:lock-smart",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+    entity_pin = KeymasterText(entity_description=entity_description_pin)
+
+    # 1. Redaction enabled (default)
+    assert entity_pin._redact_value("1234") == "[REDACTED]"
+
+    # 2. Redaction disabled
+    kmlock.redact_pin_codes = False
+    assert entity_pin._redact_value("1234") == "1234"
+
+    # 3. No kmlock (should not redact)
+    with patch.object(coordinator, "sync_get_lock_by_config_entry_id", return_value=None):
+        assert entity_pin._redact_value("1234") == "1234"

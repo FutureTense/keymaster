@@ -12,8 +12,8 @@ from homeassistant.components.binary_sensor import DOMAIN as BINARY_DOMAIN
 from homeassistant.components.lock import DOMAIN as LOCK_DOMAIN
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 
 from .const import (
@@ -27,6 +27,8 @@ from .const import (
     CONF_LOCK_NAME,
     CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
+    CONF_REDACT_PIN_CODES,
+    CONF_REDACT_SLOT_NAMES,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
@@ -34,6 +36,8 @@ from .const import (
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_CODE_SLOTS,
     DEFAULT_HIDE_PINS,
+    DEFAULT_REDACT_PIN_CODES,
+    DEFAULT_REDACT_SLOT_NAMES,
     DEFAULT_START,
     DOMAIN,
     NONE_TEXT,
@@ -128,6 +132,43 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
             user_input=user_input,
             defaults=self._data,
             entry_id=self._entry.entry_id,
+        )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> KeymasterOptionsFlowHandler:
+        """Get the options flow for this handler."""
+        return KeymasterOptionsFlowHandler()
+
+
+class KeymasterOptionsFlowHandler(OptionsFlow):
+    """Handle Keymaster options."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_REDACT_SLOT_NAMES,
+                        default=self.config_entry.options.get(
+                            CONF_REDACT_SLOT_NAMES, DEFAULT_REDACT_SLOT_NAMES
+                        ),
+                    ): bool,
+                    vol.Required(
+                        CONF_REDACT_PIN_CODES,
+                        default=self.config_entry.options.get(
+                            CONF_REDACT_PIN_CODES, DEFAULT_REDACT_PIN_CODES
+                        ),
+                    ): bool,
+                }
+            ),
         )
 
 

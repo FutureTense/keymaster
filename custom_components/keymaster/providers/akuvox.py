@@ -465,7 +465,7 @@ class AkuvoxLockProvider(BaseLockProvider):
                 _LOGGER.debug(
                     "[AkuvoxProvider] No managed slot available for untagged user '%s'; "
                     "leaving untouched",
-                    original_name,
+                    self.redact_name(original_name),
                 )
                 continue
             slot_num = next_slot
@@ -477,15 +477,15 @@ class AkuvoxLockProvider(BaseLockProvider):
                 await self._async_modify_user(device_id, name=tagged_name)
                 _LOGGER.debug(
                     "[AkuvoxProvider] Tagged user '%s' (id=%s) as slot %d: '%s'",
-                    original_name,
+                    self.redact_name(original_name),
                     device_id,
                     slot_num,
-                    tagged_name,
+                    self.redact_name(tagged_name),
                 )
             except HomeAssistantError as err:
                 _LOGGER.error(
                     "[AkuvoxProvider] Failed to tag user '%s' for slot %d: %s: %s",
-                    original_name,
+                    self.redact_name(original_name),
                     slot_num,
                     err.__class__.__qualname__,
                     err,

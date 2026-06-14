@@ -86,6 +86,16 @@ class KeymasterText(KeymasterEntity, TextEntity):
         self._attr_entity_category = EntityCategory.CONFIG
         self._attr_native_value: str | None = None
 
+    def _redact_value(self, value: str | None) -> str | None:
+        """Redact the value if configured."""
+        if not value:
+            return value
+        if (self._property.endswith(".pin") and self._kmlock and self._kmlock.redact_pin_codes) or (
+            self._property.endswith(".name") and self._kmlock and self._kmlock.redact_slot_names
+        ):
+            return "[REDACTED]"
+        return value
+
     @callback
     def _handle_coordinator_update(self) -> None:
         # _LOGGER.debug("[Text handle_coordinator_update] self.coordinator.data: %s", self.coordinator.data)
@@ -116,20 +126,22 @@ class KeymasterText(KeymasterEntity, TextEntity):
 
         self._attr_available = True
         self._attr_native_value = self._get_property_value()
+        log_value = self._redact_value(self.native_value)
         _LOGGER.debug(
             "[Text handle_coordinator_update] %s: property: %s, value: %s",
             self.name,
             self._property,
-            self.native_value,
+            log_value,
         )
         self.async_write_ha_state()
 
     async def async_set_value(self, value: str) -> None:
         """Set the value of a text entity."""
+        log_value = self._redact_value(value)
         _LOGGER.debug(
             "[Text async_set_value] %s: value: %s",
             self.name,
-            value,
+            log_value,
         )
         if self._property.endswith(".pin"):
             if value and value.isdigit() and len(value) >= 4 and self._code_slot:

@@ -4,6 +4,7 @@ from dataclasses import fields
 
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
+    KeymasterCodeSlotsDict,
     KeymasterLock,
     keymasterlock_type_lookup,
 )
@@ -29,6 +30,9 @@ def test_type_lookup_consistency():
         "masked_code_slots",  # Transient runtime-only field (init=False)
         "last_code_set_at",  # Transient runtime-only field (init=False)
         "sync_op_started_at",  # Transient runtime-only field (init=False)
+        "_lock_ref",  # Transient runtime-only field (init=False)
+        "_redact_slot_names_val",  # Transient runtime-only field (init=False)
+        "_redact_pin_codes_val",  # Transient runtime-only field (init=False)
     }
 
     # Verify that significant fields are present in the lookup map.
@@ -61,3 +65,54 @@ def test_type_lookup_consistency():
         if not found:
             # We assume if it's in the lookup it's valid, but ideally we check KeymasterCodeSlotDayOfWeek too
             pass
+
+
+def test_code_slots_dict_operations():
+    """Test KeymasterCodeSlotsDict custom dict operations."""
+    lock = KeymasterLock(
+        lock_name="Test Lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="config_entry_id",
+    )
+    # At first, code_slots is None
+    assert lock.code_slots is None
+
+    slot1 = KeymasterCodeSlot(number=1)
+    slot2 = KeymasterCodeSlot(number=2)
+    slot3 = KeymasterCodeSlot(number=3)
+
+    slots = KeymasterCodeSlotsDict(lock, {1: slot1})
+    assert slot1._lock_ref is not None
+    assert slot1._lock_ref() is lock
+
+    # Test __setitem__
+    slots[2] = slot2
+    assert slot2._lock_ref is not None
+    assert slot2._lock_ref() is lock
+    assert slots[2] is slot2
+
+    # Test update
+    slots.update({3: slot3})
+    assert slot3._lock_ref is not None
+    assert slot3._lock_ref() is lock
+    assert slots[3] is slot3
+
+    # Test setdefault - key doesn't exist
+    slot4 = KeymasterCodeSlot(number=4)
+    res_set = slots.setdefault(4, slot4)
+    assert res_set is slot4
+    assert slot4._lock_ref is not None
+    assert slot4._lock_ref() is lock
+    assert slots[4] is slot4
+
+    # Test setdefault - key already exists
+    res_set_existing = slots.setdefault(4, KeymasterCodeSlot(number=4, name="Ignored"))
+    assert res_set_existing is slot4
+    assert slots[4].name is None
+
+    # Test __ior__ (|=)
+    slot5 = KeymasterCodeSlot(number=5)
+    slots |= {5: slot5}
+    assert slot5._lock_ref is not None
+    assert slot5._lock_ref() is lock
+    assert slots[5] is slot5

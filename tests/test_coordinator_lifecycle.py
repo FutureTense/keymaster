@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.lock import KeymasterLock
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -169,6 +169,78 @@ async def test_delete_lock_not_pending(hass, mock_coordinator, mock_lock):
 
         mock_delete_lovelace.assert_not_called()
         assert "test_entry" in mock_coordinator.kmlocks
+
+
+async def test_redaction_behavior():
+    """Test redaction behavior on KeymasterCodeSlot and KeymasterLock."""
+    # Test KeymasterCodeSlot __repr__ with redaction enabled (default)
+    slot1 = KeymasterCodeSlot(number=1, name="John Doe", pin="1234")
+    assert slot1.redact_slot_names is True
+    assert slot1.redact_pin_codes is True
+    repr_str = repr(slot1)
+    assert "John Doe" not in repr_str
+    assert "1234" not in repr_str
+    assert "[REDACTED]" in repr_str
+
+    # Test KeymasterCodeSlot __repr__ with redaction disabled
+    slot2 = KeymasterCodeSlot(
+        number=2,
+        name="Jane Smith",
+        pin="5678",
+        redact_slot_names=False,
+        redact_pin_codes=False,
+    )
+    repr_str2 = repr(slot2)
+    assert "Jane Smith" in repr_str2
+    assert "5678" in repr_str2
+    assert "[REDACTED]" not in repr_str2
+
+    # Test KeymasterLock post_init propagation
+    _lock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.frontdoor",
+        keymaster_config_entry_id="test_entry",
+        code_slots={1: slot1},
+        redact_slot_names=False,
+        redact_pin_codes=False,
+    )
+    # The __post_init__ should have propagated the values to slot1
+    assert slot1.redact_slot_names is False
+    assert slot1.redact_pin_codes is False
+    repr_str_propagated = repr(slot1)
+    assert "John Doe" in repr_str_propagated
+    assert "1234" in repr_str_propagated
+    assert "[REDACTED]" not in repr_str_propagated
+
+
+async def test_set_pin_on_lock_invalid_pin_redacted(mock_coordinator, mock_lock):
+    """Test set_pin_on_lock with an invalid PIN and verify redaction behavior."""
+    # Setup lock configuration
+    mock_lock.code_slots = {1: KeymasterCodeSlot(number=1, name="John Doe", pin="1234")}
+    mock_lock.redact_pin_codes = True
+
+    # Store mock lock in coordinator
+    mock_coordinator.kmlocks["test_entry"] = mock_lock
+
+    # Call set_pin_on_lock with invalid pin (e.g., less than 4 digits)
+    result = await mock_coordinator.set_pin_on_lock("test_entry", 1, "12")
+
+    assert result is False
+
+
+async def test_set_pin_on_lock_invalid_pin_no_redacted(mock_coordinator, mock_lock):
+    """Test set_pin_on_lock with an invalid PIN and no redaction."""
+    # Setup lock configuration
+    mock_lock.code_slots = {1: KeymasterCodeSlot(number=1, name="John Doe", pin="1234")}
+    mock_lock.redact_pin_codes = False
+
+    # Store mock lock in coordinator
+    mock_coordinator.kmlocks["test_entry"] = mock_lock
+
+    # Call set_pin_on_lock with invalid pin (e.g., less than 4 digits)
+    result = await mock_coordinator.set_pin_on_lock("test_entry", 1, "12")
+
+    assert result is False
 
 
 async def test_update_listeners_startup_cleanup(hass, mock_lock):

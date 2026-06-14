@@ -35,6 +35,8 @@ from .const import (
     CONF_START,
     COORDINATOR,
     DAY_NAMES,
+    DEFAULT_REDACT_PIN_CODES,
+    DEFAULT_REDACT_SLOT_NAMES,
     DOMAIN,
 )
 from .coordinator import KeymasterCoordinator
@@ -164,6 +166,8 @@ async def _migrate_2to3_create_kmlock(config_entry: ConfigEntry) -> KeymasterLoc
         code_slots=code_slots,
         parent_name=config_entry.data.get(CONF_PARENT),
         parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+        redact_slot_names=DEFAULT_REDACT_SLOT_NAMES,
+        redact_pin_codes=DEFAULT_REDACT_PIN_CODES,
     )
 
 

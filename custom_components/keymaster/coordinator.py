@@ -1406,11 +1406,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return False
 
         if not pin or not pin.isdigit() or len(pin) < 4:
+            log_pin = "[REDACTED]" if kmlock.redact_pin_codes and pin else pin
             _LOGGER.debug(
                 "[set_pin_on_lock] %s: Code Slot %s: PIN not valid: %s. Must be 4 or more digits",
                 kmlock.lock_name,
                 code_slot_num,
-                pin,
+                log_pin,
             )
             return False
 
@@ -1439,11 +1440,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return False
 
+        log_pin = "[REDACTED]" if kmlock.redact_pin_codes and pin else pin
         _LOGGER.debug(
             "[set_pin_on_lock] %s: Code Slot %s: Setting PIN to %s",
             kmlock.lock_name,
             code_slot_num,
-            pin,
+            log_pin,
         )
 
         kmlock.code_slots[code_slot_num].synced = Synced.ADDING
@@ -1465,11 +1467,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 kmlock.code_slots[code_slot_num].synced = Synced.OUT_OF_SYNC
                 self.async_set_updated_data(dict(self.kmlocks))
                 return False
+            log_pin = "[REDACTED]" if kmlock.redact_pin_codes and pin else pin
             _LOGGER.debug(
                 "[set_pin_on_lock] %s: Code Slot %s: PIN set to %s",
                 kmlock.lock_name,
                 code_slot_num,
-                pin,
+                log_pin,
             )
             kmlock.code_slots[code_slot_num].synced = Synced.SYNCED
             kmlock.code_slots[code_slot_num].last_code_set_at = utcnow()

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.keymaster.const import CONF_REDACT_SLOT_NAMES
 from custom_components.keymaster.providers.schlage import (
     SchlageLockProvider,
     _make_tagged_name,
@@ -122,6 +123,16 @@ class TestProperties:
     def test_supports_connection_status(self, schlage_provider):
         """Test connection status is supported."""
         assert schlage_provider.supports_connection_status is True
+
+    def test_redact_slot_names_default(self, schlage_provider):
+        """Test redact_slot_names property default."""
+        schlage_provider.keymaster_config_entry.options = {}
+        assert schlage_provider.redact_slot_names is True
+
+    def test_redact_pin_codes_default(self, schlage_provider):
+        """Test redact_pin_codes property default."""
+        schlage_provider.keymaster_config_entry.options = {}
+        assert schlage_provider.redact_pin_codes is True
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +522,79 @@ class TestGetUsercodes:
         # Code is not returned because tagging was rolled back
         assert len(codes) == 0
         # get_codes + add_code + delete(original fail) + delete(rollback)
+        assert call_count == 4
+
+    async def test_get_usercodes_partial_tagging_rollback_failure(self, schlage_provider):
+        """Test add_code success, delete_code failure, and rollback delete_code failure."""
+        # Set options dictionary on config entry
+        schlage_provider.keymaster_config_entry.options = {CONF_REDACT_SLOT_NAMES: True}
+        assert schlage_provider.redact_slot_names is True
+
+        call_count = 0
+
+        async def mock_service_call(*args, **kwargs):
+            nonlocal call_count
+            idx = call_count
+            call_count += 1
+            if idx == 0:
+                # get_codes returns untagged code
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            if idx == 1:
+                # add_code succeeds
+                return None
+            if idx == 2:
+                # delete_code (original) fails
+                raise HomeAssistantError("Delete failed after add")
+            if idx == 3:
+                # rollback: delete_code (tagged) fails
+                raise HomeAssistantError("Rollback delete failed")
+            pytest.fail(f"Unexpected service call #{idx}")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
+
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 0
+        assert call_count == 4
+
+    async def test_get_usercodes_partial_tagging_rollback_failure_no_redaction(
+        self, schlage_provider
+    ):
+        """Test rollback failure when slot name redaction is disabled."""
+        # Disable slot name redaction
+        schlage_provider.keymaster_config_entry.options = {CONF_REDACT_SLOT_NAMES: False}
+        assert schlage_provider.redact_slot_names is False
+
+        call_count = 0
+
+        async def mock_service_call(*args, **kwargs):
+            nonlocal call_count
+            idx = call_count
+            call_count += 1
+            if idx == 0:
+                # get_codes returns untagged code
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            if idx == 1:
+                # add_code succeeds
+                return None
+            if idx == 2:
+                # delete_code (original) fails
+                raise HomeAssistantError("Delete failed after add")
+            if idx == 3:
+                # rollback: delete_code (tagged) fails
+                raise HomeAssistantError("Rollback delete failed")
+            pytest.fail(f"Unexpected service call #{idx}")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 0
         assert call_count == 4
 
     async def test_get_usercodes_partial_tagging_rollback_then_retag_on_next_poll(
