@@ -108,6 +108,8 @@ def mock_coordinator(mock_hass) -> Any:
         coordinator.hass = mock_hass
         coordinator.kmlocks = {}
         coordinator._last_unlock_code_slot = {}
+        coordinator._pending_keypad_unlock_notifications = {}
+        coordinator._state_change_autolock_started = set()
         # Use setattr to safely add the mock method
         setattr(coordinator, "delete_lock_by_config_entry_id", AsyncMock())
         setattr(coordinator, "async_set_updated_data", Mock())
@@ -1030,6 +1032,8 @@ class TestLockStateEventHandlers:
         lock.lock_notifications = False
         lock.door_notifications = False
         lock.notify_script_name = None
+        lock.provider = Mock()
+        lock.provider.supports_push_updates = True
         return lock
 
     async def test_lock_locked_basic_state_change(self, mock_coordinator, mock_kmlock):
@@ -1391,8 +1395,78 @@ class TestLockStateEventHandlers:
             assert mock_kmlock.door_state == STATE_OPEN
 
     async def test_handle_lock_state_change_unlocked(self, mock_coordinator, mock_kmlock):
-        """Test _handle_lock_state_change triggers _lock_unlocked when lock transitions to UNLOCKED."""
+        """Test _handle_lock_state_change starts autolock without notifications."""
         mock_kmlock.lock_state = LockState.LOCKED
+        mock_kmlock.autolock_enabled = True
+        mock_kmlock.autolock_timer = AsyncMock()
+        mock_kmlock.autolock_timer.start = AsyncMock()
+        mock_kmlock.lock_notifications = True
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+        mock_coordinator.autolock_duration_seconds = Mock(return_value=300)
+
+        mock_old = Mock()
+        mock_old.state = LockState.LOCKED
+        mock_new = Mock()
+        mock_new.state = LockState.UNLOCKED
+        event = Mock()
+        event.data = {
+            "entity_id": "lock.front_door",
+            "old_state": mock_old,
+            "new_state": mock_new,
+        }
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
+
+        assert mock_kmlock.lock_state == LockState.LOCKED
+        mock_kmlock.autolock_timer.start.assert_called_once_with(duration=300)
+        mock_coordinator.async_set_updated_data.assert_called_once()
+        mock_notify.assert_not_called()
+        mock_coordinator._lock_unlocked.assert_not_called()
+        mock_coordinator._lock_locked.assert_not_called()
+
+    async def test_handle_lock_state_change_locked(self, mock_coordinator, mock_kmlock):
+        """Test _handle_lock_state_change cancels autolock without notifications."""
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.autolock_timer = AsyncMock()
+        mock_kmlock.autolock_timer.cancel = AsyncMock()
+        mock_kmlock.lock_notifications = True
+        mock_coordinator._lock_unlocked = AsyncMock()
+        mock_coordinator._lock_locked = AsyncMock()
+
+        mock_old = Mock()
+        mock_old.state = LockState.UNLOCKED
+        mock_new = Mock()
+        mock_new.state = LockState.LOCKED
+        event = Mock()
+        event.data = {
+            "entity_id": "lock.front_door",
+            "old_state": mock_old,
+            "new_state": mock_new,
+        }
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
+
+        assert mock_kmlock.lock_state == LockState.UNLOCKED
+        mock_kmlock.autolock_timer.cancel.assert_called_once()
+        mock_coordinator.async_set_updated_data.assert_called_once()
+        mock_notify.assert_not_called()
+        mock_coordinator._lock_locked.assert_not_called()
+        mock_coordinator._lock_unlocked.assert_not_called()
+
+    async def test_handle_lock_state_change_unlocked_without_push_provider(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test state-change unlock path remains active without push provider events."""
+        mock_kmlock.provider = None
         mock_coordinator._lock_unlocked = AsyncMock()
         mock_coordinator._lock_locked = AsyncMock()
 
@@ -1412,13 +1486,15 @@ class TestLockStateEventHandlers:
         mock_coordinator._lock_unlocked.assert_called_once_with(
             kmlock=mock_kmlock,
             source="state_change",
-            event_label="State Change Update Unlock",
+            event_label="Manual Unlock",
         )
         mock_coordinator._lock_locked.assert_not_called()
 
-    async def test_handle_lock_state_change_locked(self, mock_coordinator, mock_kmlock):
-        """Test _handle_lock_state_change triggers _lock_locked when lock transitions to LOCKED."""
-        mock_kmlock.lock_state = LockState.UNLOCKED
+    async def test_handle_lock_state_change_locked_without_push_provider(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test state-change lock path remains active without push provider events."""
+        mock_kmlock.provider = None
         mock_coordinator._lock_unlocked = AsyncMock()
         mock_coordinator._lock_locked = AsyncMock()
 
@@ -1438,7 +1514,7 @@ class TestLockStateEventHandlers:
         mock_coordinator._lock_locked.assert_called_once_with(
             kmlock=mock_kmlock,
             source="state_change",
-            event_label="State Change Update Lock",
+            event_label="Manual Lock",
         )
         mock_coordinator._lock_unlocked.assert_not_called()
 
