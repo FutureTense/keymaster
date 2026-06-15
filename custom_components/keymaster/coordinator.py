@@ -84,6 +84,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 # dismiss-on-success loop in _lock_locked. Single source of truth so
 # new ids can't be added in one place and silently missed in the other.
 AUTOLOCK_NOTIFICATION_SUFFIXES: tuple[str, ...] = ("door_open", "door_closed", "failed")
+KEYPAD_UNLOCK_NOTIFICATION_DELAY_SECONDS = 1
 
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.locks"
@@ -117,6 +118,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._quick_refresh: bool = False
         self._cancel_quick_refresh: Callable | None = None
         self._cancel_debounced_refresh: Callable | None = None
+        self._pending_keypad_unlock_notifications: dict[str, Callable[[], None]] = {}
+        self._state_change_autolock_started: set[str] = set()
         self._consecutive_failures: dict[str, int] = {}
         self._next_retry_time: dict[str, dt] = {}
 
@@ -601,20 +604,42 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             new_state,
         )
 
+        uses_provider_lock_events = bool(kmlock.provider and kmlock.provider.supports_push_updates)
+        # For push providers this listener is autolock-only; notifications
+        # come from the richer provider lock-event path.
         if new_state == LockState.UNLOCKED:
-            if kmlock.lock_state != LockState.UNLOCKED:
-                await self._lock_unlocked(
-                    kmlock=kmlock,
-                    source="state_change",
-                    event_label="State Change Update Unlock",
-                )
+            if old_state != LockState.UNLOCKED:
+                if not uses_provider_lock_events:
+                    await self._lock_unlocked(
+                        kmlock=kmlock,
+                        source="state_change",
+                        event_label="Manual Unlock",
+                    )
+                elif (
+                    kmlock.lock_state != LockState.UNLOCKED
+                    and kmlock.autolock_enabled
+                    and kmlock.autolock_timer
+                ):
+                    await kmlock.autolock_timer.start(
+                        duration=self.autolock_duration_seconds(kmlock),
+                    )
+                    self._state_change_autolock_started.add(kmlock.keymaster_config_entry_id)
+                    self.async_set_updated_data(dict(self.kmlocks))
         elif new_state == LockState.LOCKED:
-            if kmlock.lock_state != LockState.LOCKED:
-                await self._lock_locked(
-                    kmlock=kmlock,
-                    source="state_change",
-                    event_label="State Change Update Lock",
-                )
+            if old_state != LockState.LOCKED:
+                if not uses_provider_lock_events:
+                    await self._lock_locked(
+                        kmlock=kmlock,
+                        source="state_change",
+                        event_label="Manual Lock",
+                    )
+                elif (
+                    kmlock.keymaster_config_entry_id in self._state_change_autolock_started
+                    or kmlock.lock_state != LockState.LOCKED
+                ) and kmlock.autolock_timer:
+                    await kmlock.autolock_timer.cancel()
+                    self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
+                    self.async_set_updated_data(dict(self.kmlocks))
 
     async def _handle_door_state_change(
         self,
@@ -760,11 +785,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock: KeymasterLock,
         code_slot_num: int,
         event_label: str | None,
-    ) -> None:
+    ) -> bool:
         """Send a per-code-slot unlock notification when enabled."""
         slot = kmlock.code_slots.get(code_slot_num) if kmlock.code_slots else None
-        if not slot or not slot.notifications or kmlock.lock_notifications:
-            return
+        if not slot or not slot.notifications:
+            return False
 
         if slot.name:
             message = f"{event_label} by {slot.name} [{code_slot_num}]"
@@ -776,6 +801,101 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             title=kmlock.lock_name,
             message=message,
         )
+        return True
+
+    async def _send_global_unlock_notification(
+        self,
+        kmlock: KeymasterLock,
+        code_slot_num: int,
+        event_label: str | None,
+    ) -> None:
+        """Send a global unlock notification."""
+        message = event_label
+        if code_slot_num > 0:
+            if (
+                kmlock.code_slots
+                and kmlock.code_slots.get(code_slot_num)
+                and kmlock.code_slots[code_slot_num].name
+            ):
+                message = f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
+            else:
+                message = f"{message} by Code Slot {code_slot_num}"
+        await send_manual_notification(
+            hass=self.hass,
+            script_name=kmlock.notify_script_name,
+            title=kmlock.lock_name,
+            message=message,
+        )
+
+    async def _send_deferred_keypad_unlock_notification(
+        self,
+        kmlock: KeymasterLock,
+        event_label: str | None,
+        _: dt,
+    ) -> None:
+        """Send a deferred global keypad unlock notification."""
+        self._pending_keypad_unlock_notifications.pop(kmlock.keymaster_config_entry_id, None)
+        if kmlock.lock_notifications:
+            await self._send_global_unlock_notification(kmlock, 0, event_label)
+        if self._last_unlock_code_slot.get(kmlock.keymaster_config_entry_id) == 0:
+            self._last_unlock_code_slot[kmlock.keymaster_config_entry_id] = None
+
+    def _cancel_pending_keypad_unlock_notification(self, kmlock: KeymasterLock) -> bool:
+        """Cancel pending keypad unlock notification if one exists."""
+        cancel = self._pending_keypad_unlock_notifications.pop(
+            kmlock.keymaster_config_entry_id,
+            None,
+        )
+        if not cancel:
+            return False
+        cancel()
+        return True
+
+    def _defer_keypad_unlock_notification(
+        self,
+        kmlock: KeymasterLock,
+        event_label: str | None,
+    ) -> None:
+        """Defer a provisional global keypad unlock notification."""
+        self._cancel_pending_keypad_unlock_notification(kmlock)
+        self._pending_keypad_unlock_notifications[kmlock.keymaster_config_entry_id] = (
+            async_call_later(
+                hass=self.hass,
+                delay=KEYPAD_UNLOCK_NOTIFICATION_DELAY_SECONDS,
+                action=functools.partial(
+                    self._send_deferred_keypad_unlock_notification,
+                    kmlock,
+                    event_label,
+                ),
+            )
+        )
+
+    @staticmethod
+    def _global_unlock_notification_superseded(
+        kmlock: KeymasterLock,
+        code_slot_num: int,
+    ) -> bool:
+        """Return whether per-slot notification should replace global unlock text."""
+        if not kmlock.code_slots:
+            return False
+
+        if code_slot_num > 0:
+            slot = kmlock.code_slots.get(code_slot_num)
+            return bool(slot and slot.notifications)
+
+        return False
+
+    @staticmethod
+    def _should_defer_keypad_unlock_notification(
+        kmlock: KeymasterLock,
+        code_slot_num: int,
+        event_label: str | None,
+    ) -> bool:
+        """Return whether a slot=0 keypad unlock may be superseded by slot details."""
+        if code_slot_num != 0 or event_label != "Keypad Unlock" or not kmlock.code_slots:
+            return False
+
+        return any(slot.notifications for slot in kmlock.code_slots.values())
 
     async def _lock_unlocked(
         self,
@@ -807,7 +927,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self._fire_unlock_state_changed(
                     kmlock, code_slot_num, source, event_label, action_code
                 )
-                await self._send_code_slot_unlock_notification(kmlock, code_slot_num, event_label)
+                had_pending_notification = self._cancel_pending_keypad_unlock_notification(kmlock)
+                sent_slot_notification = await self._send_code_slot_unlock_notification(
+                    kmlock,
+                    code_slot_num,
+                    event_label,
+                )
+                if (
+                    had_pending_notification
+                    and not sent_slot_notification
+                    and kmlock.lock_notifications
+                ):
+                    await self._send_global_unlock_notification(kmlock, 0, event_label)
             return
 
         if not self._throttle.is_allowed(
@@ -834,29 +965,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         self._last_unlock_code_slot[kmlock.keymaster_config_entry_id] = code_slot_num
 
-        if kmlock.autolock_enabled and kmlock.autolock_timer:
+        if kmlock.keymaster_config_entry_id in self._state_change_autolock_started:
+            self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
+            self.async_set_updated_data(dict(self.kmlocks))
+        elif kmlock.autolock_enabled and kmlock.autolock_timer:
             await kmlock.autolock_timer.start(duration=self.autolock_duration_seconds(kmlock))
             self.async_set_updated_data(dict(self.kmlocks))
 
         if kmlock.lock_notifications:
-            message = event_label
-            if code_slot_num > 0:
-                if (
-                    kmlock.code_slots
-                    and kmlock.code_slots.get(code_slot_num)
-                    and kmlock.code_slots[code_slot_num].name
-                ):
-                    message = (
-                        f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
-                    )
-                else:
-                    message = f"{message} by Code Slot {code_slot_num}"
-            await send_manual_notification(
-                hass=self.hass,
-                script_name=kmlock.notify_script_name,
-                title=kmlock.lock_name,
-                message=message,
-            )
+            if self._should_defer_keypad_unlock_notification(kmlock, code_slot_num, event_label):
+                self._defer_keypad_unlock_notification(kmlock, event_label)
+            elif not self._global_unlock_notification_superseded(kmlock, code_slot_num):
+                await self._send_global_unlock_notification(kmlock, code_slot_num, event_label)
 
         if code_slot_num > 0 and kmlock.code_slots and code_slot_num in kmlock.code_slots:
             if (
@@ -919,12 +1039,20 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         if kmlock.lock_state == LockState.LOCKED and not kmlock.pending_retry_lock:
+            if kmlock.keymaster_config_entry_id in self._state_change_autolock_started:
+                if kmlock.autolock_timer:
+                    await kmlock.autolock_timer.cancel()
+                    self.async_set_updated_data(dict(self.kmlocks))
+                self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
+            self._cancel_pending_keypad_unlock_notification(kmlock)
             return
 
         kmlock.lock_state = LockState.LOCKED
         kmlock.pending_retry_lock = False
         self._throttle.reset("lock_unlocked", kmlock.keymaster_config_entry_id)
         self._last_unlock_code_slot.pop(kmlock.keymaster_config_entry_id, None)
+        self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
+        self._cancel_pending_keypad_unlock_notification(kmlock)
         _LOGGER.debug(
             "[lock_locked] %s: Running. source: %s, event_label: %s, action_code: %s",
             kmlock.lock_name,
@@ -1318,6 +1446,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
         self._last_unlock_code_slot.pop(kmlock.keymaster_config_entry_id, None)
+        self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
+        self._cancel_pending_keypad_unlock_notification(kmlock)
         await self._rebuild_lock_relationships()
         await self._async_save_data()
         await self.async_refresh()
