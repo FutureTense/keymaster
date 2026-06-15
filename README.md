@@ -28,6 +28,25 @@ single line of YAML, or add individual lock views to existing dashboards. See
 the [Lovelace Configuration](https://github.com/FutureTense/keymaster/wiki/Lovelace-Configuration-Automatic)
 wiki page for setup instructions and configuration options.
 
+## Supported Lock Providers
+
+Keymaster supports multiple lock integrations and communication protocols via a
+provider abstraction model. Below is the support matrix of features for each
+provider:
+
+<!-- markdownlint-disable MD013 -->
+| Integration / Platform | Domain | Protocol | Push Updates | Connection Status | Description / Notes |
+| :--- | :--- | :--- | :---: | :---: | :--- |
+| **[Z-Wave JS](https://www.home-assistant.io/integrations/zwave_js/)** | `zwave_js` | Z-Wave | ✅ | ✅ | Direct node-based lock control with full pin/metadata querying. |
+| **[Zigbee2MQTT](https://www.zigbee2mqtt.io/)** | `mqtt` | Zigbee | ✅ | ✅ | MQTT-based control (requires `expose_pin: true` in Z2M config). |
+| **[ZHA](https://www.home-assistant.io/integrations/zha/)** | `zha` | Zigbee | ✅ | ✅ | Native HA Zigbee Home Automation integration. |
+| **[Schlage WiFi](https://www.home-assistant.io/integrations/schlage/)** | `schlage` | Wi-Fi | ❌ | ✅ | Virtual slot mapping by prefixing tags to code names. |
+| **[Local Akuvox](https://github.com/firstof9/ha-local-akuvox)** | `local_akuvox` | LAN | ✅ | ✅ | Virtual slot mapping by tagging door controller user names. |
+| **[Matter](https://www.home-assistant.io/integrations/matter/)** | `matter` | Matter | ⏳ | ⏳ | Standardized Matter Lock Cluster PIN credential management. |
+| **[Nuki](https://www.home-assistant.io/integrations/nuki/)** | `nuki` | Local API | ⏳ | ⏳ | Nuki Keypad PIN management. |
+| **[Tedee](https://www.home-assistant.io/integrations/tedee/)** | `tedee` | Cloud/Local | ⏳ | ⏳ | Tedee Keypad PIN management. |
+<!-- markdownlint-enable MD013 -->
+
 ## Installation
 
 Please visit this project's
