@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 from homeassistant.components.event import EventEntity, EventEntityDescription
 from homeassistant.components.lock.const import LockState
@@ -26,6 +27,8 @@ from .coordinator import KeymasterCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 
 EVENT_TYPE_UNLOCKED = "unlocked"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -159,4 +162,8 @@ class KeymasterCodeSlotEventEntity(KeymasterEntity, EventEntity):
             self._EventEntity__last_event_type = None
             self._EventEntity__last_event_attributes = None
         except AttributeError:
-            pass
+            _LOGGER.debug(
+                "Unable to clear event entity internals for %s",
+                self.entity_id,
+                exc_info=True,
+            )

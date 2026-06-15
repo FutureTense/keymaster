@@ -188,7 +188,6 @@ async def ws_get_section_config(
         )
         return
 
-    # Validate slot_num is within configured range
     code_slot_start = config_entry.data.get(CONF_START, 1)
     code_slots = config_entry.data.get(CONF_SLOTS, 0)
     if slot_num < code_slot_start or slot_num >= code_slot_start + code_slots:

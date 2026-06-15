@@ -361,23 +361,6 @@ def _get_entity_id(
     return entity_id or prop
 
 
-# Lovelace Card Generation Helpers
-# =================================
-# These functions build the Lovelace dashboard JSON structure:
-#
-#   View (sections layout)
-#   └── Sections (one per code slot)
-#       └── Grid
-#           ├── Heading card ("Code Slot N")
-#           └── Conditional card (entities list)
-#
-# For child locks, each code slot has two conditional cards:
-#   1. Parent-view card (when override_parent is off) - shows parent's settings
-#   2. Override card (when override_parent is on) - shows child's own settings
-#
-# Entity paths follow the pattern: {domain}.code_slots:{slot}.{key}
-# Parent entities use prefix: parent.{domain}.code_slots:{slot}.{key}
-
 DIVIDER_CARD = {"type": "divider"}
 
 

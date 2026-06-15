@@ -59,14 +59,10 @@ class BaseLockProvider(ABC):
     _connected: bool = field(default=False, init=False)
     _listeners: list[Callable[[], None]] = field(default_factory=list, init=False)
 
-    # === Required Properties ===
-
     @property
     @abstractmethod
     def domain(self) -> str:
         """Return the integration domain (e.g., 'zwave_js', 'zha')."""
-
-    # === Required Methods ===
 
     @abstractmethod
     async def async_connect(self) -> bool:
@@ -116,8 +112,6 @@ class BaseLockProvider(ABC):
 
         """
 
-    # === Optional Properties (with defaults) ===
-
     @property
     def supports_push_updates(self) -> bool:
         """Whether provider supports real-time event updates.
@@ -139,8 +133,6 @@ class BaseLockProvider(ABC):
     def connected(self) -> bool:
         """Return current connection status."""
         return self._connected
-
-    # === Optional Methods (with defaults) ===
 
     def subscribe_lock_events(
         self, kmlock: KeymasterLock, callback: LockEventCallback

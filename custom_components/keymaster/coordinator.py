@@ -180,12 +180,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 legacy_json_file,
                 legacy_json_folder,
             )
-            # Save valid data to new Store
             if config is not None:
                 await self._async_save_data(config)
             return config
 
-        # Load from Store
         stored_data = await self._store.async_load()
         if not stored_data:
             _LOGGER.debug("[load_data] No stored data found")
@@ -203,7 +201,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         This is a synchronous method that performs file I/O. Must be called
         via async_add_executor_job.
         """
-        # Load the JSON file
         config: MutableMapping[str, KeymasterLock] = {}
         try:
             with json_file.open(encoding="utf-8") as f:
@@ -338,7 +335,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
                 field_value: Any = data.get(field_name)
 
-                # Extract type information
                 origin_type = get_origin(field_type)
                 type_args = get_args(field_type)
 
@@ -381,7 +377,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 if isinstance(origin_type, type) and (
                     issubclass(origin_type, MutableMapping) or origin_type is dict
                 ):
-                    # Define key_type and value_type from type_args
                     if len(type_args) == 2:
                         key_type, value_type = type_args
                         # _LOGGER.debug(
@@ -412,7 +407,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                                     for k, v in field_value.items()
                                 }
 
-                # Handle nested dataclasses
                 elif (
                     isinstance(field_value, dict)
                     and is_dataclass(field_type)
@@ -421,7 +415,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting nested dataclass: {field_name}")
                     field_value = self._dict_to_kmlocks(field_value, field_type)
 
-                # Handle list of nested dataclasses
                 elif isinstance(field_value, list) and type_args:
                     list_type = type_args[0]
                     if is_dataclass(list_type) and isinstance(list_type, type):
@@ -462,7 +455,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 if isinstance(field_value, dt_time):
                     field_value = field_value.isoformat()
 
-                # Handle nested dataclasses and lists
                 if isinstance(field_value, list):
                     result[field_name] = [
                         (
@@ -515,7 +507,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         action_code: int | None,
     ) -> None:
         """Handle lock event from provider callback."""
-        # Get current lock state
         new_state: str | None = None
         if temp_new_state := self.hass.states.get(kmlock.lock_entity_id):
             new_state = temp_new_state.state
@@ -1020,7 +1011,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
             await self._send_code_slot_unlock_notification(kmlock, code_slot_num, event_label)
 
-        # Fire state change event
         self._fire_unlock_state_changed(kmlock, code_slot_num, source, event_label, action_code)
 
     async def _lock_locked(
@@ -1090,7 +1080,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 message=event_label,
             )
 
-        # Fire state change event
         self.hass.bus.fire(
             EVENT_KEYMASTER_LOCK_STATE_CHANGED,
             event_data={
@@ -1917,7 +1906,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return False
 
-        # Update lock_config_entry_id from provider
         if kmlock.provider.lock_config_entry_id:
             kmlock.lock_config_entry_id = kmlock.provider.lock_config_entry_id
 
@@ -1947,7 +1935,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._cancel_debounced_refresh()
             self._cancel_debounced_refresh = None
 
-        # Update all keymaster locks
         for keymaster_config_entry_id in self.kmlocks:
             await self._update_lock_data(keymaster_config_entry_id=keymaster_config_entry_id)
 
@@ -1960,7 +1947,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._sync_status_counter = 0
             await self._update_door_and_lock_state(trigger_actions_if_changed=True)
 
-        # Write updated config to JSON
         await self._async_save_data()
 
         # Schedule next refresh if needed
@@ -2041,7 +2027,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             del self._consecutive_failures[keymaster_config_entry_id]
         self._next_retry_time.pop(keymaster_config_entry_id, None)
 
-        # Get usercodes via provider
         usercodes: list[CodeSlot] = await kmlock.provider.async_get_usercodes()
         _LOGGER.debug(
             "[update_lock_data] %s: usercodes count: %s",
@@ -2058,7 +2043,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             for code_slot_num, kmslot in kmlock.code_slots.items():
                 await self._update_slot(kmlock=kmlock, kmslot=kmslot, code_slot_num=code_slot_num)
 
-        # Get usercodes from Z-Wave JS Lock and update kmlock PINs
         for usercode_slot in usercodes:
             await self._sync_usercode(kmlock=kmlock, usercode_slot=usercode_slot)
 
@@ -2489,7 +2473,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         code_slot_num=code_slot_num,
                         override=True,
                     )
-                    # Update child PIN in memory immediately
                     child_kmlock.code_slots[code_slot_num].pin = None
                 else:
                     await self.set_pin_on_lock(

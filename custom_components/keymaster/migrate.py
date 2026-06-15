@@ -89,7 +89,6 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     except asyncio.exceptions.CancelledError as e:
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
-    # Delete Package files
     _LOGGER.info("[migrate_2to3] Deleting Package files")
     await hass.async_add_executor_job(_migrate_2to3_delete_lock_and_base_folder, hass, config_entry)
 
@@ -97,7 +96,6 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     if not await _migrate_2to3_reload_package_platforms(hass=hass):
         return False
 
-    # Delete existing integration entities
     _LOGGER.info("[migrate_2to3] Deleting existing integration entities")
     for del_ent in er.async_entries_for_config_entry(
         registry=entity_registry, config_entry_id=config_entry.entry_id
@@ -114,7 +112,6 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
                 e,
             )
 
-    # Delete helper entities
     _LOGGER.info("[migrate_2to3] Delete helper entities")
     del_list: list[str] = await _migrate_2to3_build_delete_list(
         lock_name=config_entry.data[CONF_LOCK_NAME],
@@ -129,10 +126,8 @@ async def migrate_2to3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
         else:
             _LOGGER.info("[migrate_2to3] Entity not found: %s", entity)
 
-    # Update config entry
     _LOGGER.info("[migrate_2to3] Updating config entry")
     data = dict(config_entry.data)
-    # Remove path and generate
     data.pop(CONF_PATH, None)
     data.pop(CONF_GENERATE, None)
     hass.config_entries.async_update_entry(config_entry, data=data, version=3)
@@ -208,7 +203,6 @@ async def _migrate_2to3_validate_and_convert_property(prop: str, attr: str, valu
     if keymasterlock_type_lookup.get(attr) is not None and isinstance(
         value, keymasterlock_type_lookup.get(attr, object)
     ):
-        # return value
         pass
     elif keymasterlock_type_lookup.get(attr) is bool and isinstance(value, str):
         value = bool(value == "on")

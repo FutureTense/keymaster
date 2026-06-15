@@ -72,7 +72,6 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: MutableMapping[str, Any]
     ) -> MutableMapping[str, str]:
         """Check if name is unique, returning dictionary error if so."""
-        # Validate that lock name is unique
         existing_entry = await self.async_set_unique_id(
             slugify(user_input[CONF_LOCK_NAME]).lower(), raise_on_progress=True
         )
