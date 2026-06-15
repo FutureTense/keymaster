@@ -54,6 +54,8 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         default_factory=dict, init=False, repr=False
     )
     _lock_event_callback: LockEventCallback | None = field(default=None, init=False, repr=False)
+    _initial_state_received: asyncio.Event | None = field(default=None, init=False, repr=False)
+    state_wait_timeout: float = field(default=1.0, init=False, repr=False)
 
     @property
     def domain(self) -> str:
@@ -72,11 +74,19 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
     @property
     def base_topic(self) -> str | None:
-        """Get the base topic dynamically from the device name."""
+        """Get the base topic dynamically from the device identifiers or name."""
         device_entry = self.get_device_entry()
         if not device_entry:
             return None
-        name = device_entry.original_name or device_entry.name
+
+        # Extract the original Z2M friendly name from device identifiers to support device renaming
+        for domain, identifier in device_entry.identifiers:
+            if domain == MQTT_DOMAIN and identifier.startswith("zigbee2mqtt_"):
+                friendly_name = identifier[len("zigbee2mqtt_") :]
+                if friendly_name:
+                    return f"zigbee2mqtt/{friendly_name}"
+
+        name = device_entry.name
         if not name:
             return None
         return f"zigbee2mqtt/{name}"
@@ -113,6 +123,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
     async def async_connect(self) -> bool:
         """Connect to the Zigbee2MQTT lock."""
         self._connected = False
+        self._initial_state_received = asyncio.Event()
 
         # Get lock entity registry entry
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
@@ -159,22 +170,24 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         @callback
         def handle_state_message(msg: mqtt.ReceiveMessage) -> None:
             """Handle incoming state updates."""
+            if self._initial_state_received:
+                self._initial_state_received.set()
             try:
                 payload = json.loads(msg.payload)
             except ValueError:
                 return
 
-            # Check for keypad actions
+            # Check for keypad actions.
             action = payload.get("action")
             action_slot_num = payload.get("action_user")
             if action or action_slot_num:
                 self.hass.async_create_task(self._async_handle_action(action, action_slot_num))
 
-            # Parse bulk users list if available
+            # Parse bulk users list if available.
             if "users" in payload and isinstance(payload["users"], dict):
                 for slot_str, info in payload["users"].items():
                     try:
-                        slot_num = int(slot_str)
+                        km_slot_num = int(slot_str)
                     except ValueError:
                         continue
 
@@ -188,19 +201,19 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
                         in_use = bool(code and status == "enabled")
 
                     slot_data = CodeSlot(
-                        slot_num=slot_num,
+                        slot_num=km_slot_num,
                         code=code,
                         in_use=in_use,
                     )
-                    self._usercodes_cache[slot_num] = slot_data
+                    self._usercodes_cache[km_slot_num] = slot_data
 
                     # Resolve pending future if any
-                    if slot_num in self._pending_usercode_futures:
-                        fut = self._pending_usercode_futures[slot_num]
+                    if km_slot_num in self._pending_usercode_futures:
+                        fut = self._pending_usercode_futures[km_slot_num]
                         if not fut.done():
                             fut.set_result(slot_data)
 
-            # Parse single user pin_code update
+            # Parse single user pin_code update.
             if "pin_code" in payload and isinstance(payload["pin_code"], dict):
                 pin_data = payload["pin_code"]
                 user_slot = pin_data.get("user")
@@ -286,7 +299,10 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             await self._async_publish(get_topic, json.dumps(payload))
             return await asyncio.wait_for(fut, timeout=10.0)
         except TimeoutError as err:
-            _LOGGER.error("[Zigbee2MQTTProvider] Timeout querying slot %s", slot_num)
+            _LOGGER.error(
+                "[Zigbee2MQTTProvider] Timeout querying slot %s",
+                slot_num,
+            )
             raise LockOperationFailed(f"Timeout querying slot {slot_num}") from err
         finally:
             self._pending_usercode_futures.pop(slot_num, None)
@@ -297,19 +313,52 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             _LOGGER.error("[Zigbee2MQTTProvider] Not connected to lock")
             return []
 
+        # Wait for the initial state message (retained message) to arrive and populate the cache
+        if (
+            self._initial_state_received
+            and not self._initial_state_received.is_set()
+            and self.state_wait_timeout > 0
+        ):
+            try:
+                await asyncio.wait_for(
+                    self._initial_state_received.wait(), timeout=self.state_wait_timeout
+                )
+            except TimeoutError:
+                _LOGGER.debug("[Zigbee2MQTTProvider] Timeout waiting for initial state message")
+
         slot_start = self.keymaster_config_entry.data.get(CONF_START, 1)
         slot_count = self.keymaster_config_entry.data.get(CONF_SLOTS, 0)
 
-        # Query all slots concurrently
-        tasks = [self._async_query_slot(i) for i in range(slot_start, slot_start + slot_count)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Query only the slots not present in the cache
+        missing_slots = [
+            i for i in range(slot_start, slot_start + slot_count) if i not in self._usercodes_cache
+        ]
+
+        if missing_slots:
+            coros = [self._async_query_slot(i) for i in missing_slots]
+            results = await asyncio.gather(*coros, return_exceptions=True)
+            for slot_num, res in zip(missing_slots, results, strict=False):
+                if isinstance(res, CodeSlot):
+                    self._usercodes_cache[slot_num] = res
+                elif isinstance(res, HomeAssistantError):
+                    _LOGGER.warning(
+                        "[Zigbee2MQTTProvider] Error querying slot %s: %s",
+                        slot_num,
+                        res,
+                    )
+                elif isinstance(res, Exception):
+                    _LOGGER.exception(
+                        "[Zigbee2MQTTProvider] Unexpected error querying slot %s",
+                        slot_num,
+                    )
+                elif isinstance(res, BaseException):
+                    raise res
 
         result: list[CodeSlot] = []
-        for res in results:
-            if isinstance(res, BaseException):
-                raise res
-            result.append(res)
-
+        for i in range(slot_start, slot_start + slot_count):
+            slot_data = self._usercodes_cache.get(i)
+            if slot_data:
+                result.append(slot_data)
         return result
 
     async def async_get_usercode(self, slot_num: int) -> CodeSlot | None:
