@@ -125,7 +125,6 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         self._connected = False
         self._initial_state_received = asyncio.Event()
 
-        # Get lock entity registry entry
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
         if not lock_entry:
             _LOGGER.error(
@@ -177,7 +176,6 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             except ValueError:
                 return
 
-            # Check for keypad actions.
             action = payload.get("action")
             action_slot_num = payload.get("action_user")
             if action or action_slot_num:
@@ -213,7 +211,6 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
                         if not fut.done():
                             fut.set_result(slot_data)
 
-            # Parse single user pin_code update.
             if "pin_code" in payload and isinstance(payload["pin_code"], dict):
                 pin_data = payload["pin_code"]
                 user_slot = pin_data.get("user")
@@ -382,7 +379,6 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         }
         await self._async_publish(set_topic, json.dumps(payload))
 
-        # Update local cache optimistically
         self._usercodes_cache[slot_num] = CodeSlot(
             slot_num=slot_num,
             code=code,
@@ -407,7 +403,6 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         }
         await self._async_publish(set_topic, json.dumps(payload))
 
-        # Update local cache optimistically
         self._usercodes_cache[slot_num] = CodeSlot(
             slot_num=slot_num,
             code=None,

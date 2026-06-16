@@ -113,10 +113,6 @@ class AkuvoxLockProvider(BaseLockProvider):
         """Whether provider supports real-time event updates."""
         return True
 
-    # ------------------------------------------------------------------
-    # Connection
-    # ------------------------------------------------------------------
-
     async def async_connect(self) -> bool:
         """Connect to the Akuvox lock."""
         self._connected = False
@@ -153,7 +149,6 @@ class AkuvoxLockProvider(BaseLockProvider):
             )
             return False
 
-        # Get the device identifier from the device registry.
         device_entry = None
         if lock_entry.device_id:
             device_entry = self.device_registry.async_get(lock_entry.device_id)
@@ -211,10 +206,6 @@ class AkuvoxLockProvider(BaseLockProvider):
 
         self._connected = connected
         return connected
-
-    # ------------------------------------------------------------------
-    # Event subscription
-    # ------------------------------------------------------------------
 
     def subscribe_lock_events(
         self, kmlock: KeymasterLock, callback: LockEventCallback
@@ -310,10 +301,6 @@ class AkuvoxLockProvider(BaseLockProvider):
 
         return unsubscribe_all
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     async def _async_list_users(self) -> list[dict[str, Any]]:
         """Call ``local_akuvox.list_users`` and return the user list.
 
@@ -390,10 +377,6 @@ class AkuvoxLockProvider(BaseLockProvider):
             target={"entity_id": self.lock_entity_id},
             blocking=True,
         )
-
-    # ------------------------------------------------------------------
-    # Code slot operations
-    # ------------------------------------------------------------------
 
     async def async_get_usercodes(self) -> list[CodeSlot]:
         """Get all user codes from the Akuvox lock.
@@ -596,10 +579,6 @@ class AkuvoxLockProvider(BaseLockProvider):
 
         _LOGGER.debug("[AkuvoxProvider] Cleared usercode from slot %s", slot_num)
         return True
-
-    # ------------------------------------------------------------------
-    # Diagnostics
-    # ------------------------------------------------------------------
 
     def get_platform_data(self) -> dict[str, Any]:
         """Get Akuvox-specific diagnostic data."""

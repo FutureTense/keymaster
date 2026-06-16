@@ -82,7 +82,6 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
 
     await async_register_strategy_resource(hass)
 
-    # Set up websocket API
     await async_websocket_setup(hass)
     _LOGGER.debug("Finished setting up websocket API")
 

@@ -84,10 +84,6 @@ class AutolockTimer:
         self._entry: TimerEntry | None = None
         self._scheduled: ScheduledFire | None = None
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     async def recover(self) -> None:
         """Load any persisted entry left over from a prior process.
 
@@ -143,10 +139,6 @@ class AutolockTimer:
         self._state = TimerState.DONE
         _LOGGER.debug("[AutolockTimer] %s: cancelled", self._timer_id)
 
-    # ------------------------------------------------------------------
-    # Read-only properties
-    # ------------------------------------------------------------------
-
     @property
     def state(self) -> TimerState:
         """Current lifecycle state."""
@@ -183,10 +175,6 @@ class AutolockTimer:
         if not self.is_running or self._entry is None:
             return None
         return round((self._entry.end_time - dt_util.utcnow()).total_seconds())
-
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
 
     def _schedule_remaining(self) -> None:
         """(Re)create the ScheduledFire from the current `_entry`."""

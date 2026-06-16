@@ -383,7 +383,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
         """Connect to the Z-Wave JS lock."""
         self._connected = False
 
-        # Get lock entity registry entry
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
         if not lock_entry:
             _LOGGER.error(
@@ -394,7 +393,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         self.lock_config_entry_id = lock_entry.config_entry_id
 
-        # Get Z-Wave JS config entry and client
         if not self.lock_config_entry_id:
             _LOGGER.error(
                 "[ZWaveJSProvider] Lock has no config entry: %s",
@@ -420,7 +418,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return False
 
-        # Check client connection
         if not (
             self._client
             and self._client.connected
@@ -430,7 +427,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
             _LOGGER.error("[ZWaveJSProvider] Z-Wave JS not connected")
             return False
 
-        # Get device registry entry
         if lock_entry.device_id:
             self._device = self.device_registry.async_get(lock_entry.device_id)
 
@@ -441,7 +437,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return False
 
-        # Extract node ID from device identifiers
         node_id = 0
         for identifier in self._device.identifiers:
             if identifier[0] == ZWAVE_JS_DOMAIN:
@@ -455,7 +450,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return False
 
-        # Get node from controller
         self._node = self._client.driver.controller.nodes.get(node_id)
         if not self._node:
             _LOGGER.error(
@@ -507,7 +501,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
             and self._node,
         )
 
-        # Update cached state
         self._connected = connected
         return connected
 
@@ -967,7 +960,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
             params: MutableMapping[str, Any] = event.data.get(ATTR_PARAMETERS) or {}
             code_slot_num: int = params.get("userId", 0)
 
-            # Parse lock activity from event
             if (
                 event.data.get("command_class") == 113
                 and event.data.get("type") == 6
@@ -1014,7 +1006,6 @@ class ZWaveJSLockProvider(BaseLockProvider):
             if old_state not in {LockState.LOCKED, LockState.UNLOCKED}:
                 return
 
-            # Get alarm sensor states
             alarm_level_state = None
             if kmlock.alarm_level_or_user_code_entity_id:
                 alarm_level_state = self.hass.states.get(kmlock.alarm_level_or_user_code_entity_id)

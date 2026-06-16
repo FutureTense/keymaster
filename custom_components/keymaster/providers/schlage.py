@@ -79,10 +79,6 @@ class SchlageLockProvider(BaseLockProvider):
         """Whether provider can report lock connection status."""
         return True
 
-    # ------------------------------------------------------------------
-    # Connection
-    # ------------------------------------------------------------------
-
     async def async_connect(self) -> bool:
         """Connect to the Schlage lock."""
         self._connected = False
@@ -121,7 +117,6 @@ class SchlageLockProvider(BaseLockProvider):
             )
             return False
 
-        # Get Schlage device_id from device registry identifiers.
         device_entry = None
         if lock_entry.device_id:
             device_entry = self.device_registry.async_get(lock_entry.device_id)
@@ -197,10 +192,6 @@ class SchlageLockProvider(BaseLockProvider):
         self._connected = connected
         return connected
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     async def _async_get_codes(self) -> dict[str, dict[str, str]]:
         """Call ``schlage.get_codes`` and return the response dict.
 
@@ -250,10 +241,6 @@ class SchlageLockProvider(BaseLockProvider):
             target={"entity_id": self.lock_entity_id},
             blocking=True,
         )
-
-    # ------------------------------------------------------------------
-    # Code slot operations
-    # ------------------------------------------------------------------
 
     async def async_get_usercodes(self) -> list[CodeSlot]:
         """Get all user codes from the Schlage lock.
@@ -508,10 +495,6 @@ class SchlageLockProvider(BaseLockProvider):
 
         _LOGGER.debug("[SchlageProvider] Cleared usercode from slot %s", slot_num)
         return True
-
-    # ------------------------------------------------------------------
-    # Diagnostics
-    # ------------------------------------------------------------------
 
     def get_platform_data(self) -> dict[str, Any]:
         """Get Schlage-specific diagnostic data."""

@@ -68,7 +68,6 @@ export class KeymasterViewStrategy extends ReactiveElement {
         });
       }
 
-      // Build the view config with section strategies
       const viewConfig: LovelaceViewConfig = {
         type: "sections",
         max_columns: 4,

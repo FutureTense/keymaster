@@ -15,7 +15,6 @@ export function slugify(value: string, delimiter = "-"): string {
       .toLowerCase()
       // Replace special characters
       .replace(p, (c) => b.charAt(a.indexOf(c)))
-      // Remove Commas between numbers
       .replace(/(\d),(?=\d)/g, "$1")
       // Replace all non-word characters
       .replace(/[^a-z0-9]+/g, delimiter)

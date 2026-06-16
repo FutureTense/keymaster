@@ -57,7 +57,6 @@ class ZHALockProvider(BaseLockProvider):
         self._door_lock_cluster = None
         self._endpoint_id = None
 
-        # Get lock entity from registry
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
         if not lock_entry:
             _LOGGER.error(
@@ -76,7 +75,6 @@ class ZHALockProvider(BaseLockProvider):
 
         self.lock_config_entry_id = lock_entry.config_entry_id
 
-        # Get device/cluster info for ZHA
         device_entry = self.get_device_entry()
         if not device_entry:
             _LOGGER.error(
@@ -329,7 +327,6 @@ class ZHALockProvider(BaseLockProvider):
                     status,
                 )
                 return False
-            # Update cache optimistically
             self._usercodes_cache[slot_num] = CodeSlot(
                 slot_num=slot_num,
                 code=code,
@@ -371,7 +368,6 @@ class ZHALockProvider(BaseLockProvider):
                     status,
                 )
                 return False
-            # Update cache optimistically
             self._usercodes_cache[slot_num] = CodeSlot(
                 slot_num=slot_num,
                 code=None,
@@ -449,7 +445,6 @@ class ZHALockProvider(BaseLockProvider):
             if code_slot is None or code_slot == 0:
                 return
 
-            # Parse ZCL enums for robust classification
             op_val = None
             src_val = None
             if operation is not None:
