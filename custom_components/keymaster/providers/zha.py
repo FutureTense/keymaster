@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+ZCL_DUPLICATE_CODE_STATUS = 3
+
 
 @dataclass
 class ZHALockProvider(BaseLockProvider):
@@ -215,6 +217,7 @@ class ZHALockProvider(BaseLockProvider):
 
         result: list[CodeSlot] = []
         for slot_num in range(slot_start, slot_start + slot_count):
+            res = None
             try:
                 res = await cluster.get_pin_code(slot_num)
                 _LOGGER.debug(
@@ -223,38 +226,51 @@ class ZHALockProvider(BaseLockProvider):
                     slot_num,
                     res,
                 )
-                user_status, pin_code = self._parse_pin_response(res)
-                if user_status == DoorLock.UserStatus.Enabled and pin_code:
-                    slot = CodeSlot(
-                        slot_num=slot_num,
-                        code=pin_code,
-                        in_use=True,
-                    )
-                else:
-                    slot = CodeSlot(
-                        slot_num=slot_num,
-                        code=None,
-                        in_use=False,
-                    )
-                self._usercodes_cache[slot_num] = slot
-                result.append(slot)
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning(
-                    "Lock %s: failed to read slot %s: %s",
+                    "Lock %s: could not read slot %s (%s); using cache",
                     self.lock_entity_id,
                     slot_num,
                     e,
                 )
+
+            # A ZCL DefaultResponse (e.g. UNSUP_CLUSTER_COMMAND) has a 'status'
+            # field but no 'user_status'. The lock does not support get_pin_code;
+            # treat this the same as a failed read and fall back to cache.
+            if res is not None and hasattr(res, "status") and not hasattr(res, "user_status"):
+                _LOGGER.debug(
+                    "Lock %s slot %s get_pin_code returned error response %s; using cache",
+                    self.lock_entity_id,
+                    slot_num,
+                    res,
+                )
+                res = None
+
+            if res is None:
                 if slot_num in self._usercodes_cache:
                     result.append(self._usercodes_cache[slot_num])
                 else:
-                    result.append(
-                        CodeSlot(
-                            slot_num=slot_num,
-                            code=None,
-                            in_use=False,
-                        )
-                    )
+                    result.append(CodeSlot(slot_num=slot_num, code=None, in_use=False))
+                continue
+
+            user_status, pin_code = self._parse_pin_response(res)
+            if user_status == DoorLock.UserStatus.Enabled:
+                # ZHA locks typically don't return PIN bytes on read (write-only
+                # security design). If the lock confirms the slot is Enabled but
+                # returns no code, fall back to the optimistic cache so the
+                # coordinator doesn't see a mismatch and retry indefinitely.
+                # Note: in_use=True with code=None is deliberate when cache is empty;
+                # coordinator will fall back to local/refresh paths correctly.
+                effective_code = pin_code or (
+                    self._usercodes_cache[slot_num].code
+                    if slot_num in self._usercodes_cache
+                    else None
+                )
+                slot = CodeSlot(slot_num=slot_num, code=effective_code, in_use=True)
+            else:
+                slot = CodeSlot(slot_num=slot_num, code=None, in_use=False)
+            self._usercodes_cache[slot_num] = slot
+            result.append(slot)
 
         return result
 
@@ -269,32 +285,45 @@ class ZHALockProvider(BaseLockProvider):
         cluster = self._get_door_lock_cluster()
         if not cluster:
             return None
+
+        res = None
         try:
             res = await cluster.get_pin_code(slot_num)
-            user_status, pin_code = self._parse_pin_response(res)
-            if user_status == DoorLock.UserStatus.Enabled and pin_code:
-                slot = CodeSlot(
-                    slot_num=slot_num,
-                    code=pin_code,
-                    in_use=True,
-                )
-            else:
-                slot = CodeSlot(
-                    slot_num=slot_num,
-                    code=None,
-                    in_use=False,
-                )
-            self._usercodes_cache[slot_num] = slot
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning(
-                "Lock %s: failed to refresh slot %s: %s",
+                "Lock %s: could not read slot %s (%s); using cache",
                 self.lock_entity_id,
                 slot_num,
                 e,
             )
             return self._usercodes_cache.get(slot_num)
+
+        # A ZCL DefaultResponse (e.g. UNSUP_CLUSTER_COMMAND) has a 'status'
+        # field but no 'user_status'. Treat as failed read -> use cache.
+        if hasattr(res, "status") and not hasattr(res, "user_status"):
+            _LOGGER.debug(
+                "Lock %s slot %s get_pin_code returned error response %s; using cache",
+                self.lock_entity_id,
+                slot_num,
+                res,
+            )
+            return self._usercodes_cache.get(slot_num)
+
+        user_status, pin_code = self._parse_pin_response(res)
+        if user_status == DoorLock.UserStatus.Enabled:
+            # ZHA locks typically don't return PIN bytes on read (write-only
+            # security design). Fall back to the optimistic cache if the lock
+            # confirms Enabled but returns no code.
+            # Note: in_use=True with code=None is deliberate when cache is empty;
+            # coordinator will fall back to local/refresh paths correctly.
+            effective_code = pin_code or (
+                self._usercodes_cache[slot_num].code if slot_num in self._usercodes_cache else None
+            )
+            slot = CodeSlot(slot_num=slot_num, code=effective_code, in_use=True)
         else:
-            return slot
+            slot = CodeSlot(slot_num=slot_num, code=None, in_use=False)
+        self._usercodes_cache[slot_num] = slot
+        return slot
 
     async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
         """Set user code on ZHA lock."""
@@ -320,6 +349,42 @@ class ZHALockProvider(BaseLockProvider):
             if status is None and isinstance(result, list | tuple) and len(result) > 0:
                 status = result[0]
             if status is not None and status != 0:
+                # Some ZHA locks (e.g. Yale YRD210) return ZCL_DUPLICATE_CODE_STATUS (3)
+                # when set_pin_code is called on a slot that already holds that same code.
+                # If the code is already in use in a different slot, this is a genuine
+                # duplicate PIN error across slots and the write failed (so we return False,
+                # which is a behavior change to enforce duplicate rejection).
+                # Note: This cross-slot duplicate detection is best-effort and cache-dependent;
+                # on a cold start with an empty cache, it may not be detected and will soft-succeed.
+                if int(status) == ZCL_DUPLICATE_CODE_STATUS:
+                    duplicate_elsewhere = any(
+                        slot.in_use and slot.code == code
+                        for s_num, slot in self._usercodes_cache.items()
+                        if s_num != slot_num
+                    )
+                    if duplicate_elsewhere:
+                        _LOGGER.warning(
+                            "Lock %s slot %s set_pin_code returned status %s "
+                            "(Duplicate PIN); code already exists in another slot",
+                            self.lock_entity_id,
+                            slot_num,
+                            status,
+                        )
+                        return False
+
+                    _LOGGER.debug(
+                        "Lock %s slot %s set_pin_code returned status %s "
+                        "(Duplicate PIN); treating as success (likely already set in this slot)",
+                        self.lock_entity_id,
+                        slot_num,
+                        status,
+                    )
+                    self._usercodes_cache[slot_num] = CodeSlot(
+                        slot_num=slot_num,
+                        code=code,
+                        in_use=True,
+                    )
+                    return True
                 _LOGGER.error(
                     "Lock %s slot %s set_pin_code rejected: status %s",
                     self.lock_entity_id,

@@ -356,6 +356,63 @@ class TestUsercodeOperations:
         assert result[1] == CodeSlot(slot_num=2, code="8765", in_use=True)
         assert result[2] == CodeSlot(slot_num=3, code=None, in_use=False)
 
+    async def test_get_usercodes_enabled_empty_pin_uses_cache(self, provider, mock_zha_gateway):
+        """Test get_usercodes uses cached code when lock returns Enabled but no PIN.
+
+        ZHA locks don't return PIN bytes on read (write-only security design).
+        If the lock confirms a slot is Enabled but returns an empty code, the
+        optimistic cache must be used so the coordinator never sees a mismatch
+        and retries indefinitely (the Yale YRD210 bug scenario).
+        """
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # Pre-populate cache as if set_usercode was previously called
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="1234", in_use=True)
+
+        # Lock returns Enabled but no PIN bytes (write-only security)
+        res = MagicMock()
+        res.user_status = DoorLock.UserStatus.Enabled
+        res.code = ""
+        # Slots 2 & 3 not in cache and not configured
+        res_empty2 = MagicMock()
+        res_empty2.user_status = DoorLock.UserStatus.Available
+        res_empty2.code = ""
+        res_empty3 = MagicMock()
+        res_empty3.user_status = DoorLock.UserStatus.Available
+        res_empty3.code = ""
+        mock_zha_gateway["cluster"].get_pin_code.side_effect = [res, res_empty2, res_empty3]
+
+        result = await provider.async_get_usercodes()
+        assert len(result) == 3
+        # Slot 1: Enabled with no PIN → should use cached code
+        assert result[0] == CodeSlot(slot_num=1, code="1234", in_use=True)
+        # Slots 2 & 3: Available → empty
+        assert result[1] == CodeSlot(slot_num=2, code=None, in_use=False)
+        assert result[2] == CodeSlot(slot_num=3, code=None, in_use=False)
+
+    async def test_get_usercodes_enabled_empty_pin_no_cache(self, provider, mock_zha_gateway):
+        """Test get_usercodes marks slot in_use=True even when Enabled+no-PIN and no cache."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # No prior cache for slot 1
+        res = MagicMock()
+        res.user_status = DoorLock.UserStatus.Enabled
+        res.code = ""
+        res2 = MagicMock()
+        res2.user_status = DoorLock.UserStatus.Available
+        res2.code = ""
+        res3 = MagicMock()
+        res3.user_status = DoorLock.UserStatus.Available
+        res3.code = ""
+        mock_zha_gateway["cluster"].get_pin_code.side_effect = [res, res2, res3]
+
+        result = await provider.async_get_usercodes()
+        # Slot 1 is Enabled even though we have no cached code — mark in_use=True
+        assert result[0].in_use is True
+        assert result[0].code is None  # no code available, but slot is occupied
+
     async def test_get_usercodes_fallback_to_cache_on_error(self, provider, mock_zha_gateway):
         """Test that get_usercodes falls back to cached values on query exception."""
         setup_successful_connect(provider)
@@ -372,6 +429,33 @@ class TestUsercodeOperations:
         # Slot 1 retrieved from cache
         assert result[0] == CodeSlot(slot_num=1, code="9999", in_use=True)
         # Slots 2 & 3 return default empty
+        assert result[1] == CodeSlot(slot_num=2, code=None, in_use=False)
+        assert result[2] == CodeSlot(slot_num=3, code=None, in_use=False)
+
+    async def test_get_usercodes_default_response_uses_cache(self, provider, mock_zha_gateway):
+        """Test get_usercodes uses cache when lock returns a ZCL DefaultResponse error.
+
+        The Yale YRD210 returns DefaultResponse(status=UNSUP_CLUSTER_COMMAND: 129)
+        for every get_pin_code call — the command is not supported at all.
+        A DefaultResponse has a 'status' attribute but no 'user_status', so it
+        must be detected as an error and routed to the cache-fallback path rather
+        than being parsed as 'slot empty', which would re-trigger the set loop.
+        """
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="1234", in_use=True)
+
+        # Simulate DefaultResponse(status=UNSUP_CLUSTER_COMMAND) — has 'status', no 'user_status'
+        default_response = MagicMock(spec=["status", "command_id"])
+        default_response.status = 129  # UNSUP_CLUSTER_COMMAND
+        mock_zha_gateway["cluster"].get_pin_code.return_value = default_response
+
+        result = await provider.async_get_usercodes()
+        assert len(result) == 3
+        # Slot 1: cache preserved despite unsupported command
+        assert result[0] == CodeSlot(slot_num=1, code="1234", in_use=True)
+        # Slots 2 & 3: no cache → empty
         assert result[1] == CodeSlot(slot_num=2, code=None, in_use=False)
         assert result[2] == CodeSlot(slot_num=3, code=None, in_use=False)
 
@@ -397,6 +481,45 @@ class TestUsercodeOperations:
         assert result == CodeSlot(slot_num=2, code="4321", in_use=True)
         mock_zha_gateway["cluster"].get_pin_code.assert_called_once_with(2)
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code="4321", in_use=True)
+
+    async def test_refresh_usercode_enabled_empty_pin_uses_cache(self, provider, mock_zha_gateway):
+        """Test refresh_usercode uses cached code when lock returns Enabled but no PIN.
+
+        Mirrors the get_usercodes fix: ZHA locks don't return PIN bytes on read.
+        If the lock says Enabled but gives no code, preserve the cached code.
+        """
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="9876", in_use=True)
+
+        res = MagicMock()
+        res.user_status = DoorLock.UserStatus.Enabled
+        res.code = ""
+        mock_zha_gateway["cluster"].get_pin_code.return_value = res
+
+        result = await provider.async_refresh_usercode(1)
+        assert result == CodeSlot(slot_num=1, code="9876", in_use=True)
+        assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="9876", in_use=True)
+
+    async def test_refresh_usercode_default_response_uses_cache(self, provider, mock_zha_gateway):
+        """Test refresh_usercode uses cache when lock returns a ZCL DefaultResponse error.
+
+        Same UNSUP_CLUSTER_COMMAND scenario as test_get_usercodes_default_response_uses_cache
+        but for the async_refresh_usercode path.
+        """
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="5555", in_use=True)
+
+        default_response = MagicMock(spec=["status", "command_id"])
+        default_response.status = 129  # UNSUP_CLUSTER_COMMAND
+        mock_zha_gateway["cluster"].get_pin_code.return_value = default_response
+
+        result = await provider.async_refresh_usercode(1)
+        # Cache preserved; RuntimeError routed to exception handler
+        assert result == CodeSlot(slot_num=1, code="5555", in_use=True)
 
     async def test_set_usercode_success(self, provider, mock_zha_gateway):
         """Test set_usercode calls cluster directly and updates cache on success."""
@@ -442,6 +565,96 @@ class TestUsercodeOperations:
         result = await provider.async_set_usercode(2, "4321")
         assert result is False
         assert 2 not in provider._usercodes_cache
+
+    async def test_set_usercode_status_3_no_existing_cache(self, provider, mock_zha_gateway):
+        """Test set_usercode treats status 3 as soft-success when cache is empty.
+
+        Some ZHA locks (e.g. Yale YRD210) return Status.undefined_0x03 (value 3)
+        when set_pin_code is called on a slot that already holds a code. This
+        should stop the infinite retry loop without reporting an error.
+        """
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        cmd_result = MagicMock()
+        cmd_result.status = 3
+        mock_zha_gateway["cluster"].set_pin_code.return_value = cmd_result
+
+        result = await provider.async_set_usercode(1, "1234")
+        assert result is True
+        # Cache should contain the code we tried to set (no prior cache)
+        assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="1234", in_use=True)
+
+    async def test_set_usercode_status_3_overwrites_existing_cache(
+        self, provider, mock_zha_gateway
+    ):
+        """Test set_usercode status 3 stores the new code, not the old cached one.
+
+        The purpose of set_usercode is to write a specific new PIN. Even if the
+        lock returns status 3, the new code is what was sent and accepted by the
+        lock, so the cache must reflect it — not the previously cached value.
+        A stale cache entry would cause the coordinator to keep seeing a
+        mismatch and retry indefinitely on genuine PIN changes.
+        """
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="9999", in_use=True)
+
+        cmd_result = MagicMock()
+        cmd_result.status = 3
+        mock_zha_gateway["cluster"].set_pin_code.return_value = cmd_result
+
+        result = await provider.async_set_usercode(1, "1234")
+        assert result is True
+        # Cache must be updated to the new code, not the old cached value
+        assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="1234", in_use=True)
+
+    async def test_set_usercode_status_list_3_soft_success(self, provider, mock_zha_gateway):
+        """Test set_usercode handles status 3 delivered as a list element."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        mock_zha_gateway["cluster"].set_pin_code.return_value = [3]
+
+        result = await provider.async_set_usercode(2, "5678")
+        assert result is True
+        assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code="5678", in_use=True)
+
+    async def test_set_usercode_status_3_duplicate_cross_slot(
+        self, provider, mock_zha_gateway, caplog
+    ):
+        """Test set_usercode status 3 returns False when code is duplicate in another slot."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # Slot 1 already has "1234"
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="1234", in_use=True)
+
+        cmd_result = MagicMock()
+        cmd_result.status = 3
+        mock_zha_gateway["cluster"].set_pin_code.return_value = cmd_result
+
+        # Try to set slot 2 to the same code "1234"
+        result = await provider.async_set_usercode(2, "1234")
+        assert result is False
+        assert 2 not in provider._usercodes_cache
+        assert "Duplicate PIN" in caplog.text
+        assert "code already exists in another slot" in caplog.text
+
+    async def test_set_usercode_status_2_rejection(self, provider, mock_zha_gateway, caplog):
+        """Test set_usercode status 2 (memory full) is rejected."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        cmd_result = MagicMock()
+        cmd_result.status = 2
+        mock_zha_gateway["cluster"].set_pin_code.return_value = cmd_result
+
+        result = await provider.async_set_usercode(2, "4321")
+        assert result is False
+        assert 2 not in provider._usercodes_cache
+        assert "set_pin_code rejected: status 2" in caplog.text
 
     async def test_clear_usercode_success(self, provider, mock_zha_gateway):
         """Test clear_usercode calls cluster directly and updates cache on success."""
