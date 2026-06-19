@@ -621,7 +621,9 @@ class TestUsercodeOperations:
         assert result is True
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code="5678", in_use=True)
 
-    async def test_set_usercode_status_3_duplicate_cross_slot(self, provider, mock_zha_gateway):
+    async def test_set_usercode_status_3_duplicate_cross_slot(
+        self, provider, mock_zha_gateway, caplog
+    ):
         """Test set_usercode status 3 returns False when code is duplicate in another slot."""
         setup_successful_connect(provider)
         await provider.async_connect()
@@ -637,8 +639,10 @@ class TestUsercodeOperations:
         result = await provider.async_set_usercode(2, "1234")
         assert result is False
         assert 2 not in provider._usercodes_cache
+        assert "Duplicate PIN" in caplog.text
+        assert "code already exists in another slot" in caplog.text
 
-    async def test_set_usercode_status_2_rejection(self, provider, mock_zha_gateway):
+    async def test_set_usercode_status_2_rejection(self, provider, mock_zha_gateway, caplog):
         """Test set_usercode status 2 (memory full) is rejected."""
         setup_successful_connect(provider)
         await provider.async_connect()
@@ -650,6 +654,7 @@ class TestUsercodeOperations:
         result = await provider.async_set_usercode(2, "4321")
         assert result is False
         assert 2 not in provider._usercodes_cache
+        assert "set_pin_code rejected: status 2" in caplog.text
 
     async def test_clear_usercode_success(self, provider, mock_zha_gateway):
         """Test clear_usercode calls cluster directly and updates cache on success."""

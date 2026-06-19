@@ -352,8 +352,10 @@ class ZHALockProvider(BaseLockProvider):
                 # Some ZHA locks (e.g. Yale YRD210) return ZCL_DUPLICATE_CODE_STATUS (3)
                 # when set_pin_code is called on a slot that already holds that same code.
                 # If the code is already in use in a different slot, this is a genuine
-                # duplicate PIN error across slots and the write failed. Otherwise,
-                # we treat this as a soft success to stop the retry loop.
+                # duplicate PIN error across slots and the write failed (so we return False,
+                # which is a behavior change to enforce duplicate rejection).
+                # Note: This cross-slot duplicate detection is best-effort and cache-dependent;
+                # on a cold start with an empty cache, it may not be detected and will soft-succeed.
                 if int(status) == ZCL_DUPLICATE_CODE_STATUS:
                     duplicate_elsewhere = any(
                         slot.in_use and slot.code == code
