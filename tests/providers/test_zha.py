@@ -621,6 +621,36 @@ class TestUsercodeOperations:
         assert result is True
         assert provider._usercodes_cache[2] == CodeSlot(slot_num=2, code="5678", in_use=True)
 
+    async def test_set_usercode_status_3_duplicate_cross_slot(self, provider, mock_zha_gateway):
+        """Test set_usercode status 3 returns False when code is duplicate in another slot."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        # Slot 1 already has "1234"
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="1234", in_use=True)
+
+        cmd_result = MagicMock()
+        cmd_result.status = 3
+        mock_zha_gateway["cluster"].set_pin_code.return_value = cmd_result
+
+        # Try to set slot 2 to the same code "1234"
+        result = await provider.async_set_usercode(2, "1234")
+        assert result is False
+        assert 2 not in provider._usercodes_cache
+
+    async def test_set_usercode_status_2_rejection(self, provider, mock_zha_gateway):
+        """Test set_usercode status 2 (memory full) is rejected."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        cmd_result = MagicMock()
+        cmd_result.status = 2
+        mock_zha_gateway["cluster"].set_pin_code.return_value = cmd_result
+
+        result = await provider.async_set_usercode(2, "4321")
+        assert result is False
+        assert 2 not in provider._usercodes_cache
+
     async def test_clear_usercode_success(self, provider, mock_zha_gateway):
         """Test clear_usercode calls cluster directly and updates cache on success."""
         setup_successful_connect(provider)

@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+ZCL_DUPLICATE_CODE_STATUS = 3
+
 
 @dataclass
 class ZHALockProvider(BaseLockProvider):
@@ -225,7 +227,7 @@ class ZHALockProvider(BaseLockProvider):
                     res,
                 )
             except Exception as e:  # noqa: BLE001
-                _LOGGER.debug(
+                _LOGGER.warning(
                     "Lock %s: could not read slot %s (%s); using cache",
                     self.lock_entity_id,
                     slot_num,
@@ -257,6 +259,8 @@ class ZHALockProvider(BaseLockProvider):
                 # security design). If the lock confirms the slot is Enabled but
                 # returns no code, fall back to the optimistic cache so the
                 # coordinator doesn't see a mismatch and retry indefinitely.
+                # Note: in_use=True with code=None is deliberate when cache is empty;
+                # coordinator will fall back to local/refresh paths correctly.
                 effective_code = pin_code or (
                     self._usercodes_cache[slot_num].code
                     if slot_num in self._usercodes_cache
@@ -286,7 +290,7 @@ class ZHALockProvider(BaseLockProvider):
         try:
             res = await cluster.get_pin_code(slot_num)
         except Exception as e:  # noqa: BLE001
-            _LOGGER.debug(
+            _LOGGER.warning(
                 "Lock %s: could not read slot %s (%s); using cache",
                 self.lock_entity_id,
                 slot_num,
@@ -310,6 +314,8 @@ class ZHALockProvider(BaseLockProvider):
             # ZHA locks typically don't return PIN bytes on read (write-only
             # security design). Fall back to the optimistic cache if the lock
             # confirms Enabled but returns no code.
+            # Note: in_use=True with code=None is deliberate when cache is empty;
+            # coordinator will fall back to local/refresh paths correctly.
             effective_code = pin_code or (
                 self._usercodes_cache[slot_num].code if slot_num in self._usercodes_cache else None
             )
@@ -343,15 +349,30 @@ class ZHALockProvider(BaseLockProvider):
             if status is None and isinstance(result, list | tuple) and len(result) > 0:
                 status = result[0]
             if status is not None and status != 0:
-                # Some ZHA locks (e.g. Yale YRD210) return status 3
-                # (ZCL MEMORY_FULL / slot-occupied) when set_pin_code is called
-                # on a slot that already holds any code. The PIN is still
-                # accepted by the lock, so treat this as a soft success to
-                # prevent an infinite retry loop from flooding the logs.
-                if int(status) == 3:
+                # Some ZHA locks (e.g. Yale YRD210) return ZCL_DUPLICATE_CODE_STATUS (3)
+                # when set_pin_code is called on a slot that already holds that same code.
+                # If the code is already in use in a different slot, this is a genuine
+                # duplicate PIN error across slots and the write failed. Otherwise,
+                # we treat this as a soft success to stop the retry loop.
+                if int(status) == ZCL_DUPLICATE_CODE_STATUS:
+                    duplicate_elsewhere = any(
+                        slot.in_use and slot.code == code
+                        for s_num, slot in self._usercodes_cache.items()
+                        if s_num != slot_num
+                    )
+                    if duplicate_elsewhere:
+                        _LOGGER.warning(
+                            "Lock %s slot %s set_pin_code returned status %s "
+                            "(Duplicate PIN); code already exists in another slot",
+                            self.lock_entity_id,
+                            slot_num,
+                            status,
+                        )
+                        return False
+
                     _LOGGER.debug(
                         "Lock %s slot %s set_pin_code returned status %s "
-                        "(slot may already be occupied); treating as success",
+                        "(Duplicate PIN); treating as success (likely already set in this slot)",
                         self.lock_entity_id,
                         slot_num,
                         status,
