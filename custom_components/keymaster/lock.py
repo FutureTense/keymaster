@@ -246,6 +246,8 @@ class KeymasterLock:
         self.autolock_enabled = old.autolock_enabled
         self.autolock_min_day = old.autolock_min_day
         self.autolock_min_night = old.autolock_min_night
+        self.lock_notifications = old.lock_notifications
+        self.door_notifications = old.door_notifications
         self.retry_lock = old.retry_lock
         self.pending_retry_lock = old.pending_retry_lock
         if not self.code_slots or not old.code_slots:

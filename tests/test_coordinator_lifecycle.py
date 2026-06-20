@@ -304,3 +304,44 @@ async def test_update_lock_unsubscribes_old_listeners(hass):
     # The old lock's listeners should be unsubscribed
     mock_unsub.assert_called_once()
     assert len(old_lock.listeners) == 0
+
+
+async def test_update_lock_inherits_notifications(hass):
+    """Test that _update_lock inherits notifications settings from the old lock."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator._rebuild_lock_relationships = AsyncMock()
+    coordinator._update_door_and_lock_state = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
+
+    old_lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_id",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    old_lock.number_of_code_slots = 1
+    old_lock.starting_code_slot = 1
+    old_lock.lock_notifications = True
+    old_lock.door_notifications = True
+
+    new_lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_id",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    new_lock.number_of_code_slots = 1
+    new_lock.starting_code_slot = 1
+    # New lock defaults to False
+    assert new_lock.lock_notifications is False
+    assert new_lock.door_notifications is False
+
+    coordinator.kmlocks["entry_id"] = old_lock
+
+    with patch.object(coordinator, "_update_listeners", new=AsyncMock()):
+        await coordinator._update_lock(new_lock)
+
+    # Verify new_lock inherits the values from old_lock
+    assert coordinator.kmlocks["entry_id"].lock_notifications is True
+    assert coordinator.kmlocks["entry_id"].door_notifications is True
