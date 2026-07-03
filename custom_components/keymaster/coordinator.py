@@ -155,16 +155,19 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             ISSUE_URL,
         )
 
-        imported_config = await self._async_load_data()
+        try:
+            imported_config = await self._async_load_data()
 
-        _LOGGER.debug("[async_setup] Imported %s keymaster locks", len(imported_config))
-        self.kmlocks = imported_config
-        await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_state()
-        await self._setup_timers()
-        for lock in self.kmlocks.values():
-            await self._update_listeners(lock)
-        self._initial_setup_done_event.set()
+            _LOGGER.debug("[async_setup] Imported %s keymaster locks", len(imported_config))
+            self.kmlocks = imported_config
+            await self._rebuild_lock_relationships()
+            await self._update_door_and_lock_state()
+            await self._setup_timers()
+            for lock in self.kmlocks.values():
+                await self._update_listeners(lock)
+        finally:
+            self._initial_setup_done_event.set()
+
         await self._verify_lock_configuration()
 
     async def _async_load_data(self) -> MutableMapping[str, KeymasterLock]:
