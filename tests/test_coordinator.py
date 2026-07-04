@@ -3336,3 +3336,46 @@ async def test_delete_lock_pending_delete(hass: HomeAssistant) -> None:
         # Second call should return early
         await coordinator.delete_lock_by_config_entry_id("entry_1")
         assert mock_call_later.call_count == 1
+
+
+async def test_async_setup_exception_sets_event(hass: HomeAssistant) -> None:
+    """Test that _async_setup sets the initial setup done event even if an error is encountered."""
+    coordinator = KeymasterCoordinator(hass)
+    with patch.object(coordinator, "_async_load_data", side_effect=RuntimeError("Test error")):
+        with pytest.raises(RuntimeError):
+            await coordinator._async_setup()
+        assert coordinator._initial_setup_done_event.is_set()
+
+
+async def test_async_setup_success(hass: HomeAssistant) -> None:
+    """Test that _async_setup runs successfully and sets the event."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="entry_1",
+    )
+    with (
+        patch.object(coordinator, "_async_load_data", return_value={"entry_1": lock}),
+        patch.object(
+            coordinator, "_rebuild_lock_relationships", new_callable=AsyncMock
+        ) as mock_rebuild,
+        patch.object(
+            coordinator, "_update_door_and_lock_state", new_callable=AsyncMock
+        ) as mock_update_state,
+        patch.object(coordinator, "_setup_timers", new_callable=AsyncMock) as mock_setup_timers,
+        patch.object(
+            coordinator, "_update_listeners", new_callable=AsyncMock
+        ) as mock_update_listeners,
+        patch.object(
+            coordinator, "_verify_lock_configuration", new_callable=AsyncMock
+        ) as mock_verify_config,
+    ):
+        await coordinator._async_setup()
+
+        mock_rebuild.assert_called_once()
+        mock_update_state.assert_called_once()
+        mock_setup_timers.assert_called_once()
+        mock_update_listeners.assert_called_once_with(lock)
+        mock_verify_config.assert_called_once()
+        assert coordinator._initial_setup_done_event.is_set()
