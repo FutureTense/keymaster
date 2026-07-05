@@ -28,6 +28,7 @@ from custom_components.keymaster.const import (
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.util.dt import utcnow
 
 from .const import CONFIG_DATA
@@ -329,3 +330,66 @@ async def test_delete_coordinator_with_data_none(hass) -> None:
     assert DOMAIN not in hass.data
     coordinator.async_remove_data.assert_awaited_once()
     coordinator.async_shutdown.assert_awaited_once()
+
+
+async def test_async_setup_entry_initial_setup_raises_exception(hass) -> None:
+    """Test that async_setup_entry handles setup exception, pops coordinator, and raises ConfigEntryNotReady."""
+    config_data = {
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.fake",
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.fake",
+        CONF_LOCK_ENTITY_ID: "lock.akuvox_relay_a",
+        CONF_LOCK_NAME: "Akuvox Relay A",
+        CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.fake",
+        CONF_SLOTS: 1,
+        CONF_START: 1,
+        CONF_NOTIFY_SCRIPT_NAME: None,
+        CONF_HIDE_PINS: False,
+    }
+    entry = MockConfigEntry(domain=DOMAIN, title="Akuvox Relay A", data=config_data, version=4)
+    entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock(side_effect=ValueError("Failed to connect"))
+
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, entry)
+
+        assert COORDINATOR not in hass.data[DOMAIN]
+
+
+async def test_async_setup_entry_setup_success_false(hass) -> None:
+    """Test that async_setup_entry handles setup_success is False, pops coordinator, and raises ConfigEntryNotReady."""
+    config_data = {
+        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.fake",
+        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.fake",
+        CONF_LOCK_ENTITY_ID: "lock.akuvox_relay_a",
+        CONF_LOCK_NAME: "Akuvox Relay A",
+        CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.fake",
+        CONF_SLOTS: 1,
+        CONF_START: 1,
+        CONF_NOTIFY_SCRIPT_NAME: None,
+        CONF_HIDE_PINS: False,
+    }
+    entry = MockConfigEntry(domain=DOMAIN, title="Akuvox Relay A", data=config_data, version=4)
+    entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = False
+        mock_coordinator.last_exception = RuntimeError("Refresh failed")
+
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, entry)
+
+        assert COORDINATOR not in hass.data[DOMAIN]
