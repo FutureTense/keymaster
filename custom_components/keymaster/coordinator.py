@@ -166,6 +166,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             for lock in self.kmlocks.values():
                 await self._update_listeners(lock)
         finally:
+            # Set the event unconditionally to prevent deadlocks on failed setup
             self._initial_setup_done_event.set()
 
         await self._verify_lock_configuration()

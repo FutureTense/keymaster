@@ -3338,10 +3338,31 @@ async def test_delete_lock_pending_delete(hass: HomeAssistant) -> None:
         assert mock_call_later.call_count == 1
 
 
-async def test_async_setup_exception_sets_event(hass: HomeAssistant) -> None:
+@pytest.mark.parametrize(
+    "method_to_fail",
+    [
+        "_async_load_data",
+        "_rebuild_lock_relationships",
+        "_setup_timers",
+    ],
+)
+async def test_async_setup_exception_sets_event(hass: HomeAssistant, method_to_fail: str) -> None:
     """Test that _async_setup sets the initial setup done event even if an error is encountered."""
     coordinator = KeymasterCoordinator(hass)
-    with patch.object(coordinator, "_async_load_data", side_effect=RuntimeError("Test error")):
+    lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="entry_1",
+    )
+    with (
+        patch.object(coordinator, "_async_load_data", return_value={"entry_1": lock}),
+        patch.object(coordinator, "_rebuild_lock_relationships", new_callable=AsyncMock),
+        patch.object(coordinator, "_update_door_and_lock_state", new_callable=AsyncMock),
+        patch.object(coordinator, "_setup_timers", new_callable=AsyncMock),
+        patch.object(coordinator, "_update_listeners", new_callable=AsyncMock),
+        patch.object(coordinator, "_verify_lock_configuration", new_callable=AsyncMock),
+        patch.object(coordinator, method_to_fail, side_effect=RuntimeError("Test error")),
+    ):
         with pytest.raises(RuntimeError):
             await coordinator._async_setup()
         assert coordinator._initial_setup_done_event.is_set()
@@ -3355,10 +3376,22 @@ async def test_async_setup_success(hass: HomeAssistant) -> None:
         lock_entity_id="lock.test_lock",
         keymaster_config_entry_id="entry_1",
     )
+
+    # Invariants verification: setup steps must run before the event is set;
+    # verify_lock_configuration (post-setup) must run after the event is set.
+    async def mock_rebuild_side_effect():
+        assert not coordinator._initial_setup_done_event.is_set()
+
+    async def mock_verify_side_effect():
+        assert coordinator._initial_setup_done_event.is_set()
+
     with (
         patch.object(coordinator, "_async_load_data", return_value={"entry_1": lock}),
         patch.object(
-            coordinator, "_rebuild_lock_relationships", new_callable=AsyncMock
+            coordinator,
+            "_rebuild_lock_relationships",
+            new_callable=AsyncMock,
+            side_effect=mock_rebuild_side_effect,
         ) as mock_rebuild,
         patch.object(
             coordinator, "_update_door_and_lock_state", new_callable=AsyncMock
@@ -3368,7 +3401,10 @@ async def test_async_setup_success(hass: HomeAssistant) -> None:
             coordinator, "_update_listeners", new_callable=AsyncMock
         ) as mock_update_listeners,
         patch.object(
-            coordinator, "_verify_lock_configuration", new_callable=AsyncMock
+            coordinator,
+            "_verify_lock_configuration",
+            new_callable=AsyncMock,
+            side_effect=mock_verify_side_effect,
         ) as mock_verify_config,
     ):
         await coordinator._async_setup()

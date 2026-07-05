@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster import async_setup_entry
+from custom_components.keymaster import async_setup_entry, delete_coordinator
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
@@ -26,7 +26,9 @@ from custom_components.keymaster.const import (
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DOMAIN,
 )
+from custom_components.keymaster.coordinator import KeymasterCoordinator
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.util.dt import utcnow
 
 from .const import CONFIG_DATA
 
@@ -308,3 +310,22 @@ async def test_unload_vs_remove_lock_preservation(
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.entry_id not in coordinator.kmlocks
+
+
+async def test_delete_coordinator_with_data_none(hass) -> None:
+    """Test that delete_coordinator removes the coordinator when coordinator.data is None."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator.data = None
+    coordinator.async_remove_data = AsyncMock()
+    coordinator.async_shutdown = AsyncMock()
+    hass.data[DOMAIN] = {COORDINATOR: coordinator}
+
+    # Simulate no other config entries exist
+    entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data={})
+    entry.add_to_hass(hass)
+
+    await delete_coordinator(hass, entry.entry_id, utcnow())
+
+    assert DOMAIN not in hass.data
+    coordinator.async_remove_data.assert_awaited_once()
+    coordinator.async_shutdown.assert_awaited_once()
