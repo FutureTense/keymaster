@@ -404,7 +404,6 @@ async def _start_config_flow(
                 return cls.async_create_entry(title=title, data=user_input)
             if cls._entry is not None:
                 cls.hass.config_entries.async_update_entry(cls._entry, data=user_input)
-                await cls.hass.config_entries.async_reload(entry_id)
                 return cls.async_abort(reason="reconfigure_successful")
 
     data_schema = _get_schema(
