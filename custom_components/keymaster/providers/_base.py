@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
+import logging
 from typing import TYPE_CHECKING, Any
 
 from custom_components.keymaster.const import (
@@ -19,6 +20,8 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 if TYPE_CHECKING:
     from custom_components.keymaster.lock import KeymasterLock
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -177,9 +180,18 @@ class BaseLockProvider(ABC):
         Override this to cleanup resources when the lock is removed.
         """
         # Unsubscribe all listeners
-        for unsub in self._listeners:
-            unsub()
+        _LOGGER.debug(
+            "[BaseProvider] async_unload: Unsubscribing %s listeners", len(self._listeners)
+        )
+        for i, unsub in enumerate(self._listeners):
+            _LOGGER.debug("[BaseProvider] async_unload: Calling unsub %s (%s)", i, unsub)
+            try:
+                unsub()
+            except Exception:
+                _LOGGER.exception("[BaseProvider] async_unload: Error unsubscribing %s", i)
+            _LOGGER.debug("[BaseProvider] async_unload: Finished unsub %s", i)
         self._listeners.clear()
+        _LOGGER.debug("[BaseProvider] async_unload completed")
 
     async def async_get_usercode(self, slot_num: int) -> CodeSlot | None:
         """Get a specific user code from the lock.

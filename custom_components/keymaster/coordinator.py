@@ -724,13 +724,30 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     @staticmethod
     async def _unsubscribe_listeners(kmlock: KeymasterLock) -> None:
         # Unsubscribe to any listeners
-        _LOGGER.debug("[unsubscribe_listeners] %s: Removing all listeners", kmlock.lock_name)
+        _LOGGER.debug(
+            "[unsubscribe_listeners] %s: Removing all listeners (count: %s)",
+            kmlock.lock_name,
+            len(kmlock.listeners) if hasattr(kmlock, "listeners") and kmlock.listeners else 0,
+        )
         if not hasattr(kmlock, "listeners") or kmlock.listeners is None:
             kmlock.listeners = []
             return
-        for unsub_listener in kmlock.listeners:
-            unsub_listener()
+        for i, unsub_listener in enumerate(kmlock.listeners):
+            _LOGGER.debug(
+                "[unsubscribe_listeners] %s: Calling listener %s (%s)",
+                kmlock.lock_name,
+                i,
+                unsub_listener,
+            )
+            try:
+                unsub_listener()
+            except Exception:
+                _LOGGER.exception("[unsubscribe_listeners] Error calling listener %s", i)
+            _LOGGER.debug("[unsubscribe_listeners] %s: Finished listener %s", kmlock.lock_name, i)
         kmlock.listeners = []
+        _LOGGER.debug(
+            "[unsubscribe_listeners] %s: Finished removing all listeners", kmlock.lock_name
+        )
 
     async def _update_listeners(self, kmlock: KeymasterLock) -> None:
         await KeymasterCoordinator._unsubscribe_listeners(kmlock=kmlock)
