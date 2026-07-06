@@ -22,7 +22,7 @@ from custom_components.keymaster.providers import CodeSlot
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
 
 
 def validate_lock_relationship_invariants(
@@ -3415,3 +3415,66 @@ async def test_async_setup_success(hass: HomeAssistant) -> None:
         mock_update_listeners.assert_called_once_with(lock)
         mock_verify_config.assert_called_once()
         assert coordinator._initial_setup_done_event.is_set()
+
+
+async def test_unsubscribe_listeners_edge_cases(hass: HomeAssistant) -> None:
+    """Test edge cases in _unsubscribe_listeners."""
+    # Case 1: listeners attribute is absent
+    lock_no_attr = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="entry_1",
+    )
+    if hasattr(lock_no_attr, "listeners"):
+        delattr(lock_no_attr, "listeners")
+
+    await KeymasterCoordinator._unsubscribe_listeners(lock_no_attr)
+    assert lock_no_attr.listeners == []
+
+    # Case 2: listeners attribute is None
+    lock_none_listeners = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="entry_1",
+    )
+    lock_none_listeners.listeners = None  # type: ignore[assignment]
+
+    await KeymasterCoordinator._unsubscribe_listeners(lock_none_listeners)
+    assert lock_none_listeners.listeners == []
+
+    # Case 3: one listener raises an exception
+    lock_with_exceptions = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="entry_1",
+    )
+    mock_unsub_success = Mock()
+    mock_unsub_fail = Mock(side_effect=RuntimeError("Unsubscribe failed"))
+    lock_with_exceptions.listeners = [mock_unsub_success, mock_unsub_fail]
+
+    await KeymasterCoordinator._unsubscribe_listeners(lock_with_exceptions)
+    mock_unsub_success.assert_called_once()
+    mock_unsub_fail.assert_called_once()
+    assert lock_with_exceptions.listeners == []
+
+
+async def test_create_listeners_with_event(hass: HomeAssistant) -> None:
+    """Test _create_listeners clears listeners list when called with an event."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="entry_1",
+    )
+    mock_unsub = Mock()
+    lock.listeners = [mock_unsub]
+
+    # Call _create_listeners with a dummy event
+    with (
+        patch.object(coordinator, "_handle_door_state_change"),
+        patch.object(coordinator, "_handle_lock_state_change"),
+    ):
+        await coordinator._create_listeners(lock, event=Event("homeassistant_started"))
+
+    # The existing listeners in the list should be cleared out since event is not None
+    assert mock_unsub not in lock.listeners

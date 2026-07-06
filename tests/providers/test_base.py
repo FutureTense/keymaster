@@ -126,3 +126,110 @@ class TestBaseLockProviderRedaction:
         assert provider.redact_pin_codes is False
         assert provider.redact_name("John Doe") == "John Doe"
         assert provider.redact_pin_code("1234") == "1234"
+
+
+class TestBaseLockProviderDefaultImplementations:
+    """Test default implementations and fallback paths of BaseLockProvider."""
+
+    async def test_defaults_and_fallbacks(self, hass):
+        """Test default fallback properties and methods."""
+        mock_entry = MagicMock()
+        mock_entry.data = {}
+        mock_entry.options = {}
+
+        @dataclass
+        class StubProvider(BaseLockProvider):
+            @property
+            def domain(self) -> str:
+                return "stub"
+
+            async def async_connect(self) -> bool:
+                return True
+
+            async def async_is_connected(self) -> bool:
+                return True
+
+            async def async_get_usercodes(self) -> list[CodeSlot]:
+                return []
+
+            async def async_set_usercode(
+                self, slot_num: int, code: str, name: str | None = None
+            ) -> bool:
+                return True
+
+            async def async_clear_usercode(self, slot_num: int) -> bool:
+                return True
+
+        provider = StubProvider(
+            hass=hass,
+            lock_entity_id="lock.stub",
+            keymaster_config_entry=mock_entry,
+            device_registry=MagicMock(spec=dr.DeviceRegistry),
+            entity_registry=MagicMock(spec=er.EntityRegistry),
+        )
+
+        # Test defaults
+        assert provider.supports_push_updates is False
+        assert provider.supports_connection_status is False
+        assert provider.connected is False
+        provider._connected = True
+        assert provider.connected is True
+        assert provider.get_node_id() is None
+        assert provider.node is None
+        assert provider.device is None
+
+        # Test sub/unsub default methods (no-op lambdas)
+        unsub_lock = provider.subscribe_lock_events(MagicMock(), MagicMock())
+        assert callable(unsub_lock)
+        unsub_lock()
+
+        unsub_conn = provider.subscribe_connection_events(MagicMock())
+        assert callable(unsub_conn)
+        unsub_conn()
+
+        # Test async_setup default implementation
+        await provider.async_setup()
+
+        # Test async_get_usercode fallback
+        assert await provider.async_get_usercode(1) is None
+
+        # Test async_refresh_usercode calls async_get_usercode
+        assert await provider.async_refresh_usercode(1) is None
+
+        # Test async_unload with various listeners
+        mock_unsub_success = MagicMock()
+        mock_unsub_fail = MagicMock(side_effect=Exception("Unsubscribe failure"))
+
+        provider._listeners.append(mock_unsub_success)
+        provider._listeners.append(mock_unsub_fail)
+
+        await provider.async_unload()
+
+        mock_unsub_success.assert_called_once()
+        mock_unsub_fail.assert_called_once()
+        assert len(provider._listeners) == 0
+
+        # Test get_device_entry
+        # Case 1: lock_entry is None
+        provider.entity_registry.async_get.return_value = None
+        assert provider.get_device_entry() is None
+
+        # Case 2: lock_entry has no device_id
+        mock_lock_entry = MagicMock()
+        mock_lock_entry.device_id = None
+        provider.entity_registry.async_get.return_value = mock_lock_entry
+        assert provider.get_device_entry() is None
+
+        # Case 3: lock_entry has device_id
+        mock_lock_entry.device_id = "device_123"
+        mock_device_entry = MagicMock()
+        provider.entity_registry.async_get.return_value = mock_lock_entry
+        provider.device_registry.async_get.return_value = mock_device_entry
+        assert provider.get_device_entry() == mock_device_entry
+        provider.device_registry.async_get.assert_called_with("device_123")
+
+        # Test get_platform_data
+        platform_data = provider.get_platform_data()
+        assert platform_data["domain"] == "stub"
+        assert platform_data["lock_entity_id"] == "lock.stub"
+        assert platform_data["connected"] is True
