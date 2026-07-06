@@ -1081,10 +1081,31 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         def unsubscribe_all() -> None:
             """Unsubscribe from all event sources."""
-            for unsub in unsub_list:
-                unsub()
+            self._unsubscribe_all_zwave_listeners(unsub_list)
 
         return unsubscribe_all
+
+    def _unsubscribe_all_zwave_listeners(self, unsub_list: list[Callable[[], None]]) -> None:
+        """Unsubscribe from all Z-Wave JS event sources."""
+        _LOGGER.debug("[ZWaveJSProvider] unsubscribe_all starting (count: %s)", len(unsub_list))
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        for i, unsub in enumerate(unsub_list):
+            _LOGGER.debug(
+                "[ZWaveJSProvider] unsubscribe_all: Calling unsub %s of type %s", i, type(unsub)
+            )
+            for handler in logging.getLogger().handlers:
+                handler.flush()
+            try:
+                unsub()
+            except Exception:
+                _LOGGER.exception("[ZWaveJSProvider] unsubscribe_all: Error calling unsub %s", i)
+            _LOGGER.debug("[ZWaveJSProvider] unsubscribe_all: Finished unsub %s", i)
+            for handler in logging.getLogger().handlers:
+                handler.flush()
+        _LOGGER.debug("[ZWaveJSProvider] unsubscribe_all completed")
+        for handler in logging.getLogger().handlers:
+            handler.flush()
 
     def get_node_id(self) -> int | None:
         """Get the Z-Wave node ID."""

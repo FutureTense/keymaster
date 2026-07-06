@@ -184,7 +184,9 @@ class BaseLockProvider(ABC):
             "[BaseProvider] async_unload: Unsubscribing %s listeners", len(self._listeners)
         )
         for i, unsub in enumerate(self._listeners):
-            _LOGGER.debug("[BaseProvider] async_unload: Calling unsub %s (%s)", i, unsub)
+            _LOGGER.debug(
+                "[BaseProvider] async_unload: Calling unsub %s of type %s", i, type(unsub)
+            )
             try:
                 unsub()
             except Exception:
