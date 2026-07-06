@@ -1098,6 +1098,8 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 handler.flush()
             try:
                 unsub()
+                if unsub in self._listeners:
+                    self._listeners.remove(unsub)
             except Exception:
                 _LOGGER.exception("[ZWaveJSProvider] unsubscribe_all: Error calling unsub %s", i)
             _LOGGER.debug("[ZWaveJSProvider] unsubscribe_all: Finished unsub %s", i)
