@@ -1030,6 +1030,42 @@ class TestZWaveJSLockProviderEventSubscription:
         # Both notification event and state change listeners
         assert len(zwave_provider._listeners) == 2
 
+    def test_unsubscribe_lock_events_handles_exceptions(self, zwave_provider, mock_zwave_node):
+        """Test that unsubscribe_all catches exceptions when calling unsub and logs them."""
+        zwave_provider._node = mock_zwave_node
+        mock_device = MagicMock()
+        mock_device.id = "device_123"
+        zwave_provider._device = mock_device
+
+        mock_kmlock = MagicMock()
+        mock_kmlock.alarm_level_or_user_code_entity_id = "sensor.alarm_level"
+        mock_kmlock.alarm_type_or_access_control_entity_id = "sensor.alarm_type"
+        mock_callback = AsyncMock()
+
+        # Mock async_listen and async_track_state_change_event
+        mock_unsub_success = MagicMock()
+        mock_unsub_fail = MagicMock(side_effect=Exception("Unsubscribe error"))
+
+        zwave_provider.hass.bus.async_listen.return_value = mock_unsub_success
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event",
+            return_value=mock_unsub_fail,
+        ):
+            unsub = zwave_provider.subscribe_lock_events(mock_kmlock, mock_callback)
+
+        assert len(zwave_provider._listeners) == 2
+
+        # Call the unsubscribe function
+        unsub()
+
+        # Both sub calls should be invoked
+        mock_unsub_success.assert_called_once()
+        mock_unsub_fail.assert_called_once()
+
+        # Stale successfully unsubscribed listeners should be cleaned up from self._listeners
+        assert mock_unsub_success not in zwave_provider._listeners
+
 
 class TestZWaveJSLockProviderDiagnostics:
     """Test ZWaveJSLockProvider diagnostic methods."""
