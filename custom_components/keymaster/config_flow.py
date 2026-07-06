@@ -117,6 +117,10 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
             extra_entities=[NONE_TEXT],
         )
 
+        notify_script = self._data[CONF_NOTIFY_SCRIPT_NAME]
+        if notify_script and notify_script != NONE_TEXT and not notify_script.startswith("script."):
+            self._data[CONF_NOTIFY_SCRIPT_NAME] = f"script.{notify_script}"
+
         if self._data[CONF_NOTIFY_SCRIPT_NAME] not in notify_scripts:
             _LOGGER.debug(
                 "[async_step_reconfigure] notify script %s not found, setting to NONE_TEXT",
