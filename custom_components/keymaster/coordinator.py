@@ -680,13 +680,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def _create_listeners(
         self,
         kmlock: KeymasterLock,
-        _: Event | None = None,
+        event: Event | None = None,
     ) -> None:
         """Start tracking state changes after HomeAssistant has started."""
         _LOGGER.debug(
             "[create_listeners] %s: Creating lock event listeners",
             kmlock.lock_name,
         )
+        if event is not None:
+            kmlock.listeners = []
 
         # Subscribe to lock events via provider if available
         if kmlock.provider and kmlock.provider.supports_push_updates:
