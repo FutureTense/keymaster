@@ -268,6 +268,41 @@ async def test_cancel_awaits_in_flight_action(hass, store, kmlock):
     await cleanup()
 
 
+async def test_fire_closure_bails_when_entry_cleared_race(hass, store, kmlock):
+    """Regression for FutureTense/keymaster#671.
+
+    Belt-and-suspenders companion to the scheduler-level short-circuit:
+    if `_entry` is None by the time the `fire` closure runs (because
+    cancel() won a race and cleared it), the closure must return
+    cleanly instead of raising AssertionError.
+
+    Directly exercises the closure so the guard is covered even in
+    scenarios where the scheduler-level `_cancelled` check hasn't been
+    reached (e.g. reload/replace paths that null `_entry` without going
+    through `ScheduledFire.cancel`).
+    """
+    timer, action, _, cleanup = make_timer(hass, store, kmlock=kmlock)
+    await timer.recover()
+
+    with patch(
+        "custom_components.keymaster.autolock.scheduler.async_call_later"
+    ) as mock_call_later:
+        await timer.start(duration=300)
+        fire_closure = mock_call_later.call_args.kwargs["action"]
+
+    # Simulate a racing cancel(): clear the entry the closure captured
+    # `self` for, without also flipping `_cancelled` on the scheduler
+    # (so the scheduler-level guard cannot help).
+    timer._entry = None
+
+    # Invoking the raw `_run` wrapper (which is what async_call_later
+    # would eventually schedule) must not raise AssertionError.
+    await fire_closure(dt_util.utcnow())
+    action.assert_not_called()
+
+    await cleanup()
+
+
 async def test_action_failure_preserves_entry_for_replay(hass, store, kmlock):
     """Preserve store entry on action failure for replay on next restart.
 

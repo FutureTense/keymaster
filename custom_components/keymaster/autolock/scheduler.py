@@ -46,6 +46,16 @@ class ScheduledFire:
         self._done = False
 
         async def _run(now: dt) -> None:
+            # cancel() may have set `_cancelled` between the underlying
+            # HA TimerHandle being dispatched and this coroutine getting
+            # its first slice of execution. In that window, the unsub
+            # returned by async_call_later is a no-op and `cancel()` sees
+            # `_task is None`, so nothing prevents `_action` from running
+            # unless we check the flag here. Honor the cancel and bail
+            # cleanly instead of invoking the (now stale) action.
+            if self._cancelled:
+                self._done = True
+                return
             self._task = asyncio.current_task()
             try:
                 await self._action(now)
