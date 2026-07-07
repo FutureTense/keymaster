@@ -688,6 +688,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             kmlock.lock_name,
         )
         if event is not None:
+            # Clear the expired one-time EVENT_HOMEASSISTANT_STARTED listener
             kmlock.listeners = []
 
         # Subscribe to lock events via provider if available
@@ -731,8 +732,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             kmlock.lock_name,
             len(kmlock.listeners) if hasattr(kmlock, "listeners") and kmlock.listeners else 0,
         )
-        for handler in logging.getLogger().handlers:
-            handler.flush()
         if not hasattr(kmlock, "listeners") or kmlock.listeners is None:
             kmlock.listeners = []
             return
@@ -743,21 +742,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 i,
                 type(unsub_listener),
             )
-            for handler in logging.getLogger().handlers:
-                handler.flush()
             try:
                 unsub_listener()
             except Exception:
                 _LOGGER.exception("[unsubscribe_listeners] Error calling listener %s", i)
             _LOGGER.debug("[unsubscribe_listeners] %s: Finished listener %s", kmlock.lock_name, i)
-            for handler in logging.getLogger().handlers:
-                handler.flush()
         kmlock.listeners = []
         _LOGGER.debug(
             "[unsubscribe_listeners] %s: Finished removing all listeners", kmlock.lock_name
         )
-        for handler in logging.getLogger().handlers:
-            handler.flush()
 
     async def _update_listeners(self, kmlock: KeymasterLock) -> None:
         await KeymasterCoordinator._unsubscribe_listeners(kmlock=kmlock)
