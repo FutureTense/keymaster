@@ -257,6 +257,76 @@ async def test_reconfiguration_form(test_user_input, title, final_config_flow_da
         assert entry.data.copy() == final_config_flow_data
 
 
+@pytest.mark.usefixtures("mock_get_entities")
+async def test_reconfiguration_form_missing_script_prefix(hass):
+    """Test reconfiguration when the config entry has a missing script. prefix."""
+    config_data = CONFIG_DATA.copy()
+    config_data[CONF_NOTIFY_SCRIPT_NAME] = "keymaster_frontdoor_manual_notify"
+
+    with (
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._connect_and_update_lock",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._update_lock_data",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.keymaster.KeymasterCoordinator._sync_child_locks",
+            return_value=True,
+        ),
+    ):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="frontdoor",
+            data=config_data,
+            version=3,
+        )
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        reconfigure_result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": config_entries.SOURCE_RECONFIGURE,
+                "entry_id": entry.entry_id,
+            },
+        )
+        assert reconfigure_result["type"] is FlowResultType.FORM
+        assert reconfigure_result["step_id"] == "reconfigure"
+
+        for key in reconfigure_result["data_schema"].schema:
+            if key == CONF_NOTIFY_SCRIPT_NAME:
+                assert key.default() == "script.keymaster_frontdoor_manual_notify"
+
+        test_user_input = {
+            CONF_ADVANCED_DAY_OF_WEEK: False,
+            CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_level_frontdoor",
+            CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID: "sensor.kwikset_touchpad_electronic_deadbolt_alarm_type_frontdoor",
+            CONF_LOCK_ENTITY_ID: "lock.kwikset_touchpad_electronic_deadbolt_frontdoor",
+            CONF_LOCK_NAME: "frontdoor",
+            CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+            CONF_SLOTS: 6,
+            CONF_START: 1,
+            CONF_PARENT: "(none)",
+            CONF_NOTIFY_SCRIPT_NAME: "script.keymaster_frontdoor_manual_notify",
+        }
+
+        result = await hass.config_entries.flow.async_configure(
+            reconfigure_result["flow_id"],
+            test_user_input,
+        )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reconfigure_successful"
+        await hass.async_block_till_done()
+
+        entry = hass.config_entries.async_entries(DOMAIN)[0]
+        assert entry.data[CONF_NOTIFY_SCRIPT_NAME] == "keymaster_frontdoor_manual_notify"
+
+
 @pytest.mark.usefixtures("lock_kwikset_910", "client", "integration")
 async def test_get_entities(hass):
     """Test function that returns entities by domain."""
