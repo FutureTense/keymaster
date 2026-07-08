@@ -9,6 +9,7 @@ pytest marker expression. Run it explicitly with::
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import wraps
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -44,7 +45,6 @@ import homeassistant.core as ha_core
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 
-XFAIL_REASON = "HA 2026.7 nested-event guard; fixed by #676 Phase A deferral"
 LOWERED_GUARD_LIMIT = 8
 FAST_FANOUT_LISTENERS = LOWERED_GUARD_LIMIT + 1
 REALISTIC_CHILD_LOCKS = 13
@@ -64,15 +64,59 @@ PLATFORM_SETUP_MODULES = (
 )
 
 
-def _require_real_event_bus_guard(hass: HomeAssistant) -> None:
-    """Require the HA 2026.7 EventBus nested-dispatch guard."""
-    if hasattr(hass.bus, "_dispatching") and hasattr(ha_core, "_MAX_QUEUED_EVENT_DISPATCHES"):
+def _has_real_event_bus_guard(hass: HomeAssistant) -> bool:
+    """Return whether the installed HA EventBus has the nested-dispatch guard."""
+    return hasattr(hass.bus, "_dispatching") and hasattr(ha_core, "_MAX_QUEUED_EVENT_DISPATCHES")
+
+
+def _ensure_event_bus_guard(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Use the real HA guard or install a compatibility shim for older test envs."""
+    if _has_real_event_bus_guard(hass):
         return
 
-    pytest.fail(
-        "Home Assistant 2026.7 EventBus guard is required: missing "
-        "hass.bus._dispatching or homeassistant.core._MAX_QUEUED_EVENT_DISPATCHES"
+    monkeypatch.setattr(ha_core, "_MAX_QUEUED_EVENT_DISPATCHES", 10_000, raising=False)
+    guard_state = {"dispatching": False, "queued_event_count": 0}
+    monkeypatch.setattr(
+        type(hass.bus),
+        "_dispatching",
+        property(lambda _: guard_state["dispatching"]),
+        raising=False,
     )
+    original_async_fire_internal = type(hass.bus).async_fire_internal
+
+    @callback
+    @wraps(original_async_fire_internal)
+    def guarded_async_fire_internal(
+        bus: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        if bus is not hass.bus:
+            original_async_fire_internal(bus, *args, **kwargs)
+            return
+
+        if guard_state["dispatching"]:
+            guard_state["queued_event_count"] += 1
+            if guard_state["queued_event_count"] > ha_core._MAX_QUEUED_EVENT_DISPATCHES:
+                raise HomeAssistantError(
+                    f"Detected more than {ha_core._MAX_QUEUED_EVENT_DISPATCHES} "
+                    "nested event dispatches"
+                )
+            original_async_fire_internal(bus, *args, **kwargs)
+            return
+
+        guard_state["dispatching"] = True
+        guard_state["queued_event_count"] = 0
+        try:
+            original_async_fire_internal(bus, *args, **kwargs)
+        finally:
+            guard_state["dispatching"] = False
+            guard_state["queued_event_count"] = 0
+
+    monkeypatch.setattr(type(hass.bus), "async_fire_internal", guarded_async_fire_internal)
 
 
 def _patch_real_event_bus_guard_limit(
@@ -81,7 +125,7 @@ def _patch_real_event_bus_guard_limit(
     max_queued_events: int,
 ) -> None:
     """Lower the real HA EventBus queued-event guard for deterministic coverage."""
-    _require_real_event_bus_guard(hass)
+    _ensure_event_bus_guard(hass, monkeypatch)
     monkeypatch.setattr(ha_core, "_MAX_QUEUED_EVENT_DISPATCHES", max_queued_events)
 
 
@@ -252,9 +296,12 @@ def _make_state_write_listener(
     hass: HomeAssistant,
     entity_number: int,
     guard_errors: list[HomeAssistantError],
+    fanout_dispatching_snapshots: list[bool] | None,
 ) -> Callable[[], None]:
     @callback
     def _write_state_event() -> None:
+        if fanout_dispatching_snapshots is not None:
+            fanout_dispatching_snapshots.append(hass.bus._dispatching)
         if guard_errors:
             return
         try:
@@ -277,10 +324,16 @@ def _register_coordinator_state_writers(
     coordinator: KeymasterCoordinator,
     listener_count: int,
     guard_errors: list[HomeAssistantError],
+    fanout_dispatching_snapshots: list[bool] | None = None,
 ) -> tuple[int, list[Callable[[], None]]]:
     remove_listeners = [
         coordinator.async_add_listener(
-            _make_state_write_listener(hass, entity_number, guard_errors)
+            _make_state_write_listener(
+                hass,
+                entity_number,
+                guard_errors,
+                fanout_dispatching_snapshots,
+            )
         )
         for entity_number in range(listener_count)
     ]
@@ -318,15 +371,34 @@ def _exercise_nested_fanout(
     return dispatching_snapshots
 
 
-@pytest.mark.xfail(reason=XFAIL_REASON, strict=True, raises=HomeAssistantError)
-async def test_nested_coordinator_fanout_trips_lowered_event_bus_guard(
+def _exercise_deferred_fanout(
+    hass: HomeAssistant,
+    coordinator: KeymasterCoordinator,
+) -> list[bool]:
+    dispatching_snapshots: list[bool] = []
+
+    @callback
+    def _deferred_fanout_listener(event: Event[Any]) -> None:
+        dispatching_snapshots.append(hass.bus._dispatching)
+        coordinator.async_schedule_global_notification()
+
+    remove_listener = hass.bus.async_listen(_FANOUT_TRIGGER_EVENT, _deferred_fanout_listener)
+    try:
+        hass.bus.async_fire(_FANOUT_TRIGGER_EVENT)
+    finally:
+        remove_listener()
+
+    return dispatching_snapshots
+
+
+async def test_deferred_coordinator_fanout_avoids_lowered_event_bus_guard(
     hass: HomeAssistant,
     monkeypatch: pytest.MonkeyPatch,
     mock_provider: Any,
 ) -> None:
-    """Reproduce synchronous nested manager fan-out with a lowered real HA guard."""
+    """Verify raw nested fan-out trips while deferred fan-out avoids the guard."""
     _patch_real_event_bus_guard_limit(hass, monkeypatch, LOWERED_GUARD_LIMIT)
-    coordinator, _entries = _build_coordinator_tree(
+    raw_coordinator, _entries = _build_coordinator_tree(
         hass,
         mock_provider,
         child_count=0,
@@ -335,35 +407,72 @@ async def test_nested_coordinator_fanout_trips_lowered_event_bus_guard(
         advanced_day_of_week=False,
         door_sensor=False,
     )
-    guard_errors: list[HomeAssistantError] = []
-    registered_fanout_entities, remove_listeners = _register_coordinator_state_writers(
-        hass, coordinator, FAST_FANOUT_LISTENERS, guard_errors
+    raw_guard_errors: list[HomeAssistantError] = []
+    registered_raw_entities, raw_remove_listeners = _register_coordinator_state_writers(
+        hass,
+        raw_coordinator,
+        FAST_FANOUT_LISTENERS,
+        raw_guard_errors,
     )
-    assert registered_fanout_entities == FAST_FANOUT_LISTENERS
+    assert registered_raw_entities == FAST_FANOUT_LISTENERS
 
     try:
-        dispatching_snapshots = _exercise_nested_fanout(hass, coordinator, guard_errors)
+        raw_dispatching_snapshots = _exercise_nested_fanout(
+            hass,
+            raw_coordinator,
+            raw_guard_errors,
+        )
+        await hass.async_block_till_done()
+
+        assert raw_dispatching_snapshots == [True]
+        assert raw_guard_errors
+        with pytest.raises(HomeAssistantError):
+            raise raw_guard_errors[0]
+    finally:
+        _remove_state_write_listeners(raw_remove_listeners)
+        await raw_coordinator.async_shutdown()
+
+    deferred_coordinator, _entries = _build_coordinator_tree(
+        hass,
+        mock_provider,
+        child_count=0,
+        slots=1,
+        advanced_date_range=True,
+        advanced_day_of_week=False,
+        door_sensor=False,
+    )
+    deferred_guard_errors: list[HomeAssistantError] = []
+    fanout_dispatching_snapshots: list[bool] = []
+    registered_deferred_entities, deferred_remove_listeners = _register_coordinator_state_writers(
+        hass,
+        deferred_coordinator,
+        FAST_FANOUT_LISTENERS,
+        deferred_guard_errors,
+        fanout_dispatching_snapshots,
+    )
+    assert registered_deferred_entities == FAST_FANOUT_LISTENERS
+
+    try:
+        dispatching_snapshots = _exercise_deferred_fanout(hass, deferred_coordinator)
         await hass.async_block_till_done()
 
         assert dispatching_snapshots == [True]
-        guard_error = guard_errors[0] if guard_errors else None
+        assert fanout_dispatching_snapshots == [False] * FAST_FANOUT_LISTENERS
+        assert not deferred_guard_errors
     finally:
-        _remove_state_write_listeners(remove_listeners)
-        await coordinator.async_shutdown()
-
-    if guard_error:
-        raise guard_error
+        _remove_state_write_listeners(deferred_remove_listeners)
+        await deferred_coordinator.async_shutdown()
 
 
 @pytest.mark.slow
 @pytest.mark.perf
-@pytest.mark.xfail(reason=XFAIL_REASON, strict=True, raises=HomeAssistantError)
-async def test_realistic_parent_child_fanout_trips_real_event_bus_guard(
+async def test_deferred_realistic_parent_child_fanout_avoids_real_event_bus_guard(
     hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
     mock_provider: Any,
 ) -> None:
-    """Reproduce the parent-plus-children 70-slot fan-out against the real guard."""
-    _require_real_event_bus_guard(hass)
+    """Verify deferred parent-plus-children 70-slot fan-out avoids the real guard."""
+    _ensure_event_bus_guard(hass, monkeypatch)
     real_guard_limit = ha_core._MAX_QUEUED_EVENT_DISPATCHES
     connection_status_provider = MagicMock(wraps=mock_provider)
     connection_status_provider.supports_connection_status = True
@@ -394,14 +503,11 @@ async def test_realistic_parent_child_fanout_trips_real_event_bus_guard(
     assert registered_fanout_entities == projected_fanout_entities
 
     try:
-        dispatching_snapshots = _exercise_nested_fanout(hass, coordinator, guard_errors)
+        dispatching_snapshots = _exercise_deferred_fanout(hass, coordinator)
         await hass.async_block_till_done()
 
         assert dispatching_snapshots == [True]
-        guard_error = guard_errors[0] if guard_errors else None
+        assert not guard_errors
     finally:
         _remove_state_write_listeners(remove_listeners)
         await coordinator.async_shutdown()
-
-    if guard_error:
-        raise guard_error
