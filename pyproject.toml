@@ -45,7 +45,11 @@ log_level = "INFO"  # Set the logging level (DEBUG for verbose, INFO for normal,
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 timeout = 30
-addopts = "--cov=custom_components/keymaster --cov-report=xml"
+addopts = "--cov=custom_components/keymaster --cov-report=xml -m 'not slow and not perf'"
+markers = [
+    "slow: tests excluded from default CI because they are intentionally long-running",
+    "perf: performance and high-volume smoke tests run only on demand or nightly",
+]
 
 [tool.ruff]
 line-length = 100
