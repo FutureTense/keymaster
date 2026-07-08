@@ -1036,6 +1036,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             sensor_is_stale = (
                 alarm_level_state is not None
                 and alarm_type_state is not None
+                and alarm_type_state.last_changed is not None
                 and new_state
                 and dt_util.utcnow() - dt_util.as_utc(alarm_type_state.last_changed)
                 > timedelta(seconds=5)
