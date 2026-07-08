@@ -43,6 +43,7 @@ from .const import (
     NONE_TEXT,
 )
 from .coordinator import KeymasterCoordinator
+from .helpers import async_update_large_lock_repair_issue
 from .providers import is_platform_supported
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -408,6 +409,13 @@ async def _start_config_flow(
                 return cls.async_create_entry(title=title, data=user_input)
             if cls._entry is not None:
                 cls.hass.config_entries.async_update_entry(cls._entry, data=user_input)
+                try:
+                    await async_update_large_lock_repair_issue(cls.hass, cls._entry, user_input)
+                except Exception:
+                    _LOGGER.exception(
+                        "Failed to update large-lock repair issue for %s",
+                        cls._entry.entry_id,
+                    )
                 return cls.async_abort(reason="reconfigure_successful")
 
     data_schema = _get_schema(

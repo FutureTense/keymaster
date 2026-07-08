@@ -61,5 +61,18 @@
         }
       }
     }
+  },
+  "issues": {
+    "large_lock_configuration": {
+      "title": "Very large Keymaster lock configuration",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Acknowledge very large Keymaster lock: {lock_name}",
+            "description": "The Keymaster lock \"{lock_name}\" is projected to create about {entity_count} entities, approaching Home Assistant's per-dispatch event limit of {guard_limit} (warning threshold {threshold}). Reducing slots or splitting this configuration can help now; planned per-lock improvements tracked in issue #670 will reduce this dispatch risk. Acknowledging confirms you understand the risk of instability and want to dismiss this warning for the current projected size. It will reappear if the configuration grows materially larger."
+          }
+        }
+      }
+    }
   }
 }
