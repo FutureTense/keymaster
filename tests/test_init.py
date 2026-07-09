@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster import async_setup_entry, delete_coordinator
+from custom_components.keymaster import async_setup_entry, async_unload_entry, delete_coordinator
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
@@ -144,6 +144,50 @@ async def test_unload_entry(
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline
+
+
+async def test_unload_entry_preserves_pending_global_notification(hass) -> None:
+    """Test unloading one entry does not drop shared coordinator notifications."""
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
+    other_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="backdoor",
+        data={**CONFIG_DATA, CONF_LOCK_NAME: "backdoor"},
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    other_entry.add_to_hass(hass)
+    coordinator = KeymasterCoordinator(hass)
+    listener = Mock()
+    coordinator.async_add_listener(listener)
+    coordinator.async_schedule_global_notification()
+    pending_handle = coordinator._global_notify_handle
+    assert pending_handle is not None
+    hass.data.setdefault(DOMAIN, {})[COORDINATOR] = coordinator
+
+    async def unload_platform(*_: object) -> bool:
+        return True
+
+    with (
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_unload",
+            side_effect=unload_platform,
+        ),
+        patch(
+            "custom_components.keymaster.async_cleanup_strategy_resource",
+            new_callable=AsyncMock,
+        ),
+    ):
+        assert await async_unload_entry(hass, entry)
+
+    assert not pending_handle.cancelled()
+
+    await hass.async_block_till_done()
+
+    listener.assert_called_once()
+    assert not coordinator._pending_global_notification
+    await coordinator.async_shutdown()
 
 
 async def test_notify_script_name_slugified(hass):
@@ -316,7 +360,7 @@ async def test_unload_vs_remove_lock_preservation(
 async def test_delete_coordinator_with_data_none(hass) -> None:
     """Test that delete_coordinator removes the coordinator when coordinator.data is None."""
     coordinator = KeymasterCoordinator(hass)
-    coordinator.data = None
+    coordinator.data = None  # type: ignore[assignment]
     coordinator.async_remove_data = AsyncMock()
     coordinator.async_shutdown = AsyncMock()
     hass.data[DOMAIN] = {COORDINATOR: coordinator}

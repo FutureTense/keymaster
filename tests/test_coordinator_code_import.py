@@ -41,6 +41,7 @@ def mock_coordinator(mock_hass):
         coordinator.set_pin_on_lock = AsyncMock()
         coordinator.clear_pin_from_lock = AsyncMock()
         coordinator.async_set_updated_data = Mock()
+        coordinator.async_schedule_global_notification = Mock()
         coordinator._initial_setup_done_event = AsyncMock()
         coordinator._initial_setup_done_event.wait = AsyncMock()
         return coordinator
@@ -289,6 +290,7 @@ class TestSetPinPassesName:
             coordinator._initial_setup_done_event = AsyncMock()
             coordinator._initial_setup_done_event.wait = AsyncMock()
             coordinator.async_set_updated_data = Mock()
+            coordinator.async_schedule_global_notification = Mock()
             return coordinator
 
     async def test_set_pin_passes_name_to_provider(self, real_coordinator):

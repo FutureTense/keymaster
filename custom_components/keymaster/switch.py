@@ -303,7 +303,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                     await self._kmlock.autolock_timer.start(
                         duration=self.coordinator.autolock_duration_seconds(self._kmlock)
                     )
-                    self.coordinator.async_set_updated_data(dict(self.coordinator.kmlocks))
+                    self.coordinator.async_schedule_global_notification()
             if (
                 self._property.endswith(".enabled")
                 and self._kmlock
@@ -339,7 +339,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             if self._property == "switch.autolock_enabled" and self._kmlock:
                 if self._kmlock.autolock_timer and self._kmlock.autolock_timer.is_running:
                     await self._kmlock.autolock_timer.cancel()
-                    self.coordinator.async_set_updated_data(dict(self.coordinator.kmlocks))
+                    self.coordinator.async_schedule_global_notification()
             if self._property.endswith(".enabled") and self._code_slot:
                 await self.coordinator.update_slot_active_state(
                     config_entry_id=self._config_entry.entry_id,
