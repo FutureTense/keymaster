@@ -8,7 +8,7 @@ from contextlib import contextmanager
 import logging
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -501,6 +501,7 @@ async def test_remove_entry_cleanup_failure_does_not_skip_coordinator_teardown(
     delete_lock = AsyncMock()
     hass.data.setdefault(DOMAIN, {})[COORDINATOR] = SimpleNamespace(
         delete_lock_by_config_entry_id=delete_lock,
+        async_remove_lock_coordinator=Mock(),
         count_locks_not_pending_delete=1,
     )
     caplog.set_level(logging.ERROR)
@@ -591,6 +592,7 @@ async def test_setup_uses_loaded_provider_connection_status(hass: Any) -> None:
     fake_coordinator = SimpleNamespace(
         kmlocks={},
         add_lock=AsyncMock(side_effect=add_lock_with_provider),
+        async_get_lock_coordinator=Mock(),
     )
     hass.data[DOMAIN][COORDINATOR] = fake_coordinator
 
@@ -626,6 +628,7 @@ async def test_setup_continues_when_add_lock_times_out(
     hass.data.setdefault(DOMAIN, {})[COORDINATOR] = SimpleNamespace(
         kmlocks={},
         add_lock=AsyncMock(side_effect=asyncio.CancelledError()),
+        async_get_lock_coordinator=Mock(),
     )
     caplog.set_level(logging.ERROR)
 

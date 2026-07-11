@@ -1,11 +1,14 @@
 """Tests for KeymasterCoordinator lifecycle methods."""
 
+import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.const import DOMAIN
+from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,6 +41,303 @@ def mock_lock():
     # Mock dataclass fields if needed for dict conversion
     lock.__dataclass_fields__ = {}
     return lock
+
+
+def _make_lock(entry_id: str = "test_entry", lock_name: str = "test_lock") -> KeymasterLock:
+    """Create a KeymasterLock for coordinator tests."""
+    return KeymasterLock(
+        lock_name=lock_name,
+        lock_entity_id=f"lock.{lock_name}",
+        keymaster_config_entry_id=entry_id,
+    )
+
+
+async def test_lock_coordinator_created_once_with_current_lock(hass):
+    """Test manager creates one lock coordinator per entry with current data."""
+    entry = MockConfigEntry(domain=DOMAIN, entry_id="test_entry", title="Test Lock", data={})
+    entry.add_to_hass(hass)
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    same_lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+
+    assert isinstance(lock_coordinator, KeymasterLockCoordinator)
+    assert same_lock_coordinator is lock_coordinator
+    assert lock_coordinator.always_update is False
+    assert lock_coordinator.update_interval is None
+    assert lock_coordinator.data is lock
+
+
+async def test_lock_coordinator_refresh_same_lock_does_not_notify(hass):
+    """Test equal-data refresh does not notify lock coordinator listeners."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    listener = MagicMock()
+    lock_coordinator.async_add_listener(listener)
+
+    await lock_coordinator.async_refresh()
+
+    listener.assert_not_called()
+    assert lock_coordinator.data is lock
+
+
+async def test_keymaster_notification_bridge_notifies_global_and_lock(hass):
+    """Test bridge notifies manager listeners and per-lock coordinator listeners."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    manager_listener = MagicMock()
+    lock_listener = MagicMock()
+    coordinator.async_add_listener(manager_listener)
+    lock_coordinator.async_add_listener(lock_listener)
+    coordinator.last_update_success = False
+
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+    assert coordinator._pending_global_failed_refresh is True
+    await asyncio.sleep(0)
+
+    manager_listener.assert_called_once()
+    lock_listener.assert_called_once()
+    assert coordinator.data == {"test_entry": lock}
+    assert lock_coordinator.data is lock
+
+    manager_listener.reset_mock()
+    lock_listener.reset_mock()
+    coordinator.async_schedule_keymaster_notifications(["missing_entry"])
+    await asyncio.sleep(0)
+
+    manager_listener.assert_not_called()
+    lock_listener.assert_not_called()
+    assert coordinator._notify_handle is None
+    await coordinator.async_shutdown()
+
+
+async def test_keymaster_notification_bridge_coalesces_duplicate_entries(hass):
+    """Test bridge coalesces duplicate entry IDs into a single flush."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    manager_listener = MagicMock()
+    lock_listener = MagicMock()
+    coordinator.async_add_listener(manager_listener)
+    lock_coordinator.async_add_listener(lock_listener)
+
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+    first_handle = coordinator._notify_handle
+    coordinator.async_schedule_keymaster_notifications(["test_entry", "missing_entry"])
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+    await asyncio.sleep(0)
+
+    assert first_handle is not None
+    manager_listener.assert_called_once()
+    lock_listener.assert_called_once()
+    assert coordinator._notify_handle is None
+    assert lock_coordinator.last_update_success is True
+    await coordinator.async_shutdown()
+
+
+async def test_keymaster_notification_bridge_preserves_lock_failed_refresh_state(hass):
+    """Test per-lock notifications preserve the manager failed-refresh state."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    lock_listener = MagicMock()
+    lock_coordinator.async_add_listener(lock_listener)
+    coordinator.last_update_success = False
+
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+    await asyncio.sleep(0)
+
+    lock_listener.assert_called_once()
+    assert lock_coordinator.data is lock
+    assert lock_coordinator.last_update_success is False
+
+
+async def test_keymaster_notification_bridge_clears_failed_refresh_flag_when_healthy(hass):
+    """Test bridge clears the pending failed-refresh flag when the manager is healthy."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    lock_listener = MagicMock()
+    lock_coordinator.async_add_listener(lock_listener)
+    coordinator._pending_global_failed_refresh = True
+    coordinator.last_update_success = True
+
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+
+    assert coordinator._pending_global_failed_refresh is False
+    await asyncio.sleep(0)
+    lock_listener.assert_called_once()
+    assert lock_coordinator.last_update_success is True
+
+
+async def test_keymaster_notification_bridge_notifies_on_in_place_mutation(hass):
+    """Test the bridge notifies per-lock listeners even for in-place lock mutation."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    lock_listener = MagicMock()
+    lock_coordinator.async_add_listener(lock_listener)
+
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+    await asyncio.sleep(0)
+    lock_listener.assert_called_once()
+    lock_listener.reset_mock()
+
+    lock.lock_state = "locked"
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+    await asyncio.sleep(0)
+
+    lock_listener.assert_called_once()
+    assert lock_coordinator.data is lock
+
+
+async def test_keymaster_notification_bridge_deferred_and_missing_lock_paths(hass):
+    """Test deferred bridge scheduling and missing per-lock coordinator paths."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    orphan_lock = _make_lock("orphan_entry", "orphan_lock")
+    coordinator.kmlocks["test_entry"] = lock
+    coordinator.kmlocks["orphan_entry"] = orphan_lock
+    coordinator.async_get_lock_coordinator("test_entry")
+    coordinator._defer_refresh_listener_updates = True
+
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+
+    assert coordinator._notify_handle is None
+    assert coordinator._pending_notify_entry_ids == {"test_entry"}
+
+    coordinator._defer_refresh_listener_updates = False
+    coordinator._pending_notify_entry_ids = {"missing_entry", "orphan_entry"}
+    coordinator._pending_global_notification = True
+    coordinator._pending_global_data_update = True
+
+    coordinator._flush_pending_keymaster_notifications()
+
+    assert coordinator._pending_notify_entry_ids == set()
+
+
+async def test_keymaster_notification_bridge_reschedules_after_refresh_deferral(hass):
+    """Test pending per-lock notifications flush after a refresh deferral window."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    lock_listener = MagicMock()
+    lock_coordinator.async_add_listener(lock_listener)
+
+    async def update_data():
+        assert coordinator._defer_refresh_listener_updates is True
+        coordinator.async_schedule_keymaster_notifications(["test_entry"])
+        assert coordinator._notify_handle is None
+        lock_listener.assert_not_called()
+        return dict(coordinator.kmlocks)
+
+    coordinator._async_update_data = update_data
+
+    await coordinator._async_refresh()
+
+    assert coordinator._notify_handle is not None
+    await asyncio.sleep(0)
+
+    lock_listener.assert_called_once()
+    assert lock_coordinator.data is lock
+    assert coordinator._pending_notify_entry_ids == set()
+
+
+async def test_keymaster_notification_bridge_shutdown_guard(hass):
+    """Test bridge does not schedule notifications while shutting down."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks["test_entry"] = _make_lock()
+    coordinator._deferred_notifications_shutting_down = True
+
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+
+    assert coordinator._notify_handle is None
+    assert coordinator._pending_notify_entry_ids == set()
+
+
+async def test_lock_coordinator_proxy_methods_delegate(hass):
+    """Test lock coordinator proxy methods delegate to the manager."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    coordinator.set_pin_on_lock = AsyncMock(return_value=True)
+    coordinator.clear_pin_from_lock = AsyncMock(return_value=False)
+    coordinator.reset_lock = AsyncMock()
+    coordinator.reset_code_slot = AsyncMock()
+    coordinator.update_slot_active_state = AsyncMock(return_value=True)
+    coordinator.async_request_debounced_refresh = AsyncMock()
+    coordinator.autolock_duration_seconds = MagicMock(return_value=123)
+    coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=lock)
+    coordinator.sync_get_lock_by_config_entry_id = MagicMock(return_value=lock)
+
+    assert await lock_coordinator.set_pin_on_lock("test_entry", 1, "1234", True, True) is True
+    coordinator.set_pin_on_lock.assert_awaited_once_with("test_entry", 1, "1234", True, True)
+
+    assert await lock_coordinator.clear_pin_from_lock("test_entry", 1, True, True) is False
+    coordinator.clear_pin_from_lock.assert_awaited_once_with("test_entry", 1, True, True)
+
+    await lock_coordinator.reset_lock("test_entry")
+    coordinator.reset_lock.assert_awaited_once_with("test_entry")
+
+    await lock_coordinator.reset_code_slot("test_entry", 1)
+    coordinator.reset_code_slot.assert_awaited_once_with("test_entry", 1)
+
+    assert await lock_coordinator.update_slot_active_state("test_entry", 1) is True
+    coordinator.update_slot_active_state.assert_awaited_once_with("test_entry", 1)
+
+    await lock_coordinator.async_request_debounced_refresh()
+    coordinator.async_request_debounced_refresh.assert_awaited_once_with()
+
+    assert lock_coordinator.autolock_duration_seconds(lock) == 123
+    coordinator.autolock_duration_seconds.assert_called_once_with(lock)
+
+    assert await lock_coordinator.get_lock_by_config_entry_id("test_entry") is lock
+    coordinator.get_lock_by_config_entry_id.assert_awaited_once_with("test_entry")
+
+    assert lock_coordinator.sync_get_lock_by_config_entry_id("test_entry") is lock
+    coordinator.sync_get_lock_by_config_entry_id.assert_called_once_with("test_entry")
+
+    assert lock_coordinator.kmlocks is coordinator.kmlocks
+
+
+async def test_lock_coordinator_cleanup_and_shutdown(hass):
+    """Test lock coordinator removal and shutdown bridge cleanup."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = _make_lock()
+    coordinator.kmlocks["test_entry"] = lock
+    lock_coordinator = coordinator.async_get_lock_coordinator("test_entry")
+    coordinator._pending_notify_entry_ids.add("test_entry")
+
+    coordinator.async_remove_lock_coordinator("test_entry")
+
+    assert "test_entry" not in coordinator._lock_coordinators
+    assert "test_entry" not in coordinator._pending_notify_entry_ids
+
+    coordinator._lock_coordinators["test_entry"] = lock_coordinator
+    coordinator.async_schedule_keymaster_notifications(["test_entry"])
+    pending_handle = coordinator._notify_handle
+    assert pending_handle is not None
+
+    await coordinator.async_shutdown()
+
+    assert pending_handle.cancelled()
+    assert coordinator._notify_handle is None
+    assert coordinator._pending_notify_entry_ids == set()
+    assert coordinator._lock_coordinators == {}
+
+    coordinator._flush_pending_keymaster_notifications()
 
 
 async def test_add_lock_new(mock_coordinator, mock_lock):

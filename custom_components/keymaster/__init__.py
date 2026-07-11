@@ -47,6 +47,7 @@ from .const import (
     DEFAULT_REDACT_PIN_CODES,
     DEFAULT_REDACT_SLOT_NAMES,
     DOMAIN,
+    LOCK_COORDINATORS,
     NORMALIZED_TO_NONE_SENTINELS,
     PLATFORMS,
     STRATEGY_FILENAME,
@@ -225,6 +226,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     except asyncio.exceptions.CancelledError as e:
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
+    lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
+    hass.data[DOMAIN].setdefault(LOCK_COORDINATORS, {})[config_entry.entry_id] = lock_coordinator
+
     try:
         await async_load_large_lock_ack_store(hass)
         supports_connection_status = True
@@ -333,6 +337,8 @@ async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     if DOMAIN in hass.data and COORDINATOR in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
         await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id, immediate=True)
+        coordinator.async_remove_lock_coordinator(config_entry.entry_id)
+        hass.data[DOMAIN].get(LOCK_COORDINATORS, {}).pop(config_entry.entry_id, None)
 
         if coordinator.count_locks_not_pending_delete == 0:
             delay = 0 if "pytest" in sys.modules else 20

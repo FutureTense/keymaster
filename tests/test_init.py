@@ -25,8 +25,9 @@ from custom_components.keymaster.const import (
     DEFAULT_ADVANCED_DATE_RANGE,
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DOMAIN,
+    LOCK_COORDINATORS,
 )
-from custom_components.keymaster.coordinator import KeymasterCoordinator
+from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.util.dt import utcnow
@@ -80,6 +81,10 @@ async def test_setup_entry(
     await hass.async_block_till_done()
 
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline + KEYMASTER_SENSOR_COUNT
+
+    lock_coordinator = hass.data[DOMAIN][LOCK_COORDINATORS][entry.entry_id]
+    assert isinstance(lock_coordinator, KeymasterLockCoordinator)
+    assert lock_coordinator.manager is hass.data[DOMAIN][COORDINATOR]
 
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
@@ -339,6 +344,7 @@ async def test_unload_vs_remove_lock_preservation(
 
     coordinator = hass.data[DOMAIN][COORDINATOR]
     assert entry.entry_id in coordinator.kmlocks
+    assert entry.entry_id in hass.data[DOMAIN][LOCK_COORDINATORS]
 
     # Set up a mock provider to ensure line 240 is covered
     kmlock = coordinator.kmlocks[entry.entry_id]
@@ -355,6 +361,10 @@ async def test_unload_vs_remove_lock_preservation(
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.entry_id not in coordinator.kmlocks
+    assert DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN].get(
+        LOCK_COORDINATORS,
+        {},
+    )
 
 
 async def test_delete_coordinator_with_data_none(hass) -> None:
