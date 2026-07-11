@@ -182,8 +182,21 @@ class AutolockTimer:
         delay = (self._entry.end_time - dt_util.utcnow()).total_seconds()
 
         async def fire(now: dt) -> None:
-            assert self._entry is not None
-            await self._fire(now=now, entry=self._entry)
+            # `_entry` can legitimately be None here if cancel() (or a
+            # subsequent start() that awaited store I/O and yielded to a
+            # racing cancel()) cleared it after `_schedule_remaining`
+            # captured `self` but before this callback ran. Bail cleanly
+            # instead of asserting; the cancel path has already handled
+            # store state and lifecycle transitions.
+            entry = self._entry
+            if entry is None:
+                _LOGGER.debug(
+                    "[AutolockTimer] %s: fire callback observed cleared entry;"
+                    " cancel() won the race",
+                    self._timer_id,
+                )
+                return
+            await self._fire(now=now, entry=entry)
 
         self._scheduled = ScheduledFire(self._hass, delay, fire)
 

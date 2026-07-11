@@ -163,3 +163,42 @@ async def test_negative_delay_clamped_to_zero(hass):
     ) as mock_call_later:
         ScheduledFire(hass, delay=-5, action=action)
         assert mock_call_later.call_args.kwargs["delay"] == 0
+
+
+async def test_cancel_wins_race_when_run_not_yet_started(hass):
+    """Regression for FutureTense/keymaster#671.
+
+    If `cancel()` lands after the underlying HA `TimerHandle` has been
+    dispatched but before `_run` has run its first statement, the
+    returned unsub is a no-op and `cancel()` sees `_task is None` — so
+    nothing on the cancel path prevents `_run` from later invoking the
+    action. `_run` itself must observe `_cancelled` and short-circuit
+    to honor `cancel()`'s contract ("no further action firing can
+    happen after cancel() returns").
+    """
+    fired = False
+
+    async def action(now: dt) -> None:
+        nonlocal fired
+        fired = True
+
+    with patch(
+        "custom_components.keymaster.autolock.scheduler.async_call_later"
+    ) as mock_call_later:
+        # Model the "TimerHandle already fired" state: unsub is a no-op
+        # because the handle has already been picked up for execution.
+        mock_call_later.return_value = lambda: None
+        scheduled = ScheduledFire(hass, delay=10, action=action)
+        captured_run = mock_call_later.call_args.kwargs["action"]
+
+    # cancel() runs first; `_task` is still None because `_run` hasn't
+    # executed yet. The pre-fix code would return here with no other
+    # guard in place, letting the stale `_run` fire the action next.
+    await scheduled.cancel()
+    assert scheduled.cancelled
+
+    # Now `_run` finally gets its turn. It must observe `_cancelled`
+    # and skip `_action`.
+    await captured_run(dt_util.utcnow())
+    assert not fired, "action must not fire after cancel() has returned"
+    assert scheduled.done
