@@ -31,6 +31,11 @@ ENTITY_DEBOUNCE_SECONDS: int = 5
 BACKOFF_INITIAL_SECONDS: int = 60
 BACKOFF_MAX_SECONDS: int = 1800  # 30 minutes
 BACKOFF_FAILURE_THRESHOLD: int = 3  # consecutive failures before backoff
+LARGE_LOCK_WARNING_THRESHOLD = 8000
+LARGE_LOCK_CRITICAL_THRESHOLD = 9500
+LARGE_LOCK_EVENT_GUARD_LIMIT = 10000
+LARGE_LOCK_ACK_STORE_KEY = "keymaster_large_lock_ack"
+LARGE_LOCK_ACK_STORE_VERSION = 1
 
 # hass.data attributes
 CHILD_LOCKS = "child_locks"
@@ -90,6 +95,10 @@ DEFAULT_AUTOLOCK_MIN_DAY: int = 120
 DEFAULT_AUTOLOCK_MIN_NIGHT: int = 15
 
 NONE_TEXT = "(none)"
+# Placeholder sentinel values keymaster stores for optional entity fields.
+# async_setup_entry normalizes these to None before platforms load, so projection
+# treats them as unset to match generated entities.
+NORMALIZED_TO_NONE_SENTINELS = (NONE_TEXT, "sensor.fake", "binary_sensor.fake")
 
 SERVICE_UPDATE_PIN = "update_pin"
 SERVICE_CLEAR_PIN = "clear_pin"

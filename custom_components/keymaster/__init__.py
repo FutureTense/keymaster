@@ -47,12 +47,19 @@ from .const import (
     DEFAULT_REDACT_PIN_CODES,
     DEFAULT_REDACT_SLOT_NAMES,
     DOMAIN,
-    NONE_TEXT,
+    NORMALIZED_TO_NONE_SENTINELS,
     PLATFORMS,
     STRATEGY_FILENAME,
     STRATEGY_PATH,
 )
 from .coordinator import KeymasterCoordinator
+from .helpers import (
+    async_clear_large_lock_ack,
+    async_delete_large_lock_repair_issue,
+    async_load_large_lock_ack_store,
+    async_update_all_large_lock_repair_issues,
+    async_update_large_lock_repair_issue,
+)
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 from .lovelace import async_generate_lovelace
 from .migrate import migrate_2to3
@@ -62,6 +69,7 @@ from .websocket import async_setup as async_websocket_setup
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+_LARGE_LOCK_REPAIR_SWEEP_DONE = "large_lock_repair_sweep_done"
 
 
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
@@ -99,11 +107,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
         CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     ):
-        if config_entry.data.get(prop) in {
-            NONE_TEXT,
-            "sensor.fake",
-            "binary_sensor.fake",
-        }:
+        if config_entry.data.get(prop) in NORMALIZED_TO_NONE_SENTINELS:
             updated_config[prop] = None
 
     if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
@@ -221,6 +225,29 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     except asyncio.exceptions.CancelledError as e:
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
+    try:
+        await async_load_large_lock_ack_store(hass)
+        supports_connection_status = True
+        if kmlock.provider:
+            supports_connection_status = kmlock.provider.supports_connection_status
+        await async_update_large_lock_repair_issue(
+            hass,
+            config_entry,
+            supports_connection_status=supports_connection_status,
+        )
+    except Exception:
+        _LOGGER.exception(
+            "Failed to update large-lock repair issue for %s",
+            config_entry.entry_id,
+        )
+
+    if not hass.data[DOMAIN].get(_LARGE_LOCK_REPAIR_SWEEP_DONE):
+        hass.data[DOMAIN][_LARGE_LOCK_REPAIR_SWEEP_DONE] = True
+        try:
+            await async_update_all_large_lock_repair_issues(hass)
+        except Exception:
+            _LOGGER.exception("Failed to update large-lock repair issues during setup sweep")
+
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
     await async_generate_lovelace(
         hass=hass,
@@ -267,6 +294,15 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
             if kmlock.provider:
                 await kmlock.provider.async_unload()
 
+    if config_entry.disabled_by is not None:
+        try:
+            async_delete_large_lock_repair_issue(hass, config_entry.entry_id)
+        except Exception:
+            _LOGGER.exception(
+                "Failed to delete large-lock repair issue for disabled entry %s",
+                config_entry.entry_id,
+            )
+
     # Clean up strategy resource if no other keymaster entries need it
     remaining_entries = [
         entry
@@ -285,6 +321,15 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
 async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Handle removal of an entry."""
+    try:
+        async_delete_large_lock_repair_issue(hass, config_entry.entry_id)
+        await async_clear_large_lock_ack(hass, config_entry.entry_id)
+    except Exception:
+        _LOGGER.exception(
+            "Failed to clean up large-lock repair state for %s",
+            config_entry.entry_id,
+        )
+
     if DOMAIN in hass.data and COORDINATOR in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
         await coordinator.delete_lock_by_config_entry_id(config_entry.entry_id, immediate=True)
