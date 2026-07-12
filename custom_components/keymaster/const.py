@@ -40,6 +40,7 @@ LARGE_LOCK_ACK_STORE_VERSION = 1
 # hass.data attributes
 CHILD_LOCKS = "child_locks"
 COORDINATOR = "coordinator"
+LOCK_COORDINATORS = "lock_coordinators"
 PRIMARY_LOCK = "primary_lock"
 UNSUB_LISTENERS = "unsub_listeners"
 
