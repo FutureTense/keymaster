@@ -117,6 +117,14 @@ async def test_time_entities_created_with_advanced_dow(hass: HomeAssistant, time
     assert any("Start Time" in name for name in entity_names)
     assert any("End Time" in name for name in entity_names)
 
+    manager = hass.data[DOMAIN][COORDINATOR]
+    lock_coordinator = manager.async_get_lock_coordinator(time_config_entry.entry_id)
+    assert all(entity.coordinator is lock_coordinator for entity in entities)
+    assert (
+        entities[0].unique_id
+        == f"{time_config_entry.entry_id}_time_code_slots_1_accesslimit_day_of_week_0_time_start"
+    )
+
 
 async def test_time_entity_initialization(hass: HomeAssistant, time_config_entry):
     """Test time entity initialization."""

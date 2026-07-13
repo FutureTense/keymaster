@@ -61,7 +61,8 @@ async def sensor_config_entry(hass: HomeAssistant):
 @pytest.fixture
 async def coordinator(hass: HomeAssistant, sensor_config_entry):
     """Get the coordinator."""
-    return hass.data[DOMAIN][COORDINATOR]
+    manager = hass.data[DOMAIN][COORDINATOR]
+    return manager.async_get_lock_coordinator(sensor_config_entry.entry_id)
 
 
 async def test_sensor_entity_initialization(hass: HomeAssistant, sensor_config_entry, coordinator):
@@ -267,6 +268,10 @@ async def test_async_setup_entry_with_parent_lock(hass: HomeAssistant):
     # Code slot sensors for slots 1 and 2
     assert added_entities[3].entity_description.key == "sensor.code_slots:1.synced"
     assert added_entities[4].entity_description.key == "sensor.code_slots:2.synced"
+
+    lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
+    assert all(entity.coordinator is lock_coordinator for entity in added_entities)
+    assert added_entities[0].unique_id == f"{config_entry.entry_id}_sensor_lock_name"
 
 
 async def test_autolock_sensor_initialization(

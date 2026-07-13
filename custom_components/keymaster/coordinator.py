@@ -188,6 +188,11 @@ class KeymasterLockCoordinator(DataUpdateCoordinator[KeymasterLock | None]):
         """Return the manager-owned lock mapping."""
         return self.manager.kmlocks
 
+    @callback
+    def async_schedule_notification(self) -> None:
+        """Schedule a dual-target notification for this lock's config entry."""
+        self.manager.async_schedule_keymaster_notifications([self.config_entry_id])
+
 
 class KeymasterCoordinator(DataUpdateCoordinator):
     """Coordinator to manage keymaster locks."""
@@ -218,6 +223,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._lock_coordinators: dict[str, KeymasterLockCoordinator] = {}
         self._pending_notify_entry_ids: set[str] = set()
         self._notify_handle: asyncio.Handle | None = None
+        self._refresh_keepalive_unsub: Callable[[], None] | None = None
 
         super().__init__(
             hass,
@@ -249,6 +255,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._notify_handle = None
         self._pending_notify_entry_ids.clear()
         self._lock_coordinators.clear()
+        if self._refresh_keepalive_unsub is not None:
+            self._refresh_keepalive_unsub()
+            self._refresh_keepalive_unsub = None
         if self._cancel_quick_refresh:
             self._cancel_quick_refresh()
             self._cancel_quick_refresh = None
@@ -295,24 +304,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._schedule_pending_global_notification()
 
     @callback
-    def _flush_pending_global_notification(self) -> None:
-        """Notify the global coordinator outside active event dispatch."""
-        self._global_notify_handle = None
-        if not self._pending_global_notification or self._deferred_notifications_shutting_down:
-            return
-        if self._defer_refresh_listener_updates:
-            return
-
+    def _flush_global_leg(self) -> tuple[bool, bool]:
+        """Notify manager listeners / update the mirror; return (data_update, preserve_failed_refresh)."""
         data_update = self._pending_global_data_update
         preserve_failed_refresh = self._pending_global_failed_refresh
         self._pending_global_notification = False
         self._pending_global_data_update = False
         self._pending_global_failed_refresh = False
-
-        # Keep self.data refreshed for every data-update path: explicitly in
-        # the sticky-failure branch, and via async_set_updated_data() when
-        # healthy. Notify-only flushes intentionally leave the mirror unchanged
-        # because no data changed; preserve this invariant for new branches.
         if data_update and preserve_failed_refresh:
             self.data = dict(self.kmlocks)
             super().async_update_listeners()
@@ -320,6 +318,52 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             super().async_set_updated_data(dict(self.kmlocks))
         else:
             super().async_update_listeners()
+        return data_update, preserve_failed_refresh
+
+    @callback
+    def _push_lock_coordinator_update(
+        self, entry_id: str, *, data_update: bool, preserve_failed_refresh: bool
+    ) -> None:
+        """Push the current lock snapshot to one per-lock coordinator, mirroring manager health."""
+        lock_coordinator = self._lock_coordinators.get(entry_id)
+        if lock_coordinator is None or entry_id not in self.kmlocks:
+            return
+        lock = self.kmlocks[entry_id]
+        if data_update and not preserve_failed_refresh:
+            lock_coordinator.async_set_updated_data(lock)
+        else:
+            lock_coordinator.data = lock
+            lock_coordinator.last_update_success = self.last_update_success
+            lock_coordinator.async_update_listeners()
+
+    @callback
+    def _flush_pending_global_notification(self) -> None:
+        """Notify the global leg and (conservatively) every per-lock coordinator."""
+        self._global_notify_handle = None
+        if not self._pending_global_notification or self._deferred_notifications_shutting_down:
+            return
+        if self._defer_refresh_listener_updates:
+            return
+        # Absorb any pending scoped bridge flush; the all-lock fan-out covers it.
+        if self._notify_handle is not None:
+            self._notify_handle.cancel()
+            self._notify_handle = None
+        self._pending_notify_entry_ids = set()
+        data_update, preserve_failed_refresh = self._flush_global_leg()
+        for entry_id in list(self._lock_coordinators):
+            self._push_lock_coordinator_update(
+                entry_id, data_update=data_update, preserve_failed_refresh=preserve_failed_refresh
+            )
+
+    @callback
+    def _keepalive_listener(self) -> None:
+        """No-op listener that keeps the manager's periodic refresh scheduled."""
+
+    @callback
+    def _ensure_refresh_keepalive(self) -> None:
+        """Keep the manager refresh loop alive now that entities listen on per-lock coordinators."""
+        if self._refresh_keepalive_unsub is None:
+            self._refresh_keepalive_unsub = self.async_add_listener(self._keepalive_listener)
 
     @callback
     def async_get_lock_coordinator(self, config_entry_id: str) -> KeymasterLockCoordinator:
@@ -328,6 +372,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if coordinator is None:
             coordinator = KeymasterLockCoordinator(self, config_entry_id)
             self._lock_coordinators[config_entry_id] = coordinator
+        self._ensure_refresh_keepalive()
         return coordinator
 
     @callback
@@ -335,6 +380,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         """Remove a per-lock coordinator and drop any pending bridge state for it."""
         self._lock_coordinators.pop(config_entry_id, None)
         self._pending_notify_entry_ids.discard(config_entry_id)
+        if not self._lock_coordinators and self._refresh_keepalive_unsub is not None:
+            self._refresh_keepalive_unsub()
+            self._refresh_keepalive_unsub = None
 
     @callback
     def async_schedule_keymaster_notifications(self, entry_ids: Iterable[str]) -> None:
@@ -367,30 +415,26 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     @callback
     def _flush_pending_keymaster_notifications(self) -> None:
-        """Flush both notification legs outside the active event dispatch."""
+        """Flush the global leg and per-lock coordinators (scoped, or all if a global fan-out was also pending)."""
         self._notify_handle = None
         if self._deferred_notifications_shutting_down or self._defer_refresh_listener_updates:
             return
-
         entry_ids = self._pending_notify_entry_ids
         self._pending_notify_entry_ids = set()
-        manager_healthy = getattr(self, "last_update_success", True)
-        self._flush_pending_global_notification()
-        for entry_id in entry_ids:
-            if entry_id not in self.kmlocks:
-                continue
-            lock_coordinator = self._lock_coordinators.get(entry_id)
-            if lock_coordinator is None:
-                continue
-            lock = self.kmlocks[entry_id]
-            if manager_healthy:
-                lock_coordinator.async_set_updated_data(lock)
-            else:
-                # Mirror the manager's failed-refresh state so per-lock-bound
-                # entities do not appear healthy while the manager is failing.
-                lock_coordinator.data = lock
-                lock_coordinator.last_update_success = False
-                lock_coordinator.async_update_listeners()
+        # If a global all-lock fan-out was also pending, absorb it and fan out to all.
+        global_notify_handle = self._global_notify_handle
+        if global_notify_handle is not None:
+            all_fanout = True
+            global_notify_handle.cancel()
+            self._global_notify_handle = None
+        else:
+            all_fanout = False
+        data_update, preserve_failed_refresh = self._flush_global_leg()
+        targets = list(self._lock_coordinators) if all_fanout else list(entry_ids)
+        for entry_id in targets:
+            self._push_lock_coordinator_update(
+                entry_id, data_update=data_update, preserve_failed_refresh=preserve_failed_refresh
+            )
 
     async def _async_refresh(
         self,

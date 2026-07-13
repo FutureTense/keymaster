@@ -63,8 +63,8 @@ async def datetime_config_entry(hass: HomeAssistant):
 @pytest.fixture
 async def coordinator(hass: HomeAssistant, datetime_config_entry):
     """Get the coordinator."""
-    del datetime_config_entry  # Parameter needed to ensure setup runs first
-    return hass.data[DOMAIN][COORDINATOR]
+    manager = hass.data[DOMAIN][COORDINATOR]
+    return manager.async_get_lock_coordinator(datetime_config_entry.entry_id)
 
 
 async def test_datetime_entity_not_created_without_advanced_date_range(
@@ -115,6 +115,14 @@ async def test_datetime_entities_created_with_advanced_date_range(
 
     # Should create entities: 2 slots * 2 (start/end) = 4 entities
     assert len(entities) == 4
+
+    manager = hass.data[DOMAIN][COORDINATOR]
+    lock_coordinator = manager.async_get_lock_coordinator(datetime_config_entry.entry_id)
+    assert all(entity.coordinator is lock_coordinator for entity in entities)
+    assert (
+        entities[0].unique_id
+        == f"{datetime_config_entry.entry_id}_datetime_code_slots_1_accesslimit_date_range_start"
+    )
 
     # Verify entity names follow expected pattern
     entity_names = [e.entity_description.name for e in entities]

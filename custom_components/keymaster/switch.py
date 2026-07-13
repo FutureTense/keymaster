@@ -25,7 +25,7 @@ from .const import (
     DEFAULT_AUTOLOCK_MIN_NIGHT,
     DOMAIN,
 )
-from .coordinator import KeymasterCoordinator
+from .coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 
@@ -38,10 +38,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Create keymaster Switches."""
-    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
-    kmlock: KeymasterLock | None = await coordinator.get_lock_by_config_entry_id(
+    manager: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    coordinator: KeymasterLockCoordinator = manager.async_get_lock_coordinator(
         config_entry.entry_id
     )
+    kmlock: KeymasterLock | None = await manager.get_lock_by_config_entry_id(config_entry.entry_id)
     entities: list = []
 
     if not kmlock:
@@ -303,7 +304,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
                     await self._kmlock.autolock_timer.start(
                         duration=self.coordinator.autolock_duration_seconds(self._kmlock)
                     )
-                    self.coordinator.async_schedule_global_notification()
+                    self.coordinator.async_schedule_notification()
             if (
                 self._property.endswith(".enabled")
                 and self._kmlock
@@ -339,7 +340,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             if self._property == "switch.autolock_enabled" and self._kmlock:
                 if self._kmlock.autolock_timer and self._kmlock.autolock_timer.is_running:
                     await self._kmlock.autolock_timer.cancel()
-                    self.coordinator.async_schedule_global_notification()
+                    self.coordinator.async_schedule_notification()
             if self._property.endswith(".enabled") and self._code_slot:
                 await self.coordinator.update_slot_active_state(
                     config_entry_id=self._config_entry.entry_id,

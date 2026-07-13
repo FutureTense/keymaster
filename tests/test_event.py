@@ -494,3 +494,7 @@ async def test_event_entity_created_in_setup(hass: HomeAssistant):
     assert added_entities[0].entity_description.key == "event.code_slots:1.last_used"
     assert added_entities[1].entity_description.key == "event.code_slots:2.last_used"
     assert added_entities[0].event_types == [EVENT_TYPE_UNLOCKED]
+
+    lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
+    assert all(entity.coordinator is lock_coordinator for entity in added_entities)
+    assert added_entities[0].unique_id == f"{config_entry.entry_id}_event_code_slots_1_last_used"
