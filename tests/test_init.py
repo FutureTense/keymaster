@@ -28,6 +28,7 @@ from custom_components.keymaster.const import (
     LOCK_COORDINATORS,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
+from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.util.dt import utcnow
@@ -153,7 +154,7 @@ async def test_unload_entry(
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline
 
 
-async def test_unload_entry_preserves_pending_global_notification(hass) -> None:
+async def test_unload_entry_preserves_pending_all_lock_notification(hass) -> None:
     """Test unloading one entry does not drop shared coordinator notifications."""
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
     other_entry = MockConfigEntry(
@@ -165,10 +166,15 @@ async def test_unload_entry_preserves_pending_global_notification(hass) -> None:
     entry.add_to_hass(hass)
     other_entry.add_to_hass(hass)
     coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks[entry.entry_id] = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.frontdoor",
+        keymaster_config_entry_id=entry.entry_id,
+    )
     listener = Mock()
-    coordinator.async_add_listener(listener)
-    coordinator.async_schedule_global_notification()
-    pending_handle = coordinator._global_notify_handle
+    coordinator.async_get_lock_coordinator(entry.entry_id).async_add_listener(listener)
+    coordinator.async_schedule_all_lock_notifications()
+    pending_handle = coordinator._notify_handle
     assert pending_handle is not None
     hass.data.setdefault(DOMAIN, {})[COORDINATOR] = coordinator
 
@@ -193,7 +199,7 @@ async def test_unload_entry_preserves_pending_global_notification(hass) -> None:
     await hass.async_block_till_done()
 
     listener.assert_called_once()
-    assert not coordinator._pending_global_notification
+    assert not coordinator._pending_notify_all_entry_ids
     await coordinator.async_shutdown()
 
 

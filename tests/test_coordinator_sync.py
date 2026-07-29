@@ -889,7 +889,7 @@ class TestProviderFailureSyncReset:
             coordinator._initial_setup_done_event = AsyncMock()
             coordinator._initial_setup_done_event.wait = AsyncMock()
             coordinator.async_set_updated_data = Mock()
-            coordinator.async_schedule_global_notification = Mock()
+            coordinator.async_schedule_keymaster_notifications = Mock()
             return coordinator
 
     @pytest.fixture
@@ -990,7 +990,7 @@ class TestProviderFailureSyncReset:
         )
 
         # Should be called twice: once for ADDING state, once for OUT_OF_SYNC reset
-        assert real_coordinator.async_schedule_global_notification.call_count == 2
+        assert real_coordinator.async_schedule_keymaster_notifications.call_count == 2
 
     async def test_failed_clear_notifies_entities(self, real_coordinator, lock_with_provider):
         """On provider failure, deferred notification is scheduled for the UI."""
@@ -1005,7 +1005,7 @@ class TestProviderFailureSyncReset:
         )
 
         # Should be called twice: once for DELETING state, once for OUT_OF_SYNC reset
-        assert real_coordinator.async_schedule_global_notification.call_count == 2
+        assert real_coordinator.async_schedule_keymaster_notifications.call_count == 2
 
     async def test_clear_pin_restores_prior_pin_on_provider_failure(
         self, real_coordinator, lock_with_provider
@@ -1045,7 +1045,7 @@ class TestSyncPinStuckStateRecovery:
             coordinator._initial_setup_done_event = AsyncMock()
             coordinator._initial_setup_done_event.wait = AsyncMock()
             coordinator.async_set_updated_data = Mock()
-            coordinator.async_schedule_global_notification = Mock()
+            coordinator.async_schedule_keymaster_notifications = Mock()
             coordinator.set_pin_on_lock = AsyncMock(return_value=True)
             coordinator.clear_pin_from_lock = AsyncMock(return_value=True)
             return coordinator

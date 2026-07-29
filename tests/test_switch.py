@@ -1,5 +1,6 @@
 """Tests for keymaster Switch platform."""
 
+import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -189,6 +190,52 @@ async def test_switch_async_turn_on(hass: HomeAssistant, switch_config_entry, co
     # Defaults should be set on first enable
     assert kmlock.autolock_min_day == DEFAULT_AUTOLOCK_MIN_DAY
     assert kmlock.autolock_min_night == DEFAULT_AUTOLOCK_MIN_NIGHT
+
+
+async def test_plain_switch_setter_notifies_scoped_lock_coordinator(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test a plain switch setter notifies immediately and during debounced refresh."""
+    manager = coordinator.manager
+    manager._initial_setup_done_event.set()
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+        connected=True,
+        lock_notifications=False,
+    )
+    manager.kmlocks[switch_config_entry.entry_id] = kmlock
+    listener = Mock()
+    coordinator.async_add_listener(listener)
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.lock_notifications",
+        name="Lock Notifications",
+        icon="mdi:bell",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+    entity = KeymasterSwitch(entity_description=entity_description)
+    entity.async_write_ha_state = Mock()
+
+    await entity.async_turn_on()
+    await asyncio.sleep(0)
+
+    assert kmlock.lock_notifications is True
+    listener.assert_called_once()
+    listener.reset_mock()
+    manager._update_lock_data = AsyncMock()
+    manager._async_save_data = AsyncMock()
+    manager._schedule_quick_refresh_if_needed = AsyncMock()
+
+    await manager.async_refresh()
+    await asyncio.sleep(0)
+
+    listener.assert_called_once()
+    await manager.async_shutdown()
 
 
 async def test_switch_autolock_user_values_persist_after_disable_reenable(

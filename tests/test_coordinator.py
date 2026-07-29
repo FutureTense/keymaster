@@ -114,7 +114,8 @@ def mock_coordinator(mock_hass) -> Any:
         # Use setattr to safely add the mock method
         setattr(coordinator, "delete_lock_by_config_entry_id", AsyncMock())
         setattr(coordinator, "async_set_updated_data", Mock())
-        setattr(coordinator, "async_schedule_global_notification", Mock())
+        setattr(coordinator, "async_schedule_all_lock_notifications", Mock())
+        setattr(coordinator, "async_schedule_keymaster_notifications", Mock())
         return coordinator
 
 
@@ -1099,7 +1100,7 @@ class TestLockStateEventHandlers:
         await mock_coordinator._lock_locked(mock_kmlock, source="manual")
 
         mock_kmlock.autolock_timer.cancel.assert_called_once()
-        mock_coordinator.async_schedule_global_notification.assert_called_once()
+        mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
 
     async def test_lock_locked_with_notifications(self, mock_coordinator, mock_kmlock):
         """Test _lock_locked sends notification when enabled."""
@@ -1140,7 +1141,7 @@ class TestLockStateEventHandlers:
         await mock_coordinator._lock_unlocked(mock_kmlock, source="manual")
 
         mock_kmlock.autolock_timer.start.assert_called_once_with(duration=300)
-        mock_coordinator.async_schedule_global_notification.assert_called_once()
+        mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
 
     async def test_lock_unlocked_no_autolock_no_data_update(self, mock_coordinator, mock_kmlock):
         """Test _lock_unlocked does not push data update when autolock is disabled."""
@@ -1154,7 +1155,7 @@ class TestLockStateEventHandlers:
 
         await mock_coordinator._lock_unlocked(mock_kmlock, source="manual")
 
-        mock_coordinator.async_schedule_global_notification.assert_not_called()
+        mock_coordinator.async_schedule_keymaster_notifications.assert_not_called()
 
     async def test_door_opened_basic_state_change(self, mock_coordinator, mock_kmlock):
         """Test _door_opened updates door state to open."""
@@ -1426,7 +1427,7 @@ class TestLockStateEventHandlers:
 
         assert mock_kmlock.lock_state == LockState.LOCKED
         mock_kmlock.autolock_timer.start.assert_called_once_with(duration=300)
-        mock_coordinator.async_schedule_global_notification.assert_called_once()
+        mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
         mock_notify.assert_not_called()
         mock_coordinator._lock_unlocked.assert_not_called()
         mock_coordinator._lock_locked.assert_not_called()
@@ -1459,7 +1460,7 @@ class TestLockStateEventHandlers:
 
         assert mock_kmlock.lock_state == LockState.UNLOCKED
         mock_kmlock.autolock_timer.cancel.assert_called_once()
-        mock_coordinator.async_schedule_global_notification.assert_called_once()
+        mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
         mock_notify.assert_not_called()
         mock_coordinator._lock_locked.assert_not_called()
         mock_coordinator._lock_unlocked.assert_not_called()
@@ -1625,7 +1626,7 @@ class TestSetupTimer:
         """Create a coordinator instance with mocked internals."""
         coordinator = KeymasterCoordinator(hass)
         coordinator.async_set_updated_data = Mock()
-        coordinator.async_schedule_global_notification = Mock()
+        coordinator.async_schedule_keymaster_notifications = Mock()
         coordinator._initial_setup_done_event.set()
         return coordinator
 
@@ -1684,7 +1685,7 @@ class TestSetupTimer:
         ):
             await mock_coordinator._setup_timer(kmlock)
 
-        mock_coordinator.async_schedule_global_notification.assert_called_once()
+        mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
 
     async def test_setup_timer_skips_if_already_attached(self, mock_coordinator):
         """Noop if the kmlock already has a timer.
@@ -3323,57 +3324,52 @@ async def test_async_shutdown(hass: HomeAssistant) -> None:
 async def test_failed_refresh_deferred_notify_preserves_failure_state(
     hass: HomeAssistant,
 ) -> None:
-    """Test failed refresh state survives deferred notify and local data updates."""
+    """Test failed refresh state survives deferred per-lock notifications."""
     coordinator = KeymasterCoordinator(hass)
     coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = KeymasterLock(
+        lock_name="test",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_1",
+    )
+    lock_coordinator = coordinator.async_get_lock_coordinator("entry_1")
     refresh_error = RuntimeError("refresh failed")
     coordinator._async_update_data = AsyncMock(side_effect=refresh_error)
-    delivered_data: list[dict[str, KeymasterLock]] = []
     listener_update_success: list[bool] = []
 
     def record_listener_state() -> None:
-        delivered_data.append(dict(coordinator.data or {}))
-        listener_update_success.append(coordinator.last_update_success)
+        listener_update_success.append(lock_coordinator.last_update_success)
 
     listener = Mock(side_effect=record_listener_state)
-    coordinator.async_add_listener(listener)
-    entity = CoordinatorEntity(coordinator)
+    lock_coordinator.async_add_listener(listener)
+    entity = CoordinatorEntity(lock_coordinator)
 
     await coordinator.async_refresh()
 
     listener.assert_not_called()
     assert coordinator.last_update_success is False
     assert coordinator.last_exception is refresh_error
-    assert entity.available is False
 
-    coordinator.kmlocks["entry_1"] = KeymasterLock(
-        lock_name="test",
-        lock_entity_id="lock.test",
-        keymaster_config_entry_id="entry_1",
-    )
-    coordinator.async_schedule_global_notification()
+    coordinator.async_schedule_keymaster_notifications(["entry_1"])
     await hass.async_block_till_done()
 
     listener.assert_called_once()
-    assert "entry_1" in delivered_data[0]
     assert listener_update_success == [False]
     assert coordinator.last_update_success is False
     assert coordinator.last_exception is refresh_error
     assert entity.available is False
 
     listener.reset_mock()
-    delivered_data.clear()
     listener_update_success.clear()
     coordinator.kmlocks["entry_2"] = KeymasterLock(
         lock_name="test2",
         lock_entity_id="lock.test2",
         keymaster_config_entry_id="entry_2",
     )
-    coordinator.async_schedule_global_notification()
+    coordinator.async_schedule_all_lock_notifications()
     await hass.async_block_till_done()
 
     listener.assert_called_once()
-    assert "entry_2" in delivered_data[0]
     assert listener_update_success == [False]
     assert coordinator.last_update_success is False
     assert coordinator.last_exception is refresh_error
@@ -3393,10 +3389,10 @@ async def test_failed_refresh_deferred_notify_preserves_failure_state(
     await coordinator.async_shutdown()
 
 
-async def test_cancel_pending_global_notification_prevents_deferred_flush(
+async def test_cancel_pending_notifications_prevents_deferred_flush(
     hass: HomeAssistant,
 ) -> None:
-    """Test unload cancellation clears pending global notification fan-out."""
+    """Test unload cancellation clears pending all-lock notification fan-out."""
     coordinator = KeymasterCoordinator(hass)
     coordinator.kmlocks["entry_1"] = KeymasterLock(
         lock_name="test",
@@ -3404,22 +3400,22 @@ async def test_cancel_pending_global_notification_prevents_deferred_flush(
         keymaster_config_entry_id="entry_1",
     )
     listener = Mock()
-    coordinator.async_add_listener(listener)
+    coordinator.async_get_lock_coordinator("entry_1").async_add_listener(listener)
 
-    coordinator.async_schedule_global_notification()
-    pending_handle = coordinator._global_notify_handle
+    coordinator.async_schedule_all_lock_notifications()
+    pending_handle = coordinator._notify_handle
 
     assert pending_handle is not None
     assert not pending_handle.cancelled()
-    assert coordinator._pending_global_notification
+    assert coordinator._pending_notify_all_entry_ids
 
-    coordinator.async_cancel_pending_global_notification()
+    coordinator.async_cancel_pending_notifications()
 
     assert pending_handle.cancelled()
-    assert coordinator._global_notify_handle is None
-    assert not coordinator._pending_global_notification
-    assert not coordinator._pending_global_data_update
-    assert not coordinator._pending_global_failed_refresh
+    assert coordinator._notify_handle is None
+    assert not coordinator._pending_notify_all_entry_ids
+    assert not coordinator._pending_notify_entry_ids
+    assert not coordinator._pending_failed_refresh
 
     await hass.async_block_till_done()
 
@@ -3427,17 +3423,17 @@ async def test_cancel_pending_global_notification_prevents_deferred_flush(
     await coordinator.async_shutdown()
 
 
-async def test_schedule_global_notification_noops_while_shutting_down(
+async def test_schedule_all_lock_notification_noops_while_shutting_down(
     hass: HomeAssistant,
 ) -> None:
     """Test local notification scheduling is ignored during shutdown."""
     coordinator = KeymasterCoordinator(hass)
     coordinator._deferred_notifications_shutting_down = True
 
-    coordinator.async_schedule_global_notification()
+    coordinator.async_schedule_all_lock_notifications()
 
-    assert coordinator._global_notify_handle is None
-    assert not coordinator._pending_global_notification
+    assert coordinator._notify_handle is None
+    assert not coordinator._pending_notify_all_entry_ids
     assert coordinator.data is None
 
     await coordinator.async_shutdown()
@@ -3451,105 +3447,111 @@ async def test_refresh_notification_noops_while_shutting_down(hass: HomeAssistan
 
     coordinator.async_update_listeners()
 
-    assert coordinator._global_notify_handle is None
-    assert not coordinator._pending_global_notification
+    assert coordinator._notify_handle is None
+    assert not coordinator._pending_notify_all_entry_ids
 
     await coordinator.async_shutdown()
 
 
-async def test_schedule_pending_global_notification_noops_during_refresh_deferral(
+async def test_schedule_pending_keymaster_notification_noops_during_refresh_deferral(
     hass: HomeAssistant,
 ) -> None:
     """Test pending flush scheduling waits until refresh deferral ends."""
     coordinator = KeymasterCoordinator(hass)
     coordinator._defer_refresh_listener_updates = True
 
-    coordinator._schedule_pending_global_notification()
+    coordinator._schedule_pending_keymaster_notifications()
 
-    assert coordinator._global_notify_handle is None
+    assert coordinator._notify_handle is None
 
     await coordinator.async_shutdown()
 
 
-async def test_schedule_pending_global_notification_creates_handle_when_not_deferring(
+async def test_schedule_pending_keymaster_notification_creates_handle_when_not_deferring(
     hass: HomeAssistant,
 ) -> None:
     """Test pending flush scheduling creates a handle outside refresh deferral."""
     coordinator = KeymasterCoordinator(hass)
 
-    coordinator._schedule_pending_global_notification()
+    coordinator._schedule_pending_keymaster_notifications()
 
-    assert coordinator._global_notify_handle is not None
+    assert coordinator._notify_handle is not None
 
     await coordinator.async_shutdown()
 
 
-async def test_flush_pending_global_notification_noops_without_pending(
+async def test_flush_pending_keymaster_notifications_noops_without_pending(
     hass: HomeAssistant,
 ) -> None:
-    """Test deferred flush exits when no global notification is pending."""
+    """Test deferred flush exits when no per-lock notification is pending."""
     coordinator = KeymasterCoordinator(hass)
     listener = Mock()
-    coordinator.async_add_listener(listener)
+    coordinator.async_get_lock_coordinator("entry_1").async_add_listener(listener)
 
-    coordinator._flush_pending_global_notification()
+    coordinator._flush_pending_keymaster_notifications()
 
     listener.assert_not_called()
-    assert coordinator._global_notify_handle is None
+    assert coordinator._notify_handle is None
 
     await coordinator.async_shutdown()
 
 
-async def test_flush_pending_global_notification_noops_while_shutting_down(
+async def test_flush_pending_keymaster_notifications_noops_while_shutting_down(
     hass: HomeAssistant,
 ) -> None:
     """Test deferred flush exits when shutdown starts before the callback runs."""
     coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks["entry_1"] = KeymasterLock(
+        lock_name="test",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_1",
+    )
     listener = Mock()
-    coordinator.async_add_listener(listener)
-    coordinator._pending_global_notification = True
-    coordinator._pending_global_data_update = True
+    coordinator.async_get_lock_coordinator("entry_1").async_add_listener(listener)
+    coordinator._pending_notify_entry_ids = {"entry_1"}
     coordinator._deferred_notifications_shutting_down = True
 
-    coordinator._flush_pending_global_notification()
+    coordinator._flush_pending_keymaster_notifications()
 
     listener.assert_not_called()
-    assert coordinator._pending_global_notification
-    assert coordinator._global_notify_handle is None
+    assert coordinator._pending_notify_entry_ids == {"entry_1"}
+    assert coordinator._notify_handle is None
 
     await coordinator.async_shutdown()
 
 
-async def test_flush_pending_global_notification_waits_during_refresh_deferral(
+async def test_flush_pending_keymaster_notifications_waits_during_refresh_deferral(
     hass: HomeAssistant,
 ) -> None:
     """Test deferred flush preserves pending state while refresh defers fan-out."""
     coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks["entry_1"] = KeymasterLock(
+        lock_name="test",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_1",
+    )
     listener = Mock()
-    coordinator.async_add_listener(listener)
-    coordinator._pending_global_notification = True
-    coordinator._pending_global_data_update = True
+    coordinator.async_get_lock_coordinator("entry_1").async_add_listener(listener)
+    coordinator._pending_notify_entry_ids = {"entry_1"}
     coordinator._deferred_notifications_shutting_down = False
     coordinator._defer_refresh_listener_updates = True
 
-    coordinator._flush_pending_global_notification()
+    coordinator._flush_pending_keymaster_notifications()
 
     listener.assert_not_called()
-    assert coordinator._pending_global_notification
-    assert coordinator._pending_global_data_update
-    assert coordinator._global_notify_handle is None
+    assert coordinator._pending_notify_entry_ids == {"entry_1"}
+    assert coordinator._notify_handle is None
 
     coordinator._defer_refresh_listener_updates = False
-    coordinator._flush_pending_global_notification()
+    coordinator._flush_pending_keymaster_notifications()
 
     listener.assert_called_once()
-    assert not coordinator._pending_global_notification
-    assert not coordinator._pending_global_data_update
+    assert not coordinator._pending_notify_entry_ids
 
     await coordinator.async_shutdown()
 
 
-async def test_refresh_finally_reschedules_pending_global_notification(
+async def test_refresh_finally_reschedules_pending_keymaster_notification(
     hass: HomeAssistant,
 ) -> None:
     """Test refresh finally schedules pending notification when no handle exists."""
@@ -3558,19 +3560,24 @@ async def test_refresh_finally_reschedules_pending_global_notification(
     coordinator.always_update = False
     coordinator.data = {}
     coordinator._async_update_data = AsyncMock(return_value=coordinator.data)
+    coordinator.kmlocks["entry_1"] = KeymasterLock(
+        lock_name="test",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_1",
+    )
     listener = Mock()
-    coordinator.async_add_listener(listener)
-    coordinator._pending_global_notification = True
+    coordinator.async_get_lock_coordinator("entry_1").async_add_listener(listener)
+    coordinator._pending_notify_entry_ids = {"entry_1"}
 
     await coordinator.async_refresh()
 
-    assert coordinator._global_notify_handle is not None
+    assert coordinator._notify_handle is not None
     listener.assert_not_called()
 
     await hass.async_block_till_done()
 
     listener.assert_called_once()
-    assert not coordinator._pending_global_notification
+    assert not coordinator._pending_notify_entry_ids
 
     await coordinator.async_shutdown()
 
