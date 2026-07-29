@@ -59,8 +59,8 @@ async def button_config_entry(hass: HomeAssistant):
 @pytest.fixture
 async def coordinator(hass: HomeAssistant, button_config_entry):
     """Get the coordinator."""
-    del button_config_entry  # Parameter needed to ensure setup runs first
-    return hass.data[DOMAIN][COORDINATOR]
+    manager = hass.data[DOMAIN][COORDINATOR]
+    return manager.async_get_lock_coordinator(button_config_entry.entry_id)
 
 
 async def test_button_entities_created(hass: HomeAssistant, button_config_entry):
@@ -82,6 +82,11 @@ async def test_button_entities_created(hass: HomeAssistant, button_config_entry)
     assert "Reset Lock" in entity_names
     assert "Code Slot 1: Reset" in entity_names
     assert "Code Slot 2: Reset" in entity_names
+
+    manager = hass.data[DOMAIN][COORDINATOR]
+    lock_coordinator = manager.async_get_lock_coordinator(button_config_entry.entry_id)
+    assert all(entity.coordinator is lock_coordinator for entity in entities)
+    assert entities[0].unique_id == f"{button_config_entry.entry_id}_button_reset_lock"
 
 
 async def test_button_entity_initialization(hass: HomeAssistant, button_config_entry, coordinator):

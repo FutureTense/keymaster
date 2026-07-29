@@ -62,7 +62,8 @@ async def number_config_entry(hass: HomeAssistant):
 @pytest.fixture
 async def coordinator(hass: HomeAssistant, number_config_entry):
     """Get the coordinator."""
-    return hass.data[DOMAIN][COORDINATOR]
+    manager = hass.data[DOMAIN][COORDINATOR]
+    return manager.async_get_lock_coordinator(number_config_entry.entry_id)
 
 
 async def test_number_entities_created(hass: HomeAssistant, number_config_entry):
@@ -86,6 +87,11 @@ async def test_number_entities_created(hass: HomeAssistant, number_config_entry)
     assert "Night Auto Lock" in entity_names
     assert "Code Slot 1: Uses Remaining" in entity_names
     assert "Code Slot 2: Uses Remaining" in entity_names
+
+    manager = hass.data[DOMAIN][COORDINATOR]
+    lock_coordinator = manager.async_get_lock_coordinator(number_config_entry.entry_id)
+    assert all(entity.coordinator is lock_coordinator for entity in entities)
+    assert entities[0].unique_id == f"{number_config_entry.entry_id}_number_autolock_min_day"
 
 
 async def test_number_autolock_entities_have_correct_config(

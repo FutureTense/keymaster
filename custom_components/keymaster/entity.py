@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
 from .const import DOMAIN
-from .coordinator import KeymasterCoordinator
+from .coordinator import KeymasterLockCoordinator
 from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -25,14 +25,14 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 # Items cannot contain . or : in their names
 
 
-class KeymasterEntity(CoordinatorEntity[KeymasterCoordinator]):
+class KeymasterEntity(CoordinatorEntity[KeymasterLockCoordinator]):
     """Base entity for Keymaster."""
 
     def __init__(self, entity_description: KeymasterEntityDescription) -> None:
         """Initialize base keymaster entity."""
         # _LOGGER.debug("[Entity init] entity_description: %s", entity_description)
         self.hass: HomeAssistant = entity_description.hass
-        self.coordinator: KeymasterCoordinator = entity_description.coordinator
+        self.coordinator: KeymasterLockCoordinator = entity_description.coordinator
         self._config_entry: ConfigEntry = entity_description.config_entry
         self.entity_description: KeymasterEntityDescription = entity_description
         self._property: str = entity_description.key  # <Platform>.<Property>.<SubProperty>:<Slot Number*>.<SubProperty>:<Slot Number*>  *Only if needed
@@ -146,4 +146,4 @@ class KeymasterEntityDescription(EntityDescription):
 
     hass: HomeAssistant
     config_entry: ConfigEntry
-    coordinator: KeymasterCoordinator
+    coordinator: KeymasterLockCoordinator

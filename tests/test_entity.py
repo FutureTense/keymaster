@@ -54,8 +54,37 @@ async def entity_config_entry(hass: HomeAssistant):
 @pytest.fixture
 async def coordinator(hass: HomeAssistant, entity_config_entry):
     """Get the coordinator."""
-    del entity_config_entry  # Parameter needed to ensure setup runs first
-    return hass.data[DOMAIN][COORDINATOR]
+    manager = hass.data[DOMAIN][COORDINATOR]
+    return manager.async_get_lock_coordinator(entity_config_entry.entry_id)
+
+
+async def test_entity_uses_lock_coordinator_and_stable_unique_id(
+    hass: HomeAssistant, entity_config_entry, coordinator
+):
+    """Test base entities bind to the per-lock coordinator without changing unique IDs."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=entity_config_entry.entry_id,
+    )
+    coordinator.kmlocks[entity_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterEntityDescription(
+        key="switch.autolock_enabled",
+        name="Auto Lock",
+        hass=hass,
+        config_entry=entity_config_entry,
+        coordinator=coordinator,
+    )
+
+    class MockEntity(KeymasterEntity):
+        def _handle_coordinator_update(self):
+            pass
+
+    entity = MockEntity(entity_description=entity_description)
+
+    assert entity.coordinator is coordinator
+    assert entity.unique_id == f"{entity_config_entry.entry_id}_switch_autolock_enabled"
 
 
 async def test_entity_get_property_value_simple(

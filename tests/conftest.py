@@ -30,7 +30,8 @@ from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 from zwave_js_server.model.version import VersionInfo
 
-from custom_components.keymaster.const import NONE_TEXT
+from custom_components.keymaster.const import COORDINATOR, DOMAIN, NONE_TEXT
+from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
 from homeassistant.components.zwave_js import PLATFORMS
 from homeassistant.const import Platform
@@ -157,6 +158,9 @@ async def auto_unload(hass: HomeAssistant):
     for entry in hass.config_entries.async_entries("keymaster"):
         await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+    coordinator = hass.data.get(DOMAIN, {}).get(COORDINATOR)
+    if isinstance(coordinator, KeymasterCoordinator):
+        await coordinator.async_shutdown()
 
 
 @pytest.fixture

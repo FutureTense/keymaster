@@ -7,7 +7,14 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.event import Event
 
 from custom_components.keymaster.binary_sensor import async_setup_entry
-from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from custom_components.keymaster.const import (
+    CONF_LOCK_ENTITY_ID,
+    CONF_SLOTS,
+    CONF_START,
+    COORDINATOR,
+    DOMAIN,
+)
+from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntryState
@@ -41,6 +48,7 @@ async def test_setup_entry_creates_connection_sensor_when_provider_none(hass):
     mock_coordinator = MagicMock()
     mock_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=mock_lock)
     mock_coordinator.sync_get_lock_by_config_entry_id = MagicMock(return_value=mock_lock)
+    mock_coordinator.async_get_lock_coordinator.return_value = mock_coordinator
 
     hass.data.setdefault(DOMAIN, {})[COORDINATOR] = mock_coordinator
 
@@ -75,6 +83,7 @@ async def test_setup_entry_creates_connection_sensor_when_provider_supports_it(h
     mock_coordinator = MagicMock()
     mock_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=mock_lock)
     mock_coordinator.sync_get_lock_by_config_entry_id = MagicMock(return_value=mock_lock)
+    mock_coordinator.async_get_lock_coordinator.return_value = mock_coordinator
 
     hass.data.setdefault(DOMAIN, {})[COORDINATOR] = mock_coordinator
 
@@ -108,6 +117,7 @@ async def test_setup_entry_no_connection_sensor_when_provider_unsupported(hass):
     mock_coordinator = MagicMock()
     mock_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=mock_lock)
     mock_coordinator.sync_get_lock_by_config_entry_id = MagicMock(return_value=mock_lock)
+    mock_coordinator.async_get_lock_coordinator.return_value = mock_coordinator
 
     hass.data.setdefault(DOMAIN, {})[COORDINATOR] = mock_coordinator
 
@@ -118,6 +128,34 @@ async def test_setup_entry_no_connection_sensor_when_provider_unsupported(hass):
         e for e in added_entities if "binary_sensor.connected" in e.entity_description.key
     ]
     assert len(connection_sensors) == 0
+
+
+async def test_setup_entry_binds_binary_sensors_to_lock_coordinator(hass):
+    """Test binary sensors created by setup use the per-lock coordinator."""
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="test_lock",
+        data={**CONFIG_DATA_910, CONF_START: 1, CONF_SLOTS: 1},
+    )
+    config_entry.add_to_hass(hass)
+
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    kmlock = KeymasterLock(
+        lock_name="Test Lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=config_entry.entry_id,
+    )
+    kmlock.provider = None
+    coordinator.kmlocks[config_entry.entry_id] = kmlock
+    hass.data.setdefault(DOMAIN, {})[COORDINATOR] = coordinator
+
+    added_entities: list = []
+    await async_setup_entry(hass, config_entry, lambda entities, _: added_entities.extend(entities))
+
+    lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
+    assert all(entity.coordinator is lock_coordinator for entity in added_entities)
+    assert added_entities[0].unique_id == f"{config_entry.entry_id}_binary_sensor_connected"
 
 
 async def test_zwavejs_network_ready(hass, client, lock_kwikset_910, integration, caplog):
@@ -145,8 +183,12 @@ async def test_zwavejs_network_ready(hass, client, lock_kwikset_910, integration
     assert state.state == LockState.UNLOCKED
 
     # Load the integration with wrong lock entity_id
+    hass.data.pop(DOMAIN, None)
     config_entry = MockConfigEntry(
-        domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_910, version=3
+        domain=DOMAIN,
+        title="frontdoor",
+        data={**CONFIG_DATA_910, CONF_LOCK_ENTITY_ID: "lock.missing"},
+        version=3,
     )
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)

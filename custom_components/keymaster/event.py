@@ -23,7 +23,7 @@ from .const import (
     EVENT_KEYMASTER_CODE_SLOT_RESET,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
 )
-from .coordinator import KeymasterCoordinator
+from .coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from .entity import KeymasterEntity, KeymasterEntityDescription
 
 EVENT_TYPE_UNLOCKED = "unlocked"
@@ -42,7 +42,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up event entities for keymaster code slots."""
-    coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    manager: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    coordinator: KeymasterLockCoordinator = manager.async_get_lock_coordinator(
+        config_entry.entry_id
+    )
 
     entities: list[KeymasterCodeSlotEventEntity] = [
         KeymasterCodeSlotEventEntity(

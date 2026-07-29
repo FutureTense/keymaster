@@ -63,7 +63,8 @@ async def text_config_entry(hass: HomeAssistant):
 @pytest.fixture
 async def coordinator(hass: HomeAssistant, text_config_entry):
     """Get the coordinator."""
-    return hass.data[DOMAIN][COORDINATOR]
+    manager = hass.data[DOMAIN][COORDINATOR]
+    return manager.async_get_lock_coordinator(text_config_entry.entry_id)
 
 
 async def test_text_entities_created(hass: HomeAssistant, text_config_entry):
@@ -87,6 +88,11 @@ async def test_text_entities_created(hass: HomeAssistant, text_config_entry):
     assert "Code Slot 1: PIN" in entity_names
     assert "Code Slot 2: Name" in entity_names
     assert "Code Slot 2: PIN" in entity_names
+
+    manager = hass.data[DOMAIN][COORDINATOR]
+    lock_coordinator = manager.async_get_lock_coordinator(text_config_entry.entry_id)
+    assert all(entity.coordinator is lock_coordinator for entity in entities)
+    assert entities[0].unique_id == f"{text_config_entry.entry_id}_text_code_slots_1_name"
 
 
 async def test_text_pin_entity_password_mode_when_hide_pins(hass: HomeAssistant):

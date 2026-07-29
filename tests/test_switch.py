@@ -22,7 +22,11 @@ from custom_components.keymaster.const import (
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
-from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
+from custom_components.keymaster.switch import (
+    KeymasterSwitch,
+    KeymasterSwitchEntityDescription,
+    async_setup_entry,
+)
 from homeassistant.components.lock.const import LockState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -62,7 +66,34 @@ async def switch_config_entry(hass: HomeAssistant):
 @pytest.fixture
 async def coordinator(hass: HomeAssistant, switch_config_entry):
     """Get the coordinator."""
-    return hass.data[DOMAIN][COORDINATOR]
+    manager = hass.data[DOMAIN][COORDINATOR]
+    return manager.async_get_lock_coordinator(switch_config_entry.entry_id)
+
+
+async def test_switch_entities_created_with_lock_coordinator(
+    hass: HomeAssistant, switch_config_entry
+):
+    """Test switch setup binds entities to the per-lock coordinator."""
+    manager: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    manager._initial_setup_done_event.set()
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    manager.kmlocks[switch_config_entry.entry_id] = kmlock
+    entities = []
+
+    def mock_add_entities(new_entities, update_before_add=False):
+        del update_before_add
+        entities.extend(new_entities)
+
+    await async_setup_entry(hass, switch_config_entry, mock_add_entities)
+
+    lock_coordinator = manager.async_get_lock_coordinator(switch_config_entry.entry_id)
+    assert entities
+    assert all(entity.coordinator is lock_coordinator for entity in entities)
+    assert entities[0].unique_id == f"{switch_config_entry.entry_id}_switch_autolock_enabled"
 
 
 async def test_switch_entity_initialization(hass: HomeAssistant, switch_config_entry, coordinator):
