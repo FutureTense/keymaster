@@ -975,9 +975,7 @@ class TestCoverageExtra:
         # 1. Test unexpected Exception
         with (
             patch.object(provider, "_async_query_slot", side_effect=ValueError("Unexpected")),
-            patch(
-                "custom_components.keymaster.providers.zigbee2mqtt._LOGGER.exception"
-            ) as mock_logger,
+            patch("custom_components.keymaster.providers.zigbee2mqtt._LOGGER.error") as mock_logger,
         ):
             result = await provider.async_get_usercodes()
             assert result == []

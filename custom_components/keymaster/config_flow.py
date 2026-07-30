@@ -197,6 +197,7 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) ->
 def _get_entities(
     hass: HomeAssistant,
     domain: str,
+    *,
     search: list[str] | None = None,
     extra_entities: list[str] | None = None,
     exclude_entities: list[str] | None = None,
@@ -370,6 +371,7 @@ async def _start_config_flow(
     step_id: str,
     title: str,
     user_input: MutableMapping[str, Any] | None,
+    *,
     defaults: MutableMapping[str, Any] | None = None,
     entry_id: str | None = None,
 ) -> ConfigFlowResult:

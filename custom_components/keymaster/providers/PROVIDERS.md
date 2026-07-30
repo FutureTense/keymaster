@@ -41,6 +41,7 @@ from ._base import BaseLockProvider, CodeSlot, LockEventCallback
 if TYPE_CHECKING:
     from ..lock import KeymasterLock
 
+
 @dataclass
 class ZHALockProvider(BaseLockProvider):
     """ZHA lock provider implementation."""
@@ -109,12 +110,14 @@ async def async_get_usercodes(self) -> list[CodeSlot]:
     # Call ZHA service or API to get codes
     # Convert to CodeSlot format:
     for slot in zha_codes:
-        codes.append(CodeSlot(
-            slot_num=slot["slot"],
-            code=slot.get("code"),
-            in_use=slot.get("in_use", False),
-            name=slot.get("name"),
-        ))
+        codes.append(
+            CodeSlot(
+                slot_num=slot["slot"],
+                code=slot.get("code"),
+                in_use=slot.get("in_use", False),
+                name=slot.get("name"),
+            )
+        )
 
     return codes
 ```
@@ -123,10 +126,10 @@ async def async_get_usercodes(self) -> list[CodeSlot]:
 
 Sets a user code on the lock.
 
+<!-- markdownlint-disable MD013 -->
+
 ```python
-async def async_set_usercode(
-    self, slot_num: int, code: str, name: str | None = None
-) -> bool:
+async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
     """Set user code on ZHA lock."""
     try:
         await self.hass.services.async_call(
@@ -144,6 +147,8 @@ async def async_set_usercode(
         _LOGGER.exception("Failed to set user code")
         return False
 ```
+
+<!-- markdownlint-enable MD013 -->
 
 #### `async_clear_usercode(slot_num) -> bool`
 
@@ -180,6 +185,7 @@ def supports_push_updates(self) -> bool:
     """ZHA supports real-time events."""
     return True
 
+
 def subscribe_lock_events(
     self, kmlock: KeymasterLock, callback: LockEventCallback
 ) -> Callable[[], None]:
@@ -201,19 +207,22 @@ def subscribe_lock_events(
 
 #### Connection Status Monitoring
 
+<!-- markdownlint-disable MD013 -->
+
 ```python
 @property
 def supports_connection_status(self) -> bool:
     """ZHA can report connection status."""
     return True
 
-def subscribe_connection_events(
-    self, callback: ConnectionCallback
-) -> Callable[[], None]:
+
+def subscribe_connection_events(self, callback: ConnectionCallback) -> Callable[[], None]:
     """Subscribe to connection state changes."""
     # Subscribe to ZHA device availability events
     # ...
 ```
+
+<!-- markdownlint-enable MD013 -->
 
 ### Step 4: Register the Provider
 
@@ -261,6 +270,7 @@ def mock_zha_provider(hass):
     """Create a ZHA provider with mocked internals."""
     # Setup mocks...
 
+
 async def test_zha_set_usercode(mock_zha_provider):
     """Test setting user code via ZHA."""
     result = await mock_zha_provider.async_set_usercode(1, "1234")
@@ -291,10 +301,10 @@ async def test_zha_set_usercode(mock_zha_provider):
 
 Always handle platform errors gracefully:
 
+<!-- markdownlint-disable MD013 -->
+
 ```python
-async def async_set_usercode(
-    self, slot_num: int, code: str, name: str | None = None
-) -> bool:
+async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
     try:
         # Attempt operation
         return True
