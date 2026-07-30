@@ -43,9 +43,16 @@ provider:
 | **[Schlage WiFi](https://www.home-assistant.io/integrations/schlage/)** | `schlage` | Wi-Fi | ❌ | ✅ | Virtual slot mapping by prefixing tags to code names. |
 | **[Local Akuvox](https://github.com/firstof9/ha-local-akuvox)** | `local_akuvox` | LAN | ✅ | ✅ | Virtual slot mapping by tagging door controller user names. |
 | **[Matter](https://www.home-assistant.io/integrations/matter/)** | `matter` | Matter | ⏳ | ⏳ | Standardized Matter Lock Cluster PIN credential management. |
-| **[Nuki](https://www.home-assistant.io/integrations/nuki/)** | `nuki` | Local API | ⏳ | ⏳ | Nuki Keypad PIN management. |
-| **[Tedee](https://www.home-assistant.io/integrations/tedee/)** | `tedee` | Cloud/Local | ⏳ | ⏳ | Tedee Keypad PIN management. |
+| **[Nuki](https://www.home-assistant.io/integrations/nuki/)** | `nuki` | Local API | 🚫 | 🚫 | Nuki Keypad PIN management (Not planned due to lack of hardware for testing). |
+| **[Tedee](https://www.home-assistant.io/integrations/tedee/)** | `tedee` | Cloud/Local | 🚫 | 🚫 | Tedee Keypad PIN management (Not planned due to lack of hardware for testing). |
 <!-- markdownlint-enable MD013 -->
+
+**Key:**
+
+- ✅ Fully Supported
+- ❌ Not Supported
+- ⏳ Planned / Work in Progress
+- 🚫 Not Planned (due to lack of hardware for testing)
 
 ## Installation
 
