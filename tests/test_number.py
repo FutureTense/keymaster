@@ -638,7 +638,7 @@ async def test_number_entity_autolock_float_to_int(
     ],
 )
 async def test_number_entities_can_be_preset_when_feature_disabled(
-    hass: HomeAssistant, number_config_entry, coordinator, key, slot_kwargs, lock_attr, value
+    hass: HomeAssistant, number_config_entry, coordinator, *, key, slot_kwargs, lock_attr, value
 ):
     """Test number entities remain available and writable while feature is disabled."""
     kmlock = KeymasterLock(

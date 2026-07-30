@@ -401,7 +401,7 @@ async def test_datetime_entity_available_with_valid_code_slot(
     ],
 )
 async def test_datetime_entities_can_be_preset_when_feature_disabled(
-    hass: HomeAssistant, datetime_config_entry, coordinator, key, attr_name, value
+    hass: HomeAssistant, datetime_config_entry, coordinator, *, key, attr_name, value
 ):
     """Test date range datetimes are available and writable while disabled."""
     kmlock = KeymasterLock(

@@ -344,9 +344,10 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
                         res,
                     )
                 elif isinstance(res, Exception):
-                    _LOGGER.exception(
-                        "[Zigbee2MQTTProvider] Unexpected error querying slot %s",
+                    _LOGGER.error(
+                        "[Zigbee2MQTTProvider] Unexpected error querying slot %s: %s",
                         slot_num,
+                        res,
                     )
                 elif isinstance(res, BaseException):
                     raise res

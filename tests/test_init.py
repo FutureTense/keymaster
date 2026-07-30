@@ -65,6 +65,7 @@ def _build_entry_data(lock_name: str, lock_entity_id: str) -> dict:
 
 async def test_setup_entry(
     hass,
+    *,
     lock_kwikset_910,
     mock_zwavejs_get_usercodes,
     mock_zwavejs_clear_usercode,
@@ -98,6 +99,7 @@ async def test_setup_entry(
 
 async def test_setup_entry_core_state(
     hass,
+    *,
     lock_kwikset_910,
     mock_zwavejs_get_usercodes,
     mock_zwavejs_clear_usercode,

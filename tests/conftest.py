@@ -177,6 +177,7 @@ def mock_get_entities():
 def side_effect_get_entities(
     hass,
     domain,
+    *,
     search=None,
     extra_entities=None,
     exclude_entities=None,

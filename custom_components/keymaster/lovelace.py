@@ -81,6 +81,7 @@ def generate_section_config(
     hass: HomeAssistant,
     keymaster_config_entry_id: str,
     slot_num: int,
+    *,
     advanced_date_range: bool,
     advanced_day_of_week: bool,
     parent_config_entry_id: str | None = None,
@@ -135,6 +136,7 @@ def generate_section_config(
 def generate_view_config(
     hass: HomeAssistant,
     kmlock_name: str,
+    *,
     keymaster_config_entry_id: str,
     code_slot_start: int,
     code_slots: int,
@@ -183,6 +185,7 @@ def generate_view_config(
 async def async_generate_lovelace(
     hass: HomeAssistant,
     kmlock_name: str,
+    *,
     keymaster_config_entry_id: str,
     code_slot_start: int,
     code_slots: int,
@@ -369,6 +372,7 @@ def _generate_entity_card_ll_config(
     domain: str,
     key: str,
     name: str,
+    *,
     parent: bool = False,
     type_: str | None = None,
     tap_action: str = "none",
@@ -394,6 +398,7 @@ def _generate_entity_card_ll_config(
 def _generate_badge_ll_config(
     entity: str | None,
     name: str,
+    *,
     visibility: bool = False,
     tap_action: str | None = "none",
     show_name: bool = False,
@@ -430,6 +435,7 @@ def _generate_conditional_card_ll_config(
     key: str,
     name: str,
     conditions: list[MutableMapping[str, Any]],
+    *,
     parent: bool = False,
     type_: str | None = None,
     tap_action: str = "none",
