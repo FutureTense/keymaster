@@ -95,4 +95,5 @@ async def async_cleanup_strategy_resource(hass: HomeAssistant, hass_data: dict[s
         return
 
     await resources.async_delete_item(resource_id)
+    hass_data["resources"] = False
     _LOGGER.debug("Removed strategy module (resource ID %s)", resource_id)
