@@ -1008,17 +1008,17 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         source="state_change",
                         event_label="Manual Unlock",
                     )
-                else:
-                    if (
-                        kmlock.lock_state != LockState.UNLOCKED
-                        and kmlock.autolock_enabled
-                        and kmlock.autolock_timer
-                    ):
-                        await kmlock.autolock_timer.start(
-                            duration=self.autolock_duration_seconds(kmlock),
-                        )
-                        self._state_change_autolock_started.add(kmlock.keymaster_config_entry_id)
-                        self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
+                elif (
+                    kmlock.lock_state != LockState.UNLOCKED
+                    and kmlock.autolock_enabled
+                    and kmlock.autolock_timer
+                ):
+                    await kmlock.autolock_timer.start(
+                        duration=self.autolock_duration_seconds(kmlock),
+                    )
+                    self._state_change_autolock_started.add(kmlock.keymaster_config_entry_id)
+                    self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
+                if uses_provider_lock_events:
                     kmlock.lock_state = LockState.UNLOCKED
                     self._last_unlock_code_slot[kmlock.keymaster_config_entry_id] = 0
         elif new_state == LockState.LOCKED:
@@ -1029,16 +1029,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         source="state_change",
                         event_label="Manual Lock",
                     )
-                else:
-                    if (
-                        kmlock.keymaster_config_entry_id in self._state_change_autolock_started
-                        or kmlock.lock_state != LockState.LOCKED
-                    ) and kmlock.autolock_timer:
-                        await kmlock.autolock_timer.cancel()
-                        self._state_change_autolock_started.discard(
-                            kmlock.keymaster_config_entry_id
-                        )
-                        self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
+                elif (
+                    kmlock.keymaster_config_entry_id in self._state_change_autolock_started
+                    or kmlock.lock_state != LockState.LOCKED
+                ) and kmlock.autolock_timer:
+                    await kmlock.autolock_timer.cancel()
+                    self._state_change_autolock_started.discard(
+                        kmlock.keymaster_config_entry_id
+                    )
+                    self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
+                if uses_provider_lock_events:
                     kmlock.lock_state = LockState.LOCKED
 
     async def _handle_door_state_change(
