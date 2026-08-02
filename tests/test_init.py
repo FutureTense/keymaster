@@ -530,3 +530,23 @@ async def test_async_setup_entry_setup_success_false(hass) -> None:
             await async_setup_entry(hass, entry)
 
         assert COORDINATOR not in hass.data[DOMAIN]
+
+
+async def test_async_setup_entry_registers_strategy_resource(
+    hass,
+    lock_kwikset_910,
+    mock_zwavejs_get_usercodes,
+    mock_zwavejs_clear_usercode,
+    mock_zwavejs_set_usercode,
+    integration,
+) -> None:
+    """Test that async_setup_entry calls async_register_strategy_resource."""
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.keymaster.async_register_strategy_resource", new_callable=AsyncMock
+    ) as mock_register:
+        assert await hass.config_entries.async_setup(entry.entry_id) is True
+        await hass.async_block_till_done()
+        mock_register.assert_awaited()

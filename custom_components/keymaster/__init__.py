@@ -156,6 +156,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # _LOGGER.debug(f"[init async_setup_entry] updated config_entry.data: {config_entry.data}")
 
     await async_setup_services(hass)
+    await async_register_strategy_resource(hass)
 
     if COORDINATOR not in hass.data[DOMAIN]:
         coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
