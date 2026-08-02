@@ -1027,3 +1027,30 @@ class TestCoverageExtra:
         }
         await provider._async_handle_action("lock", 2, payload)
         callback.assert_called_once_with(2, "Keypad Lock", 5)
+
+    async def test_base_topic_prefers_name_by_user(self, provider, mock_hass):
+        """Test that base_topic prefers device_entry.name_by_user when set."""
+        setup_successful_connect(
+            provider,
+            mock_hass,
+            device_name="Front Door Lock",
+            identifiers={("mqtt", "zigbee2mqtt_0x000d6f001933df17")},
+        )
+        device_entry = provider.device_registry.async_get.return_value
+        device_entry.name_by_user = "Custom User Name"
+        assert provider.base_topic == "zigbee2mqtt/Custom User Name"
+
+    async def test_base_topic_fallback_to_identifier_when_device_name_empty(
+        self, provider, mock_hass
+    ):
+        """Test fallback to identifier when device name and name_by_user are empty."""
+        setup_successful_connect(
+            provider,
+            mock_hass,
+            device_name=None,
+            identifiers={("mqtt", "zigbee2mqtt_0x000d6f001933df17")},
+        )
+        device_entry = provider.device_registry.async_get.return_value
+        device_entry.name_by_user = None
+        device_entry.name = None
+        assert provider.base_topic == "zigbee2mqtt/0x000d6f001933df17"
