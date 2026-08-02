@@ -1426,7 +1426,7 @@ class TestLockStateEventHandlers:
         ) as mock_notify:
             await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
 
-        assert mock_kmlock.lock_state == LockState.LOCKED
+        assert mock_kmlock.lock_state == LockState.UNLOCKED
         mock_kmlock.autolock_timer.start.assert_called_once_with(duration=300)
         mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
         mock_notify.assert_not_called()
@@ -1459,7 +1459,7 @@ class TestLockStateEventHandlers:
         ) as mock_notify:
             await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
 
-        assert mock_kmlock.lock_state == LockState.UNLOCKED
+        assert mock_kmlock.lock_state == LockState.LOCKED
         mock_kmlock.autolock_timer.cancel.assert_called_once()
         mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
         mock_notify.assert_not_called()
