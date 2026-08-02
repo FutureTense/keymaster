@@ -535,9 +535,6 @@ async def test_async_setup_entry_setup_success_false(hass) -> None:
 async def test_async_setup_entry_registers_strategy_resource(
     hass,
     lock_kwikset_910,
-    mock_zwavejs_get_usercodes,
-    mock_zwavejs_clear_usercode,
-    mock_zwavejs_set_usercode,
     integration,
 ) -> None:
     """Test that async_setup_entry calls async_register_strategy_resource."""
