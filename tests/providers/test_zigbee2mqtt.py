@@ -164,14 +164,14 @@ class TestConnect:
 
     async def test_connect_success_rename_device(self, provider, mock_hass):
         """Test that device rename behavior handles identifiers and name fallbacks."""
-        # 1. With zigbee2mqtt identifier: renaming name does NOT change topics
+        # 1. With device_entry.name set, base_topic reflects the device's friendly name
         await connect_provider(provider, mock_hass)
         assert provider.base_topic == "zigbee2mqtt/my_lock"
 
         device_entry = provider.device_registry.async_get.return_value
         device_entry.name = "new_lock_name"
 
-        assert provider.base_topic == "zigbee2mqtt/my_lock"
+        assert provider.base_topic == "zigbee2mqtt/new_lock_name"
 
         # 2. Without zigbee2mqtt identifier: renaming name DOES change topics
         device_entry.identifiers = {("mqtt", "some_other_id")}
@@ -990,3 +990,40 @@ class TestCoverageExtra:
             pytest.raises(CustomBaseException),
         ):
             await provider.async_get_usercodes()
+
+    async def test_base_topic_prefers_device_name_over_ieee_identifier(self, provider, mock_hass):
+        """Test that base_topic prefers device_entry.name over identifier suffix."""
+        setup_successful_connect(
+            provider,
+            mock_hass,
+            device_name="Front Door Lock",
+            identifiers={("mqtt", "zigbee2mqtt_0x000d6f001933df17")},
+        )
+        assert provider.base_topic == "zigbee2mqtt/Front Door Lock"
+
+    async def test_async_handle_action_with_action_source_name(self, provider):
+        """Test _async_handle_action handling action: unlock with action_source_name: keypad."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        payload = {
+            "action": "unlock",
+            "action_source": 0,
+            "action_source_name": "keypad",
+            "action_user": 1,
+        }
+        await provider._async_handle_action("unlock", 1, payload)
+        callback.assert_called_once_with(1, "Unlocked via Keypad", 1)
+
+    async def test_async_handle_action_with_action_source_lock(self, provider):
+        """Test _async_handle_action handling action: lock with action_source: 0."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        payload = {
+            "action": "lock",
+            "action_source": 0,
+            "action_user": 2,
+        }
+        await provider._async_handle_action("lock", 2, payload)
+        callback.assert_called_once_with(2, "Keypad Lock", 5)
