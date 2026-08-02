@@ -3768,3 +3768,61 @@ async def test_create_listeners_with_event(hass: HomeAssistant) -> None:
 
     # The existing listeners in the list should be cleared out since event is not None
     assert mock_unsub not in lock.listeners
+
+
+async def test_handle_provider_lock_event_prioritizes_event_label(hass: HomeAssistant) -> None:
+    """Test that _handle_provider_lock_event trusts explicit event_label over entity state mismatch."""
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+
+    # Set lock entity state to locked in state machine
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+
+    with patch.object(coordinator, "_lock_unlocked", new_callable=AsyncMock) as mock_unlocked:
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=1,
+            event_label="Unlocked via Keypad",
+            action_code=1,
+        )
+        mock_unlocked.assert_called_once_with(
+            kmlock=kmlock,
+            code_slot_num=1,
+            source="event",
+            event_label="Unlocked via Keypad",
+            action_code=1,
+        )
+
+
+async def test_handle_lock_state_change_syncs_push_provider_lock_state(
+    hass: HomeAssistant,
+) -> None:
+    """Test that _handle_lock_state_change syncs kmlock.lock_state for push providers."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    event = Event("state_changed", data=event_data)
+
+    await coordinator._handle_lock_state_change(kmlock, event)
+    assert kmlock.lock_state == LockState.UNLOCKED
