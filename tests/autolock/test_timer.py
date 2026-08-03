@@ -329,7 +329,7 @@ async def test_cancel_does_not_orphan_fire_armed_during_await(hass, store, kmloc
             await gate.wait()
         await original_cancel()
 
-    first.cancel = gated_cancel  # type: ignore[method-assign]
+    first.cancel = gated_cancel
 
     cancel_task = asyncio.create_task(timer.cancel())
     await asyncio.sleep(0)  # let cancel() reach the await
