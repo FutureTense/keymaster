@@ -1567,6 +1567,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             action=self._timer_triggered,
         )
         await kmlock.autolock_timer.recover()
+        if (
+            kmlock.lock_state == LockState.UNLOCKED
+            and kmlock.autolock_enabled
+            and not kmlock.autolock_timer.is_running
+        ):
+            # Already unlocked at startup: no unlocked transition will arrive
+            # to arm the timer, so arm it from the state we adopted.
+            await kmlock.autolock_timer.start(duration=self.autolock_duration_seconds(kmlock))
         if kmlock.autolock_timer.is_running:
             self.async_schedule_global_notification()
 

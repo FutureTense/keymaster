@@ -131,7 +131,11 @@ class AutolockTimer:
     async def cancel(self) -> None:
         """Cancel the timer. Idempotent. Awaits in-flight callback."""
         if self._scheduled is not None:
-            await self._scheduled.cancel()
+            scheduled = self._scheduled
+            await scheduled.cancel()
+            if self._scheduled is not scheduled:
+                # A start() interleaved with the await and owns the timer now.
+                return
             self._scheduled = None
         if self._state == TimerState.ACTIVE:
             self._entry = None
