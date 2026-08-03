@@ -1041,6 +1041,28 @@ class TestCoverageExtra:
         await provider._async_handle_action("keypad_lock", 2, "not a dict")
         callback.assert_called_once_with(2, "Keypad Lock", 5)
 
+    async def test_async_handle_action_ignores_non_keypad_source(self, provider):
+        """Test that RF/app-sourced unlock does not raise a keypad event."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        payload = {
+            "action": "unlock",
+            "action_source": 1,
+            "action_source_name": "rf",
+            "action_user": 1,
+        }
+        await provider._async_handle_action("unlock", 1, payload)
+        callback.assert_not_called()
+
+    async def test_async_handle_action_ignores_bare_action_without_source(self, provider):
+        """Test that a bare unlock with no source information is not attributed."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        await provider._async_handle_action("unlock", 1, {"action": "unlock", "action_user": 1})
+        callback.assert_not_called()
+
     async def test_base_topic_prefers_name_by_user(self, provider, mock_hass):
         """Test that base_topic prefers device_entry.name_by_user when set."""
         setup_successful_connect(
