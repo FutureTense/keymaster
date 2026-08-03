@@ -1063,8 +1063,8 @@ class TestCoverageExtra:
         await provider._async_handle_action("unlock", 1, {"action": "unlock", "action_user": 1})
         callback.assert_not_called()
 
-    async def test_base_topic_prefers_name_by_user(self, provider, mock_hass):
-        """Test that base_topic prefers device_entry.name_by_user when set."""
+    async def test_base_topic_ignores_name_by_user(self, provider, mock_hass):
+        """Test that an HA-side rename (name_by_user) does not change the topic."""
         setup_successful_connect(
             provider,
             mock_hass,
@@ -1073,7 +1073,7 @@ class TestCoverageExtra:
         )
         device_entry = provider.device_registry.async_get.return_value
         device_entry.name_by_user = "Custom User Name"
-        assert provider.base_topic == "zigbee2mqtt/Custom User Name"
+        assert provider.base_topic == "zigbee2mqtt/Front Door Lock"
 
     async def test_base_topic_fallback_to_identifier_when_device_name_empty(
         self, provider, mock_hass

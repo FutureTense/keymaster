@@ -79,9 +79,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         if not device_entry:
             return None
 
-        # Prefer device_entry.name_by_user / device_entry.name if set to a string
-        if isinstance(device_entry.name_by_user, str) and device_entry.name_by_user:
-            return f"zigbee2mqtt/{device_entry.name_by_user}"
+        # Prefer device_entry.name if set to a string
         if isinstance(device_entry.name, str) and device_entry.name:
             return f"zigbee2mqtt/{device_entry.name}"
 
