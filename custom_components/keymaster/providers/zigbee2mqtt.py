@@ -423,7 +423,8 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         if not isinstance(slot_num, int):
             return
 
-        payload = payload or {}
+        if not isinstance(payload, dict):
+            payload = {}
         action_source_name = payload.get("action_source_name")
         action_source = payload.get("action_source")
         is_keypad = (

@@ -1028,6 +1028,19 @@ class TestCoverageExtra:
         await provider._async_handle_action("lock", 2, payload)
         callback.assert_called_once_with(2, "Keypad Lock", 5)
 
+    async def test_async_handle_action_with_non_dict_payload(self, provider):
+        """Test _async_handle_action handles non-dict payloads without crashing."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        # Pass invalid payload types (None, list, int)
+        await provider._async_handle_action("keypad_unlock", 1, None)
+        callback.assert_called_once_with(1, "Unlocked via Keypad", 1)
+        callback.reset_mock()
+
+        await provider._async_handle_action("keypad_lock", 2, "not a dict")
+        callback.assert_called_once_with(2, "Keypad Lock", 5)
+
     async def test_base_topic_prefers_name_by_user(self, provider, mock_hass):
         """Test that base_topic prefers device_entry.name_by_user when set."""
         setup_successful_connect(
