@@ -3828,3 +3828,43 @@ async def test_handle_lock_state_change_syncs_push_provider_lock_state(
 
     await coordinator._handle_lock_state_change(kmlock, event)
     assert kmlock.lock_state == LockState.UNLOCKED
+    assert coordinator._last_unlock_code_slot["entry_1"] == 0
+
+
+@pytest.mark.parametrize(
+    ("supports_push", "provider_obj"),
+    [
+        (False, Mock(supports_push_updates=False)),
+        (False, None),
+    ],
+)
+async def test_handle_lock_state_change_non_push_provider_does_not_sync_state(
+    hass: HomeAssistant, supports_push: bool, provider_obj: Any
+) -> None:
+    """Test that _handle_lock_state_change does not sync kmlock.lock_state for non-push providers."""
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        provider=provider_obj,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    event = Event("state_changed", data=event_data)
+
+    with patch.object(coordinator, "_lock_unlocked", new_callable=AsyncMock) as mock_unlocked:
+        await coordinator._handle_lock_state_change(kmlock, event)
+        mock_unlocked.assert_called_once_with(
+            kmlock=kmlock,
+            source="state_change",
+            event_label="Manual Unlock",
+        )
+        # Lock state should remain LOCKED as it wasn't mutated by state_change for non-push provider
+        assert kmlock.lock_state == LockState.LOCKED
