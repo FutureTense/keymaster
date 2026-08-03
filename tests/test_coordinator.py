@@ -3778,7 +3778,9 @@ async def test_handle_provider_lock_event_prioritizes_event_label(hass: HomeAssi
         lock_entity_id="lock.front_door",
         keymaster_config_entry_id="entry_1",
     )
-    kmlock.lock_state = LockState.LOCKED
+    # Stale tracked state: entity reports LOCKED while our cache says UNLOCKED,
+    # so `state_changed` is True and would otherwise override the label.
+    kmlock.lock_state = LockState.UNLOCKED
     coordinator.kmlocks["entry_1"] = kmlock
 
     # Set lock entity state to locked in state machine

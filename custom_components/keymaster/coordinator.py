@@ -923,15 +923,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         #   back to `new_state` in that case would drop the event.
         # - If the label is ambiguous, fall back to new_state.
         label_lower = event_label.lower() if event_label else ""
-        state_changed = (
-            new_state in (LockState.LOCKED, LockState.UNLOCKED) and new_state != kmlock.lock_state
-        )
-        if state_changed:
-            inferred_action = new_state
-        elif "unlock" in label_lower:
+        if "unlock" in label_lower:
             inferred_action = LockState.UNLOCKED
         elif "lock" in label_lower and "jam" not in label_lower:
             inferred_action = LockState.LOCKED
+        elif new_state in (LockState.LOCKED, LockState.UNLOCKED) and new_state != kmlock.lock_state:
+            inferred_action = new_state
         else:
             inferred_action = new_state
 
