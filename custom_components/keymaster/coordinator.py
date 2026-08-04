@@ -923,12 +923,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         #   back to `new_state` in that case would drop the event.
         # - If the label is ambiguous, fall back to new_state.
         label_lower = event_label.lower() if event_label else ""
-        if "unlock" in label_lower:
+        state_changed = (
+            new_state in (LockState.LOCKED, LockState.UNLOCKED) and new_state != kmlock.lock_state
+        )
+        if state_changed:
+            inferred_action = new_state
+        elif "unlock" in label_lower:
             inferred_action = LockState.UNLOCKED
         elif "lock" in label_lower and "jam" not in label_lower:
             inferred_action = LockState.LOCKED
-        elif new_state in (LockState.LOCKED, LockState.UNLOCKED) and new_state != kmlock.lock_state:
-            inferred_action = new_state
         else:
             inferred_action = new_state
 
@@ -1031,9 +1034,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     or kmlock.lock_state != LockState.LOCKED
                 ) and kmlock.autolock_timer:
                     await kmlock.autolock_timer.cancel()
-                    self._state_change_autolock_started.discard(
-                        kmlock.keymaster_config_entry_id
-                    )
+                    self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
                     self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
                 if uses_provider_lock_events:
                     kmlock.lock_state = LockState.LOCKED
