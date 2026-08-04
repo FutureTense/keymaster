@@ -250,6 +250,7 @@ class KeymasterLock:
         self.door_notifications = old.door_notifications
         self.retry_lock = old.retry_lock
         self.pending_retry_lock = old.pending_retry_lock
+        self.child_config_entry_ids = list(old.child_config_entry_ids)
         if not self.code_slots or not old.code_slots:
             # Log loudly: silent code-slot loss would drop the user's
             # PINs/schedules without any signal until they notice codes

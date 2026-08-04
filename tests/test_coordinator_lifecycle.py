@@ -41,6 +41,7 @@ def mock_coordinator(hass):
     coordinator._update_listeners = AsyncMock()
     coordinator._setup_timer = AsyncMock()
     coordinator.async_refresh = AsyncMock()
+    coordinator.async_refresh_lock = AsyncMock()
     coordinator._initial_setup_done_event.set()  # Don't block
     return coordinator
 
@@ -218,6 +219,97 @@ async def test_multi_entry_startup_entities_initialize_available(
             entity_id
             for entity_id in entity_ids
             if hass.states.get(entity_id).state == STATE_UNAVAILABLE
+        ]
+
+    assert unavailable_by_entry == {entry.entry_id: [] for entry in entries}
+
+
+async def test_restart_startup_uses_scoped_entry_refreshes(
+    hass: HomeAssistant,
+) -> None:
+    """Test restart setup does not run one full all-lock refresh per entry."""
+    entries = [_make_startup_entry(hass, index) for index in range(5)]
+    stored_locks = {
+        entry.entry_id: KeymasterLock(
+            lock_name=entry.data[CONF_LOCK_NAME],
+            lock_entity_id=entry.data[CONF_LOCK_ENTITY_ID],
+            keymaster_config_entry_id=entry.entry_id,
+            number_of_code_slots=entry.data[CONF_SLOTS],
+            starting_code_slot=entry.data[CONF_START],
+            code_slots={1: KeymasterCodeSlot(number=1)},
+        )
+        for entry in entries
+    }
+    full_refresh_calls = 0
+    scoped_refresh_calls = 0
+    update_lock_data_calls = 0
+    original_async_refresh = KeymasterCoordinator.async_refresh
+    original_async_refresh_lock = KeymasterCoordinator.async_refresh_lock
+    original_update_lock_data = KeymasterCoordinator._update_lock_data
+
+    async def count_full_refresh(self: KeymasterCoordinator) -> None:
+        nonlocal full_refresh_calls
+        full_refresh_calls += 1
+        await original_async_refresh(self)
+
+    async def count_scoped_refresh(
+        self: KeymasterCoordinator,
+        entry_id: str,
+    ) -> set[str]:
+        nonlocal scoped_refresh_calls
+        scoped_refresh_calls += 1
+        return await original_async_refresh_lock(self, entry_id)
+
+    async def count_update_lock_data(
+        self: KeymasterCoordinator,
+        keymaster_config_entry_id: str,
+    ) -> None:
+        nonlocal update_lock_data_calls
+        update_lock_data_calls += 1
+        await original_update_lock_data(self, keymaster_config_entry_id)
+
+    with (
+        patch.object(
+            KeymasterCoordinator, "_async_load_data", AsyncMock(return_value=stored_locks)
+        ),
+        patch.object(KeymasterCoordinator, "async_refresh", count_full_refresh),
+        patch.object(KeymasterCoordinator, "async_refresh_lock", count_scoped_refresh),
+        patch.object(KeymasterCoordinator, "_update_lock_data", count_update_lock_data),
+        patch(
+            "custom_components.keymaster.coordinator.create_provider",
+            side_effect=_startup_provider_factory,
+        ),
+        patch("custom_components.keymaster.async_generate_lovelace", new_callable=AsyncMock),
+        patch(
+            "custom_components.keymaster.async_update_large_lock_repair_issue",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.keymaster.async_update_all_large_lock_repair_issues",
+            new_callable=AsyncMock,
+        ),
+    ):
+        for entry in entries:
+            if entry.state is ConfigEntryState.NOT_LOADED:
+                assert await hass.config_entries.async_setup(entry.entry_id)
+
+        await hass.async_block_till_done()
+
+    assert full_refresh_calls == 1
+    assert scoped_refresh_calls == len(entries)
+    assert update_lock_data_calls <= len(entries) * 2
+
+    entity_registry = er.async_get(hass)
+    unavailable_by_entry: dict[str, list[str]] = {}
+    for entry in entries:
+        unavailable_by_entry[entry.entry_id] = [
+            registry_entry.entity_id
+            for registry_entry in er.async_entries_for_config_entry(
+                entity_registry,
+                entry.entry_id,
+            )
+            if hass.states.get(registry_entry.entity_id) is not None
+            and hass.states.get(registry_entry.entity_id).state == STATE_UNAVAILABLE
         ]
 
     assert unavailable_by_entry == {entry.entry_id: [] for entry in entries}
@@ -879,7 +971,7 @@ async def test_async_refresh_lock_unchanged_lock_is_not_dirty(hass) -> None:
     dirty = await coordinator.async_refresh_lock("entry_1")
 
     assert dirty == set()
-    coordinator._async_save_data.assert_awaited_once()
+    coordinator._async_save_data.assert_not_awaited()
     assert coordinator.data == coordinator.kmlocks
     await coordinator.async_shutdown()
 
@@ -904,6 +996,30 @@ async def test_async_refresh_lock_folds_child_dirty_ids(hass) -> None:
     await coordinator.async_shutdown()
 
 
+async def test_async_refresh_lock_syncs_parent_when_refreshing_child(hass) -> None:
+    """Test child refresh also propagates parent settings back to the child tree."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["parent_entry"] = _make_lock("parent_entry", "parent_lock")
+    child_lock = _make_lock("child_entry", "child_lock")
+    child_lock.parent_config_entry_id = "parent_entry"
+    coordinator.kmlocks["child_entry"] = child_lock
+    coordinator._update_lock_data = AsyncMock()
+    coordinator._sync_child_locks = AsyncMock(side_effect=[set(), {"child_entry"}])
+    coordinator._async_save_data = AsyncMock()
+    coordinator._schedule_quick_refresh_if_needed = AsyncMock()
+    coordinator._update_door_and_lock_state = AsyncMock()
+
+    dirty = await coordinator.async_refresh_lock("child_entry")
+
+    assert dirty == {"child_entry"}
+    assert [args.args[0] for args in coordinator._sync_child_locks.await_args_list] == [
+        "child_entry",
+        "parent_entry",
+    ]
+    await coordinator.async_shutdown()
+
+
 async def test_async_refresh_lock_cancels_debounce_and_reports_sync_status_dirty(hass) -> None:
     """Test single-lock refresh cancels debounced refresh and reports sync status changes."""
     coordinator = KeymasterCoordinator(hass)
@@ -918,8 +1034,12 @@ async def test_async_refresh_lock_cancels_debounce_and_reports_sync_status_dirty
     coordinator._async_save_data = AsyncMock()
     coordinator._schedule_quick_refresh_if_needed = AsyncMock()
 
-    async def update_door_and_lock_state(trigger_actions_if_changed: bool = False) -> None:
+    async def update_door_and_lock_state(
+        trigger_actions_if_changed: bool = False,
+        entry_ids: object = None,
+    ) -> None:
         assert trigger_actions_if_changed is True
+        assert entry_ids is None
         lock.lock_state = "locked"
 
     coordinator._update_door_and_lock_state = update_door_and_lock_state
@@ -930,6 +1050,49 @@ async def test_async_refresh_lock_cancels_debounce_and_reports_sync_status_dirty
     cancel_debounced_refresh.assert_called_once()
     assert coordinator._cancel_debounced_refresh is None
     assert coordinator._sync_status_counter == 0
+    await coordinator.async_shutdown()
+
+
+async def test_async_refresh_lock_health_transition_notifies_all_locks(hass) -> None:
+    """Test scoped refresh keeps global manager health mirrored to every lock."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
+    lock_coordinator_1 = coordinator.async_get_lock_coordinator("entry_1")
+    lock_coordinator_2 = coordinator.async_get_lock_coordinator("entry_2")
+    listener_1 = MagicMock()
+    listener_2 = MagicMock()
+    lock_coordinator_1.async_add_listener(listener_1)
+    lock_coordinator_2.async_add_listener(listener_2)
+    coordinator._update_lock_data = AsyncMock(side_effect=RuntimeError("refresh failed"))
+    coordinator._async_save_data = AsyncMock()
+    coordinator._schedule_quick_refresh_if_needed = AsyncMock()
+
+    dirty = await coordinator.async_refresh_lock("entry_1")
+    await asyncio.sleep(0)
+
+    assert dirty == set()
+    assert coordinator.last_update_success is False
+    assert lock_coordinator_1.last_update_success is False
+    assert lock_coordinator_2.last_update_success is False
+    listener_1.assert_called_once()
+    listener_2.assert_called_once()
+
+    listener_1.reset_mock()
+    listener_2.reset_mock()
+    coordinator._update_lock_data = AsyncMock()
+    coordinator._sync_child_locks = AsyncMock(return_value=set())
+
+    dirty = await coordinator.async_refresh_lock("entry_1")
+    await asyncio.sleep(0)
+
+    assert dirty == set()
+    assert coordinator.last_update_success is True
+    assert lock_coordinator_1.last_update_success is True
+    assert lock_coordinator_2.last_update_success is True
+    listener_1.assert_called_once()
+    listener_2.assert_called_once()
     await coordinator.async_shutdown()
 
 
@@ -1069,8 +1232,12 @@ async def test_async_refresh_all_locks_reports_sync_status_dirty(hass) -> None:
     coordinator._async_save_data = AsyncMock()
     coordinator._schedule_quick_refresh_if_needed = AsyncMock()
 
-    async def update_door_and_lock_state(trigger_actions_if_changed: bool = False) -> None:
+    async def update_door_and_lock_state(
+        trigger_actions_if_changed: bool = False,
+        entry_ids: object = None,
+    ) -> None:
         assert trigger_actions_if_changed is True
+        assert entry_ids is None
         lock.lock_state = "locked"
 
     coordinator._update_door_and_lock_state = update_door_and_lock_state
@@ -1255,7 +1422,8 @@ async def test_add_lock_new(mock_coordinator, mock_lock):
     mock_coordinator._update_door_and_lock_state.assert_called_once()
     mock_coordinator._update_listeners.assert_called_once_with(mock_lock)
     mock_coordinator._setup_timer.assert_called_once_with(mock_lock)
-    mock_coordinator.async_refresh.assert_called_once()
+    mock_coordinator.async_refresh.assert_not_called()
+    mock_coordinator.async_refresh_lock.assert_awaited_once_with("test_entry")
 
 
 async def test_add_lock_existing_update(mock_coordinator, mock_lock):
@@ -1476,6 +1644,7 @@ async def test_update_lock_unsubscribes_old_listeners(hass):
     coordinator._rebuild_lock_relationships = AsyncMock()
     coordinator._update_door_and_lock_state = AsyncMock()
     coordinator.async_refresh = AsyncMock()
+    coordinator.async_refresh_lock = AsyncMock()
 
     old_lock = KeymasterLock(
         lock_name="test_lock",
@@ -1517,6 +1686,7 @@ async def test_update_lock_inherits_notifications(hass):
     coordinator._rebuild_lock_relationships = AsyncMock()
     coordinator._update_door_and_lock_state = AsyncMock()
     coordinator.async_refresh = AsyncMock()
+    coordinator.async_refresh_lock = AsyncMock()
 
     old_lock = KeymasterLock(
         lock_name="test_lock",
