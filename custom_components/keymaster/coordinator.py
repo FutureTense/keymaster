@@ -226,6 +226,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._pending_failed_refresh = False
         self._notify_handle: asyncio.Handle | None = None
         self._refresh_dirty_entry_ids: set[str] | None = None
+        self._active_refresh_count = 0
         self._refresh_previous_update_success: bool | None = None
         self._externally_dirty_entry_ids: set[str] = set()
         self._refresh_keepalive_unsub: Callable[[], None] | None = None
@@ -278,13 +279,23 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if self._deferred_notifications_shutting_down:
             return
 
+        dirty_entry_ids = self._refresh_dirty_entry_ids
+        self._refresh_dirty_entry_ids = set()
         if (
             self._refresh_previous_update_success is not None
             and self._refresh_previous_update_success != self.last_update_success
-        ) or self._refresh_dirty_entry_ids is None:
+        ) or dirty_entry_ids is None:
             self.async_schedule_all_lock_notifications()
         else:
-            self.async_schedule_keymaster_notifications(self._refresh_dirty_entry_ids)
+            self.async_schedule_keymaster_notifications(dirty_entry_ids)
+
+    def _record_refresh_dirty_entry_ids(self, dirty_entry_ids: set[str]) -> None:
+        """Add refresh dirty entry IDs without dropping overlapping refresh results."""
+        if self._refresh_dirty_entry_ids is None:
+            self._refresh_dirty_entry_ids = set(dirty_entry_ids)
+            return
+
+        self._refresh_dirty_entry_ids.update(dirty_entry_ids)
 
     @callback
     def _push_lock_coordinator_update(
@@ -390,9 +401,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         raise_on_entry_error: bool = False,
     ) -> None:
         """Refresh data while deferring listener fan-out."""
+        if self._active_refresh_count == 0:
+            self._refresh_dirty_entry_ids = None
+            self._refresh_previous_update_success = self.last_update_success
+        self._active_refresh_count += 1
         self._defer_refresh_listener_updates = True
-        self._refresh_dirty_entry_ids = None
-        self._refresh_previous_update_success = self.last_update_success
         try:
             await super()._async_refresh(
                 log_failures=log_failures,
@@ -401,13 +414,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 raise_on_entry_error=raise_on_entry_error,
             )
         finally:
-            self._defer_refresh_listener_updates = False
-            if (
-                (self._pending_notify_entry_ids or self._pending_notify_all_entry_ids)
-                and self._notify_handle is None
-                and not self._deferred_notifications_shutting_down
-            ):
-                self._schedule_pending_keymaster_notifications()
+            self._active_refresh_count -= 1
+            if self._active_refresh_count == 0:
+                self._defer_refresh_listener_updates = False
+                if (
+                    (self._pending_notify_entry_ids or self._pending_notify_all_entry_ids)
+                    and self._notify_handle is None
+                    and not self._deferred_notifications_shutting_down
+                ):
+                    self._schedule_pending_keymaster_notifications()
 
     @callback
     def async_update_listeners(self) -> None:
@@ -2324,7 +2339,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update all keymaster locks."""
-        self._refresh_dirty_entry_ids = await self.async_refresh_all_locks()
+        self._record_refresh_dirty_entry_ids(await self.async_refresh_all_locks())
         return dict(self.kmlocks)
 
     async def _clear_pending_quick_refresh(self) -> None:

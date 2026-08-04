@@ -509,6 +509,79 @@ async def test_refresh_completion_notifies_only_dirty_lock_coordinator(hass) -> 
     await coordinator.async_shutdown()
 
 
+async def test_overlapping_refreshes_union_dirty_lock_notifications(hass) -> None:
+    """Test overlapping refreshes do not drop dirty entry IDs."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
+    lock_coordinator_1 = coordinator.async_get_lock_coordinator("entry_1")
+    lock_coordinator_2 = coordinator.async_get_lock_coordinator("entry_2")
+    listener_1 = MagicMock()
+    listener_2 = MagicMock()
+    lock_coordinator_1.async_add_listener(listener_1)
+    lock_coordinator_2.async_add_listener(listener_2)
+    first_recorded = asyncio.Event()
+    second_recorded = asyncio.Event()
+    refresh_calls = 0
+
+    async def update_data() -> dict[str, KeymasterLock]:
+        nonlocal refresh_calls
+        refresh_calls += 1
+        if refresh_calls == 1:
+            coordinator._record_refresh_dirty_entry_ids({"entry_1"})
+            first_recorded.set()
+            await second_recorded.wait()
+        else:
+            coordinator._record_refresh_dirty_entry_ids({"entry_2"})
+            second_recorded.set()
+        return dict(coordinator.kmlocks)
+
+    coordinator._async_update_data = update_data
+
+    refresh_1 = asyncio.create_task(coordinator._async_refresh())
+    await first_recorded.wait()
+    refresh_2 = asyncio.create_task(coordinator._async_refresh())
+    await second_recorded.wait()
+    await refresh_2
+    await refresh_1
+    await asyncio.sleep(0)
+
+    listener_1.assert_called_once()
+    listener_2.assert_called_once()
+    assert coordinator._refresh_dirty_entry_ids == set()
+    await coordinator.async_shutdown()
+
+
+async def test_refresh_completion_without_dirty_record_notifies_all_lock_coordinators(
+    hass,
+) -> None:
+    """Test an unknown refresh dirty set falls back to all-lock notifications."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
+    lock_coordinator_1 = coordinator.async_get_lock_coordinator("entry_1")
+    lock_coordinator_2 = coordinator.async_get_lock_coordinator("entry_2")
+    listener_1 = MagicMock()
+    listener_2 = MagicMock()
+    lock_coordinator_1.async_add_listener(listener_1)
+    lock_coordinator_2.async_add_listener(listener_2)
+
+    async def update_data() -> dict[str, KeymasterLock]:
+        return dict(coordinator.kmlocks)
+
+    coordinator._async_update_data = update_data
+
+    await coordinator._async_refresh()
+    await asyncio.sleep(0)
+
+    listener_1.assert_called_once()
+    listener_2.assert_called_once()
+    assert coordinator._refresh_dirty_entry_ids == set()
+    await coordinator.async_shutdown()
+
+
 async def test_refresh_health_recovery_notifies_all_lock_coordinators(hass) -> None:
     """Test all lock coordinators are notified when manager refresh health recovers."""
     coordinator = KeymasterCoordinator(hass)
@@ -622,7 +695,7 @@ async def test_refresh_health_recovery_notifies_all_with_mixed_dirtiness(hass) -
     await coordinator.async_refresh()
     await asyncio.sleep(0)
 
-    assert coordinator._refresh_dirty_entry_ids == {"dirty_entry"}
+    assert coordinator._refresh_dirty_entry_ids == set()
     assert dirty_coordinator.last_update_success is True
     assert clean_coordinator.last_update_success is True
     dirty_listener.assert_called_once()
