@@ -6,7 +6,6 @@ import asyncio
 import base64
 from collections.abc import Callable, Iterable, MutableMapping
 import contextlib
-import copy
 from dataclasses import fields, is_dataclass
 from datetime import datetime as dt, time as dt_time, timedelta
 import functools
@@ -587,7 +586,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock = self.kmlocks.get(entry_id)
         if kmlock is None:
             return None
-        return copy.deepcopy(self._sanitized_lock_dict(self._kmlocks_to_dict(kmlock)))
+        return self._sanitized_lock_dict(self._kmlocks_to_dict(kmlock))
 
     async def async_remove_data(self) -> None:
         """Remove stored data."""

@@ -1151,7 +1151,7 @@ async def test_scoped_set_pin_notification_and_data_mirror(hass) -> None:
     await coordinator.async_shutdown()
 
 
-async def test_lock_snapshot_is_deep_sanitized_copy(hass) -> None:
+async def test_lock_snapshot_is_sanitized_copy(hass) -> None:
     """Test lock snapshots do not alias mutable live lock state."""
     coordinator = KeymasterCoordinator(hass)
     lock = _make_lock("entry_1", "lock_1")
