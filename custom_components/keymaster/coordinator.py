@@ -586,8 +586,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         entry_ids: Iterable[str] | None = None,
     ) -> None:
         """Save data to Store."""
-        if not hasattr(self, "_save_lock"):
-            self._save_lock = asyncio.Lock()
         async with self._save_lock:
             await self._async_save_data_locked(kmlocks, entry_ids=entry_ids)
 

@@ -1,5 +1,6 @@
 """Tests for the Coordinator."""
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime as dt, time as dt_time, timedelta
@@ -2373,6 +2374,7 @@ class TestStorageAndMigration:
             coord.hass = mock_hass
             coord.kmlocks = {}
             coord._prev_kmlocks_dict = {}
+            coord._save_lock = asyncio.Lock()
             coord._store = AsyncMock()
             return coord
 
