@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import MutableMapping
 from datetime import datetime as dt, timedelta
 import functools
+import inspect
 import logging
 from pathlib import Path
 import sys
@@ -268,6 +269,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     )
 
     config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
+    flush_pending_save = getattr(
+        coordinator,
+        "async_flush_pending_save_data_if_setup_complete",
+        None,
+    )
+    if inspect.iscoroutinefunction(flush_pending_save):
+        await flush_pending_save()
 
     return True
 

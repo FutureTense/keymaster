@@ -274,6 +274,7 @@ async def test_parent_title_resolves_to_parent_entry_id_during_setup(hass):
         mock_coordinator.last_update_success = True
         mock_coordinator.kmlocks = {}
         mock_coordinator.add_lock = AsyncMock()
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
 
         mock_device_registry = Mock()
         mock_device_registry.async_get_or_create = Mock()
@@ -324,6 +325,7 @@ async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(has
         mock_coordinator.last_update_success = True
         mock_coordinator.add_lock = AsyncMock()
         mock_coordinator.kmlocks = {entry.entry_id: Mock()}
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
 
         mock_device_registry = Mock()
         mock_device_registry.async_get_or_create = Mock()

@@ -255,10 +255,18 @@ async def test_restart_startup_uses_scoped_entry_refreshes(
     async def count_scoped_refresh(
         self: KeymasterCoordinator,
         entry_id: str,
+        *,
+        advance_sync_status: bool = True,
+        defer_save: bool = False,
     ) -> set[str]:
         nonlocal scoped_refresh_calls
         scoped_refresh_calls += 1
-        return await original_async_refresh_lock(self, entry_id)
+        return await original_async_refresh_lock(
+            self,
+            entry_id,
+            advance_sync_status=advance_sync_status,
+            defer_save=defer_save,
+        )
 
     async def count_update_lock_data(
         self: KeymasterCoordinator,
@@ -369,6 +377,25 @@ async def test_lock_coordinator_removal_manages_refresh_keepalive(hass):
     assert coordinator._refresh_keepalive_unsub is not None
 
     await coordinator.async_shutdown()
+
+
+async def test_shutdown_flushes_pending_save_data(hass) -> None:
+    """Test coalesced save work is flushed before coordinator shutdown."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks["entry_1"] = KeymasterLock(
+        lock_name="lock_1",
+        lock_entity_id="lock.lock_1",
+        keymaster_config_entry_id="entry_1",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    coordinator._store.async_save = AsyncMock()
+
+    coordinator.async_schedule_save_data(["entry_1"])
+
+    await coordinator.async_shutdown()
+
+    coordinator._store.async_save.assert_awaited_once()
+    assert coordinator._pending_save_entry_ids == set()
 
 
 async def test_keymaster_notification_bridge_notifies_only_lock(hass):
@@ -1104,8 +1131,15 @@ async def test_async_refresh_lock_reraises_task_cancellation(hass) -> None:
     started = asyncio.Event()
     unblock = asyncio.Event()
 
-    async def refresh_lock_data(entry_id: str) -> set[str]:
+    async def refresh_lock_data(
+        entry_id: str,
+        *,
+        advance_sync_status: bool = True,
+        defer_save: bool = False,
+    ) -> set[str]:
         assert entry_id == "entry_1"
+        assert advance_sync_status is True
+        assert defer_save is False
         started.set()
         await unblock.wait()
         return set()
@@ -1132,8 +1166,15 @@ async def test_async_refresh_lock_flushes_notifications_scheduled_during_refresh
     listener = MagicMock()
     lock_coordinator.async_add_listener(listener)
 
-    async def refresh_lock_data(entry_id: str) -> set[str]:
+    async def refresh_lock_data(
+        entry_id: str,
+        *,
+        advance_sync_status: bool = True,
+        defer_save: bool = False,
+    ) -> set[str]:
         assert entry_id == "entry_1"
+        assert advance_sync_status is True
+        assert defer_save is False
         coordinator.async_schedule_keymaster_notifications(["entry_1"])
         assert coordinator._notify_handle is None
         return set()
@@ -1476,7 +1517,11 @@ async def test_add_lock_new(mock_coordinator, mock_lock):
     mock_coordinator._update_listeners.assert_called_once_with(mock_lock)
     mock_coordinator._setup_timer.assert_called_once_with(mock_lock)
     mock_coordinator.async_refresh.assert_not_called()
-    mock_coordinator.async_refresh_lock.assert_awaited_once_with("test_entry")
+    mock_coordinator.async_refresh_lock.assert_awaited_once_with(
+        "test_entry",
+        advance_sync_status=False,
+        defer_save=True,
+    )
 
 
 async def test_add_lock_existing_update(mock_coordinator, mock_lock):
@@ -1751,6 +1796,9 @@ async def test_update_lock_inherits_notifications(hass):
     old_lock.starting_code_slot = 1
     old_lock.lock_notifications = True
     old_lock.door_notifications = True
+    old_lock.connected = True
+    old_lock.provider = MagicMock()
+    old_lock.lock_config_entry_id = "lock_config_entry"
 
     new_lock = KeymasterLock(
         lock_name="test_lock",
@@ -1772,6 +1820,9 @@ async def test_update_lock_inherits_notifications(hass):
     # Verify new_lock inherits the values from old_lock
     assert coordinator.kmlocks["entry_id"].lock_notifications is True
     assert coordinator.kmlocks["entry_id"].door_notifications is True
+    assert coordinator.kmlocks["entry_id"].connected is True
+    assert coordinator.kmlocks["entry_id"].provider is old_lock.provider
+    assert coordinator.kmlocks["entry_id"].lock_config_entry_id == "lock_config_entry"
 
 
 async def test_update_lock_rebuilds_relationships_when_parent_changes(hass):
