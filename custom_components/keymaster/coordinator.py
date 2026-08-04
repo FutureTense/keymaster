@@ -243,6 +243,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._externally_dirty_entry_ids: set[str] = set()
         self._refresh_keepalive_unsub: Callable[[], None] | None = None
         self._pending_save_entry_ids: set[str] = set()
+        self._save_lock = asyncio.Lock()
         self._stop_unsub: Callable[[], None] | None = None
         self._shutdown_complete = False
 
@@ -262,6 +263,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     async def _async_homeassistant_stop(self, _: Event) -> None:
         """Flush pending work when Home Assistant stops."""
+        self._stop_unsub = None
         await self.async_shutdown()
 
     @callback
@@ -280,7 +282,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
         _LOGGER.debug("Shutting down keymaster coordinator")
         if self._stop_unsub is not None:
-            self._stop_unsub()
+            with contextlib.suppress(ValueError):
+                self._stop_unsub()
             self._stop_unsub = None
         await self.async_flush_pending_save_data()
         self._deferred_notifications_shutting_down = True
@@ -583,6 +586,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         entry_ids: Iterable[str] | None = None,
     ) -> None:
         """Save data to Store."""
+        if not hasattr(self, "_save_lock"):
+            self._save_lock = asyncio.Lock()
+        async with self._save_lock:
+            await self._async_save_data_locked(kmlocks, entry_ids=entry_ids)
+
+    async def _async_save_data_locked(
+        self,
+        kmlocks: MutableMapping[str, KeymasterLock] | None = None,
+        *,
+        entry_ids: Iterable[str] | None = None,
+    ) -> None:
+        """Save data to Store while the save lock is held."""
         if kmlocks is None:
             kmlocks = self.kmlocks
 

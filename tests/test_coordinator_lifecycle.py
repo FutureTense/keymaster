@@ -1,6 +1,7 @@
 """Tests for KeymasterCoordinator lifecycle methods."""
 
 import asyncio
+import copy
 from datetime import datetime as dt, timedelta
 import logging
 from types import SimpleNamespace
@@ -401,6 +402,8 @@ async def test_shutdown_flushes_pending_save_data(hass) -> None:
 
 async def test_failed_pending_save_is_retried_without_advancing_cache(hass) -> None:
     """Test failed coalesced saves remain pending and do not poison the saved cache."""
+    # This asserts Keymaster's ordering contract for propagated exceptions. HA Store currently
+    # swallows some lower-level write failures; see FutureTense/keymaster#704.
     coordinator = KeymasterCoordinator(hass)
     coordinator.kmlocks["entry_1"] = KeymasterLock(
         lock_name="lock_1",
@@ -451,6 +454,101 @@ async def test_pending_save_scheduled_during_flush_is_not_dropped(hass) -> None:
 
     assert coordinator._store.async_save.await_count == 2
     assert coordinator._pending_save_entry_ids == set()
+    await coordinator.async_shutdown()
+
+
+async def test_overlapping_partial_saves_preserve_both_changes(hass) -> None:
+    """Test concurrent partial saves merge against the latest persisted cache."""
+    coordinator = KeymasterCoordinator(hass)
+    lock_a = KeymasterLock(
+        lock_name="lock_a",
+        lock_entity_id="lock.lock_a",
+        keymaster_config_entry_id="entry_a",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    lock_b = KeymasterLock(
+        lock_name="lock_b",
+        lock_entity_id="lock.lock_b",
+        keymaster_config_entry_id="entry_b",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    coordinator.kmlocks = {"entry_a": lock_a, "entry_b": lock_b}
+    coordinator._store.async_save = AsyncMock()
+    await coordinator._async_save_data()
+    coordinator._store.async_save.reset_mock()
+
+    persisted_configs: list[dict[str, object]] = []
+    save_b_task: asyncio.Task[None] | None = None
+    first_save = True
+
+    async def save_data(config: dict[str, object]) -> None:
+        nonlocal first_save, save_b_task
+        if first_save:
+            first_save = False
+            lock_b.lock_state = "locked"
+            save_b_task = asyncio.create_task(coordinator._async_save_data(entry_ids={"entry_b"}))
+            await asyncio.sleep(0)
+        persisted_configs.append(copy.deepcopy(config))
+
+    coordinator._store.async_save = AsyncMock(side_effect=save_data)
+    lock_a.lock_state = "locked"
+
+    await coordinator._async_save_data(entry_ids={"entry_a"})
+    assert save_b_task is not None
+    await save_b_task
+
+    final_config = persisted_configs[-1]
+    assert final_config["entry_a"]["lock_state"] == "locked"  # type: ignore[index]
+    assert final_config["entry_b"]["lock_state"] == "locked"  # type: ignore[index]
+    assert coordinator._prev_kmlocks_dict == final_config
+    await coordinator.async_shutdown()
+
+
+async def test_full_save_delete_racing_partial_save_wins(hass) -> None:
+    """Test full saves do not have deletions reverted by in-flight partial saves."""
+    coordinator = KeymasterCoordinator(hass)
+    lock_a = KeymasterLock(
+        lock_name="lock_a",
+        lock_entity_id="lock.lock_a",
+        keymaster_config_entry_id="entry_a",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    lock_b = KeymasterLock(
+        lock_name="lock_b",
+        lock_entity_id="lock.lock_b",
+        keymaster_config_entry_id="entry_b",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    coordinator.kmlocks = {"entry_a": lock_a, "entry_b": lock_b}
+    coordinator._store.async_save = AsyncMock()
+    await coordinator._async_save_data()
+    coordinator._store.async_save.reset_mock()
+
+    persisted_configs: list[dict[str, object]] = []
+    full_save_task: asyncio.Task[None] | None = None
+    first_save = True
+
+    async def save_data(config: dict[str, object]) -> None:
+        nonlocal first_save, full_save_task
+        if first_save:
+            first_save = False
+            coordinator.kmlocks.pop("entry_b")
+            full_save_task = asyncio.create_task(coordinator._async_save_data())
+            await asyncio.sleep(0)
+        persisted_configs.append(copy.deepcopy(config))
+
+    coordinator._store.async_save = AsyncMock(side_effect=save_data)
+    lock_a.lock_state = "locked"
+
+    await coordinator._async_save_data(entry_ids={"entry_a"})
+    assert full_save_task is not None
+    await full_save_task
+
+    final_config = persisted_configs[-1]
+    assert "entry_b" not in final_config
+    assert "entry_b" not in coordinator._prev_kmlocks_dict
+    assert final_config["entry_a"]["lock_state"] == "locked"  # type: ignore[index]
+    assert coordinator._prev_kmlocks_dict == final_config
     await coordinator.async_shutdown()
 
 

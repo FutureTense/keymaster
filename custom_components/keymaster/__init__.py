@@ -73,6 +73,22 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 _LARGE_LOCK_REPAIR_SWEEP_DONE = "large_lock_repair_sweep_done"
 
 
+async def _flush_pending_save_after_setup(
+    coordinator: KeymasterCoordinator,
+    *,
+    setup_failed: bool,
+) -> None:
+    """Flush deferred setup save work without masking setup failures."""
+    if not setup_failed:
+        await coordinator.async_flush_pending_save_data_if_setup_complete()
+        return
+
+    try:
+        await coordinator.async_flush_pending_save_data_if_setup_complete()
+    except Exception:
+        _LOGGER.exception("Failed to flush pending keymaster save data after setup error")
+
+
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     """Set up integration."""
     hass.data.setdefault(DOMAIN, {"resources": False})
@@ -226,6 +242,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     except asyncio.exceptions.CancelledError as e:
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
+    setup_failed = False
     try:
         lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
         hass.data[DOMAIN].setdefault(LOCK_COORDINATORS, {})[config_entry.entry_id] = (
@@ -271,8 +288,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         )
 
         config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
+    except BaseException:
+        setup_failed = True
+        raise
     finally:
-        await coordinator.async_flush_pending_save_data_if_setup_complete()
+        await _flush_pending_save_after_setup(coordinator, setup_failed=setup_failed)
 
     return True
 
