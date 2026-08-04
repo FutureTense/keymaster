@@ -243,7 +243,7 @@ class KeymasterLock:
         """
         self.lock_state = old.lock_state
         self.door_state = old.door_state
-        if self.lock_entity_id == old.lock_entity_id:
+        if self.lock_entity_id == old.lock_entity_id and old.connected and old.provider:
             self.lock_config_entry_id = old.lock_config_entry_id
             self.connected = old.connected
             self.provider = old.provider

@@ -593,6 +593,7 @@ async def test_setup_uses_loaded_provider_connection_status(hass: Any) -> None:
         kmlocks={},
         add_lock=AsyncMock(side_effect=add_lock_with_provider),
         async_get_lock_coordinator=Mock(),
+        async_flush_pending_save_data_if_setup_complete=AsyncMock(),
     )
     hass.data[DOMAIN][COORDINATOR] = fake_coordinator
 
@@ -629,6 +630,7 @@ async def test_setup_continues_when_add_lock_times_out(
         kmlocks={},
         add_lock=AsyncMock(side_effect=asyncio.CancelledError()),
         async_get_lock_coordinator=Mock(),
+        async_flush_pending_save_data_if_setup_complete=AsyncMock(),
     )
     caplog.set_level(logging.ERROR)
 

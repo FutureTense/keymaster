@@ -339,6 +339,42 @@ async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(has
     assert add_lock_kwargs["update"] is True
 
 
+async def test_setup_failure_after_add_lock_flushes_pending_save(hass):
+    """Test deferred save work is flushed when post-add setup fails."""
+    entry_data = _build_entry_data("front_door", "lock.front_door")
+    entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=entry_data, version=4)
+    entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+    coordinator = Mock()
+    coordinator.kmlocks = {}
+    coordinator.add_lock = AsyncMock()
+    coordinator.async_get_lock_coordinator = Mock(return_value=Mock())
+    coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
+    hass.data[DOMAIN][COORDINATOR] = coordinator
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.dr.async_get"),
+        patch("custom_components.keymaster.async_update_large_lock_repair_issue"),
+        patch(
+            "custom_components.keymaster.async_update_all_large_lock_repair_issues",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("platform failed"),
+        ),
+        pytest.raises(RuntimeError, match="platform failed"),
+    ):
+        await async_setup_entry(hass, entry)
+
+    coordinator.add_lock.assert_awaited_once()
+    coordinator.async_flush_pending_save_data_if_setup_complete.assert_awaited_once()
+
+
 async def test_unload_vs_remove_lock_preservation(
     hass,
     mock_async_call_later,

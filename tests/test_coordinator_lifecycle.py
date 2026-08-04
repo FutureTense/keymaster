@@ -3,6 +3,7 @@
 import asyncio
 from datetime import datetime as dt, timedelta
 import logging
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -393,6 +394,102 @@ async def test_shutdown_flushes_pending_save_data(hass) -> None:
     coordinator.async_schedule_save_data(["entry_1"])
 
     await coordinator.async_shutdown()
+
+    coordinator._store.async_save.assert_awaited_once()
+    assert coordinator._pending_save_entry_ids == set()
+
+
+async def test_failed_pending_save_is_retried_without_advancing_cache(hass) -> None:
+    """Test failed coalesced saves remain pending and do not poison the saved cache."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks["entry_1"] = KeymasterLock(
+        lock_name="lock_1",
+        lock_entity_id="lock.lock_1",
+        keymaster_config_entry_id="entry_1",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    coordinator._store.async_save = AsyncMock(side_effect=[RuntimeError("disk full"), None])
+
+    coordinator.async_schedule_save_data(["entry_1"])
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        await coordinator.async_flush_pending_save_data()
+
+    assert coordinator._pending_save_entry_ids == {"entry_1"}
+
+    await coordinator.async_flush_pending_save_data()
+
+    assert coordinator._store.async_save.await_count == 2
+    assert coordinator._pending_save_entry_ids == set()
+    await coordinator.async_shutdown()
+
+
+async def test_pending_save_scheduled_during_flush_is_not_dropped(hass) -> None:
+    """Test save work queued during disk I/O is flushed by the same drain loop."""
+    coordinator = KeymasterCoordinator(hass)
+    lock = KeymasterLock(
+        lock_name="lock_1",
+        lock_entity_id="lock.lock_1",
+        keymaster_config_entry_id="entry_1",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    coordinator.kmlocks["entry_1"] = lock
+    scheduled_during_flush = False
+
+    async def save_data(_: dict[str, object]) -> None:
+        nonlocal scheduled_during_flush
+        if not scheduled_during_flush:
+            scheduled_during_flush = True
+            lock.lock_state = "locked"
+            coordinator.async_schedule_save_data(["entry_1"])
+
+    coordinator._store.async_save = AsyncMock(side_effect=save_data)
+
+    coordinator.async_schedule_save_data(["entry_1"])
+
+    await coordinator.async_flush_pending_save_data()
+
+    assert coordinator._store.async_save.await_count == 2
+    assert coordinator._pending_save_entry_ids == set()
+    await coordinator.async_shutdown()
+
+
+async def test_setup_retry_entry_does_not_block_pending_save_flush(hass) -> None:
+    """Test retrying entries do not strand pending saves for loaded entries."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator._async_save_data = AsyncMock()
+    coordinator.async_schedule_save_data(["entry_1"])
+
+    with patch.object(
+        hass.config_entries,
+        "async_entries",
+        return_value=[
+            SimpleNamespace(disabled_by=None, state=ConfigEntryState.LOADED),
+            SimpleNamespace(disabled_by=None, state=ConfigEntryState.SETUP_RETRY),
+        ],
+    ):
+        await coordinator.async_flush_pending_save_data_if_setup_complete()
+
+    coordinator._async_save_data.assert_awaited_once_with(entry_ids={"entry_1"})
+    assert coordinator._pending_save_entry_ids == set()
+    await coordinator.async_shutdown()
+
+
+async def test_homeassistant_stop_flushes_pending_save_data(hass) -> None:
+    """Test the coordinator flushes pending saves on Home Assistant stop."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks["entry_1"] = KeymasterLock(
+        lock_name="lock_1",
+        lock_entity_id="lock.lock_1",
+        keymaster_config_entry_id="entry_1",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+    )
+    coordinator._store.async_save = AsyncMock()
+    coordinator.async_schedule_save_data(["entry_1"])
+
+    hass.bus.async_fire("homeassistant_stop")
+    await hass.async_block_till_done()
 
     coordinator._store.async_save.assert_awaited_once()
     assert coordinator._pending_save_entry_ids == set()
@@ -1120,6 +1217,29 @@ async def test_async_refresh_lock_health_transition_notifies_all_locks(hass) -> 
     assert lock_coordinator_2.last_update_success is True
     listener_1.assert_called_once()
     listener_2.assert_called_once()
+    await coordinator.async_shutdown()
+
+
+async def test_scoped_refresh_keeps_shared_debounce_for_other_dirty_locks(hass) -> None:
+    """Test scoped refresh does not strand another lock's pending debounced refresh."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
+    cancel_debounced_refresh = MagicMock()
+    coordinator._cancel_debounced_refresh = cancel_debounced_refresh
+    coordinator._externally_dirty_entry_ids = {"entry_2"}
+    coordinator._update_lock_data = AsyncMock()
+    coordinator._sync_child_locks = AsyncMock(return_value=set())
+    coordinator._async_save_data = AsyncMock()
+    coordinator._schedule_quick_refresh_if_needed = AsyncMock()
+
+    dirty = await coordinator.async_refresh_lock("entry_1")
+
+    assert dirty == set()
+    assert coordinator._externally_dirty_entry_ids == {"entry_2"}
+    assert coordinator._cancel_debounced_refresh is cancel_debounced_refresh
+    cancel_debounced_refresh.assert_not_called()
     await coordinator.async_shutdown()
 
 

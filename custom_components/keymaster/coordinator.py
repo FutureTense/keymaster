@@ -20,6 +20,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_STATE,
     EVENT_HOMEASSISTANT_STARTED,
+    EVENT_HOMEASSISTANT_STOP,
     SERVICE_LOCK,
     STATE_CLOSED,
     STATE_OFF,
@@ -242,6 +243,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._externally_dirty_entry_ids: set[str] = set()
         self._refresh_keepalive_unsub: Callable[[], None] | None = None
         self._pending_save_entry_ids: set[str] = set()
+        self._stop_unsub: Callable[[], None] | None = None
+        self._shutdown_complete = False
 
         super().__init__(
             hass,
@@ -252,6 +255,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._timer_store = TimerStore(hass)
+        self._stop_unsub = hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STOP,
+            self._async_homeassistant_stop,
+        )
+
+    async def _async_homeassistant_stop(self, _: Event) -> None:
+        """Flush pending work when Home Assistant stops."""
+        await self.async_shutdown()
 
     @callback
     def async_cancel_pending_notifications(self) -> None:
@@ -265,7 +276,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self) -> None:
         """Shutdown the coordinator and cancel any pending timers."""
+        if self._shutdown_complete:
+            return
         _LOGGER.debug("Shutting down keymaster coordinator")
+        if self._stop_unsub is not None:
+            self._stop_unsub()
+            self._stop_unsub = None
         await self.async_flush_pending_save_data()
         self._deferred_notifications_shutting_down = True
         self.async_cancel_pending_notifications()
@@ -280,6 +296,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._cancel_debounced_refresh()
             self._cancel_debounced_refresh = None
         await super().async_shutdown()
+        self._shutdown_complete = True
 
     @callback
     def async_schedule_all_lock_notifications(self) -> None:
@@ -591,8 +608,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if config == self._prev_kmlocks_dict:
             _LOGGER.debug("[save_data] No changes to kmlocks. Not saving.")
             return
-        self._prev_kmlocks_dict = dict(config)
         await self._store.async_save(config)
+        self._prev_kmlocks_dict = dict(config)
         _LOGGER.debug("[save_data] Data saved to storage")
 
     @callback
@@ -604,12 +621,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     async def async_flush_pending_save_data(self) -> None:
         """Flush any coalesced entry-scoped save work."""
-        if not self._pending_save_entry_ids:
-            return
-
-        entry_ids = set(self._pending_save_entry_ids)
-        await self._async_save_data(entry_ids=entry_ids)
-        self._pending_save_entry_ids.difference_update(entry_ids)
+        while self._pending_save_entry_ids:
+            entry_ids = set(self._pending_save_entry_ids)
+            self._pending_save_entry_ids.difference_update(entry_ids)
+            try:
+                await self._async_save_data(entry_ids=entry_ids)
+            except BaseException:
+                self._pending_save_entry_ids.update(
+                    entry_id for entry_id in entry_ids if entry_id in self.kmlocks
+                )
+                raise
 
     async def async_flush_pending_save_data_if_setup_complete(self) -> None:
         """Flush coalesced setup saves once every Keymaster entry has reached setup."""
@@ -618,7 +639,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         setup_states = {
             ConfigEntryState.LOADED,
+            ConfigEntryState.MIGRATION_ERROR,
+            ConfigEntryState.SETUP_ERROR,
             ConfigEntryState.SETUP_IN_PROGRESS,
+            ConfigEntryState.SETUP_RETRY,
         }
         entries = self.hass.config_entries.async_entries(DOMAIN)
         if all(entry.disabled_by is not None or entry.state in setup_states for entry in entries):
@@ -2406,15 +2430,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if advance_sync_status:
             self._sync_status_counter += 1
         await self._clear_pending_quick_refresh()
-        if self._cancel_debounced_refresh:
-            self._cancel_debounced_refresh()
-            self._cancel_debounced_refresh = None
         dirty = (
             {entry_id}
             if entry_id in self.kmlocks and entry_id in self._externally_dirty_entry_ids
             else set()
         )
         self._externally_dirty_entry_ids.discard(entry_id)
+        if self._cancel_debounced_refresh and not self._externally_dirty_entry_ids:
+            self._cancel_debounced_refresh()
+            self._cancel_debounced_refresh = None
         before = self._lock_snapshot(entry_id)
         await self._update_lock_data(entry_id)
         if before != self._lock_snapshot(entry_id):
