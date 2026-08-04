@@ -61,6 +61,20 @@ class KeymasterEntity(CoordinatorEntity[KeymasterLockCoordinator]):
         super().__init__(self.coordinator, self._attr_unique_id)
         # _LOGGER.debug(f"[Entity init] Entity created: {self.name}, device_info: {self.device_info}")
 
+    async def async_added_to_hass(self) -> None:
+        """Apply current coordinator data after the entity is added."""
+        await super().async_added_to_hass()
+
+        if (
+            self.entity_id is None
+            or self.coordinator.data is None
+            or not self.coordinator.last_update_success
+            or self._kmlock is None
+        ):
+            return
+
+        self._handle_coordinator_update()
+
     @property
     def available(self) -> bool:
         """Return whether entity is available."""

@@ -8,9 +8,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.keymaster.const import DOMAIN, SYNC_STATUS_THRESHOLD
+from custom_components.keymaster.const import (
+    CONF_ADVANCED_DATE_RANGE,
+    CONF_ADVANCED_DAY_OF_WEEK,
+    CONF_DOOR_SENSOR_ENTITY_ID,
+    CONF_HIDE_PINS,
+    CONF_LOCK_ENTITY_ID,
+    CONF_LOCK_NAME,
+    CONF_SLOTS,
+    CONF_START,
+    DOMAIN,
+    SYNC_STATUS_THRESHOLD,
+)
 from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
+from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +69,77 @@ def _make_lock(entry_id: str = "test_entry", lock_name: str = "test_lock") -> Ke
     )
 
 
+class StartupProvider(BaseLockProvider):
+    """Provider used by startup regression coverage."""
+
+    @property
+    def domain(self) -> str:
+        """Return the provider domain."""
+        return "test"
+
+    @property
+    def supports_connection_status(self) -> bool:
+        """Return whether the provider exposes connection status."""
+        return True
+
+    async def async_connect(self) -> bool:
+        """Connect successfully."""
+        self._connected = True
+        return True
+
+    async def async_is_connected(self) -> bool:
+        """Return current connection status."""
+        return self._connected
+
+    async def async_get_usercodes(self) -> list[CodeSlot]:
+        """Return no configured user codes."""
+        return []
+
+    async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
+        """Set a user code successfully."""
+        return True
+
+    async def async_clear_usercode(self, slot_num: int) -> bool:
+        """Clear a user code successfully."""
+        return True
+
+
+def _make_startup_entry(hass: HomeAssistant, index: int) -> MockConfigEntry:
+    """Create a startup-style Keymaster config entry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=f"Entry {index}",
+        data={
+            CONF_ADVANCED_DATE_RANGE: False,
+            CONF_ADVANCED_DAY_OF_WEEK: False,
+            CONF_DOOR_SENSOR_ENTITY_ID: None,
+            CONF_HIDE_PINS: False,
+            CONF_LOCK_ENTITY_ID: f"lock.entry_{index}",
+            CONF_LOCK_NAME: f"entry_{index}",
+            CONF_SLOTS: 1,
+            CONF_START: 1,
+        },
+        version=4,
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+def _startup_provider_factory(
+    hass: HomeAssistant,
+    lock_entity_id: str,
+    keymaster_config_entry: MockConfigEntry,
+) -> StartupProvider:
+    """Create a connected startup provider."""
+    return StartupProvider(
+        hass=hass,
+        lock_entity_id=lock_entity_id,
+        keymaster_config_entry=keymaster_config_entry,
+        device_registry=dr.async_get(hass),
+        entity_registry=er.async_get(hass),
+    )
+
+
 async def test_lock_coordinator_created_once_with_current_lock(hass):
     """Test manager creates one lock coordinator per entry with current data."""
     entry = MockConfigEntry(domain=DOMAIN, entry_id="test_entry", title="Test Lock", data={})
@@ -86,6 +173,54 @@ async def test_lock_coordinator_created_with_manager_health_state(hass):
     assert lock_coordinator.last_update_success is False
     assert lock_coordinator.last_exception is refresh_error
     await coordinator.async_shutdown()
+
+
+async def test_multi_entry_startup_entities_initialize_available(
+    hass: HomeAssistant,
+) -> None:
+    """Test every startup entry applies existing coordinator data when entities are added."""
+    entries = [_make_startup_entry(hass, index) for index in range(5)]
+
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.create_provider",
+            side_effect=_startup_provider_factory,
+        ),
+        patch("custom_components.keymaster.async_generate_lovelace", new_callable=AsyncMock),
+        patch(
+            "custom_components.keymaster.async_update_large_lock_repair_issue",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.keymaster.async_update_all_large_lock_repair_issues",
+            new_callable=AsyncMock,
+        ),
+    ):
+        for entry in entries:
+            if entry.state is ConfigEntryState.NOT_LOADED:
+                assert await hass.config_entries.async_setup(entry.entry_id)
+
+        await hass.async_block_till_done()
+
+    entity_registry = er.async_get(hass)
+    unavailable_by_entry: dict[str, list[str]] = {}
+    for entry in entries:
+        entity_ids = [
+            registry_entry.entity_id
+            for registry_entry in er.async_entries_for_config_entry(
+                entity_registry,
+                entry.entry_id,
+            )
+            if hass.states.get(registry_entry.entity_id) is not None
+        ]
+        assert entity_ids
+        unavailable_by_entry[entry.entry_id] = [
+            entity_id
+            for entity_id in entity_ids
+            if hass.states.get(entity_id).state == STATE_UNAVAILABLE
+        ]
+
+    assert unavailable_by_entry == {entry.entry_id: [] for entry in entries}
 
 
 async def test_lock_coordinator_refresh_same_lock_does_not_notify(hass):
