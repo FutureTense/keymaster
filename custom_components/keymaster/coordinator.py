@@ -2398,8 +2398,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         except asyncio.CancelledError as err:
             self.last_exception = err
             self.last_update_success = False
-            if (task := asyncio.current_task()) and task.cancelling() > 0:
-                raise
+            raise
         except Exception as exc:
             self.last_exception = exc
             self.last_update_success = False

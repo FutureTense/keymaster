@@ -1375,6 +1375,29 @@ async def test_async_refresh_lock_reraises_task_cancellation(hass) -> None:
     await coordinator.async_shutdown()
 
 
+async def test_async_refresh_lock_reraises_internal_cancellation(hass) -> None:
+    """Test scoped refresh does not swallow CancelledError from refresh work."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+
+    async def refresh_lock_data(
+        entry_id: str,
+        *,
+        advance_sync_status: bool = True,
+        defer_save: bool = False,
+    ) -> set[str]:
+        raise asyncio.CancelledError
+
+    coordinator._async_refresh_lock_data = refresh_lock_data
+
+    with pytest.raises(asyncio.CancelledError):
+        await coordinator.async_refresh_lock("entry_1")
+
+    assert coordinator.last_update_success is False
+    await coordinator.async_shutdown()
+
+
 async def test_async_refresh_lock_flushes_notifications_scheduled_during_refresh(hass) -> None:
     """Test scoped refresh flushes notification work queued during deferral."""
     coordinator = KeymasterCoordinator(hass)
