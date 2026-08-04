@@ -1096,6 +1096,59 @@ async def test_async_refresh_lock_health_transition_notifies_all_locks(hass) -> 
     await coordinator.async_shutdown()
 
 
+async def test_async_refresh_lock_reraises_task_cancellation(hass) -> None:
+    """Test scoped refresh preserves task cancellation semantics."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    started = asyncio.Event()
+    unblock = asyncio.Event()
+
+    async def refresh_lock_data(entry_id: str) -> set[str]:
+        assert entry_id == "entry_1"
+        started.set()
+        await unblock.wait()
+        return set()
+
+    coordinator._async_refresh_lock_data = refresh_lock_data
+
+    refresh_task = asyncio.create_task(coordinator.async_refresh_lock("entry_1"))
+    await started.wait()
+    refresh_task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await refresh_task
+
+    assert coordinator.last_update_success is False
+    await coordinator.async_shutdown()
+
+
+async def test_async_refresh_lock_flushes_notifications_scheduled_during_refresh(hass) -> None:
+    """Test scoped refresh flushes notification work queued during deferral."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    lock_coordinator = coordinator.async_get_lock_coordinator("entry_1")
+    listener = MagicMock()
+    lock_coordinator.async_add_listener(listener)
+
+    async def refresh_lock_data(entry_id: str) -> set[str]:
+        assert entry_id == "entry_1"
+        coordinator.async_schedule_keymaster_notifications(["entry_1"])
+        assert coordinator._notify_handle is None
+        return set()
+
+    coordinator._async_refresh_lock_data = refresh_lock_data
+
+    dirty = await coordinator.async_refresh_lock("entry_1")
+
+    assert dirty == set()
+    assert coordinator._notify_handle is not None
+    await asyncio.sleep(0)
+    listener.assert_called_once()
+    await coordinator.async_shutdown()
+
+
 async def test_external_dirty_entry_is_drained_into_refresh_dirty_set(hass) -> None:
     """Test externally dirty entries are returned once and then cleared."""
     coordinator = KeymasterCoordinator(hass)
@@ -1719,3 +1772,38 @@ async def test_update_lock_inherits_notifications(hass):
     # Verify new_lock inherits the values from old_lock
     assert coordinator.kmlocks["entry_id"].lock_notifications is True
     assert coordinator.kmlocks["entry_id"].door_notifications is True
+
+
+async def test_update_lock_rebuilds_relationships_when_parent_changes(hass):
+    """Test _update_lock rebuilds parent/child links when relationship config changes."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator._rebuild_lock_relationships = AsyncMock()
+    coordinator._update_door_and_lock_state = AsyncMock()
+    coordinator._update_listeners = AsyncMock()
+    coordinator.async_refresh_lock = AsyncMock()
+
+    old_lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_id",
+        parent_config_entry_id="old_parent",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+        number_of_code_slots=1,
+        starting_code_slot=1,
+    )
+    new_lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id="entry_id",
+        parent_config_entry_id="new_parent",
+        code_slots={1: KeymasterCodeSlot(number=1)},
+        number_of_code_slots=1,
+        starting_code_slot=1,
+    )
+    coordinator.kmlocks["entry_id"] = old_lock
+
+    assert await coordinator._update_lock(new_lock)
+
+    coordinator._rebuild_lock_relationships.assert_awaited_once()
+    await coordinator.async_shutdown()
