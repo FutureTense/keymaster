@@ -244,6 +244,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._refresh_keepalive_unsub: Callable[[], None] | None = None
         self._pending_save_entry_ids: set[str] = set()
         self._save_lock = asyncio.Lock()
+        self._setup_completed_entry_ids: set[str] = set()
         self._stop_unsub: Callable[[], None] | None = None
         self._shutdown_complete = False
 
@@ -651,8 +652,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 )
                 raise
 
-    async def async_flush_pending_save_data_if_setup_complete(self) -> None:
+    async def async_flush_pending_save_data_if_setup_complete(
+        self,
+        completed_entry_id: str | None = None,
+    ) -> None:
         """Flush coalesced setup saves once every Keymaster entry has reached setup."""
+        if completed_entry_id is not None:
+            self._setup_completed_entry_ids.add(completed_entry_id)
         if not self._pending_save_entry_ids:
             return
 
@@ -660,11 +666,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             ConfigEntryState.LOADED,
             ConfigEntryState.MIGRATION_ERROR,
             ConfigEntryState.SETUP_ERROR,
-            ConfigEntryState.SETUP_IN_PROGRESS,
             ConfigEntryState.SETUP_RETRY,
         }
         entries = self.hass.config_entries.async_entries(DOMAIN)
-        if all(entry.disabled_by is not None or entry.state in setup_states for entry in entries):
+        if all(
+            entry.disabled_by is not None
+            or entry.state in setup_states
+            or entry.entry_id in self._setup_completed_entry_ids
+            for entry in entries
+        ):
             await self.async_flush_pending_save_data()
 
     def _sanitized_lock_dict(self, lock: object) -> dict[str, Any]:
@@ -1742,6 +1752,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def add_lock(self, kmlock: KeymasterLock, update: bool = False) -> None:
         """Add a new kmlock."""
         await self._initial_setup_done_event.wait()
+        self._setup_completed_entry_ids.discard(kmlock.keymaster_config_entry_id)
         if kmlock.keymaster_config_entry_id in self.kmlocks:
             if update or self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete:
                 if self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete:

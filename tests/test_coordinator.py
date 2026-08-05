@@ -2261,6 +2261,29 @@ class TestDictToKmlocksConversion:
         # masked_code_slots is init=False, so gets its default (empty set)
         assert result.masked_code_slots == set()
 
+    def test_reload_inherits_missing_child_config_entry_ids_as_empty_list(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Stored locks missing child IDs reload without inheriting None."""
+        stored_lock = {
+            "lock_name": "Test",
+            "lock_entity_id": "lock.test",
+            "keymaster_config_entry_id": "entry_1",
+            "code_slots": {},
+        }
+        old_lock = coordinator_for_conversion._dict_to_kmlocks(stored_lock, KeymasterLock)
+        new_lock = KeymasterLock(
+            lock_name="Test",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry_1",
+            code_slots={},
+        )
+
+        new_lock.inherit_state_from(old_lock)
+
+        assert new_lock.child_config_entry_ids == []
+
 
 class TestKmlocksToDict:
     """Test cases for _kmlocks_to_dict conversion method."""

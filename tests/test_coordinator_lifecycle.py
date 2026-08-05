@@ -667,6 +667,35 @@ async def test_setup_retry_entry_does_not_block_pending_save_flush(hass) -> None
     await coordinator.async_shutdown()
 
 
+async def test_setup_in_progress_entries_do_not_trigger_early_save_flush(hass) -> None:
+    """Test concurrent in-progress entries do not shrink setup save coalescing."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator._async_save_data = AsyncMock()
+    coordinator.async_schedule_save_data(["entry_1"])
+
+    entries = [
+        SimpleNamespace(
+            entry_id=f"entry_{index}",
+            disabled_by=None,
+            state=ConfigEntryState.SETUP_IN_PROGRESS,
+        )
+        for index in range(1, 4)
+    ]
+    with patch.object(hass.config_entries, "async_entries", return_value=entries):
+        await coordinator.async_flush_pending_save_data_if_setup_complete("entry_1")
+        await coordinator.async_flush_pending_save_data_if_setup_complete("entry_2")
+
+        coordinator._async_save_data.assert_not_awaited()
+        assert coordinator._pending_save_entry_ids == {"entry_1"}
+
+        await coordinator.async_flush_pending_save_data_if_setup_complete("entry_3")
+
+    coordinator._async_save_data.assert_awaited_once_with(entry_ids={"entry_1"})
+    assert coordinator._pending_save_entry_ids == set()
+    await coordinator.async_shutdown()
+
+
 async def test_homeassistant_stop_flushes_pending_save_data(hass) -> None:
     """Test the coordinator flushes pending saves on Home Assistant stop."""
     coordinator = KeymasterCoordinator(hass)

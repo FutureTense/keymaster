@@ -372,7 +372,9 @@ async def test_setup_failure_after_add_lock_flushes_pending_save(hass):
         await async_setup_entry(hass, entry)
 
     coordinator.add_lock.assert_awaited_once()
-    coordinator.async_flush_pending_save_data_if_setup_complete.assert_awaited_once()
+    coordinator.async_flush_pending_save_data_if_setup_complete.assert_awaited_once_with(
+        entry.entry_id
+    )
 
 
 async def test_setup_failure_flush_error_does_not_mask_original_error(hass):

@@ -75,16 +75,17 @@ _LARGE_LOCK_REPAIR_SWEEP_DONE = "large_lock_repair_sweep_done"
 
 async def _flush_pending_save_after_setup(
     coordinator: KeymasterCoordinator,
+    entry_id: str,
     *,
     setup_failed: bool,
 ) -> None:
     """Flush deferred setup save work without masking setup failures."""
     if not setup_failed:
-        await coordinator.async_flush_pending_save_data_if_setup_complete()
+        await coordinator.async_flush_pending_save_data_if_setup_complete(entry_id)
         return
 
     try:
-        await coordinator.async_flush_pending_save_data_if_setup_complete()
+        await coordinator.async_flush_pending_save_data_if_setup_complete(entry_id)
     except Exception:
         _LOGGER.exception("Failed to flush pending keymaster save data after setup error")
 
@@ -292,7 +293,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         setup_failed = True
         raise
     finally:
-        await _flush_pending_save_after_setup(coordinator, setup_failed=setup_failed)
+        await _flush_pending_save_after_setup(
+            coordinator,
+            config_entry.entry_id,
+            setup_failed=setup_failed,
+        )
 
     return True
 
