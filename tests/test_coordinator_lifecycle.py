@@ -26,7 +26,7 @@ from custom_components.keymaster.coordinator import KeymasterCoordinator, Keymas
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
@@ -455,6 +455,42 @@ async def test_shutdown_cleanup_runs_before_flush_cancellation_propagates(hass) 
 
     await coordinator.async_shutdown()
     coordinator.async_flush_pending_save_data.assert_awaited_once()
+
+
+async def test_shutdown_unregisters_stop_listener_before_flush_await(hass) -> None:
+    """Test HA stop cannot re-enter shutdown while pending-save flush is awaiting."""
+    coordinator = KeymasterCoordinator(hass)
+    flush_started = asyncio.Event()
+    finish_flush = asyncio.Event()
+    original_stop_unsub = coordinator._stop_unsub
+    flush_calls = 0
+
+    async def flush_pending_save_data() -> None:
+        nonlocal flush_calls
+        flush_calls += 1
+        flush_started.set()
+        if flush_calls == 1:
+            await finish_flush.wait()
+
+    coordinator.async_flush_pending_save_data = AsyncMock(side_effect=flush_pending_save_data)
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.async_shutdown",
+        new_callable=AsyncMock,
+    ) as super_shutdown:
+        shutdown_task = asyncio.create_task(coordinator.async_shutdown())
+        await flush_started.wait()
+
+        hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+        finish_flush.set()
+        await shutdown_task
+
+    assert original_stop_unsub is not None
+    coordinator.async_flush_pending_save_data.assert_awaited_once()
+    super_shutdown.assert_awaited_once()
+    assert coordinator._shutdown_complete is True
 
 
 async def test_failed_pending_save_is_retried_without_advancing_cache(hass) -> None:

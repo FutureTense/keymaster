@@ -281,6 +281,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if self._shutdown_complete:
             return
         _LOGGER.debug("Shutting down keymaster coordinator")
+        if self._stop_unsub is not None:
+            with contextlib.suppress(ValueError):
+                self._stop_unsub()
+            self._stop_unsub = None
         try:
             await self.async_flush_pending_save_data()
         except asyncio.CancelledError:
@@ -288,10 +292,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         except Exception:
             _LOGGER.exception("Failed to flush pending keymaster save data during shutdown")
         finally:
-            if self._stop_unsub is not None:
-                with contextlib.suppress(ValueError):
-                    self._stop_unsub()
-                self._stop_unsub = None
             self._deferred_notifications_shutting_down = True
             self.async_cancel_pending_notifications()
             self._lock_coordinators.clear()
