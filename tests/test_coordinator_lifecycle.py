@@ -400,6 +400,63 @@ async def test_shutdown_flushes_pending_save_data(hass) -> None:
     assert coordinator._pending_save_entry_ids == set()
 
 
+async def test_shutdown_cleanup_runs_when_pending_save_flush_fails(hass) -> None:
+    """Test shutdown cleanup still runs after a failed pending-save flush."""
+    coordinator = KeymasterCoordinator(hass)
+    keepalive_unsub = MagicMock()
+    quick_refresh_unsub = MagicMock()
+    debounced_refresh_unsub = MagicMock()
+    notify_handle = MagicMock()
+    coordinator._pending_save_entry_ids = {"entry_1"}
+    coordinator._refresh_keepalive_unsub = keepalive_unsub
+    coordinator._cancel_quick_refresh = quick_refresh_unsub
+    coordinator._cancel_debounced_refresh = debounced_refresh_unsub
+    coordinator._notify_handle = notify_handle
+    coordinator._pending_notify_entry_ids = {"entry_1"}
+    coordinator._lock_coordinators["entry_1"] = MagicMock()
+    coordinator.async_flush_pending_save_data = AsyncMock(side_effect=RuntimeError("flush failed"))
+
+    await coordinator.async_shutdown()
+
+    coordinator.async_flush_pending_save_data.assert_awaited_once()
+    assert coordinator._pending_save_entry_ids == {"entry_1"}
+    notify_handle.cancel.assert_called_once()
+    keepalive_unsub.assert_called_once()
+    quick_refresh_unsub.assert_called_once()
+    debounced_refresh_unsub.assert_called_once()
+    assert coordinator._notify_handle is None
+    assert coordinator._refresh_keepalive_unsub is None
+    assert coordinator._cancel_quick_refresh is None
+    assert coordinator._cancel_debounced_refresh is None
+    assert coordinator._lock_coordinators == {}
+    assert coordinator._shutdown_requested is True
+    assert coordinator._shutdown_complete is True
+
+    await coordinator.async_shutdown()
+    coordinator.async_flush_pending_save_data.assert_awaited_once()
+
+
+async def test_shutdown_cleanup_runs_before_flush_cancellation_propagates(hass) -> None:
+    """Test shutdown cleanup runs before pending-save flush cancellation propagates."""
+    coordinator = KeymasterCoordinator(hass)
+    keepalive_unsub = MagicMock()
+    coordinator._pending_save_entry_ids = {"entry_1"}
+    coordinator._refresh_keepalive_unsub = keepalive_unsub
+    coordinator.async_flush_pending_save_data = AsyncMock(side_effect=asyncio.CancelledError)
+
+    with pytest.raises(asyncio.CancelledError):
+        await coordinator.async_shutdown()
+
+    assert coordinator._pending_save_entry_ids == {"entry_1"}
+    keepalive_unsub.assert_called_once()
+    assert coordinator._refresh_keepalive_unsub is None
+    assert coordinator._shutdown_requested is True
+    assert coordinator._shutdown_complete is True
+
+    await coordinator.async_shutdown()
+    coordinator.async_flush_pending_save_data.assert_awaited_once()
+
+
 async def test_failed_pending_save_is_retried_without_advancing_cache(hass) -> None:
     """Test failed coalesced saves remain pending and do not poison the saved cache."""
     # This asserts Keymaster's ordering contract for propagated exceptions. HA Store currently

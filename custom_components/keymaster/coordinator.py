@@ -281,25 +281,31 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if self._shutdown_complete:
             return
         _LOGGER.debug("Shutting down keymaster coordinator")
-        if self._stop_unsub is not None:
-            with contextlib.suppress(ValueError):
-                self._stop_unsub()
-            self._stop_unsub = None
-        await self.async_flush_pending_save_data()
-        self._deferred_notifications_shutting_down = True
-        self.async_cancel_pending_notifications()
-        self._lock_coordinators.clear()
-        if self._refresh_keepalive_unsub is not None:
-            self._refresh_keepalive_unsub()
-            self._refresh_keepalive_unsub = None
-        if self._cancel_quick_refresh:
-            self._cancel_quick_refresh()
-            self._cancel_quick_refresh = None
-        if self._cancel_debounced_refresh:
-            self._cancel_debounced_refresh()
-            self._cancel_debounced_refresh = None
-        await super().async_shutdown()
-        self._shutdown_complete = True
+        try:
+            await self.async_flush_pending_save_data()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOGGER.exception("Failed to flush pending keymaster save data during shutdown")
+        finally:
+            if self._stop_unsub is not None:
+                with contextlib.suppress(ValueError):
+                    self._stop_unsub()
+                self._stop_unsub = None
+            self._deferred_notifications_shutting_down = True
+            self.async_cancel_pending_notifications()
+            self._lock_coordinators.clear()
+            if self._refresh_keepalive_unsub is not None:
+                self._refresh_keepalive_unsub()
+                self._refresh_keepalive_unsub = None
+            if self._cancel_quick_refresh:
+                self._cancel_quick_refresh()
+                self._cancel_quick_refresh = None
+            if self._cancel_debounced_refresh:
+                self._cancel_debounced_refresh()
+                self._cancel_debounced_refresh = None
+            await super().async_shutdown()
+            self._shutdown_complete = True
 
     @callback
     def async_schedule_all_lock_notifications(self) -> None:
