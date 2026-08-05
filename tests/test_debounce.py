@@ -214,7 +214,7 @@ class TestTimestampRecording:
         mock_coordinator._initial_setup_done_event = Mock()
         mock_coordinator._initial_setup_done_event.wait = AsyncMock()
         mock_coordinator.async_set_updated_data = Mock()
-        mock_coordinator.async_schedule_global_notification = Mock()
+        mock_coordinator.async_schedule_keymaster_notifications = Mock()
 
         result = await KeymasterCoordinator.set_pin_on_lock(mock_coordinator, "entry_1", 1, "5678")
 
@@ -234,7 +234,7 @@ class TestTimestampRecording:
         mock_coordinator._initial_setup_done_event = Mock()
         mock_coordinator._initial_setup_done_event.wait = AsyncMock()
         mock_coordinator.async_set_updated_data = Mock()
-        mock_coordinator.async_schedule_global_notification = Mock()
+        mock_coordinator.async_schedule_keymaster_notifications = Mock()
 
         result = await KeymasterCoordinator.clear_pin_from_lock(mock_coordinator, "entry_1", 1)
 

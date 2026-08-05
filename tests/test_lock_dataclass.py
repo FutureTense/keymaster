@@ -1,6 +1,7 @@
 """Tests for KeymasterLock dataclass integrity."""
 
 from dataclasses import fields
+from typing import Any, cast
 
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
@@ -116,3 +117,49 @@ def test_code_slots_dict_operations():
     assert slot5._lock_ref is not None
     assert slot5._lock_ref() is lock
     assert slots[5] is slot5
+
+
+def test_inherit_state_does_not_carry_provider_identity_to_different_lock_entity():
+    """Test provider identity is only inherited for the same lock entity."""
+    old_lock = KeymasterLock(
+        lock_name="Old Lock",
+        lock_entity_id="lock.old",
+        keymaster_config_entry_id="entry_id",
+        connected=True,
+        lock_config_entry_id="old_lock_config_entry",
+    )
+    old_lock.provider = cast(Any, object())
+    new_lock = KeymasterLock(
+        lock_name="New Lock",
+        lock_entity_id="lock.new",
+        keymaster_config_entry_id="entry_id",
+    )
+
+    new_lock.inherit_state_from(old_lock)
+
+    assert new_lock.connected is False
+    assert new_lock.provider is None
+    assert new_lock.lock_config_entry_id is None
+
+
+def test_inherit_state_does_not_resurrect_disconnected_provider_on_reload():
+    """Test reload recovery starts with a fresh provider after a failed connection."""
+    old_lock = KeymasterLock(
+        lock_name="Old Lock",
+        lock_entity_id="lock.same",
+        keymaster_config_entry_id="entry_id",
+        connected=False,
+        lock_config_entry_id="old_lock_config_entry",
+    )
+    old_lock.provider = cast(Any, object())
+    new_lock = KeymasterLock(
+        lock_name="New Lock",
+        lock_entity_id="lock.same",
+        keymaster_config_entry_id="entry_id",
+    )
+
+    new_lock.inherit_state_from(old_lock)
+
+    assert new_lock.connected is False
+    assert new_lock.provider is None
+    assert new_lock.lock_config_entry_id is None

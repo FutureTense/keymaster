@@ -28,6 +28,7 @@ from custom_components.keymaster.const import (
     LOCK_COORDINATORS,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
+from custom_components.keymaster.lock import KeymasterLock
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.util.dt import utcnow
@@ -153,7 +154,7 @@ async def test_unload_entry(
     assert len(hass.states.async_entity_ids(SENSOR_DOMAIN)) == baseline
 
 
-async def test_unload_entry_preserves_pending_global_notification(hass) -> None:
+async def test_unload_entry_preserves_pending_all_lock_notification(hass) -> None:
     """Test unloading one entry does not drop shared coordinator notifications."""
     entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
     other_entry = MockConfigEntry(
@@ -165,10 +166,15 @@ async def test_unload_entry_preserves_pending_global_notification(hass) -> None:
     entry.add_to_hass(hass)
     other_entry.add_to_hass(hass)
     coordinator = KeymasterCoordinator(hass)
+    coordinator.kmlocks[entry.entry_id] = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.frontdoor",
+        keymaster_config_entry_id=entry.entry_id,
+    )
     listener = Mock()
-    coordinator.async_add_listener(listener)
-    coordinator.async_schedule_global_notification()
-    pending_handle = coordinator._global_notify_handle
+    coordinator.async_get_lock_coordinator(entry.entry_id).async_add_listener(listener)
+    coordinator.async_schedule_all_lock_notifications()
+    pending_handle = coordinator._notify_handle
     assert pending_handle is not None
     hass.data.setdefault(DOMAIN, {})[COORDINATOR] = coordinator
 
@@ -193,7 +199,7 @@ async def test_unload_entry_preserves_pending_global_notification(hass) -> None:
     await hass.async_block_till_done()
 
     listener.assert_called_once()
-    assert not coordinator._pending_global_notification
+    assert not coordinator._pending_notify_all_entry_ids
     await coordinator.async_shutdown()
 
 
@@ -268,6 +274,7 @@ async def test_parent_title_resolves_to_parent_entry_id_during_setup(hass):
         mock_coordinator.last_update_success = True
         mock_coordinator.kmlocks = {}
         mock_coordinator.add_lock = AsyncMock()
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
 
         mock_device_registry = Mock()
         mock_device_registry.async_get_or_create = Mock()
@@ -318,6 +325,7 @@ async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(has
         mock_coordinator.last_update_success = True
         mock_coordinator.add_lock = AsyncMock()
         mock_coordinator.kmlocks = {entry.entry_id: Mock()}
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
 
         mock_device_registry = Mock()
         mock_device_registry.async_get_or_create = Mock()
@@ -329,6 +337,79 @@ async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(has
     assert add_lock_await_args is not None
     add_lock_kwargs = add_lock_await_args.kwargs
     assert add_lock_kwargs["update"] is True
+
+
+async def test_setup_failure_after_add_lock_flushes_pending_save(hass):
+    """Test deferred save work is flushed when post-add setup fails."""
+    entry_data = _build_entry_data("front_door", "lock.front_door")
+    entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=entry_data, version=4)
+    entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+    coordinator = Mock()
+    coordinator.kmlocks = {}
+    coordinator.add_lock = AsyncMock()
+    coordinator.async_get_lock_coordinator = Mock(return_value=Mock())
+    coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
+    hass.data[DOMAIN][COORDINATOR] = coordinator
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.dr.async_get"),
+        patch("custom_components.keymaster.async_update_large_lock_repair_issue"),
+        patch(
+            "custom_components.keymaster.async_update_all_large_lock_repair_issues",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("platform failed"),
+        ),
+        pytest.raises(RuntimeError, match="platform failed"),
+    ):
+        await async_setup_entry(hass, entry)
+
+    coordinator.add_lock.assert_awaited_once()
+    coordinator.async_flush_pending_save_data_if_setup_complete.assert_awaited_once_with(
+        entry.entry_id
+    )
+
+
+async def test_setup_failure_flush_error_does_not_mask_original_error(hass):
+    """Test a failed deferred-save flush does not replace the setup failure."""
+    entry_data = _build_entry_data("front_door", "lock.front_door")
+    entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=entry_data, version=4)
+    entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+    coordinator = Mock()
+    coordinator.kmlocks = {}
+    coordinator.add_lock = AsyncMock()
+    coordinator.async_get_lock_coordinator = Mock(return_value=Mock())
+    coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock(
+        side_effect=RuntimeError("flush failed")
+    )
+    hass.data[DOMAIN][COORDINATOR] = coordinator
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.dr.async_get"),
+        patch("custom_components.keymaster.async_update_large_lock_repair_issue"),
+        patch(
+            "custom_components.keymaster.async_update_all_large_lock_repair_issues",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("platform failed"),
+        ),
+        pytest.raises(RuntimeError, match="platform failed"),
+    ):
+        await async_setup_entry(hass, entry)
 
 
 async def test_unload_vs_remove_lock_preservation(

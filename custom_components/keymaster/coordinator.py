@@ -15,11 +15,12 @@ from pathlib import Path
 from typing import Any, Union, get_args, get_origin
 
 from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_STATE,
     EVENT_HOMEASSISTANT_STARTED,
+    EVENT_HOMEASSISTANT_STOP,
     SERVICE_LOCK,
     STATE_CLOSED,
     STATE_OFF,
@@ -90,6 +91,12 @@ STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.locks"
 
 
+@functools.cache
+def _serializable_dataclass_fields(cls: type) -> tuple[Any, ...]:
+    """Return dataclass fields that are persisted."""
+    return tuple(field for field in fields(cls) if field.init)
+
+
 def _is_masked_code(code: str | None) -> bool:
     """Check if a code appears to be a masked/redacted response from a lock.
 
@@ -105,6 +112,9 @@ def _is_masked_code(code: str | None) -> bool:
 class KeymasterLockCoordinator(DataUpdateCoordinator[KeymasterLock | None]):
     """Entity-facing coordinator for a single Keymaster lock."""
 
+    last_exception: BaseException | None
+    last_update_success: bool
+
     def __init__(self, manager: KeymasterCoordinator, config_entry_id: str) -> None:
         """Initialize the per-lock coordinator."""
         self.manager = manager
@@ -118,6 +128,8 @@ class KeymasterLockCoordinator(DataUpdateCoordinator[KeymasterLock | None]):
             always_update=False,
         )
         self.data = manager.sync_get_lock_by_config_entry_id(config_entry_id)
+        self.last_update_success = manager.last_update_success
+        self.last_exception = getattr(manager, "last_exception", None)
 
     async def _async_update_data(self) -> KeymasterLock | None:
         """Mirror the manager's current lock snapshot."""
@@ -169,7 +181,8 @@ class KeymasterLockCoordinator(DataUpdateCoordinator[KeymasterLock | None]):
 
     async def async_request_debounced_refresh(self) -> None:
         """Request a debounced coordinator refresh."""
-        return await self.manager.async_request_debounced_refresh()
+        self.manager.async_schedule_keymaster_notifications([self.config_entry_id])
+        return await self.manager.async_request_debounced_refresh(self.config_entry_id)
 
     def autolock_duration_seconds(self, kmlock: KeymasterLock) -> int:
         """Compute the autolock duration for a kmlock based on time of day."""
@@ -197,6 +210,9 @@ class KeymasterLockCoordinator(DataUpdateCoordinator[KeymasterLock | None]):
 class KeymasterCoordinator(DataUpdateCoordinator):
     """Coordinator to manage keymaster locks."""
 
+    last_exception: BaseException | None
+    last_update_success: bool
+
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize keymaster Coordinator."""
         self._device_registry: dr.DeviceRegistry = dr.async_get(hass)
@@ -214,16 +230,23 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._state_change_autolock_started: set[str] = set()
         self._consecutive_failures: dict[str, int] = {}
         self._next_retry_time: dict[str, dt] = {}
-        self._pending_global_notification = False
-        self._pending_global_data_update = False
-        self._pending_global_failed_refresh = False
-        self._global_notify_handle: asyncio.Handle | None = None
         self._deferred_notifications_shutting_down = False
         self._defer_refresh_listener_updates = False
         self._lock_coordinators: dict[str, KeymasterLockCoordinator] = {}
         self._pending_notify_entry_ids: set[str] = set()
+        self._pending_notify_all_entry_ids = False
+        self._pending_failed_refresh = False
         self._notify_handle: asyncio.Handle | None = None
+        self._refresh_dirty_entry_ids: set[str] | None = None
+        self._active_refresh_count = 0
+        self._refresh_previous_update_success: bool | None = None
+        self._externally_dirty_entry_ids: set[str] = set()
         self._refresh_keepalive_unsub: Callable[[], None] | None = None
+        self._pending_save_entry_ids: set[str] = set()
+        self._save_lock = asyncio.Lock()
+        self._setup_completed_entry_ids: set[str] = set()
+        self._stop_unsub: Callable[[], None] | None = None
+        self._shutdown_complete = False
 
         super().__init__(
             hass,
@@ -234,126 +257,104 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._timer_store = TimerStore(hass)
+        self._stop_unsub = hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STOP,
+            self._async_homeassistant_stop,
+        )
+
+    async def _async_homeassistant_stop(self, _: Event) -> None:
+        """Flush pending work when Home Assistant stops."""
+        self._stop_unsub = None
+        await self.async_shutdown()
 
     @callback
-    def async_cancel_pending_global_notification(self) -> None:
-        """Cancel pending deferred global notification work."""
-        self._pending_global_notification = False
-        self._pending_global_data_update = False
-        self._pending_global_failed_refresh = False
-        if self._global_notify_handle is not None:
-            self._global_notify_handle.cancel()
-            self._global_notify_handle = None
-
-    async def async_shutdown(self) -> None:
-        """Shutdown the coordinator and cancel any pending timers."""
-        _LOGGER.debug("Shutting down keymaster coordinator")
-        self._deferred_notifications_shutting_down = True
-        self.async_cancel_pending_global_notification()
+    def async_cancel_pending_notifications(self) -> None:
+        """Cancel pending deferred all-lock notification work."""
+        self._pending_notify_entry_ids.clear()
+        self._pending_notify_all_entry_ids = False
+        self._pending_failed_refresh = False
         if self._notify_handle is not None:
             self._notify_handle.cancel()
             self._notify_handle = None
-        self._pending_notify_entry_ids.clear()
-        self._lock_coordinators.clear()
-        if self._refresh_keepalive_unsub is not None:
-            self._refresh_keepalive_unsub()
-            self._refresh_keepalive_unsub = None
-        if self._cancel_quick_refresh:
-            self._cancel_quick_refresh()
-            self._cancel_quick_refresh = None
-        if self._cancel_debounced_refresh:
-            self._cancel_debounced_refresh()
-            self._cancel_debounced_refresh = None
-        await super().async_shutdown()
+
+    async def async_shutdown(self) -> None:
+        """Shutdown the coordinator and cancel any pending timers."""
+        if self._shutdown_complete:
+            return
+        _LOGGER.debug("Shutting down keymaster coordinator")
+        if self._stop_unsub is not None:
+            with contextlib.suppress(ValueError):
+                self._stop_unsub()
+            self._stop_unsub = None
+        try:
+            await self.async_flush_pending_save_data()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOGGER.exception("Failed to flush pending keymaster save data during shutdown")
+        finally:
+            self._deferred_notifications_shutting_down = True
+            self.async_cancel_pending_notifications()
+            self._lock_coordinators.clear()
+            if self._refresh_keepalive_unsub is not None:
+                self._refresh_keepalive_unsub()
+                self._refresh_keepalive_unsub = None
+            if self._cancel_quick_refresh:
+                self._cancel_quick_refresh()
+                self._cancel_quick_refresh = None
+            if self._cancel_debounced_refresh:
+                self._cancel_debounced_refresh()
+                self._cancel_debounced_refresh = None
+            await super().async_shutdown()
+            self._shutdown_complete = True
 
     @callback
-    def async_schedule_global_notification(self) -> None:
-        """Coalesce and defer the current global coordinator notification."""
+    def async_schedule_all_lock_notifications(self) -> None:
+        """Coalesce and defer notification for every per-lock coordinator."""
+        self.async_schedule_keymaster_notifications(self.kmlocks, all_entry_ids=True)
+
+    @callback
+    def _schedule_refresh_notifications(self) -> None:
+        """Schedule deferred refresh-completion per-lock notifications."""
         if self._deferred_notifications_shutting_down:
             return
 
-        self.data = dict(self.kmlocks)
-        self._pending_global_notification = True
-        self._pending_global_data_update = True
-        if not getattr(self, "last_update_success", True):
-            self._pending_global_failed_refresh = True
-        self._schedule_pending_global_notification()
+        dirty_entry_ids = self._refresh_dirty_entry_ids
+        self._refresh_dirty_entry_ids = set()
+        if (
+            self._refresh_previous_update_success is not None
+            and self._refresh_previous_update_success != self.last_update_success
+        ) or dirty_entry_ids is None:
+            self.async_schedule_all_lock_notifications()
+        else:
+            self.async_schedule_keymaster_notifications(dirty_entry_ids)
 
-    @callback
-    def _schedule_pending_global_notification(self) -> None:
-        """Schedule the pending global notification flush."""
-        if self._defer_refresh_listener_updates:
+    def _record_refresh_dirty_entry_ids(self, dirty_entry_ids: set[str]) -> None:
+        """Add refresh dirty entry IDs without dropping overlapping refresh results."""
+        if self._refresh_dirty_entry_ids is None:
+            self._refresh_dirty_entry_ids = set(dirty_entry_ids)
             return
 
-        if self._global_notify_handle is None:
-            self._global_notify_handle = self.hass.loop.call_soon(
-                self._flush_pending_global_notification,
-            )
-
-    @callback
-    def _schedule_refresh_global_notification(self) -> None:
-        """Schedule a deferred refresh-completion listener notification."""
-        if self._deferred_notifications_shutting_down:
-            return
-
-        self._pending_global_notification = True
-        if not getattr(self, "last_update_success", True):
-            self._pending_global_failed_refresh = True
-        else:
-            self._pending_global_failed_refresh = False
-        self._schedule_pending_global_notification()
-
-    @callback
-    def _flush_global_leg(self) -> tuple[bool, bool]:
-        """Notify manager listeners / update the mirror; return (data_update, preserve_failed_refresh)."""
-        data_update = self._pending_global_data_update
-        preserve_failed_refresh = self._pending_global_failed_refresh
-        self._pending_global_notification = False
-        self._pending_global_data_update = False
-        self._pending_global_failed_refresh = False
-        if data_update and preserve_failed_refresh:
-            self.data = dict(self.kmlocks)
-            super().async_update_listeners()
-        elif data_update:
-            super().async_set_updated_data(dict(self.kmlocks))
-        else:
-            super().async_update_listeners()
-        return data_update, preserve_failed_refresh
+        self._refresh_dirty_entry_ids.update(dirty_entry_ids)
 
     @callback
     def _push_lock_coordinator_update(
-        self, entry_id: str, *, data_update: bool, preserve_failed_refresh: bool
+        self, entry_id: str, *, preserve_failed_refresh: bool
     ) -> None:
         """Push the current lock snapshot to one per-lock coordinator, mirroring manager health."""
         lock_coordinator = self._lock_coordinators.get(entry_id)
         if lock_coordinator is None or entry_id not in self.kmlocks:
             return
         lock = self.kmlocks[entry_id]
-        if data_update and not preserve_failed_refresh:
+        lock_coordinator.last_exception = (
+            None if self.last_update_success else getattr(self, "last_exception", None)
+        )
+        if not preserve_failed_refresh:
             lock_coordinator.async_set_updated_data(lock)
         else:
             lock_coordinator.data = lock
             lock_coordinator.last_update_success = self.last_update_success
             lock_coordinator.async_update_listeners()
-
-    @callback
-    def _flush_pending_global_notification(self) -> None:
-        """Notify the global leg and (conservatively) every per-lock coordinator."""
-        self._global_notify_handle = None
-        if not self._pending_global_notification or self._deferred_notifications_shutting_down:
-            return
-        if self._defer_refresh_listener_updates:
-            return
-        # Absorb any pending scoped bridge flush; the all-lock fan-out covers it.
-        if self._notify_handle is not None:
-            self._notify_handle.cancel()
-            self._notify_handle = None
-        self._pending_notify_entry_ids = set()
-        data_update, preserve_failed_refresh = self._flush_global_leg()
-        for entry_id in list(self._lock_coordinators):
-            self._push_lock_coordinator_update(
-                entry_id, data_update=data_update, preserve_failed_refresh=preserve_failed_refresh
-            )
 
     @callback
     def _keepalive_listener(self) -> None:
@@ -385,22 +386,23 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._refresh_keepalive_unsub = None
 
     @callback
-    def async_schedule_keymaster_notifications(self, entry_ids: Iterable[str]) -> None:
-        """Coalesce dirty IDs and notify global and per-lock coordinator listeners."""
+    def async_schedule_keymaster_notifications(
+        self, entry_ids: Iterable[str], *, all_entry_ids: bool = False
+    ) -> None:
+        """Coalesce dirty IDs and notify per-lock coordinator listeners."""
         if self._deferred_notifications_shutting_down:
             return
 
         valid = {entry_id for entry_id in entry_ids if entry_id in self.kmlocks}
-        if not valid and not self._pending_notify_entry_ids:
+        if not valid and not all_entry_ids and not self._pending_notify_entry_ids:
             return
         self._pending_notify_entry_ids |= valid
+        self._pending_notify_all_entry_ids |= all_entry_ids
         self.data = dict(self.kmlocks)
-        self._pending_global_notification = True
-        self._pending_global_data_update = True
         if not getattr(self, "last_update_success", True):
-            self._pending_global_failed_refresh = True
+            self._pending_failed_refresh = True
         else:
-            self._pending_global_failed_refresh = False
+            self._pending_failed_refresh = False
         self._schedule_pending_keymaster_notifications()
 
     @callback
@@ -415,25 +417,20 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     @callback
     def _flush_pending_keymaster_notifications(self) -> None:
-        """Flush the global leg and per-lock coordinators (scoped, or all if a global fan-out was also pending)."""
+        """Flush per-lock coordinator notifications."""
         self._notify_handle = None
         if self._deferred_notifications_shutting_down or self._defer_refresh_listener_updates:
             return
         entry_ids = self._pending_notify_entry_ids
         self._pending_notify_entry_ids = set()
-        # If a global all-lock fan-out was also pending, absorb it and fan out to all.
-        global_notify_handle = self._global_notify_handle
-        if global_notify_handle is not None:
-            all_fanout = True
-            global_notify_handle.cancel()
-            self._global_notify_handle = None
-        else:
-            all_fanout = False
-        data_update, preserve_failed_refresh = self._flush_global_leg()
-        targets = list(self._lock_coordinators) if all_fanout else list(entry_ids)
+        all_entry_ids = self._pending_notify_all_entry_ids
+        self._pending_notify_all_entry_ids = False
+        preserve_failed_refresh = self._pending_failed_refresh
+        self._pending_failed_refresh = False
+        targets = list(self._lock_coordinators) if all_entry_ids else list(entry_ids)
         for entry_id in targets:
             self._push_lock_coordinator_update(
-                entry_id, data_update=data_update, preserve_failed_refresh=preserve_failed_refresh
+                entry_id, preserve_failed_refresh=preserve_failed_refresh
             )
 
     async def _async_refresh(
@@ -444,6 +441,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         raise_on_entry_error: bool = False,
     ) -> None:
         """Refresh data while deferring listener fan-out."""
+        if self._active_refresh_count == 0:
+            self._refresh_dirty_entry_ids = None
+            self._refresh_previous_update_success = self.last_update_success
+        self._active_refresh_count += 1
         self._defer_refresh_listener_updates = True
         try:
             await super()._async_refresh(
@@ -453,28 +454,24 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 raise_on_entry_error=raise_on_entry_error,
             )
         finally:
-            self._defer_refresh_listener_updates = False
-            if (
-                self._pending_global_notification
-                and self._global_notify_handle is None
-                and not self._deferred_notifications_shutting_down
-            ):
-                self._schedule_pending_global_notification()
-            if (
-                self._pending_notify_entry_ids
-                and self._notify_handle is None
-                and not self._deferred_notifications_shutting_down
-            ):
-                self._schedule_pending_keymaster_notifications()
+            self._active_refresh_count -= 1
+            if self._active_refresh_count == 0:
+                self._defer_refresh_listener_updates = False
+                if (
+                    (self._pending_notify_entry_ids or self._pending_notify_all_entry_ids)
+                    and self._notify_handle is None
+                    and not self._deferred_notifications_shutting_down
+                ):
+                    self._schedule_pending_keymaster_notifications()
 
     @callback
     def async_update_listeners(self) -> None:
         """Update listeners immediately or defer refresh-completion fan-out."""
         if self._defer_refresh_listener_updates:
-            self._schedule_refresh_global_notification()
+            self._schedule_refresh_notifications()
             return
 
-        super().async_update_listeners()
+        self.async_schedule_all_lock_notifications()
 
     async def initial_setup(self) -> None:
         """Trigger the initial async_setup."""
@@ -575,7 +572,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         for lock in config.values():
             lock["autolock_timer"] = None
             lock["listeners"] = []
-            for kmslot in lock.get("code_slots", {}).values():
+            for kmslot in (lock.get("code_slots") or {}).values():
                 if isinstance(kmslot.get("pin", None), str):
                     kmslot["pin"] = KeymasterCoordinator._decode_pin(
                         kmslot["pin"],
@@ -592,33 +589,110 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def _async_save_data(
         self,
         kmlocks: MutableMapping[str, KeymasterLock] | None = None,
+        *,
+        entry_ids: Iterable[str] | None = None,
     ) -> None:
         """Save data to Store."""
+        async with self._save_lock:
+            await self._async_save_data_locked(kmlocks, entry_ids=entry_ids)
+
+    async def _async_save_data_locked(
+        self,
+        kmlocks: MutableMapping[str, KeymasterLock] | None = None,
+        *,
+        entry_ids: Iterable[str] | None = None,
+    ) -> None:
+        """Save data to Store while the save lock is held."""
         if kmlocks is None:
             kmlocks = self.kmlocks
 
-        config: dict[str, Any] = {
-            key: self._kmlocks_to_dict(kmlock) for key, kmlock in kmlocks.items()
-        }
-        for lock in config.values():
-            lock.pop("zwave_js_lock_device", None)
-            lock.pop("zwave_js_lock_node", None)
-            lock.pop("autolock_timer", None)
-            lock.pop("listeners", None)
-            lock.pop("provider", None)
-            for kmslot in lock.get("code_slots", {}).values():
+        if entry_ids is None or kmlocks is not self.kmlocks or not self._prev_kmlocks_dict:
+            config = {}
+            save_kmlocks: Iterable[tuple[str, KeymasterLock]] = kmlocks.items()
+        else:
+            config = dict(self._prev_kmlocks_dict)
+            save_kmlocks = (
+                (entry_id, kmlocks[entry_id]) for entry_id in set(entry_ids) if entry_id in kmlocks
+            )
+
+        for key, kmlock in save_kmlocks:
+            lock = self._sanitized_lock_dict(self._kmlocks_to_dict(kmlock))
+            for kmslot in (lock.get("code_slots") or {}).values():
                 if isinstance(kmslot.get("pin", None), str):
                     kmslot["pin"] = KeymasterCoordinator._encode_pin(
                         kmslot["pin"],
                         lock["keymaster_config_entry_id"],
                     )
+            config[key] = lock
 
         if config == self._prev_kmlocks_dict:
             _LOGGER.debug("[save_data] No changes to kmlocks. Not saving.")
             return
-        self._prev_kmlocks_dict = dict(config)
         await self._store.async_save(config)
+        self._prev_kmlocks_dict = dict(config)
         _LOGGER.debug("[save_data] Data saved to storage")
+
+    @callback
+    def async_schedule_save_data(self, entry_ids: Iterable[str]) -> None:
+        """Mark entries to be saved by the next setup-complete or shutdown flush."""
+        self._pending_save_entry_ids.update(
+            entry_id for entry_id in entry_ids if entry_id in self.kmlocks
+        )
+
+    async def async_flush_pending_save_data(self) -> None:
+        """Flush any coalesced entry-scoped save work."""
+        while self._pending_save_entry_ids:
+            entry_ids = set(self._pending_save_entry_ids)
+            self._pending_save_entry_ids.difference_update(entry_ids)
+            try:
+                await self._async_save_data(entry_ids=entry_ids)
+            except BaseException:
+                self._pending_save_entry_ids.update(
+                    entry_id for entry_id in entry_ids if entry_id in self.kmlocks
+                )
+                raise
+
+    async def async_flush_pending_save_data_if_setup_complete(
+        self,
+        completed_entry_id: str | None = None,
+    ) -> None:
+        """Flush coalesced setup saves once every Keymaster entry has reached setup."""
+        if completed_entry_id is not None:
+            self._setup_completed_entry_ids.add(completed_entry_id)
+        if not self._pending_save_entry_ids:
+            return
+
+        setup_states = {
+            ConfigEntryState.LOADED,
+            ConfigEntryState.MIGRATION_ERROR,
+            ConfigEntryState.SETUP_ERROR,
+            ConfigEntryState.SETUP_RETRY,
+        }
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        if all(
+            entry.disabled_by is not None
+            or entry.state in setup_states
+            or entry.entry_id in self._setup_completed_entry_ids
+            for entry in entries
+        ):
+            await self.async_flush_pending_save_data()
+
+    def _sanitized_lock_dict(self, lock: object) -> dict[str, Any]:
+        """Remove runtime-only lock fields from a serialized lock dictionary."""
+        sanitized = dict(lock) if isinstance(lock, dict) else {}
+        sanitized.pop("zwave_js_lock_device", None)
+        sanitized.pop("zwave_js_lock_node", None)
+        sanitized.pop("autolock_timer", None)
+        sanitized.pop("listeners", None)
+        sanitized.pop("provider", None)
+        return sanitized
+
+    def _lock_snapshot(self, entry_id: str) -> dict[str, Any] | None:
+        """Return a sanitized comparable snapshot for one lock."""
+        kmlock = self.kmlocks.get(entry_id)
+        if kmlock is None:
+            return None
+        return self._sanitized_lock_dict(self._kmlocks_to_dict(kmlock))
 
     async def async_remove_data(self) -> None:
         """Remove stored data."""
@@ -658,12 +732,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if hasattr(cls, "__dataclass_fields__"):
             field_values: MutableMapping = {}
 
-            for field in fields(cls):
+            for field in _serializable_dataclass_fields(cls):
                 field_name: str = field.name
-
-                # Skip transient (init=False) fields — they are not persisted.
-                if not field.init:
-                    continue
 
                 field_type: type | None = keymasterlock_type_lookup.get(field_name)
                 if not field_type and isinstance(field.type, type):
@@ -774,12 +844,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         """Recursively convert a dataclass instance to a dictionary for JSON export."""
         if is_dataclass(instance):
             result: MutableMapping = {}
-            for field in fields(instance):
+            for field in _serializable_dataclass_fields(instance.__class__):
                 field_name: str = field.name
-
-                # Skip transient (init=False) fields — they are not persisted.
-                if not field.init:
-                    continue
 
                 field_value: Any = getattr(instance, field_name)
 
@@ -951,7 +1017,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                         duration=self.autolock_duration_seconds(kmlock),
                     )
                     self._state_change_autolock_started.add(kmlock.keymaster_config_entry_id)
-                    self.async_schedule_global_notification()
+                    self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
         elif new_state == LockState.LOCKED:
             if old_state != LockState.LOCKED:
                 if not uses_provider_lock_events:
@@ -966,7 +1032,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 ) and kmlock.autolock_timer:
                     await kmlock.autolock_timer.cancel()
                     self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
-                    self.async_schedule_global_notification()
+                    self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
     async def _handle_door_state_change(
         self,
@@ -1314,10 +1380,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if kmlock.keymaster_config_entry_id in self._state_change_autolock_started:
             self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
-            self.async_schedule_global_notification()
+            self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
         elif kmlock.autolock_enabled and kmlock.autolock_timer:
             await kmlock.autolock_timer.start(duration=self.autolock_duration_seconds(kmlock))
-            self.async_schedule_global_notification()
+            self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
         if kmlock.lock_notifications:
             if self._should_defer_keypad_unlock_notification(kmlock, code_slot_num, event_label):
@@ -1349,7 +1415,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                             accesslimit_count - 1
                         )
                         # Defer notifying entities of the count change
-                        self.async_schedule_global_notification()
+                        self.async_schedule_keymaster_notifications(
+                            [parent_kmlock.keymaster_config_entry_id]
+                        )
                         # Check if slot should be deactivated (e.g., count reached 0)
                         await self._update_slot(
                             parent_kmlock,
@@ -1361,7 +1429,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 if isinstance(accesslimit_count, int) and accesslimit_count > 0:
                     kmlock.code_slots[code_slot_num].accesslimit_count = accesslimit_count - 1
                     # Defer notifying entities of the count change
-                    self.async_schedule_global_notification()
+                    self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
                     # Check if slot should be deactivated (e.g., count reached 0)
                     await self._update_slot(kmlock, kmlock.code_slots[code_slot_num], code_slot_num)
 
@@ -1388,7 +1456,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if kmlock.keymaster_config_entry_id in self._state_change_autolock_started:
                 if kmlock.autolock_timer:
                     await kmlock.autolock_timer.cancel()
-                    self.async_schedule_global_notification()
+                    self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
                 self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
             self._cancel_pending_keypad_unlock_notification(kmlock)
             return
@@ -1426,7 +1494,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         if kmlock.autolock_timer:
             await kmlock.autolock_timer.cancel()
-            self.async_schedule_global_notification()
+            self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
         if kmlock.lock_notifications:
             await send_manual_notification(
@@ -1568,7 +1636,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         await kmlock.autolock_timer.recover()
         if kmlock.autolock_timer.is_running:
-            self.async_schedule_global_notification()
+            self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
     async def _timer_triggered(self, kmlock: KeymasterLock, _: dt) -> None:
         _LOGGER.debug("[timer_triggered] %s", kmlock.lock_name)
@@ -1600,9 +1668,19 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             raise
 
-    async def _update_door_and_lock_state(self, trigger_actions_if_changed: bool = False) -> None:
+    async def _update_door_and_lock_state(
+        self,
+        trigger_actions_if_changed: bool = False,
+        entry_ids: Iterable[str] | None = None,
+    ) -> None:
         # _LOGGER.debug("[update_door_and_lock_state] Running")
-        for kmlock in self.kmlocks.values():
+        entry_id_filter = set(entry_ids) if entry_ids is not None else None
+        locks = (
+            (self.kmlocks[entry_id] for entry_id in entry_id_filter if entry_id in self.kmlocks)
+            if entry_id_filter is not None
+            else self.kmlocks.values()
+        )
+        for kmlock in locks:
             if isinstance(kmlock.lock_entity_id, str) and kmlock.lock_entity_id:
                 lock_state = None
                 if temp_lock_state := self.hass.states.get(kmlock.lock_entity_id):
@@ -1674,6 +1752,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def add_lock(self, kmlock: KeymasterLock, update: bool = False) -> None:
         """Add a new kmlock."""
         await self._initial_setup_done_event.wait()
+        self._setup_completed_entry_ids.discard(kmlock.keymaster_config_entry_id)
         if kmlock.keymaster_config_entry_id in self.kmlocks:
             if update or self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete:
                 if self.kmlocks[kmlock.keymaster_config_entry_id].pending_delete:
@@ -1708,10 +1787,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("[add_lock] %s", kmlock.lock_name)
         self.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
         await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_state()
+        await self._update_door_and_lock_state(entry_ids=[kmlock.keymaster_config_entry_id])
         await self._update_listeners(kmlock)
         await self._setup_timer(kmlock)
-        await self.async_refresh()
+        await self.async_refresh_lock(
+            kmlock.keymaster_config_entry_id,
+            advance_sync_status=False,
+            defer_save=True,
+        )
         return
 
     async def _update_lock(self, new: KeymasterLock) -> bool:
@@ -1741,6 +1824,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             if code_slot_num in del_code_slots:
                 del_code_slots.remove(code_slot_num)
 
+        relationships_changed = (
+            old.lock_name != new.lock_name
+            or old.parent_name != new.parent_name
+            or old.parent_config_entry_id != new.parent_config_entry_id
+        )
+
         # Carry user/runtime state from old → new (lock state, autolock
         # config, retry state, code slots + DOW). Owned by KeymasterLock
         # so the field-by-field copy lives next to the field declarations.
@@ -1760,15 +1849,20 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 keymaster_config_entry_id=new.keymaster_config_entry_id,
                 code_slot_num=code_slot_num,
             )
-        await self._rebuild_lock_relationships()
-        await self._update_door_and_lock_state()
+        if relationships_changed:
+            await self._rebuild_lock_relationships()
+        await self._update_door_and_lock_state(entry_ids=[new.keymaster_config_entry_id])
         await self._update_listeners(self.kmlocks[new.keymaster_config_entry_id])
         # Construct the timer if old didn't have one (defensive — should be
         # rare since add_lock sets one up, but a half-initialized old
         # instance might not).
         if new.autolock_timer is None:
             await self._setup_timer(new)
-        await self.async_refresh()
+        await self.async_refresh_lock(
+            new.keymaster_config_entry_id,
+            advance_sync_status=False,
+            defer_save=True,
+        )
         return True
 
     async def _delete_lock(self, kmlock: KeymasterLock, _: dt) -> None:
@@ -1927,7 +2021,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.code_slots[code_slot_num].sync_op_started_at = utcnow()
         self._quick_refresh = True
         # Defer notifying entities of sync status change
-        self.async_schedule_global_notification()
+        self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
         # Use provider if available
         if kmlock.provider:
@@ -1940,7 +2034,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     code_slot_num,
                 )
                 kmlock.code_slots[code_slot_num].synced = Synced.OUT_OF_SYNC
-                self.async_schedule_global_notification()
+                self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
                 return False
             log_pin = "[REDACTED]" if kmlock.redact_pin_codes and pin else pin
             _LOGGER.debug(
@@ -1951,7 +2045,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             kmlock.code_slots[code_slot_num].synced = Synced.SYNCED
             kmlock.code_slots[code_slot_num].last_code_set_at = utcnow()
-            self.async_schedule_global_notification()
+            self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
             return True
 
         raise ProviderNotConfiguredError
@@ -2009,7 +2103,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.code_slots[code_slot_num].sync_op_started_at = utcnow()
         self._quick_refresh = True
         # Defer notifying entities of sync status change
-        self.async_schedule_global_notification()
+        self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
         # Use provider if available
         if kmlock.provider:
@@ -2023,7 +2117,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 # Restore prior PIN to preserve local state after failed clear
                 kmlock.code_slots[code_slot_num].pin = prior_pin
                 kmlock.code_slots[code_slot_num].synced = Synced.OUT_OF_SYNC
-                self.async_schedule_global_notification()
+                self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
                 return False
             _LOGGER.debug(
                 "[clear_pin_from_lock] %s: Code Slot %s: PIN cleared via provider",
@@ -2032,7 +2126,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             kmlock.code_slots[code_slot_num].synced = Synced.DISCONNECTED
             kmlock.code_slots[code_slot_num].last_code_set_at = utcnow()
-            self.async_schedule_global_notification()
+            self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
             return True
 
         raise ProviderNotConfiguredError
@@ -2166,13 +2260,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def _trigger_quick_refresh(self, _: dt) -> None:
         await self.async_request_refresh()
 
-    async def async_request_debounced_refresh(self) -> None:
+    async def async_request_debounced_refresh(self, entry_id: str | None = None) -> None:
         """Request a debounced coordinator refresh.
 
         Batches rapid entity updates into a single refresh by cancelling
         any previously scheduled debounced refresh and scheduling a new
         one after ENTITY_DEBOUNCE_SECONDS.
         """
+        if entry_id is not None and entry_id in self.kmlocks:
+            self._externally_dirty_entry_ids.add(entry_id)
+
         if self._cancel_debounced_refresh:
             self._cancel_debounced_refresh()
             self._cancel_debounced_refresh = None
@@ -2279,11 +2376,137 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         return True
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Update all keymaster locks."""
+    async def async_refresh_lock(
+        self,
+        entry_id: str,
+        *,
+        advance_sync_status: bool = True,
+        defer_save: bool = False,
+    ) -> set[str]:
+        """Refresh one lock; return entry IDs whose entities may need notification."""
+        async with self._debounced_refresh.async_lock():
+            return await self._async_refresh_lock(
+                entry_id,
+                advance_sync_status=advance_sync_status,
+                defer_save=defer_save,
+            )
+
+    async def _async_refresh_lock(
+        self,
+        entry_id: str,
+        *,
+        advance_sync_status: bool = True,
+        defer_save: bool = False,
+    ) -> set[str]:
+        """Refresh one lock, preserving manager health and scoped notifications."""
+        previous_update_success = self.last_update_success
+        dirty_entry_ids: set[str] = set()
+        if self._active_refresh_count == 0:
+            self._refresh_dirty_entry_ids = None
+            self._refresh_previous_update_success = self.last_update_success
+        self._active_refresh_count += 1
+        self._defer_refresh_listener_updates = True
+        try:
+            dirty_entry_ids = await self._async_refresh_lock_data(
+                entry_id,
+                advance_sync_status=advance_sync_status,
+                defer_save=defer_save,
+            )
+        except asyncio.CancelledError as err:
+            self.last_exception = err
+            self.last_update_success = False
+            raise
+        except Exception as exc:
+            self.last_exception = exc
+            self.last_update_success = False
+            self.logger.exception("Unexpected error fetching %s data", self.name)
+        else:
+            if not self.last_update_success:
+                self.last_update_success = True
+                self.logger.info("Fetching %s data recovered", self.name)
+            self._record_refresh_dirty_entry_ids(dirty_entry_ids)
+        finally:
+            self._active_refresh_count -= 1
+            if self._active_refresh_count == 0:
+                self._defer_refresh_listener_updates = False
+                if (
+                    (self._pending_notify_entry_ids or self._pending_notify_all_entry_ids)
+                    and self._notify_handle is None
+                    and not self._deferred_notifications_shutting_down
+                ):
+                    self._schedule_pending_keymaster_notifications()
+
+        if not self.last_update_success and not previous_update_success:
+            return dirty_entry_ids
+
+        if self.last_update_success != previous_update_success:
+            self.async_schedule_all_lock_notifications()
+        elif dirty_entry_ids:
+            self.async_schedule_keymaster_notifications(dirty_entry_ids)
+
+        return dirty_entry_ids
+
+    async def _async_refresh_lock_data(
+        self,
+        entry_id: str,
+        *,
+        advance_sync_status: bool = True,
+        defer_save: bool = False,
+    ) -> set[str]:
+        """Refresh one lock's data and return dirty entry IDs."""
+        await self._initial_setup_done_event.wait()
+        self._quick_refresh = False
+        if advance_sync_status:
+            self._sync_status_counter += 1
+        await self._clear_pending_quick_refresh()
+        dirty = (
+            {entry_id}
+            if entry_id in self.kmlocks and entry_id in self._externally_dirty_entry_ids
+            else set()
+        )
+        self._externally_dirty_entry_ids.discard(entry_id)
+        if self._cancel_debounced_refresh and not self._externally_dirty_entry_ids:
+            self._cancel_debounced_refresh()
+            self._cancel_debounced_refresh = None
+        before = self._lock_snapshot(entry_id)
+        await self._update_lock_data(entry_id)
+        if before != self._lock_snapshot(entry_id):
+            dirty.add(entry_id)
+        dirty.update(await self._sync_child_locks(entry_id))
+        parent_entry_id = None
+        if entry_id in self.kmlocks:
+            parent_entry_id = self.kmlocks[entry_id].parent_config_entry_id
+        if parent_entry_id and parent_entry_id in self.kmlocks:
+            dirty.update(await self._sync_child_locks(parent_entry_id))
+        if self._sync_status_counter > SYNC_STATUS_THRESHOLD:
+            before_sync_status = {
+                lock_entry_id: self._lock_snapshot(lock_entry_id) for lock_entry_id in self.kmlocks
+            }
+            self._sync_status_counter = 0
+            await self._update_door_and_lock_state(trigger_actions_if_changed=True)
+            dirty.update(
+                lock_entry_id
+                for lock_entry_id, before_lock in before_sync_status.items()
+                if before_lock != self._lock_snapshot(lock_entry_id)
+            )
+        if dirty:
+            if defer_save:
+                self.async_schedule_save_data(dirty)
+            else:
+                await self._async_save_data(entry_ids=dirty)
+        self.data = dict(self.kmlocks)
+        await self._schedule_quick_refresh_if_needed()
+        return dirty
+
+    async def async_refresh_all_locks(self) -> set[str]:
+        """Refresh all locks for startup/maintenance; return dirty entry IDs."""
         await self._initial_setup_done_event.wait()
         self._quick_refresh = False
         self._sync_status_counter += 1
+        dirty_entry_ids: set[str] = {
+            entry_id for entry_id in self._externally_dirty_entry_ids if entry_id in self.kmlocks
+        }
+        self._externally_dirty_entry_ids.clear()
 
         # Clear any pending refresh callbacks
         await self._clear_pending_quick_refresh()
@@ -2292,22 +2515,40 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._cancel_debounced_refresh = None
 
         for keymaster_config_entry_id in self.kmlocks:
+            before = self._lock_snapshot(keymaster_config_entry_id)
             await self._update_lock_data(keymaster_config_entry_id=keymaster_config_entry_id)
+            if before != self._lock_snapshot(keymaster_config_entry_id):
+                dirty_entry_ids.add(keymaster_config_entry_id)
 
         # Propagate parent kmlock settings to child kmlocks
         for keymaster_config_entry_id in self.kmlocks:
-            await self._sync_child_locks(keymaster_config_entry_id=keymaster_config_entry_id)
+            dirty_entry_ids.update(
+                await self._sync_child_locks(keymaster_config_entry_id=keymaster_config_entry_id)
+            )
 
         # Handle sync status update if necessary
         if self._sync_status_counter > SYNC_STATUS_THRESHOLD:
+            before_sync_status = {
+                entry_id: self._lock_snapshot(entry_id) for entry_id in self.kmlocks
+            }
             self._sync_status_counter = 0
             await self._update_door_and_lock_state(trigger_actions_if_changed=True)
+            dirty_entry_ids.update(
+                entry_id
+                for entry_id, before in before_sync_status.items()
+                if before != self._lock_snapshot(entry_id)
+            )
 
         await self._async_save_data()
 
         # Schedule next refresh if needed
         await self._schedule_quick_refresh_if_needed()
 
+        return dirty_entry_ids
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Update all keymaster locks."""
+        self._record_refresh_dirty_entry_ids(await self.async_refresh_all_locks())
         return dict(self.kmlocks)
 
     async def _clear_pending_quick_refresh(self) -> None:
@@ -2688,29 +2929,34 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             # and consider it synced to avoid flip-flopping.
             slot.synced = Synced.SYNCED
 
-    async def _sync_child_locks(self, keymaster_config_entry_id: str) -> None:
-        """Propagate parent lock settings to child locks."""
+    async def _sync_child_locks(self, keymaster_config_entry_id: str) -> set[str]:
+        """Propagate parent lock settings to child locks and return dirty child IDs."""
+        dirty_entry_ids: set[str] = set()
         kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(
             keymaster_config_entry_id,
         )
         if not isinstance(kmlock, KeymasterLock):
-            return
+            return dirty_entry_ids
         if not kmlock.connected:
             _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
-            return
+            return dirty_entry_ids
 
         if not kmlock.provider:
             _LOGGER.error("[Coordinator] %s: No provider available", kmlock.lock_name)
-            return
+            return dirty_entry_ids
 
         if (
             not isinstance(kmlock.child_config_entry_ids, list)
             or len(kmlock.child_config_entry_ids) == 0
         ):
-            return
+            return dirty_entry_ids
 
         for child_entry_id in kmlock.child_config_entry_ids:
+            before = self._lock_snapshot(child_entry_id)
             await self._sync_child_lock(kmlock, child_entry_id)
+            if before != self._lock_snapshot(child_entry_id):
+                dirty_entry_ids.add(child_entry_id)
+        return dirty_entry_ids
 
     async def _sync_child_lock(self, kmlock: KeymasterLock, child_entry_id: str) -> None:
         """Sync the settings for a child lock."""

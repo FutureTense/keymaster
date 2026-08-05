@@ -73,6 +73,23 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 _LARGE_LOCK_REPAIR_SWEEP_DONE = "large_lock_repair_sweep_done"
 
 
+async def _flush_pending_save_after_setup(
+    coordinator: KeymasterCoordinator,
+    entry_id: str,
+    *,
+    setup_failed: bool,
+) -> None:
+    """Flush deferred setup save work without masking setup failures."""
+    if not setup_failed:
+        await coordinator.async_flush_pending_save_data_if_setup_complete(entry_id)
+        return
+
+    try:
+        await coordinator.async_flush_pending_save_data_if_setup_complete(entry_id)
+    except Exception:
+        _LOGGER.exception("Failed to flush pending keymaster save data after setup error")
+
+
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     """Set up integration."""
     hass.data.setdefault(DOMAIN, {"resources": False})
@@ -226,48 +243,61 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     except asyncio.exceptions.CancelledError as e:
         _LOGGER.error("Timeout on add_lock. %s: %s", e.__class__.__qualname__, e)
 
-    lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
-    hass.data[DOMAIN].setdefault(LOCK_COORDINATORS, {})[config_entry.entry_id] = lock_coordinator
-
+    setup_failed = False
     try:
-        await async_load_large_lock_ack_store(hass)
-        supports_connection_status = True
-        if kmlock.provider:
-            supports_connection_status = kmlock.provider.supports_connection_status
-        await async_update_large_lock_repair_issue(
-            hass,
-            config_entry,
-            supports_connection_status=supports_connection_status,
-        )
-    except Exception:
-        _LOGGER.exception(
-            "Failed to update large-lock repair issue for %s",
-            config_entry.entry_id,
+        lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
+        hass.data[DOMAIN].setdefault(LOCK_COORDINATORS, {})[config_entry.entry_id] = (
+            lock_coordinator
         )
 
-    if not hass.data[DOMAIN].get(_LARGE_LOCK_REPAIR_SWEEP_DONE):
-        hass.data[DOMAIN][_LARGE_LOCK_REPAIR_SWEEP_DONE] = True
         try:
-            await async_update_all_large_lock_repair_issues(hass)
+            await async_load_large_lock_ack_store(hass)
+            supports_connection_status = True
+            if kmlock.provider:
+                supports_connection_status = kmlock.provider.supports_connection_status
+            await async_update_large_lock_repair_issue(
+                hass,
+                config_entry,
+                supports_connection_status=supports_connection_status,
+            )
         except Exception:
-            _LOGGER.exception("Failed to update large-lock repair issues during setup sweep")
+            _LOGGER.exception(
+                "Failed to update large-lock repair issue for %s",
+                config_entry.entry_id,
+            )
 
-    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
-    await async_generate_lovelace(
-        hass=hass,
-        kmlock_name=config_entry.data[CONF_LOCK_NAME],
-        keymaster_config_entry_id=config_entry.entry_id,
-        parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
-        code_slot_start=config_entry.data[CONF_START],
-        code_slots=config_entry.data[CONF_SLOTS],
-        lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
-        advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
-        advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
-        door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
-        hide_pins=config_entry.data.get(CONF_HIDE_PINS, False),
-    )
+        if not hass.data[DOMAIN].get(_LARGE_LOCK_REPAIR_SWEEP_DONE):
+            hass.data[DOMAIN][_LARGE_LOCK_REPAIR_SWEEP_DONE] = True
+            try:
+                await async_update_all_large_lock_repair_issues(hass)
+            except Exception:
+                _LOGGER.exception("Failed to update large-lock repair issues during setup sweep")
 
-    config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
+        await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+        await async_generate_lovelace(
+            hass=hass,
+            kmlock_name=config_entry.data[CONF_LOCK_NAME],
+            keymaster_config_entry_id=config_entry.entry_id,
+            parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+            code_slot_start=config_entry.data[CONF_START],
+            code_slots=config_entry.data[CONF_SLOTS],
+            lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
+            advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
+            advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
+            door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
+            hide_pins=config_entry.data.get(CONF_HIDE_PINS, False),
+        )
+
+        config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
+    except BaseException:
+        setup_failed = True
+        raise
+    finally:
+        await _flush_pending_save_after_setup(
+            coordinator,
+            config_entry.entry_id,
+            setup_failed=setup_failed,
+        )
 
     return True
 

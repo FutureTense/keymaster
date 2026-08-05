@@ -44,6 +44,7 @@ from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 import homeassistant.core as ha_core
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 LOWERED_GUARD_LIMIT = 8
 FAST_FANOUT_LISTENERS = LOWERED_GUARD_LIMIT + 1
@@ -340,6 +341,31 @@ def _register_coordinator_state_writers(
     return len(remove_listeners), remove_listeners
 
 
+def _register_lock_coordinator_state_writers(
+    hass: HomeAssistant,
+    coordinator: KeymasterCoordinator,
+    entry_id: str,
+    *,
+    listener_count: int,
+    guard_errors: list[HomeAssistantError],
+    fanout_dispatching_snapshots: list[bool] | None = None,
+) -> tuple[int, list[Callable[[], None]]]:
+    """Register synthetic state writers on one per-lock coordinator."""
+    lock_coordinator = coordinator.async_get_lock_coordinator(entry_id)
+    remove_listeners = [
+        lock_coordinator.async_add_listener(
+            _make_state_write_listener(
+                hass,
+                entity_number,
+                guard_errors,
+                fanout_dispatching_snapshots,
+            )
+        )
+        for entity_number in range(listener_count)
+    ]
+    return len(remove_listeners), remove_listeners
+
+
 def _remove_state_write_listeners(remove_listeners: list[Callable[[], None]]) -> None:
     """Remove synthetic fan-out listeners registered through the public API."""
     for remove_listener in remove_listeners:
@@ -357,7 +383,7 @@ def _exercise_nested_fanout(
     def _nested_fanout_listener(event: Event[Any]) -> None:
         dispatching_snapshots.append(hass.bus._dispatching)
         try:
-            coordinator.async_set_updated_data(dict(coordinator.kmlocks))
+            DataUpdateCoordinator.async_update_listeners(coordinator)
         except HomeAssistantError as err:
             _capture_guard_error(guard_errors, err)
             raise
@@ -374,13 +400,14 @@ def _exercise_nested_fanout(
 def _exercise_deferred_fanout(
     hass: HomeAssistant,
     coordinator: KeymasterCoordinator,
+    entry_ids: list[str],
 ) -> list[bool]:
     dispatching_snapshots: list[bool] = []
 
     @callback
     def _deferred_fanout_listener(event: Event[Any]) -> None:
         dispatching_snapshots.append(hass.bus._dispatching)
-        coordinator.async_schedule_global_notification()
+        coordinator.async_schedule_keymaster_notifications(entry_ids)
 
     remove_listener = hass.bus.async_listen(_FANOUT_TRIGGER_EVENT, _deferred_fanout_listener)
     try:
@@ -432,10 +459,10 @@ async def test_deferred_coordinator_fanout_avoids_lowered_event_bus_guard(
         _remove_state_write_listeners(raw_remove_listeners)
         await raw_coordinator.async_shutdown()
 
-    deferred_coordinator, _entries = _build_coordinator_tree(
+    deferred_coordinator, entries = _build_coordinator_tree(
         hass,
         mock_provider,
-        child_count=0,
+        child_count=1,
         slots=1,
         advanced_date_range=True,
         advanced_day_of_week=False,
@@ -443,21 +470,31 @@ async def test_deferred_coordinator_fanout_avoids_lowered_event_bus_guard(
     )
     deferred_guard_errors: list[HomeAssistantError] = []
     fanout_dispatching_snapshots: list[bool] = []
-    registered_deferred_entities, deferred_remove_listeners = _register_coordinator_state_writers(
-        hass,
-        deferred_coordinator,
-        FAST_FANOUT_LISTENERS,
-        deferred_guard_errors,
-        fanout_dispatching_snapshots,
+    registered_deferred_entities, deferred_remove_listeners = (
+        _register_lock_coordinator_state_writers(
+            hass,
+            deferred_coordinator,
+            entries[0].entry_id,
+            listener_count=FAST_FANOUT_LISTENERS,
+            guard_errors=deferred_guard_errors,
+            fanout_dispatching_snapshots=fanout_dispatching_snapshots,
+        )
     )
     assert registered_deferred_entities == FAST_FANOUT_LISTENERS
+    clean_listener = MagicMock()
+    deferred_coordinator.async_get_lock_coordinator(entries[1].entry_id).async_add_listener(
+        clean_listener
+    )
 
     try:
-        dispatching_snapshots = _exercise_deferred_fanout(hass, deferred_coordinator)
+        dispatching_snapshots = _exercise_deferred_fanout(
+            hass, deferred_coordinator, [entries[0].entry_id]
+        )
         await hass.async_block_till_done()
 
         assert dispatching_snapshots == [True]
         assert fanout_dispatching_snapshots == [False] * FAST_FANOUT_LISTENERS
+        clean_listener.assert_not_called()
         assert not deferred_guard_errors
     finally:
         _remove_state_write_listeners(deferred_remove_listeners)
@@ -497,16 +534,25 @@ async def test_deferred_realistic_parent_child_fanout_avoids_real_event_bus_guar
     assert projected_fanout_entities == intended_realistic_entities
     assert projected_fanout_entities > real_guard_limit
     guard_errors: list[HomeAssistantError] = []
-    registered_fanout_entities, remove_listeners = _register_coordinator_state_writers(
-        hass, coordinator, projected_fanout_entities, guard_errors
+    registered_fanout_entities, remove_listeners = _register_lock_coordinator_state_writers(
+        hass,
+        coordinator,
+        entries[0].entry_id,
+        listener_count=projected_fanout_entities,
+        guard_errors=guard_errors,
     )
     assert registered_fanout_entities == projected_fanout_entities
 
     try:
-        dispatching_snapshots = _exercise_deferred_fanout(hass, coordinator)
+        clean_listener = MagicMock()
+        coordinator.async_get_lock_coordinator(entries[1].entry_id).async_add_listener(
+            clean_listener
+        )
+        dispatching_snapshots = _exercise_deferred_fanout(hass, coordinator, [entries[0].entry_id])
         await hass.async_block_till_done()
 
         assert dispatching_snapshots == [True]
+        clean_listener.assert_not_called()
         assert not guard_errors
     finally:
         _remove_state_write_listeners(remove_listeners)
