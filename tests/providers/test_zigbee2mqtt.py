@@ -164,21 +164,21 @@ class TestConnect:
 
     async def test_connect_success_rename_device(self, provider, mock_hass):
         """Test that device rename behavior handles identifiers and name fallbacks."""
-        # 1. With zigbee2mqtt identifier: renaming name does NOT change topics
+        # 1. With device_entry.name set, base_topic reflects the device's friendly name
         await connect_provider(provider, mock_hass)
         assert provider.base_topic == "zigbee2mqtt/my_lock"
 
         device_entry = provider.device_registry.async_get.return_value
         device_entry.name = "new_lock_name"
 
-        assert provider.base_topic == "zigbee2mqtt/my_lock"
-
-        # 2. Without zigbee2mqtt identifier: renaming name DOES change topics
-        device_entry.identifiers = {("mqtt", "some_other_id")}
         assert provider.base_topic == "zigbee2mqtt/new_lock_name"
-        assert provider.set_topic == "zigbee2mqtt/new_lock_name/set"
-        assert provider.get_topic == "zigbee2mqtt/new_lock_name/get"
-        assert provider.state_topic == "zigbee2mqtt/new_lock_name"
+
+        # 2. When device_entry.name is None/empty, fallback to zigbee2mqtt identifier suffix
+        device_entry.name = None
+        assert provider.base_topic == "zigbee2mqtt/my_lock"
+        assert provider.set_topic == "zigbee2mqtt/my_lock/set"
+        assert provider.get_topic == "zigbee2mqtt/my_lock/get"
+        assert provider.state_topic == "zigbee2mqtt/my_lock"
 
     async def test_connect_entity_not_found(self, provider):
         """Test connection fails when lock entity is not found in Entity Registry."""
@@ -990,3 +990,102 @@ class TestCoverageExtra:
             pytest.raises(CustomBaseException),
         ):
             await provider.async_get_usercodes()
+
+    async def test_base_topic_prefers_device_name_over_ieee_identifier(self, provider, mock_hass):
+        """Test that base_topic prefers device_entry.name over identifier suffix."""
+        setup_successful_connect(
+            provider,
+            mock_hass,
+            device_name="Front Door Lock",
+            identifiers={("mqtt", "zigbee2mqtt_0x000d6f001933df17")},
+        )
+        assert provider.base_topic == "zigbee2mqtt/Front Door Lock"
+
+    async def test_async_handle_action_with_action_source_name(self, provider):
+        """Test _async_handle_action handling action: unlock with action_source_name: keypad."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        payload = {
+            "action": "unlock",
+            "action_source": 0,
+            "action_source_name": "keypad",
+            "action_user": 1,
+        }
+        await provider._async_handle_action("unlock", 1, payload)
+        callback.assert_called_once_with(1, "Unlocked via Keypad", 1)
+
+    async def test_async_handle_action_with_action_source_lock(self, provider):
+        """Test _async_handle_action handling action: lock with action_source: 0."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        payload = {
+            "action": "lock",
+            "action_source": 0,
+            "action_user": 2,
+        }
+        await provider._async_handle_action("lock", 2, payload)
+        callback.assert_called_once_with(2, "Keypad Lock", 5)
+
+    async def test_async_handle_action_with_non_dict_payload(self, provider):
+        """Test _async_handle_action handles non-dict payloads without crashing."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        # Pass invalid payload types (None, list, int)
+        await provider._async_handle_action("keypad_unlock", 1, None)
+        callback.assert_called_once_with(1, "Unlocked via Keypad", 1)
+        callback.reset_mock()
+
+        await provider._async_handle_action("keypad_lock", 2, "not a dict")
+        callback.assert_called_once_with(2, "Keypad Lock", 5)
+
+    async def test_async_handle_action_ignores_non_keypad_source(self, provider):
+        """Test that RF/app-sourced unlock does not raise a keypad event."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        payload = {
+            "action": "unlock",
+            "action_source": 1,
+            "action_source_name": "rf",
+            "action_user": 1,
+        }
+        await provider._async_handle_action("unlock", 1, payload)
+        callback.assert_not_called()
+
+    async def test_async_handle_action_ignores_bare_action_without_source(self, provider):
+        """Test that a bare unlock with no source information is not attributed."""
+        callback = AsyncMock()
+        provider._lock_event_callback = callback
+
+        await provider._async_handle_action("unlock", 1, {"action": "unlock", "action_user": 1})
+        callback.assert_not_called()
+
+    async def test_base_topic_ignores_name_by_user(self, provider, mock_hass):
+        """Test that an HA-side rename (name_by_user) does not change the topic."""
+        setup_successful_connect(
+            provider,
+            mock_hass,
+            device_name="Front Door Lock",
+            identifiers={("mqtt", "zigbee2mqtt_0x000d6f001933df17")},
+        )
+        device_entry = provider.device_registry.async_get.return_value
+        device_entry.name_by_user = "Custom User Name"
+        assert provider.base_topic == "zigbee2mqtt/Front Door Lock"
+
+    async def test_base_topic_fallback_to_identifier_when_device_name_empty(
+        self, provider, mock_hass
+    ):
+        """Test fallback to identifier when device name and name_by_user are empty."""
+        setup_successful_connect(
+            provider,
+            mock_hass,
+            device_name=None,
+            identifiers={("mqtt", "zigbee2mqtt_0x000d6f001933df17")},
+        )
+        device_entry = provider.device_registry.async_get.return_value
+        device_entry.name_by_user = None
+        device_entry.name = None
+        assert provider.base_topic == "zigbee2mqtt/0x000d6f001933df17"

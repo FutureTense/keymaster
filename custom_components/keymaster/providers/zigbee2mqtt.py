@@ -74,22 +74,23 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
 
     @property
     def base_topic(self) -> str | None:
-        """Get the base topic dynamically from the device identifiers or name."""
+        """Get the base topic dynamically from the device name or identifiers."""
         device_entry = self.get_device_entry()
         if not device_entry:
             return None
 
-        # Extract the original Z2M friendly name from device identifiers to support device renaming
+        # Prefer device_entry.name if set to a string
+        if isinstance(device_entry.name, str) and device_entry.name:
+            return f"zigbee2mqtt/{device_entry.name}"
+
+        # Fallback to extracting IEEE address identifier suffix if available
         for domain, identifier in device_entry.identifiers:
             if domain == MQTT_DOMAIN and identifier.startswith("zigbee2mqtt_"):
-                friendly_name = identifier[len("zigbee2mqtt_") :]
-                if friendly_name:
-                    return f"zigbee2mqtt/{friendly_name}"
+                ieee_suffix = identifier[len("zigbee2mqtt_") :]
+                if ieee_suffix:
+                    return f"zigbee2mqtt/{ieee_suffix}"
 
-        name = device_entry.name
-        if not name:
-            return None
-        return f"zigbee2mqtt/{name}"
+        return None
 
     @property
     def set_topic(self) -> str | None:
@@ -179,7 +180,9 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             action = payload.get("action")
             action_slot_num = payload.get("action_user")
             if action or action_slot_num:
-                self.hass.async_create_task(self._async_handle_action(action, action_slot_num))
+                self.hass.async_create_task(
+                    self._async_handle_action(action, action_slot_num, payload)
+                )
 
             # Parse bulk users list if available.
             if "users" in payload and isinstance(payload["users"], dict):
@@ -411,15 +414,27 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         )
         return True
 
-    async def _async_handle_action(self, action: Any, slot_num: Any) -> None:
+    async def _async_handle_action(
+        self, action: Any, slot_num: Any, payload: dict[str, Any] | None = None
+    ) -> None:
         """Handle keypad action events."""
         if not isinstance(slot_num, int):
             return
 
+        if not isinstance(payload, dict):
+            payload = {}
+        action_source_name = payload.get("action_source_name")
+        action_source = payload.get("action_source")
+        is_keypad = (
+            action_source_name == "keypad"
+            or action_source == 0
+            or (isinstance(action, str) and action.startswith("keypad_"))
+        )
+
         if self._lock_event_callback:
-            if action == "keypad_unlock":
+            if is_keypad and action in ("keypad_unlock", "unlock"):
                 await self._lock_event_callback(slot_num, "Unlocked via Keypad", 1)
-            elif action == "keypad_lock":
+            elif is_keypad and action in ("keypad_lock", "lock"):
                 await self._lock_event_callback(slot_num, "Keypad Lock", 5)
 
         if action in ("pin_code_added", "pin_code_deleted"):
