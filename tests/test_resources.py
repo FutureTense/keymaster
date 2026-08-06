@@ -150,6 +150,40 @@ async def test_register_strategy_resource_no_resources(hass: HomeAssistant, capl
     assert "Lovelace integration not available" in caplog.text
 
 
+async def test_register_strategy_resource_no_resources_subsequent_debug(
+    hass: HomeAssistant, caplog
+):
+    """Test subsequent registration calls when no resources available log as debug."""
+    hass.data[DOMAIN] = {}
+
+    await async_register_strategy_resource(hass)
+
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG):
+        await async_register_strategy_resource(hass)
+
+    assert "Lovelace integration not available" in caplog.text
+    assert len([rec for rec in caplog.records if rec.levelno == logging.WARNING]) == 0
+
+
+async def test_register_strategy_resource_yaml_mode_subsequent_debug(
+    hass: HomeAssistant, mock_yaml_resources, caplog
+):
+    """Test subsequent registration calls in YAML mode log as debug."""
+    hass.data[LOVELACE_DOMAIN] = MagicMock()
+    hass.data[LOVELACE_DOMAIN].resources = mock_yaml_resources
+    hass.data[DOMAIN] = {}
+
+    await async_register_strategy_resource(hass)
+
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG):
+        await async_register_strategy_resource(hass)
+
+    assert "YAML mode" in caplog.text
+    assert len([rec for rec in caplog.records if rec.levelno == logging.WARNING]) == 0
+
+
 async def test_cleanup_strategy_resource_removes(hass: HomeAssistant, mock_storage_resources):
     """Test cleaning up strategy resource."""
     mock_storage_resources.async_items.return_value = [{"id": "resource_id", "url": STRATEGY_PATH}]

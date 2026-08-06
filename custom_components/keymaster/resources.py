@@ -30,8 +30,11 @@ def get_lovelace_resources(
 async def async_register_strategy_resource(hass: HomeAssistant) -> None:
     """Register the Lovelace strategy resource when supported."""
     resources = get_lovelace_resources(hass)
+    domain_data = hass.data.setdefault(DOMAIN, {})
     if not resources:
-        _LOGGER.warning(
+        log = _LOGGER.debug if domain_data.get("resources_warned") else _LOGGER.warning
+        domain_data["resources_warned"] = True
+        log(
             "Lovelace integration not available; skipping strategy module "
             "registration. The keymaster dashboard strategy will not work "
             "until Lovelace is loaded and Home Assistant is restarted."
@@ -50,7 +53,9 @@ async def async_register_strategy_resource(hass: HomeAssistant) -> None:
         return
 
     if isinstance(resources, ResourceYAMLCollection):
-        _LOGGER.warning(
+        log = _LOGGER.debug if domain_data.get("yaml_warned") else _LOGGER.warning
+        domain_data["yaml_warned"] = True
+        log(
             "Strategy module can't automatically be registered because this "
             "Home Assistant instance is running in YAML mode for resources. "
             "Please add a new entry in the list under the resources key in "
