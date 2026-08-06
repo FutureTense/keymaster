@@ -1370,8 +1370,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     await self._send_global_unlock_notification(kmlock, 0, event_label)
             return
 
-        self._pending_provider_unlock_event.discard(kmlock.keymaster_config_entry_id)
-
         if not self._throttle.is_allowed(
             "lock_unlocked",
             kmlock.keymaster_config_entry_id,
@@ -1379,6 +1377,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             _LOGGER.debug("[lock_unlocked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
+
+        self._pending_provider_unlock_event.discard(kmlock.keymaster_config_entry_id)
 
         kmlock.lock_state = LockState.UNLOCKED
         self._throttle.reset("lock_locked", kmlock.keymaster_config_entry_id)
@@ -1913,6 +1913,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
         self._last_unlock_code_slot.pop(kmlock.keymaster_config_entry_id, None)
         self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
+        self._pending_provider_unlock_event.discard(kmlock.keymaster_config_entry_id)
+        self._pending_provider_lock_event.discard(kmlock.keymaster_config_entry_id)
         self._cancel_pending_keypad_unlock_notification(kmlock)
         await self._rebuild_lock_relationships()
         await self._async_save_data()

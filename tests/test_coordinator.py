@@ -4079,3 +4079,113 @@ async def test_provider_unlock_before_state_change_does_not_clobber_slot_or_dupl
     await hass.async_block_till_done()
     # Duplicate event suppressed
     assert len(bus_events) == 1
+
+
+async def test_duplicate_provider_lock_event_suppressed_after_state_change(
+    hass: HomeAssistant,
+) -> None:
+    """Test duplicate provider lock events are suppressed once the token is consumed."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        notify_script_name="notify_front_door",
+        lock_notifications=True,
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
+
+    bus_events: list[dict[str, Any]] = []
+
+    @callback
+    def _listen_bus(event: Event) -> None:
+        bus_events.append(dict(event.data))
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _listen_bus)
+
+    # 1. State change event to LOCKED lands first (adds pending token)
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.UNLOCKED),
+        "new_state": Mock(state=LockState.LOCKED),
+    }
+    await coordinator._handle_lock_state_change(kmlock, Event("state_changed", data=event_data))
+    assert "entry_1" in coordinator._pending_provider_lock_event
+
+    # 2. First provider lock event consumes token
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new_callable=AsyncMock,
+        ),
+    ):
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Keypad Lock",
+            action_code=6,
+        )
+        await hass.async_block_till_done()
+        assert mock_notify.call_count == 1
+        assert len(bus_events) == 1
+        assert "entry_1" not in coordinator._pending_provider_lock_event
+
+    # 3. Duplicate provider lock event arrives (token is gone, so early return suppresses duplicate)
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new_callable=AsyncMock,
+        ),
+    ):
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Keypad Lock",
+            action_code=6,
+        )
+        await hass.async_block_till_done()
+        assert mock_notify.call_count == 0
+        assert len(bus_events) == 1
+
+
+async def test_delete_lock_clears_pending_provider_event_sets(
+    hass: HomeAssistant,
+) -> None:
+    """Test that _delete_lock discards pending provider unlock and lock event entry IDs."""
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        pending_delete=True,
+    )
+    coordinator.kmlocks["entry_1"] = kmlock
+    coordinator._pending_provider_unlock_event.add("entry_1")
+    coordinator._pending_provider_lock_event.add("entry_1")
+    coordinator._initial_setup_done_event.set()
+
+    with (
+        patch.object(coordinator, "_async_save_data", new_callable=AsyncMock),
+        patch.object(coordinator, "async_refresh", new_callable=AsyncMock),
+        patch.object(coordinator, "_rebuild_lock_relationships", new_callable=AsyncMock),
+        patch("custom_components.keymaster.coordinator.delete_lovelace", new_callable=Mock),
+    ):
+        await coordinator._delete_lock(kmlock, dt.now())
+
+    assert "entry_1" not in coordinator._pending_provider_unlock_event
+    assert "entry_1" not in coordinator._pending_provider_lock_event
