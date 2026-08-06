@@ -4189,3 +4189,73 @@ async def test_delete_lock_clears_pending_provider_event_sets(
 
     assert "entry_1" not in coordinator._pending_provider_unlock_event
     assert "entry_1" not in coordinator._pending_provider_lock_event
+
+
+async def test_duplicate_provider_unlock_event_suppressed_after_state_change(
+    hass: HomeAssistant,
+) -> None:
+    """Test duplicate provider unlock events are suppressed once the unlock token is consumed."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        notify_script_name="notify_front_door",
+        lock_notifications=True,
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+
+    bus_events: list[dict[str, Any]] = []
+
+    @callback
+    def _listen_bus(event: Event) -> None:
+        bus_events.append(dict(event.data))
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _listen_bus)
+
+    # 1. State change event to UNLOCKED lands first (adds pending token)
+    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    await coordinator._handle_lock_state_change(kmlock, Event("state_changed", data=event_data))
+    assert "entry_1" in coordinator._pending_provider_unlock_event
+
+    # 2. First provider unlock event consumes token
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new_callable=AsyncMock,
+    ) as mock_notify:
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Manual Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+        assert mock_notify.call_count == 1
+        assert len(bus_events) == 1
+        assert "entry_1" not in coordinator._pending_provider_unlock_event
+
+    # 3. Duplicate provider unlock event arrives (token is gone, so early return suppresses duplicate)
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new_callable=AsyncMock,
+    ) as mock_notify:
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Manual Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+        assert mock_notify.call_count == 0
+        assert len(bus_events) == 1
