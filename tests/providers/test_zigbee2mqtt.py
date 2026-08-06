@@ -173,12 +173,12 @@ class TestConnect:
 
         assert provider.base_topic == "zigbee2mqtt/new_lock_name"
 
-        # 2. Without zigbee2mqtt identifier: renaming name DOES change topics
-        device_entry.identifiers = {("mqtt", "some_other_id")}
-        assert provider.base_topic == "zigbee2mqtt/new_lock_name"
-        assert provider.set_topic == "zigbee2mqtt/new_lock_name/set"
-        assert provider.get_topic == "zigbee2mqtt/new_lock_name/get"
-        assert provider.state_topic == "zigbee2mqtt/new_lock_name"
+        # 2. When device_entry.name is None/empty, fallback to zigbee2mqtt identifier suffix
+        device_entry.name = None
+        assert provider.base_topic == "zigbee2mqtt/my_lock"
+        assert provider.set_topic == "zigbee2mqtt/my_lock/set"
+        assert provider.get_topic == "zigbee2mqtt/my_lock/get"
+        assert provider.state_topic == "zigbee2mqtt/my_lock"
 
     async def test_connect_entity_not_found(self, provider):
         """Test connection fails when lock entity is not found in Entity Registry."""

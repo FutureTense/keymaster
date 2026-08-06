@@ -83,12 +83,12 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         if isinstance(device_entry.name, str) and device_entry.name:
             return f"zigbee2mqtt/{device_entry.name}"
 
-        # Fallback to extracting friendly name from device identifiers if available
+        # Fallback to extracting IEEE address identifier suffix if available
         for domain, identifier in device_entry.identifiers:
             if domain == MQTT_DOMAIN and identifier.startswith("zigbee2mqtt_"):
-                friendly_name = identifier[len("zigbee2mqtt_") :]
-                if friendly_name:
-                    return f"zigbee2mqtt/{friendly_name}"
+                ieee_suffix = identifier[len("zigbee2mqtt_") :]
+                if ieee_suffix:
+                    return f"zigbee2mqtt/{ieee_suffix}"
 
         return None
 
