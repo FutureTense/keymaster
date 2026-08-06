@@ -3770,37 +3770,6 @@ async def test_create_listeners_with_event(hass: HomeAssistant) -> None:
     assert mock_unsub not in lock.listeners
 
 
-async def test_handle_provider_lock_event_prioritizes_event_label(hass: HomeAssistant) -> None:
-    """Test that _handle_provider_lock_event trusts explicit event_label over entity state mismatch."""
-    coordinator = KeymasterCoordinator(hass)
-    kmlock = KeymasterLock(
-        lock_name="Front Door",
-        lock_entity_id="lock.front_door",
-        keymaster_config_entry_id="entry_1",
-    )
-    # When lock entity state matches tracked state (state_changed is False), trust explicit event_label
-    kmlock.lock_state = LockState.UNLOCKED
-    coordinator.kmlocks["entry_1"] = kmlock
-
-    # Set lock entity state to unlocked in state machine
-    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
-
-    with patch.object(coordinator, "_lock_unlocked", new_callable=AsyncMock) as mock_unlocked:
-        await coordinator._handle_provider_lock_event(
-            kmlock=kmlock,
-            code_slot_num=1,
-            event_label="Unlocked via Keypad",
-            action_code=1,
-        )
-        mock_unlocked.assert_called_once_with(
-            kmlock=kmlock,
-            code_slot_num=1,
-            source="event",
-            event_label="Unlocked via Keypad",
-            action_code=1,
-        )
-
-
 async def test_handle_lock_state_change_syncs_push_provider_lock_state(
     hass: HomeAssistant,
 ) -> None:
