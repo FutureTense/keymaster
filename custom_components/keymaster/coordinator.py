@@ -228,6 +228,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._cancel_debounced_refresh: Callable | None = None
         self._pending_keypad_unlock_notifications: dict[str, Callable[[], None]] = {}
         self._state_change_autolock_started: set[str] = set()
+        self._pending_provider_unlock_event: set[str] = set()
+        self._pending_provider_lock_event: set[str] = set()
         self._consecutive_failures: dict[str, int] = {}
         self._next_retry_time: dict[str, dt] = {}
         self._deferred_notifications_shutting_down = False
@@ -1018,6 +1020,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     )
                     self._state_change_autolock_started.add(kmlock.keymaster_config_entry_id)
                     self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
+                if uses_provider_lock_events:
+                    if kmlock.lock_state != LockState.UNLOCKED:
+                        kmlock.lock_state = LockState.UNLOCKED
+                        self._last_unlock_code_slot.setdefault(kmlock.keymaster_config_entry_id, 0)
+                        self._pending_provider_unlock_event.add(kmlock.keymaster_config_entry_id)
+                    self._pending_provider_lock_event.discard(kmlock.keymaster_config_entry_id)
         elif new_state == LockState.LOCKED:
             if old_state != LockState.LOCKED:
                 if not uses_provider_lock_events:
@@ -1033,6 +1041,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     await kmlock.autolock_timer.cancel()
                     self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
                     self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
+                if uses_provider_lock_events:
+                    if kmlock.lock_state != LockState.LOCKED:
+                        kmlock.lock_state = LockState.LOCKED
+                        self._pending_provider_lock_event.add(kmlock.keymaster_config_entry_id)
+                    self._pending_provider_unlock_event.discard(kmlock.keymaster_config_entry_id)
 
     async def _handle_door_state_change(
         self,
@@ -1321,7 +1334,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         # Check for supersede condition before throttle: when the lock is already
         # unlocked with slot=0 and a more informative slot>0 event arrives, we
         # must let it through regardless of throttle state.
-        if kmlock.lock_state == LockState.UNLOCKED:
+        pending_provider_event = (
+            kmlock.keymaster_config_entry_id in self._pending_provider_unlock_event
+        )
+        if kmlock.lock_state == LockState.UNLOCKED and not pending_provider_event:
             prior_slot = self._last_unlock_code_slot.get(kmlock.keymaster_config_entry_id)
             if isinstance(code_slot_num, int) and code_slot_num > 0 and prior_slot == 0:
                 # A more informative event arrived after an initial slot=0 unlock.
@@ -1361,6 +1377,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             _LOGGER.debug("[lock_unlocked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
+
+        self._pending_provider_unlock_event.discard(kmlock.keymaster_config_entry_id)
 
         kmlock.lock_state = LockState.UNLOCKED
         self._throttle.reset("lock_locked", kmlock.keymaster_config_entry_id)
@@ -1452,7 +1470,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("[lock_locked] %s: Throttled. source: %s", kmlock.lock_name, source)
             return
 
-        if kmlock.lock_state == LockState.LOCKED and not kmlock.pending_retry_lock:
+        pending_provider_event = (
+            kmlock.keymaster_config_entry_id in self._pending_provider_lock_event
+        )
+        if (
+            kmlock.lock_state == LockState.LOCKED
+            and not kmlock.pending_retry_lock
+            and not pending_provider_event
+        ):
             if kmlock.keymaster_config_entry_id in self._state_change_autolock_started:
                 if kmlock.autolock_timer:
                     await kmlock.autolock_timer.cancel()
@@ -1460,6 +1485,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
             self._cancel_pending_keypad_unlock_notification(kmlock)
             return
+
+        self._pending_provider_lock_event.discard(kmlock.keymaster_config_entry_id)
 
         kmlock.lock_state = LockState.LOCKED
         kmlock.pending_retry_lock = False
@@ -1886,6 +1913,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self.kmlocks.pop(kmlock.keymaster_config_entry_id, None)
         self._last_unlock_code_slot.pop(kmlock.keymaster_config_entry_id, None)
         self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
+        self._pending_provider_unlock_event.discard(kmlock.keymaster_config_entry_id)
+        self._pending_provider_lock_event.discard(kmlock.keymaster_config_entry_id)
         self._cancel_pending_keypad_unlock_notification(kmlock)
         await self._rebuild_lock_relationships()
         await self._async_save_data()

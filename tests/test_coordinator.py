@@ -11,7 +11,11 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from custom_components.keymaster.const import BACKOFF_FAILURE_THRESHOLD, BACKOFF_MAX_SECONDS
+from custom_components.keymaster.const import (
+    BACKOFF_FAILURE_THRESHOLD,
+    BACKOFF_MAX_SECONDS,
+    EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+)
 from custom_components.keymaster.coordinator import KeymasterCoordinator
 from custom_components.keymaster.helpers import Throttle
 from custom_components.keymaster.lock import (
@@ -23,7 +27,7 @@ from custom_components.keymaster.providers import CodeSlot
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 
@@ -112,6 +116,8 @@ def mock_coordinator(mock_hass) -> Any:
         coordinator._last_unlock_code_slot = {}
         coordinator._pending_keypad_unlock_notifications = {}
         coordinator._state_change_autolock_started = set()
+        coordinator._pending_provider_unlock_event = set()
+        coordinator._pending_provider_lock_event = set()
         # Use setattr to safely add the mock method
         setattr(coordinator, "delete_lock_by_config_entry_id", AsyncMock())
         setattr(coordinator, "async_set_updated_data", Mock())
@@ -1426,7 +1432,7 @@ class TestLockStateEventHandlers:
         ) as mock_notify:
             await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
 
-        assert mock_kmlock.lock_state == LockState.LOCKED
+        assert mock_kmlock.lock_state == LockState.UNLOCKED
         mock_kmlock.autolock_timer.start.assert_called_once_with(duration=300)
         mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
         mock_notify.assert_not_called()
@@ -1459,7 +1465,7 @@ class TestLockStateEventHandlers:
         ) as mock_notify:
             await mock_coordinator._handle_lock_state_change(mock_kmlock, event)
 
-        assert mock_kmlock.lock_state == LockState.UNLOCKED
+        assert mock_kmlock.lock_state == LockState.LOCKED
         mock_kmlock.autolock_timer.cancel.assert_called_once()
         mock_coordinator.async_schedule_keymaster_notifications.assert_called_once()
         mock_notify.assert_not_called()
@@ -3768,3 +3774,492 @@ async def test_create_listeners_with_event(hass: HomeAssistant) -> None:
 
     # The existing listeners in the list should be cleared out since event is not None
     assert mock_unsub not in lock.listeners
+
+
+async def test_handle_lock_state_change_syncs_push_provider_lock_state(
+    hass: HomeAssistant,
+) -> None:
+    """Test that _handle_lock_state_change syncs kmlock.lock_state for push providers."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    event = Event("state_changed", data=event_data)
+
+    await coordinator._handle_lock_state_change(kmlock, event)
+    assert kmlock.lock_state == LockState.UNLOCKED
+    assert coordinator._last_unlock_code_slot["entry_1"] == 0
+
+
+@pytest.mark.parametrize(
+    "provider_obj",
+    [
+        Mock(supports_push_updates=False),
+        None,
+    ],
+)
+async def test_handle_lock_state_change_non_push_provider_does_not_sync_state(
+    hass: HomeAssistant, provider_obj: Any
+) -> None:
+    """Test that _handle_lock_state_change does not sync kmlock.lock_state for non-push providers."""
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        provider=provider_obj,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    event = Event("state_changed", data=event_data)
+
+    with patch.object(coordinator, "_lock_unlocked", new_callable=AsyncMock) as mock_unlocked:
+        await coordinator._handle_lock_state_change(kmlock, event)
+        mock_unlocked.assert_called_once_with(
+            kmlock=kmlock,
+            source="state_change",
+            event_label="Manual Unlock",
+        )
+        # Lock state should remain LOCKED as it wasn't mutated by state_change for non-push provider
+        assert kmlock.lock_state == LockState.LOCKED
+
+
+async def test_state_change_before_provider_unlock_event_slot_0_fires_bus_and_notification(
+    hass: HomeAssistant,
+) -> None:
+    """Test state change to UNLOCKED before provider slot 0 unlock event fires bus event & notification."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        notify_script_name="notify_front_door",
+        lock_notifications=True,
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+
+    bus_events: list[dict[str, Any]] = []
+
+    @callback
+    def _listen_bus(event: Event) -> None:
+        bus_events.append(dict(event.data))
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _listen_bus)
+
+    # 1. State change event to UNLOCKED lands first
+    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    await coordinator._handle_lock_state_change(kmlock, Event("state_changed", data=event_data))
+    assert kmlock.lock_state == LockState.UNLOCKED
+
+    # 2. Provider event with slot 0 arrives next
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification", new_callable=AsyncMock
+    ) as mock_notify:
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Manual Unlock",
+            action_code=2,
+        )
+
+        mock_notify.assert_called_once_with(
+            hass=hass,
+            script_name="notify_front_door",
+            title="Front Door",
+            message="Manual Unlock",
+        )
+        await hass.async_block_till_done()
+        assert len(bus_events) == 1
+        assert bus_events[0]["state"] == LockState.UNLOCKED
+        assert bus_events[0]["action_code"] == 2
+        assert bus_events[0]["action_text"] == "Manual Unlock"
+        assert bus_events[0]["code_slot_num"] == 0
+
+
+async def test_state_change_before_provider_unlock_event_slot_gt_0_decrements_access_limit(
+    hass: HomeAssistant,
+) -> None:
+    """Test state change to UNLOCKED before provider slot > 0 unlock event decrements access limit count."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    code_slot = KeymasterCodeSlot(number=3, name="Guest", pin="1234")
+    code_slot.accesslimit_count_enabled = True
+    code_slot.accesslimit_count = 5
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        notify_script_name="notify_front_door",
+        code_slots={3: code_slot},
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+
+    # 1. State change event to UNLOCKED lands first
+    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    await coordinator._handle_lock_state_change(kmlock, Event("state_changed", data=event_data))
+
+    # 2. Provider event with slot 3 arrives next
+    await coordinator._handle_provider_lock_event(
+        kmlock=kmlock,
+        code_slot_num=3,
+        event_label="Keypad Unlock",
+        action_code=1,
+    )
+
+    assert code_slot.accesslimit_count == 4
+
+
+async def test_state_change_before_provider_lock_event_fires_bus_notification_and_dismisses_autolock(
+    hass: HomeAssistant,
+) -> None:
+    """Test state change to LOCKED before provider lock event fires bus event, notification, and dismisses persistent autolock notifications."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        notify_script_name="notify_front_door",
+        lock_notifications=True,
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
+
+    bus_events: list[dict[str, Any]] = []
+
+    @callback
+    def _listen_bus(event: Event) -> None:
+        bus_events.append(dict(event.data))
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _listen_bus)
+
+    # 1. State change event to LOCKED lands first
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.UNLOCKED),
+        "new_state": Mock(state=LockState.LOCKED),
+    }
+    await coordinator._handle_lock_state_change(kmlock, Event("state_changed", data=event_data))
+    assert kmlock.lock_state == LockState.LOCKED
+
+    # 2. Provider event with Keypad Lock arrives next
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new_callable=AsyncMock,
+        ) as mock_dismiss,
+    ):
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Keypad Lock",
+            action_code=6,
+        )
+
+        mock_notify.assert_called_once_with(
+            hass=hass,
+            script_name="notify_front_door",
+            title="Front Door",
+            message="Keypad Lock",
+        )
+        assert mock_dismiss.call_count == 3
+        await hass.async_block_till_done()
+        assert len(bus_events) == 1
+        assert bus_events[0]["state"] == LockState.LOCKED
+        assert bus_events[0]["action_code"] == 6
+        assert bus_events[0]["action_text"] == "Keypad Lock"
+
+
+async def test_provider_unlock_before_state_change_does_not_clobber_slot_or_duplicate(
+    hass: HomeAssistant,
+) -> None:
+    """Test provider unlock event preceding state change preserves recorded slot and suppresses duplicates."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+
+    bus_events: list[dict[str, Any]] = []
+
+    @callback
+    def _listen_bus(event: Event) -> None:
+        bus_events.append(dict(event.data))
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _listen_bus)
+
+    # 1. Provider unlock event for slot 3 arrives first
+    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
+    await coordinator._handle_provider_lock_event(
+        kmlock=kmlock,
+        code_slot_num=3,
+        event_label="Keypad Unlock",
+        action_code=1,
+    )
+    assert coordinator._last_unlock_code_slot["entry_1"] == 3
+    await hass.async_block_till_done()
+    assert len(bus_events) == 1
+
+    # 2. Entity state change event to UNLOCKED arrives second
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    await coordinator._handle_lock_state_change(kmlock, Event("state_changed", data=event_data))
+    # Recorded slot should still be 3, not clobbered to 0
+    assert coordinator._last_unlock_code_slot["entry_1"] == 3
+
+    # 3. Duplicate provider unlock event for slot 3 arrives
+    await coordinator._handle_provider_lock_event(
+        kmlock=kmlock,
+        code_slot_num=3,
+        event_label="Keypad Unlock",
+        action_code=1,
+    )
+    await hass.async_block_till_done()
+    # Duplicate event suppressed
+    assert len(bus_events) == 1
+
+
+async def test_duplicate_provider_lock_event_suppressed_after_state_change(
+    hass: HomeAssistant,
+) -> None:
+    """Test duplicate provider lock events are suppressed once the token is consumed."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        notify_script_name="notify_front_door",
+        lock_notifications=True,
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
+
+    bus_events: list[dict[str, Any]] = []
+
+    @callback
+    def _listen_bus(event: Event) -> None:
+        bus_events.append(dict(event.data))
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _listen_bus)
+
+    # 1. State change event to LOCKED lands first (adds pending token)
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.UNLOCKED),
+        "new_state": Mock(state=LockState.LOCKED),
+    }
+    await coordinator._handle_lock_state_change(kmlock, Event("state_changed", data=event_data))
+    assert "entry_1" in coordinator._pending_provider_lock_event
+
+    # 2. First provider lock event consumes token
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new_callable=AsyncMock,
+        ),
+    ):
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Keypad Lock",
+            action_code=6,
+        )
+        await hass.async_block_till_done()
+        assert mock_notify.call_count == 1
+        assert len(bus_events) == 1
+        assert "entry_1" not in coordinator._pending_provider_lock_event
+
+    # 3. Duplicate provider lock event arrives (token is gone, so early return suppresses duplicate)
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+            new_callable=AsyncMock,
+        ),
+        patch.object(coordinator._throttle, "is_allowed", return_value=True),
+    ):
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Keypad Lock",
+            action_code=6,
+        )
+        await hass.async_block_till_done()
+        assert mock_notify.call_count == 0
+        assert len(bus_events) == 1
+
+
+async def test_delete_lock_clears_pending_provider_event_sets(
+    hass: HomeAssistant,
+) -> None:
+    """Test that _delete_lock discards pending provider unlock and lock event entry IDs."""
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        pending_delete=True,
+    )
+    coordinator.kmlocks["entry_1"] = kmlock
+    coordinator._pending_provider_unlock_event.add("entry_1")
+    coordinator._pending_provider_lock_event.add("entry_1")
+    coordinator._initial_setup_done_event.set()
+
+    with (
+        patch.object(coordinator, "_async_save_data", new_callable=AsyncMock),
+        patch.object(coordinator, "async_refresh", new_callable=AsyncMock),
+        patch.object(coordinator, "_rebuild_lock_relationships", new_callable=AsyncMock),
+        patch("custom_components.keymaster.coordinator.delete_lovelace", new_callable=Mock),
+    ):
+        await coordinator._delete_lock(kmlock, dt.now())
+
+    assert "entry_1" not in coordinator._pending_provider_unlock_event
+    assert "entry_1" not in coordinator._pending_provider_lock_event
+
+
+async def test_duplicate_provider_unlock_event_suppressed_after_state_change(
+    hass: HomeAssistant,
+) -> None:
+    """Test duplicate provider unlock events are suppressed once the unlock token is consumed."""
+    coordinator = KeymasterCoordinator(hass)
+    mock_provider = Mock()
+    mock_provider.supports_push_updates = True
+
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry_1",
+        notify_script_name="notify_front_door",
+        lock_notifications=True,
+        provider=mock_provider,
+    )
+    kmlock.lock_state = LockState.LOCKED
+    coordinator.kmlocks["entry_1"] = kmlock
+    hass.states.async_set("lock.front_door", LockState.LOCKED)
+
+    bus_events: list[dict[str, Any]] = []
+
+    @callback
+    def _listen_bus(event: Event) -> None:
+        bus_events.append(dict(event.data))
+
+    hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, _listen_bus)
+
+    # 1. State change event to UNLOCKED lands first (adds pending token)
+    hass.states.async_set("lock.front_door", LockState.UNLOCKED)
+    event_data = {
+        "entity_id": "lock.front_door",
+        "old_state": Mock(state=LockState.LOCKED),
+        "new_state": Mock(state=LockState.UNLOCKED),
+    }
+    await coordinator._handle_lock_state_change(kmlock, Event("state_changed", data=event_data))
+    assert "entry_1" in coordinator._pending_provider_unlock_event
+
+    # 2. First provider unlock event consumes token
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new_callable=AsyncMock,
+    ) as mock_notify:
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Manual Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+        assert mock_notify.call_count == 1
+        assert len(bus_events) == 1
+        assert "entry_1" not in coordinator._pending_provider_unlock_event
+
+    # 3. Duplicate provider unlock event arrives (token is gone, so early return suppresses duplicate)
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch.object(coordinator._throttle, "is_allowed", return_value=True),
+    ):
+        await coordinator._handle_provider_lock_event(
+            kmlock=kmlock,
+            code_slot_num=0,
+            event_label="Manual Unlock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+        assert mock_notify.call_count == 0
+        assert len(bus_events) == 1
