@@ -1,7 +1,7 @@
 """Test keymaster init."""
 
 import logging
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -26,9 +26,12 @@ from custom_components.keymaster.const import (
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DOMAIN,
     LOCK_COORDINATORS,
+    STRATEGY_PATH,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from custom_components.keymaster.lock import KeymasterLock
+from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
+from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.util.dt import utcnow
@@ -530,3 +533,45 @@ async def test_async_setup_entry_setup_success_false(hass) -> None:
             await async_setup_entry(hass, entry)
 
         assert COORDINATOR not in hass.data[DOMAIN]
+
+
+@pytest.fixture(name="fake_lovelace_resources")
+def fake_lovelace_resources_fixture(hass):
+    """Install a fake Lovelace resource storage collection."""
+    items: list[dict] = []
+    resources = MagicMock(spec=ResourceStorageCollection)
+    resources.loaded = True
+    resources.async_items.side_effect = lambda: list(items)
+
+    async def _create(data):
+        item = {"id": f"res{len(items)}", **data}
+        items.append(item)
+        return item
+
+    async def _delete(item_id):
+        items[:] = [i for i in items if i["id"] != item_id]
+
+    resources.async_create_item = AsyncMock(side_effect=_create)
+    resources.async_delete_item = AsyncMock(side_effect=_delete)
+    hass.data[LOVELACE_DOMAIN] = MagicMock()
+    hass.data[LOVELACE_DOMAIN].resources = resources
+    return items
+
+
+async def test_reload_preserves_strategy_resource(
+    hass,
+    lock_kwikset_910,
+    integration,
+    fake_lovelace_resources,
+) -> None:
+    """Reloading the only keymaster entry must leave the strategy resource registered."""
+    entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA, version=3)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
+    await hass.async_block_till_done()
+    assert [i for i in fake_lovelace_resources if i["url"] == STRATEGY_PATH]
+
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert [i for i in fake_lovelace_resources if i["url"] == STRATEGY_PATH]
