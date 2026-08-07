@@ -4151,6 +4151,7 @@ async def test_duplicate_provider_lock_event_suppressed_after_state_change(
             "custom_components.keymaster.coordinator.dismiss_persistent_notification",
             new_callable=AsyncMock,
         ),
+        patch.object(coordinator._throttle, "is_allowed", return_value=True),
     ):
         await coordinator._handle_provider_lock_event(
             kmlock=kmlock,
@@ -4246,10 +4247,13 @@ async def test_duplicate_provider_unlock_event_suppressed_after_state_change(
         assert "entry_1" not in coordinator._pending_provider_unlock_event
 
     # 3. Duplicate provider unlock event arrives (token is gone, so early return suppresses duplicate)
-    with patch(
-        "custom_components.keymaster.coordinator.send_manual_notification",
-        new_callable=AsyncMock,
-    ) as mock_notify:
+    with (
+        patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch.object(coordinator._throttle, "is_allowed", return_value=True),
+    ):
         await coordinator._handle_provider_lock_event(
             kmlock=kmlock,
             code_slot_num=0,
