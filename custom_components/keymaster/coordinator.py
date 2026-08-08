@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import Callable, Iterable, MutableMapping
+from collections.abc import AsyncIterator, Callable, Iterable, MutableMapping
 import contextlib
+from contextlib import asynccontextmanager
 from dataclasses import fields, is_dataclass
 from datetime import datetime as dt, time as dt_time, timedelta
 import functools
@@ -223,9 +224,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._throttle = Throttle()
         self._last_unlock_code_slot: dict[str, int | None] = {}
         self._sync_status_counter: int = 0
-        self._quick_refresh: bool = False
-        self._cancel_quick_refresh: Callable | None = None
-        self._cancel_debounced_refresh: Callable | None = None
+        self._quick_refresh_entry_ids: set[str] = set()
+        self._cancel_quick_refresh: dict[str, Callable] = {}
+        self._cancel_debounced_refresh: dict[str, Callable] = {}
         self._pending_keypad_unlock_notifications: dict[str, Callable[[], None]] = {}
         self._state_change_autolock_started: set[str] = set()
         self._pending_provider_unlock_event: set[str] = set()
@@ -241,6 +242,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._notify_handle: asyncio.Handle | None = None
         self._refresh_dirty_entry_ids: set[str] | None = None
         self._active_refresh_count = 0
+        self._sync_tx_depth: int = 0
+        self._sync_tx_dirty_ids: set[str] = set()
+        self._sync_tx_all_entry_ids: bool = False
         self._refresh_previous_update_success: bool | None = None
         self._externally_dirty_entry_ids: set[str] = set()
         self._refresh_keepalive_unsub: Callable[[], None] | None = None
@@ -302,11 +306,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self._refresh_keepalive_unsub()
                 self._refresh_keepalive_unsub = None
             if self._cancel_quick_refresh:
-                self._cancel_quick_refresh()
-                self._cancel_quick_refresh = None
+                for cancel in self._cancel_quick_refresh.values():
+                    cancel()
+                self._cancel_quick_refresh.clear()
             if self._cancel_debounced_refresh:
-                self._cancel_debounced_refresh()
-                self._cancel_debounced_refresh = None
+                for cancel in self._cancel_debounced_refresh.values():
+                    cancel()
+                self._cancel_debounced_refresh.clear()
             await super().async_shutdown()
             self._shutdown_complete = True
 
@@ -387,6 +393,27 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._refresh_keepalive_unsub()
             self._refresh_keepalive_unsub = None
 
+    @asynccontextmanager
+    async def _parent_sync_transaction(self) -> AsyncIterator[None]:
+        """Suppress per-slot notifications and flush once on exit.
+
+        Re-entrant: increments a depth counter so nested transactions
+        share the same accumulator; only the outermost exit flushes.
+        Exception-safe: depth is decremented in a finally block.
+        """
+        self._sync_tx_depth += 1
+        try:
+            yield
+        finally:
+            self._sync_tx_depth -= 1
+            if self._sync_tx_depth == 0:
+                dirty = self._sync_tx_dirty_ids
+                all_ids = self._sync_tx_all_entry_ids
+                self._sync_tx_dirty_ids = set()
+                self._sync_tx_all_entry_ids = False
+                if dirty or all_ids:
+                    self.async_schedule_keymaster_notifications(dirty, all_entry_ids=all_ids)
+
     @callback
     def async_schedule_keymaster_notifications(
         self, entry_ids: Iterable[str], *, all_entry_ids: bool = False
@@ -396,6 +423,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         valid = {entry_id for entry_id in entry_ids if entry_id in self.kmlocks}
+
+        # Inside a parent-sync transaction: accumulate and defer
+        if self._sync_tx_depth > 0:
+            self._sync_tx_dirty_ids |= valid
+            self._sync_tx_all_entry_ids |= all_entry_ids
+            return
+
         if not valid and not all_entry_ids and not self._pending_notify_entry_ids:
             return
         self._pending_notify_entry_ids |= valid
@@ -1916,6 +1950,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._pending_provider_unlock_event.discard(kmlock.keymaster_config_entry_id)
         self._pending_provider_lock_event.discard(kmlock.keymaster_config_entry_id)
         self._cancel_pending_keypad_unlock_notification(kmlock)
+        self._cancel_entry_refresh_timers(kmlock.keymaster_config_entry_id)
         await self._rebuild_lock_relationships()
         await self._async_save_data()
         await self.async_refresh()
@@ -2048,7 +2083,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         kmlock.code_slots[code_slot_num].synced = Synced.ADDING
         kmlock.code_slots[code_slot_num].sync_op_started_at = utcnow()
-        self._quick_refresh = True
+        self._quick_refresh_entry_ids.add(kmlock.keymaster_config_entry_id)
         # Defer notifying entities of sync status change
         self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
@@ -2130,7 +2165,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         kmlock.code_slots[code_slot_num].synced = Synced.DELETING
         kmlock.code_slots[code_slot_num].sync_op_started_at = utcnow()
-        self._quick_refresh = True
+        self._quick_refresh_entry_ids.add(kmlock.keymaster_config_entry_id)
         # Defer notifying entities of sync status change
         self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
@@ -2286,33 +2321,41 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         return True
 
-    async def _trigger_quick_refresh(self, _: dt) -> None:
-        await self.async_request_refresh()
+    async def _trigger_quick_refresh_for_entry(self, entry_id: str, _: dt) -> None:
+        """Trigger a scoped quick-refresh for a single lock entry."""
+        self._cancel_quick_refresh.pop(entry_id, None)
+        if entry_id in self.kmlocks:
+            await self.async_refresh_lock(entry_id)
 
     async def async_request_debounced_refresh(self, entry_id: str | None = None) -> None:
         """Request a debounced coordinator refresh.
 
         Batches rapid entity updates into a single refresh by cancelling
-        any previously scheduled debounced refresh and scheduling a new
-        one after ENTITY_DEBOUNCE_SECONDS.
+        any previously scheduled debounced refresh for the same entry and
+        scheduling a new one after ENTITY_DEBOUNCE_SECONDS.
         """
         if entry_id is not None and entry_id in self.kmlocks:
             self._externally_dirty_entry_ids.add(entry_id)
 
-        if self._cancel_debounced_refresh:
-            self._cancel_debounced_refresh()
-            self._cancel_debounced_refresh = None
+        target = entry_id or "_global"
 
-        self._cancel_debounced_refresh = async_call_later(
+        if target in self._cancel_debounced_refresh:
+            self._cancel_debounced_refresh[target]()
+            del self._cancel_debounced_refresh[target]
+
+        self._cancel_debounced_refresh[target] = async_call_later(
             hass=self.hass,
             delay=ENTITY_DEBOUNCE_SECONDS,
-            action=self._trigger_debounced_refresh,
+            action=functools.partial(self._trigger_debounced_refresh_for_entry, target),
         )
 
-    async def _trigger_debounced_refresh(self, _: dt | None) -> None:
-        """Trigger a debounced refresh."""
-        self._cancel_debounced_refresh = None
-        await self.async_request_refresh()
+    async def _trigger_debounced_refresh_for_entry(self, entry_id: str, _: dt | None) -> None:
+        """Trigger a debounced refresh for a single entry."""
+        self._cancel_debounced_refresh.pop(entry_id, None)
+        if entry_id == "_global" or entry_id not in self.kmlocks:
+            await self.async_request_refresh()
+        else:
+            await self.async_refresh_lock(entry_id)
 
     async def update_slot_active_state(self, config_entry_id: str, code_slot_num: int) -> bool:
         """Update the active state for a code slot."""
@@ -2484,19 +2527,19 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     ) -> set[str]:
         """Refresh one lock's data and return dirty entry IDs."""
         await self._initial_setup_done_event.wait()
-        self._quick_refresh = False
+        self._quick_refresh_entry_ids.discard(entry_id)
         if advance_sync_status:
             self._sync_status_counter += 1
-        await self._clear_pending_quick_refresh()
+        await self._clear_pending_quick_refresh(entry_id)
         dirty = (
             {entry_id}
             if entry_id in self.kmlocks and entry_id in self._externally_dirty_entry_ids
             else set()
         )
         self._externally_dirty_entry_ids.discard(entry_id)
-        if self._cancel_debounced_refresh and not self._externally_dirty_entry_ids:
-            self._cancel_debounced_refresh()
-            self._cancel_debounced_refresh = None
+        if entry_id in self._cancel_debounced_refresh:
+            self._cancel_debounced_refresh[entry_id]()
+            del self._cancel_debounced_refresh[entry_id]
         before = self._lock_snapshot(entry_id)
         await self._update_lock_data(entry_id)
         if before != self._lock_snapshot(entry_id):
@@ -2530,7 +2573,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def async_refresh_all_locks(self) -> set[str]:
         """Refresh all locks for startup/maintenance; return dirty entry IDs."""
         await self._initial_setup_done_event.wait()
-        self._quick_refresh = False
+        self._quick_refresh_entry_ids.clear()
         self._sync_status_counter += 1
         dirty_entry_ids: set[str] = {
             entry_id for entry_id in self._externally_dirty_entry_ids if entry_id in self.kmlocks
@@ -2539,9 +2582,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # Clear any pending refresh callbacks
         await self._clear_pending_quick_refresh()
-        if self._cancel_debounced_refresh:
-            self._cancel_debounced_refresh()
-            self._cancel_debounced_refresh = None
+        for cancel in self._cancel_debounced_refresh.values():
+            cancel()
+        self._cancel_debounced_refresh.clear()
 
         for keymaster_config_entry_id in self.kmlocks:
             before = self._lock_snapshot(keymaster_config_entry_id)
@@ -2580,11 +2623,32 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._record_refresh_dirty_entry_ids(await self.async_refresh_all_locks())
         return dict(self.kmlocks)
 
-    async def _clear_pending_quick_refresh(self) -> None:
-        """Clear any pending refresh callback."""
-        if self._cancel_quick_refresh:
-            self._cancel_quick_refresh()
-            self._cancel_quick_refresh = None
+    async def _clear_pending_quick_refresh(self, entry_id: str | None = None) -> None:
+        """Clear pending quick-refresh callback(s).
+
+        If entry_id is given, cancel only that entry's timer.
+        If None, cancel ALL pending quick-refresh timers.
+        """
+        if entry_id is not None:
+            cancel = self._cancel_quick_refresh.pop(entry_id, None)
+            if cancel:
+                cancel()
+        else:
+            for cancel in self._cancel_quick_refresh.values():
+                cancel()
+            self._cancel_quick_refresh.clear()
+
+    @callback
+    def _cancel_entry_refresh_timers(self, entry_id: str) -> None:
+        """Cancel quick-refresh and debounced-refresh timers for a single entry."""
+        cancel = self._cancel_quick_refresh.pop(entry_id, None)
+        if cancel:
+            cancel()
+        cancel = self._cancel_debounced_refresh.pop(entry_id, None)
+        if cancel:
+            cancel()
+        self._quick_refresh_entry_ids.discard(entry_id)
+        self._externally_dirty_entry_ids.discard(entry_id)
 
     async def _update_lock_data(self, keymaster_config_entry_id: str) -> None:
         """Update a single keymaster lock."""
@@ -2909,7 +2973,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 )
                 return
             slot.synced = Synced.OUT_OF_SYNC
-            self._quick_refresh = True
+            self._quick_refresh_entry_ids.add(kmlock.keymaster_config_entry_id)
             return
 
         # Don't import stale lock codes during grace period after a clear.
@@ -2980,11 +3044,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             return dirty_entry_ids
 
-        for child_entry_id in kmlock.child_config_entry_ids:
-            before = self._lock_snapshot(child_entry_id)
-            await self._sync_child_lock(kmlock, child_entry_id)
-            if before != self._lock_snapshot(child_entry_id):
-                dirty_entry_ids.add(child_entry_id)
+        async with self._parent_sync_transaction():
+            for child_entry_id in kmlock.child_config_entry_ids:
+                before = self._lock_snapshot(child_entry_id)
+                await self._sync_child_lock(kmlock, child_entry_id)
+                if before != self._lock_snapshot(child_entry_id):
+                    dirty_entry_ids.add(child_entry_id)
         return dirty_entry_ids
 
     async def _sync_child_lock(self, kmlock: KeymasterLock, child_entry_id: str) -> None:
@@ -3097,7 +3162,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 or prev_active != child_slot.active
                 or child_needs_retry
             ):
-                self._quick_refresh = True
+                self._quick_refresh_entry_ids.add(child_kmlock.keymaster_config_entry_id)
                 if not kmslot.enabled or not kmslot.active or not kmslot.pin:
                     await self.clear_pin_from_lock(
                         config_entry_id=child_kmlock.keymaster_config_entry_id,
@@ -3116,14 +3181,19 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     child_kmlock.code_slots[code_slot_num].pin = kmslot.pin
 
     async def _schedule_quick_refresh_if_needed(self) -> None:
-        """Schedule quick refresh if required."""
-        if self._quick_refresh:
+        """Schedule per-entry quick refresh timers for pending entries."""
+        for entry_id in list(self._quick_refresh_entry_ids):
+            if entry_id in self._cancel_quick_refresh:
+                # Already has a pending timer — don't reschedule
+                continue
             _LOGGER.debug(
-                "[schedule_quick_refresh_if_needed] Scheduling refresh in %s seconds",
+                "[schedule_quick_refresh_if_needed] %s: Scheduling refresh in %s seconds",
+                entry_id,
                 QUICK_REFRESH_SECONDS,
             )
-            self._cancel_quick_refresh = async_call_later(
+            self._cancel_quick_refresh[entry_id] = async_call_later(
                 hass=self.hass,
                 delay=QUICK_REFRESH_SECONDS,
-                action=self._trigger_quick_refresh,
+                action=functools.partial(self._trigger_quick_refresh_for_entry, entry_id),
             )
+        self._quick_refresh_entry_ids.clear()
