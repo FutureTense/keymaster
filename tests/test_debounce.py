@@ -790,3 +790,70 @@ class TestPerEntryQuickRefresh:
             coordinator._cancel_debounced_refresh["entry_1"]()
             await coordinator._trigger_debounced_refresh_for_entry("entry_1", utcnow())
             mock_refresh.assert_called_once_with("entry_1")
+
+
+class TestPerEntryRefreshEdgeCases:
+    """Cover per-entry refresh fallback, cancel-all, and dedup guard paths."""
+
+    async def test_debounced_refresh_global_sentinel_calls_full_refresh(self, hass: HomeAssistant):
+        """_trigger_debounced_refresh_for_entry with '_global' calls async_request_refresh."""
+        coordinator = KeymasterCoordinator(hass)
+
+        with patch.object(coordinator, "async_request_refresh", new=AsyncMock()) as mock_refresh:
+            await coordinator._trigger_debounced_refresh_for_entry("_global", utcnow())
+            mock_refresh.assert_called_once()
+
+    async def test_debounced_refresh_removed_lock_calls_full_refresh(self, hass: HomeAssistant):
+        """If a lock is removed before its debounce timer fires, fall back to full refresh."""
+        coordinator = KeymasterCoordinator(hass)
+        # entry_1 was scheduled but then removed from kmlocks
+        coordinator.kmlocks.pop("entry_1", None)
+
+        with patch.object(coordinator, "async_request_refresh", new=AsyncMock()) as mock_refresh:
+            await coordinator._trigger_debounced_refresh_for_entry("entry_1", utcnow())
+            mock_refresh.assert_called_once()
+
+    async def test_clear_all_quick_refresh_cancels_every_handle(self, hass: HomeAssistant):
+        """_clear_pending_quick_refresh(None) cancels ALL per-entry handles."""
+        coordinator = KeymasterCoordinator(hass)
+        cancel_1 = Mock()
+        cancel_2 = Mock()
+        cancel_3 = Mock()
+        coordinator._cancel_quick_refresh = {
+            "entry_1": cancel_1,
+            "entry_2": cancel_2,
+            "entry_3": cancel_3,
+        }
+
+        await coordinator._clear_pending_quick_refresh()
+
+        cancel_1.assert_called_once()
+        cancel_2.assert_called_once()
+        cancel_3.assert_called_once()
+        assert coordinator._cancel_quick_refresh == {}
+
+    async def test_schedule_quick_refresh_does_not_reschedule_existing_timer(
+        self, hass: HomeAssistant
+    ):
+        """An entry with an existing pending handle is NOT rescheduled."""
+        coordinator = KeymasterCoordinator(hass)
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
+        coordinator.kmlocks["entry_2"] = _make_lock("entry_2")
+
+        # entry_1 already has a pending timer
+        existing_handle = Mock()
+        coordinator._cancel_quick_refresh = {"entry_1": existing_handle}
+        # Both entries are pending quick refresh
+        coordinator._quick_refresh_entry_ids = {"entry_1", "entry_2"}
+
+        await coordinator._schedule_quick_refresh_if_needed()
+
+        # entry_1's handle is unchanged (identity check — not rescheduled)
+        assert coordinator._cancel_quick_refresh["entry_1"] is existing_handle
+        # entry_2 got a NEW timer
+        assert "entry_2" in coordinator._cancel_quick_refresh
+        assert coordinator._cancel_quick_refresh["entry_2"] is not existing_handle
+        # pending set was cleared
+        assert coordinator._quick_refresh_entry_ids == set()
+        # Clean up
+        coordinator._cancel_quick_refresh["entry_2"]()
