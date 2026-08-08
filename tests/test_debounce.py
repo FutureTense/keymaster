@@ -31,6 +31,7 @@ from custom_components.keymaster.lock import (
     KeymasterLock,
 )
 from custom_components.keymaster.number import KeymasterNumber, KeymasterNumberEntityDescription
+from custom_components.keymaster.providers._base import BaseLockProvider
 from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
 from custom_components.keymaster.text import KeymasterText, KeymasterTextEntityDescription
 from custom_components.keymaster.time import KeymasterTime, KeymasterTimeEntityDescription
@@ -57,7 +58,7 @@ def mock_coordinator(mock_hass):
         coordinator = KeymasterCoordinator(mock_hass)
         coordinator.hass = mock_hass
         coordinator.kmlocks = {}
-        coordinator._quick_refresh = False
+        coordinator._quick_refresh_entry_ids = set()
         coordinator.set_pin_on_lock = AsyncMock()
         coordinator.clear_pin_from_lock = AsyncMock()
         return coordinator
@@ -95,7 +96,7 @@ class TestGracePeriod:
 
         assert slot.pin == "5678"
         assert slot.synced == Synced.SYNCED
-        assert mock_coordinator._quick_refresh is False
+        assert "entry_1" not in mock_coordinator._quick_refresh_entry_ids
 
     async def test_mismatch_detected_after_grace_expires(self, mock_coordinator):
         """PIN mismatch after grace period should mark OUT_OF_SYNC."""
@@ -109,7 +110,7 @@ class TestGracePeriod:
         await mock_coordinator._sync_pin(lock, 1, "1234")
 
         assert slot.synced == Synced.OUT_OF_SYNC
-        assert mock_coordinator._quick_refresh is True
+        assert "entry_1" in mock_coordinator._quick_refresh_entry_ids
         assert slot.pin == "5678"
 
     async def test_mismatch_detected_when_no_grace_timestamp(self, mock_coordinator):
@@ -124,7 +125,7 @@ class TestGracePeriod:
         await mock_coordinator._sync_pin(lock, 1, "1234")
 
         assert slot.synced == Synced.OUT_OF_SYNC
-        assert mock_coordinator._quick_refresh is True
+        assert "entry_1" in mock_coordinator._quick_refresh_entry_ids
 
     async def test_empty_lock_response_during_grace_does_not_repush(self, mock_coordinator):
         """Lock reports empty during grace period — should NOT re-push PIN."""
@@ -165,7 +166,7 @@ class TestGracePeriod:
 
         assert slot.synced == Synced.SYNCED
         assert slot.pin == "5678"
-        assert mock_coordinator._quick_refresh is False
+        assert "entry_1" not in mock_coordinator._quick_refresh_entry_ids
 
     async def test_stale_code_after_clear_within_grace(self, mock_coordinator):
         """Lock reporting old PIN after clear within grace should not overwrite cleared state."""
@@ -252,32 +253,34 @@ class TestDebouncedRefresh:
     async def test_multiple_rapid_calls_result_in_single_refresh(self, hass: HomeAssistant):
         """Multiple rapid calls should schedule only one refresh."""
         coordinator = KeymasterCoordinator(hass)
-        coordinator._cancel_debounced_refresh = None
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
 
-        with patch.object(coordinator, "async_request_refresh", new=AsyncMock()) as mock_refresh:
-            await coordinator.async_request_debounced_refresh()
-            await coordinator.async_request_debounced_refresh()
-            await coordinator.async_request_debounced_refresh()
+        with patch.object(
+            coordinator, "async_refresh_lock", new=AsyncMock(return_value=set())
+        ) as mock_refresh:
+            await coordinator.async_request_debounced_refresh("entry_1")
+            await coordinator.async_request_debounced_refresh("entry_1")
+            await coordinator.async_request_debounced_refresh("entry_1")
 
-            assert coordinator._cancel_debounced_refresh is not None
+            assert "entry_1" in coordinator._cancel_debounced_refresh
 
             # Cancel the pending async_call_later timer before manually triggering
-            coordinator._cancel_debounced_refresh()
-            await coordinator._trigger_debounced_refresh(utcnow())
+            coordinator._cancel_debounced_refresh["entry_1"]()
+            await coordinator._trigger_debounced_refresh_for_entry("entry_1", utcnow())
 
-            mock_refresh.assert_called_once()
+            mock_refresh.assert_called_once_with("entry_1")
 
     async def test_cancels_previous_pending(self, hass: HomeAssistant):
         """Calling again should cancel the previous pending refresh."""
         coordinator = KeymasterCoordinator(hass)
-        coordinator._cancel_debounced_refresh = None
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
 
-        await coordinator.async_request_debounced_refresh()
-        first_cancel = coordinator._cancel_debounced_refresh
+        await coordinator.async_request_debounced_refresh("entry_1")
+        first_cancel = coordinator._cancel_debounced_refresh.get("entry_1")
         assert first_cancel is not None
 
-        await coordinator.async_request_debounced_refresh()
-        second_cancel = coordinator._cancel_debounced_refresh
+        await coordinator.async_request_debounced_refresh("entry_1")
+        second_cancel = coordinator._cancel_debounced_refresh.get("entry_1")
         assert second_cancel is not None
         assert first_cancel is not second_cancel
 
@@ -285,23 +288,23 @@ class TestDebouncedRefresh:
         second_cancel()
 
     async def test_trigger_debounced_refresh_clears_cancel(self, hass: HomeAssistant):
-        """_trigger_debounced_refresh should clear _cancel_debounced_refresh."""
+        """_trigger_debounced_refresh_for_entry should clear its entry."""
         coordinator = KeymasterCoordinator(hass)
-        coordinator._cancel_debounced_refresh = Mock()
+        coordinator._cancel_debounced_refresh["entry_1"] = Mock()
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
 
-        with patch.object(coordinator, "async_request_refresh", new=AsyncMock()):
-            await coordinator._trigger_debounced_refresh(utcnow())
+        with patch.object(coordinator, "async_refresh_lock", new=AsyncMock(return_value=set())):
+            await coordinator._trigger_debounced_refresh_for_entry("entry_1", utcnow())
 
-        assert coordinator._cancel_debounced_refresh is None
+        assert "entry_1" not in coordinator._cancel_debounced_refresh
 
     async def test_debounce_cancelled_on_full_refresh(self, hass: HomeAssistant):
         """_async_update_data should cancel any pending debounced refresh."""
         coordinator = KeymasterCoordinator(hass)
         cancel_mock = Mock()
-        coordinator._cancel_debounced_refresh = cancel_mock
+        coordinator._cancel_debounced_refresh = {"entry_1": cancel_mock}
         coordinator._initial_setup_done_event = Mock()
         coordinator._initial_setup_done_event.wait = AsyncMock()
-        coordinator._cancel_quick_refresh = None
 
         with (
             patch.object(coordinator, "_async_save_data", new=AsyncMock()),
@@ -313,7 +316,7 @@ class TestDebouncedRefresh:
             await coordinator._async_update_data()
 
         cancel_mock.assert_called_once()
-        assert coordinator._cancel_debounced_refresh is None
+        assert coordinator._cancel_debounced_refresh == {}
 
 
 # ── Entity Handler Tests ────────────────────────────────────────────────────
@@ -594,3 +597,196 @@ class TestSerializationExclusion:
         assert result["number"] == 1
         assert result["enabled"] is True
         assert result["pin"] == "1234"
+
+
+# ── Per-Entry Scoped Refresh Tests ──────────────────────────────────────────
+
+
+class TestPerEntryQuickRefresh:
+    """Tests for per-entry quick refresh scheduling (issue #684)."""
+
+    @pytest.fixture
+    def real_coordinator(self, mock_hass):
+        """Coordinator with real _schedule_quick_refresh_if_needed."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._quick_refresh_entry_ids = set()
+            coordinator._cancel_quick_refresh = {}
+            coordinator._cancel_debounced_refresh = {}
+            coordinator._externally_dirty_entry_ids = set()
+            coordinator._initial_setup_done_event = AsyncMock()
+            coordinator._initial_setup_done_event.wait = AsyncMock()
+            coordinator.async_set_updated_data = Mock()
+            coordinator.async_schedule_keymaster_notifications = Mock()
+            coordinator._sync_tx_depth = 0
+            coordinator._sync_tx_dirty_ids = set()
+            coordinator._sync_tx_all_entry_ids = False
+            return coordinator
+
+    async def test_set_pin_records_target_entry_id(self, real_coordinator):
+        """set_pin_on_lock adds the target lock's entry ID to pending set."""
+
+        provider = Mock(spec=BaseLockProvider)
+        provider.async_set_usercode = AsyncMock(return_value=True)
+        lock = KeymasterLock(
+            lock_name="Test",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry_1",
+        )
+        lock.connected = True
+        lock.provider = provider
+        lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, pin="1234", name="Slot", active=True, enabled=True),
+        }
+        real_coordinator.kmlocks["entry_1"] = lock
+
+        await real_coordinator.set_pin_on_lock("entry_1", 1, "5678", override=True)
+
+        assert "entry_1" in real_coordinator._quick_refresh_entry_ids
+
+    async def test_clear_pin_records_target_entry_id(self, real_coordinator):
+        """clear_pin_from_lock adds the target lock's entry ID to pending set."""
+
+        provider = Mock(spec=BaseLockProvider)
+        provider.async_clear_usercode = AsyncMock(return_value=True)
+        lock = KeymasterLock(
+            lock_name="Test",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry_1",
+        )
+        lock.connected = True
+        lock.provider = provider
+        lock.code_slots = {
+            1: KeymasterCodeSlot(number=1, pin="1234", name="Slot", active=True, enabled=True),
+        }
+        real_coordinator.kmlocks["entry_1"] = lock
+
+        await real_coordinator.clear_pin_from_lock("entry_1", 1, override=True)
+
+        assert "entry_1" in real_coordinator._quick_refresh_entry_ids
+
+    async def test_two_locks_get_independent_quick_refresh_timers(self, hass: HomeAssistant):
+        """Edits on two locks produce two independent per-entry timers."""
+        coordinator = KeymasterCoordinator(hass)
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
+        coordinator.kmlocks["entry_2"] = _make_lock("entry_2")
+        coordinator._quick_refresh_entry_ids = {"entry_1", "entry_2"}
+
+        await coordinator._schedule_quick_refresh_if_needed()
+
+        assert "entry_1" in coordinator._cancel_quick_refresh
+        assert "entry_2" in coordinator._cancel_quick_refresh
+        assert (
+            coordinator._cancel_quick_refresh["entry_1"]
+            is not (coordinator._cancel_quick_refresh["entry_2"])
+        )
+        # Clean up
+        coordinator._cancel_quick_refresh["entry_1"]()
+        coordinator._cancel_quick_refresh["entry_2"]()
+
+    async def test_cancelling_one_entry_does_not_disturb_another(self, hass: HomeAssistant):
+        """Cancelling/rescheduling for one entry must not disturb another."""
+        coordinator = KeymasterCoordinator(hass)
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
+        coordinator.kmlocks["entry_2"] = _make_lock("entry_2")
+        coordinator._quick_refresh_entry_ids = {"entry_1", "entry_2"}
+
+        await coordinator._schedule_quick_refresh_if_needed()
+        entry_2_cancel = coordinator._cancel_quick_refresh["entry_2"]
+
+        # Clear only entry_1
+        await coordinator._clear_pending_quick_refresh("entry_1")
+
+        assert "entry_1" not in coordinator._cancel_quick_refresh
+        assert coordinator._cancel_quick_refresh["entry_2"] is entry_2_cancel
+        # Clean up
+        entry_2_cancel()
+
+    async def test_two_locks_get_independent_debounced_timers(self, hass: HomeAssistant):
+        """Debounced edits on two locks produce two independent per-entry timers."""
+        coordinator = KeymasterCoordinator(hass)
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
+        coordinator.kmlocks["entry_2"] = _make_lock("entry_2")
+
+        await coordinator.async_request_debounced_refresh("entry_1")
+        await coordinator.async_request_debounced_refresh("entry_2")
+
+        assert "entry_1" in coordinator._cancel_debounced_refresh
+        assert "entry_2" in coordinator._cancel_debounced_refresh
+        assert (
+            coordinator._cancel_debounced_refresh["entry_1"]
+            is not (coordinator._cancel_debounced_refresh["entry_2"])
+        )
+        # Clean up
+        coordinator._cancel_debounced_refresh["entry_1"]()
+        coordinator._cancel_debounced_refresh["entry_2"]()
+
+    async def test_shutdown_cancels_all_per_entry_handles(self, hass: HomeAssistant):
+        """Shutdown cancels every per-entry handle and leaves dicts empty."""
+        coordinator = KeymasterCoordinator(hass)
+        cancel_quick_1 = Mock()
+        cancel_quick_2 = Mock()
+        cancel_debounce_1 = Mock()
+        coordinator._cancel_quick_refresh = {"e1": cancel_quick_1, "e2": cancel_quick_2}
+        coordinator._cancel_debounced_refresh = {"e1": cancel_debounce_1}
+
+        await coordinator.async_shutdown()
+
+        cancel_quick_1.assert_called_once()
+        cancel_quick_2.assert_called_once()
+        cancel_debounce_1.assert_called_once()
+        assert coordinator._cancel_quick_refresh == {}
+        assert coordinator._cancel_debounced_refresh == {}
+
+    async def test_delete_lock_cancels_pending_timers(self, hass: HomeAssistant):
+        """A lock deleted while holding a pending handle does not leave dangling timer."""
+        coordinator = KeymasterCoordinator(hass)
+        cancel_quick = Mock()
+        cancel_debounce = Mock()
+        coordinator._cancel_quick_refresh = {"entry_1": cancel_quick}
+        coordinator._cancel_debounced_refresh = {"entry_1": cancel_debounce}
+        coordinator._quick_refresh_entry_ids = {"entry_1"}
+        coordinator._externally_dirty_entry_ids = {"entry_1"}
+
+        coordinator._cancel_entry_refresh_timers("entry_1")
+
+        cancel_quick.assert_called_once()
+        cancel_debounce.assert_called_once()
+        assert "entry_1" not in coordinator._cancel_quick_refresh
+        assert "entry_1" not in coordinator._cancel_debounced_refresh
+        assert "entry_1" not in coordinator._quick_refresh_entry_ids
+        assert "entry_1" not in coordinator._externally_dirty_entry_ids
+
+    async def test_quick_refresh_routes_through_serialised_refresh_lock(self, hass: HomeAssistant):
+        """Quick refresh triggers async_refresh_lock which serialises via _debounced_refresh."""
+        coordinator = KeymasterCoordinator(hass)
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
+
+        with patch.object(
+            coordinator, "async_refresh_lock", new=AsyncMock(return_value=set())
+        ) as mock_refresh:
+            await coordinator._trigger_quick_refresh_for_entry("entry_1", utcnow())
+            mock_refresh.assert_called_once_with("entry_1")
+
+    async def test_rapid_debounce_coalesces_for_one_lock(self, hass: HomeAssistant):
+        """Multiple rapid debounced calls for one lock coalesce into one refresh."""
+        coordinator = KeymasterCoordinator(hass)
+        coordinator.kmlocks["entry_1"] = _make_lock("entry_1")
+
+        await coordinator.async_request_debounced_refresh("entry_1")
+        await coordinator.async_request_debounced_refresh("entry_1")
+        await coordinator.async_request_debounced_refresh("entry_1")
+
+        # Only one timer for entry_1
+        assert len(coordinator._cancel_debounced_refresh) == 1
+        assert "entry_1" in coordinator._cancel_debounced_refresh
+
+        # Trigger and verify only one call
+        with patch.object(
+            coordinator, "async_refresh_lock", new=AsyncMock(return_value=set())
+        ) as mock_refresh:
+            coordinator._cancel_debounced_refresh["entry_1"]()
+            await coordinator._trigger_debounced_refresh_for_entry("entry_1", utcnow())
+            mock_refresh.assert_called_once_with("entry_1")
