@@ -110,7 +110,7 @@ class TestGracePeriod:
         await mock_coordinator._sync_pin(lock, 1, "1234")
 
         assert slot.synced == Synced.OUT_OF_SYNC
-        assert "entry_1" in mock_coordinator._quick_refresh_entry_ids
+        assert mock_coordinator._quick_refresh_entry_ids == {"entry_1"}
         assert slot.pin == "5678"
 
     async def test_mismatch_detected_when_no_grace_timestamp(self, mock_coordinator):
@@ -125,7 +125,7 @@ class TestGracePeriod:
         await mock_coordinator._sync_pin(lock, 1, "1234")
 
         assert slot.synced == Synced.OUT_OF_SYNC
-        assert "entry_1" in mock_coordinator._quick_refresh_entry_ids
+        assert mock_coordinator._quick_refresh_entry_ids == {"entry_1"}
 
     async def test_empty_lock_response_during_grace_does_not_repush(self, mock_coordinator):
         """Lock reports empty during grace period — should NOT re-push PIN."""
@@ -644,7 +644,7 @@ class TestPerEntryQuickRefresh:
 
         await real_coordinator.set_pin_on_lock("entry_1", 1, "5678", override=True)
 
-        assert "entry_1" in real_coordinator._quick_refresh_entry_ids
+        assert real_coordinator._quick_refresh_entry_ids == {"entry_1"}
 
     async def test_clear_pin_records_target_entry_id(self, real_coordinator):
         """clear_pin_from_lock adds the target lock's entry ID to pending set."""
@@ -665,7 +665,7 @@ class TestPerEntryQuickRefresh:
 
         await real_coordinator.clear_pin_from_lock("entry_1", 1, override=True)
 
-        assert "entry_1" in real_coordinator._quick_refresh_entry_ids
+        assert real_coordinator._quick_refresh_entry_ids == {"entry_1"}
 
     async def test_two_locks_get_independent_quick_refresh_timers(self, hass: HomeAssistant):
         """Edits on two locks produce two independent per-entry timers."""

@@ -116,7 +116,7 @@ class TestParentChildSync:
             override=True,
         )
         assert child_slot.pin is None
-        assert mock_coordinator._quick_refresh_entry_ids
+        assert mock_coordinator._quick_refresh_entry_ids == {"child_id"}
 
     async def test_sync_parent_inactive_slot_clears_child(
         self, mock_coordinator, parent_lock, child_lock
@@ -1444,7 +1444,7 @@ class TestChildSyncOutOfSyncFullCycle:
             pin="5678",
             override=True,
         )
-        assert mock_coordinator._quick_refresh_entry_ids
+        assert mock_coordinator._quick_refresh_entry_ids == {"child_id"}
 
 
 class TestParentSyncTransaction:

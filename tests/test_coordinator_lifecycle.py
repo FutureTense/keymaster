@@ -1440,8 +1440,8 @@ async def test_async_refresh_lock_health_transition_notifies_all_locks(hass) -> 
     await coordinator.async_shutdown()
 
 
-async def test_scoped_refresh_keeps_shared_debounce_for_other_dirty_locks(hass) -> None:
-    """Test scoped refresh does not strand another lock's pending debounced refresh."""
+async def test_scoped_refresh_preserves_other_entry_debounce_timer(hass) -> None:
+    """Refreshing entry_1 must not cancel entry_2's per-entry debounce timer."""
     coordinator = KeymasterCoordinator(hass)
     coordinator._initial_setup_done_event.set()
     coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
