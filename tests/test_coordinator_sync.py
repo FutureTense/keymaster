@@ -1445,3 +1445,195 @@ class TestChildSyncOutOfSyncFullCycle:
             override=True,
         )
         assert mock_coordinator._quick_refresh is True
+
+
+class TestParentSyncTransaction:
+    """Tests for _parent_sync_transaction coalescing notifications."""
+
+    @pytest.fixture
+    def real_coordinator(self, mock_hass):
+        """Coordinator with real async_schedule_keymaster_notifications and transaction."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator.kmlocks = {}
+            coordinator._quick_refresh = False
+            coordinator._initial_setup_done_event = AsyncMock()
+            coordinator._initial_setup_done_event.wait = AsyncMock()
+            coordinator.async_set_updated_data = Mock()
+            # Real notification method (not mocked)
+            coordinator._deferred_notifications_shutting_down = False
+            coordinator._pending_notify_entry_ids = set()
+            coordinator._pending_notify_all_entry_ids = False
+            coordinator._pending_failed_refresh = False
+            coordinator._defer_refresh_listener_updates = False
+            coordinator._notify_handle = None
+            coordinator._lock_coordinators = {}
+            coordinator._sync_tx_depth = 0
+            coordinator._sync_tx_dirty_ids = set()
+            coordinator._sync_tx_all_entry_ids = False
+            coordinator.last_update_success = True
+            # Mock schedule to track calls that escape the transaction
+            coordinator._schedule_pending_keymaster_notifications = Mock()
+            return coordinator
+
+    @pytest.fixture
+    def parent_with_children(self, real_coordinator):
+        """Set up parent with two children in kmlocks."""
+        parent = KeymasterLock(
+            lock_name="Parent",
+            lock_entity_id="lock.parent",
+            keymaster_config_entry_id="parent_id",
+        )
+        parent.connected = True
+        parent.provider = Mock(spec=BaseLockProvider)
+        parent.child_config_entry_ids = ["child_a", "child_b"]
+        parent.code_slots = {
+            1: KeymasterCodeSlot(number=1, pin="1111", name="Slot1", active=True, enabled=True),
+            2: KeymasterCodeSlot(number=2, pin="2222", name="Slot2", active=True, enabled=True),
+        }
+
+        child_a = KeymasterLock(
+            lock_name="Child A",
+            lock_entity_id="lock.child_a",
+            keymaster_config_entry_id="child_a",
+        )
+        child_a.connected = True
+        child_a.provider = Mock(spec=BaseLockProvider)
+        child_a.provider.async_set_usercode = AsyncMock(return_value=True)
+        child_a.provider.async_clear_usercode = AsyncMock(return_value=True)
+        child_a.parent_config_entry_id = "parent_id"
+        child_a.code_slots = {
+            1: KeymasterCodeSlot(number=1, pin="0000", name="Slot1", active=True, enabled=True),
+            2: KeymasterCodeSlot(number=2, pin="0000", name="Slot2", active=True, enabled=True),
+        }
+
+        child_b = KeymasterLock(
+            lock_name="Child B",
+            lock_entity_id="lock.child_b",
+            keymaster_config_entry_id="child_b",
+        )
+        child_b.connected = True
+        child_b.provider = Mock(spec=BaseLockProvider)
+        child_b.provider.async_set_usercode = AsyncMock(return_value=True)
+        child_b.provider.async_clear_usercode = AsyncMock(return_value=True)
+        child_b.parent_config_entry_id = "parent_id"
+        child_b.code_slots = {
+            1: KeymasterCodeSlot(number=1, pin="0000", name="Slot1", active=True, enabled=True),
+            2: KeymasterCodeSlot(number=2, pin="0000", name="Slot2", active=True, enabled=True),
+        }
+
+        real_coordinator.kmlocks = {
+            "parent_id": parent,
+            "child_a": child_a,
+            "child_b": child_b,
+        }
+        return parent, child_a, child_b
+
+    async def test_multiple_slots_one_child_single_notification(
+        self, real_coordinator, parent_with_children
+    ):
+        """Parent sync touching multiple slots on one child produces ONE notification."""
+        parent, child_a, _child_b = parent_with_children
+        # Only sync child_a
+        parent.child_config_entry_ids = ["child_a"]
+
+        await real_coordinator._sync_child_locks("parent_id")
+
+        # The transaction should flush exactly once, producing one schedule call
+        assert real_coordinator._schedule_pending_keymaster_notifications.call_count == 1
+        # The pending set should contain child_a (both slots triggered it)
+        assert "child_a" in real_coordinator._pending_notify_entry_ids
+
+    async def test_multiple_children_each_notified_once(
+        self, real_coordinator, parent_with_children
+    ):
+        """Parent with multiple children notifies parent + each child exactly once."""
+        _parent, _child_a, _child_b = parent_with_children
+
+        await real_coordinator._sync_child_locks("parent_id")
+
+        # Single flush at transaction exit
+        assert real_coordinator._schedule_pending_keymaster_notifications.call_count == 1
+        # Both children should be in the pending set
+        assert "child_a" in real_coordinator._pending_notify_entry_ids
+        assert "child_b" in real_coordinator._pending_notify_entry_ids
+
+    async def test_override_parent_child_not_notified(self, real_coordinator, parent_with_children):
+        """Children with override_parent=True are neither mutated nor notified."""
+        parent, child_a, _child_b = parent_with_children
+        parent.child_config_entry_ids = ["child_a"]
+        # Set override_parent on child slots
+        child_a.code_slots[1].override_parent = True
+        child_a.code_slots[2].override_parent = True
+
+        await real_coordinator._sync_child_locks("parent_id")
+
+        # No slots were changed, so child_a is not dirty
+        assert "child_a" not in real_coordinator._pending_notify_entry_ids
+
+    async def test_exception_mid_transaction_does_not_leak_depth(
+        self, real_coordinator, parent_with_children
+    ):
+        """An exception during provider call does not leak transaction depth."""
+        parent, child_a, _child_b = parent_with_children
+        parent.child_config_entry_ids = ["child_a"]
+        # Make the provider raise on second slot
+        call_count = {"n": 0}
+
+        async def failing_set(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] >= 2:
+                raise RuntimeError("Provider exploded")
+            return True
+
+        child_a.provider.async_set_usercode = AsyncMock(side_effect=failing_set)
+
+        with pytest.raises(RuntimeError, match="Provider exploded"):
+            await real_coordinator._sync_child_locks("parent_id")
+
+        # Depth must be back to 0
+        assert real_coordinator._sync_tx_depth == 0
+        # Accumulated IDs from before the exception should have been flushed
+        assert real_coordinator._schedule_pending_keymaster_notifications.call_count == 1
+
+        # Subsequent call must schedule immediately (depth == 0)
+        real_coordinator._schedule_pending_keymaster_notifications.reset_mock()
+        real_coordinator.async_schedule_keymaster_notifications(["child_a"])
+        assert real_coordinator._schedule_pending_keymaster_notifications.call_count == 1
+
+    async def test_nested_transaction_reentrant(self, real_coordinator, parent_with_children):
+        """Nested transactions share the accumulator; only outermost flushes."""
+        _parent, _child_a, _child_b = parent_with_children
+
+        async with real_coordinator._parent_sync_transaction():
+            real_coordinator.async_schedule_keymaster_notifications(["parent_id"])
+            assert real_coordinator._sync_tx_depth == 1
+            assert real_coordinator._schedule_pending_keymaster_notifications.call_count == 0
+
+            async with real_coordinator._parent_sync_transaction():
+                real_coordinator.async_schedule_keymaster_notifications(["child_a"])
+                assert real_coordinator._sync_tx_depth == 2
+                assert real_coordinator._schedule_pending_keymaster_notifications.call_count == 0
+
+            # Inner exited but depth > 0, no flush yet
+            assert real_coordinator._sync_tx_depth == 1
+            assert real_coordinator._schedule_pending_keymaster_notifications.call_count == 0
+
+        # Outermost exits -> flush
+        assert real_coordinator._sync_tx_depth == 0
+        assert real_coordinator._schedule_pending_keymaster_notifications.call_count == 1
+        assert "parent_id" in real_coordinator._pending_notify_entry_ids
+        assert "child_a" in real_coordinator._pending_notify_entry_ids
+
+    async def test_all_entry_ids_preserved_through_transaction(
+        self, real_coordinator, parent_with_children
+    ):
+        """all_entry_ids=True requested during transaction is honoured at flush."""
+        _parent, _child_a, _child_b = parent_with_children
+
+        async with real_coordinator._parent_sync_transaction():
+            real_coordinator.async_schedule_keymaster_notifications(["child_a"], all_entry_ids=True)
+
+        # After flush, the all_entry_ids flag should have propagated
+        assert real_coordinator._pending_notify_all_entry_ids is True
