@@ -37,7 +37,7 @@ def mock_coordinator(mock_hass):
         coordinator = KeymasterCoordinator(mock_hass)
         coordinator.hass = mock_hass
         coordinator.kmlocks = {}
-        coordinator._quick_refresh = False
+        coordinator._quick_refresh_entry_ids = set()
         coordinator.set_pin_on_lock = AsyncMock()
         coordinator.clear_pin_from_lock = AsyncMock()
         coordinator.async_set_updated_data = Mock()
@@ -286,7 +286,7 @@ class TestSetPinPassesName:
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
             coordinator.kmlocks = {}
-            coordinator._quick_refresh = False
+            coordinator._quick_refresh_entry_ids = set()
             coordinator._initial_setup_done_event = AsyncMock()
             coordinator._initial_setup_done_event.wait = AsyncMock()
             coordinator.async_set_updated_data = Mock()

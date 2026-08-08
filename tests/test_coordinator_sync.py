@@ -30,7 +30,7 @@ def mock_coordinator(mock_hass):
         coordinator = KeymasterCoordinator(mock_hass)
         coordinator.hass = mock_hass
         coordinator.kmlocks = {}
-        coordinator._quick_refresh = False
+        coordinator._quick_refresh_entry_ids = set()
         # Mock the PIN operations
         coordinator.set_pin_on_lock = AsyncMock()
         coordinator.clear_pin_from_lock = AsyncMock()
@@ -116,7 +116,7 @@ class TestParentChildSync:
             override=True,
         )
         assert child_slot.pin is None
-        assert mock_coordinator._quick_refresh is True
+        assert mock_coordinator._quick_refresh_entry_ids
 
     async def test_sync_parent_inactive_slot_clears_child(
         self, mock_coordinator, parent_lock, child_lock
@@ -885,7 +885,7 @@ class TestProviderFailureSyncReset:
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
             coordinator.kmlocks = {}
-            coordinator._quick_refresh = False
+            coordinator._quick_refresh_entry_ids = set()
             coordinator._initial_setup_done_event = AsyncMock()
             coordinator._initial_setup_done_event.wait = AsyncMock()
             coordinator.async_set_updated_data = Mock()
@@ -1041,7 +1041,7 @@ class TestSyncPinStuckStateRecovery:
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
             coordinator.kmlocks = {}
-            coordinator._quick_refresh = False
+            coordinator._quick_refresh_entry_ids = set()
             coordinator._initial_setup_done_event = AsyncMock()
             coordinator._initial_setup_done_event.wait = AsyncMock()
             coordinator.async_set_updated_data = Mock()
@@ -1294,7 +1294,7 @@ class TestUpdateCodeSlotsRetryUncovered:
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
             coordinator.kmlocks = {}
-            coordinator._quick_refresh = False
+            coordinator._quick_refresh_entry_ids = set()
             coordinator.set_pin_on_lock = AsyncMock(return_value=True)
             coordinator.clear_pin_from_lock = AsyncMock(return_value=True)
             coordinator._update_slot = AsyncMock()
@@ -1444,7 +1444,7 @@ class TestChildSyncOutOfSyncFullCycle:
             pin="5678",
             override=True,
         )
-        assert mock_coordinator._quick_refresh is True
+        assert mock_coordinator._quick_refresh_entry_ids
 
 
 class TestParentSyncTransaction:
@@ -1457,7 +1457,7 @@ class TestParentSyncTransaction:
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
             coordinator.kmlocks = {}
-            coordinator._quick_refresh = False
+            coordinator._quick_refresh_entry_ids = set()
             coordinator._initial_setup_done_event = AsyncMock()
             coordinator._initial_setup_done_event.wait = AsyncMock()
             coordinator.async_set_updated_data = Mock()
