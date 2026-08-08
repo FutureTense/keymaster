@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import Callable, Iterable, MutableMapping
+from collections.abc import AsyncIterator, Callable, Iterable, MutableMapping
 import contextlib
+from contextlib import asynccontextmanager
 from dataclasses import fields, is_dataclass
 from datetime import datetime as dt, time as dt_time, timedelta
 import functools
@@ -241,6 +242,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._notify_handle: asyncio.Handle | None = None
         self._refresh_dirty_entry_ids: set[str] | None = None
         self._active_refresh_count = 0
+        self._sync_tx_depth: int = 0
+        self._sync_tx_dirty_ids: set[str] = set()
+        self._sync_tx_all_entry_ids: bool = False
         self._refresh_previous_update_success: bool | None = None
         self._externally_dirty_entry_ids: set[str] = set()
         self._refresh_keepalive_unsub: Callable[[], None] | None = None
@@ -387,6 +391,27 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._refresh_keepalive_unsub()
             self._refresh_keepalive_unsub = None
 
+    @asynccontextmanager
+    async def _parent_sync_transaction(self) -> AsyncIterator[None]:
+        """Suppress per-slot notifications and flush once on exit.
+
+        Re-entrant: increments a depth counter so nested transactions
+        share the same accumulator; only the outermost exit flushes.
+        Exception-safe: depth is decremented in a finally block.
+        """
+        self._sync_tx_depth += 1
+        try:
+            yield
+        finally:
+            self._sync_tx_depth -= 1
+            if self._sync_tx_depth == 0:
+                dirty = self._sync_tx_dirty_ids
+                all_ids = self._sync_tx_all_entry_ids
+                self._sync_tx_dirty_ids = set()
+                self._sync_tx_all_entry_ids = False
+                if dirty or all_ids:
+                    self.async_schedule_keymaster_notifications(dirty, all_entry_ids=all_ids)
+
     @callback
     def async_schedule_keymaster_notifications(
         self, entry_ids: Iterable[str], *, all_entry_ids: bool = False
@@ -396,6 +421,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             return
 
         valid = {entry_id for entry_id in entry_ids if entry_id in self.kmlocks}
+
+        # Inside a parent-sync transaction: accumulate and defer
+        if self._sync_tx_depth > 0:
+            self._sync_tx_dirty_ids |= valid
+            self._sync_tx_all_entry_ids |= all_entry_ids
+            return
+
         if not valid and not all_entry_ids and not self._pending_notify_entry_ids:
             return
         self._pending_notify_entry_ids |= valid
@@ -2980,11 +3012,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             return dirty_entry_ids
 
-        for child_entry_id in kmlock.child_config_entry_ids:
-            before = self._lock_snapshot(child_entry_id)
-            await self._sync_child_lock(kmlock, child_entry_id)
-            if before != self._lock_snapshot(child_entry_id):
-                dirty_entry_ids.add(child_entry_id)
+        async with self._parent_sync_transaction():
+            for child_entry_id in kmlock.child_config_entry_ids:
+                before = self._lock_snapshot(child_entry_id)
+                await self._sync_child_lock(kmlock, child_entry_id)
+                if before != self._lock_snapshot(child_entry_id):
+                    dirty_entry_ids.add(child_entry_id)
         return dirty_entry_ids
 
     async def _sync_child_lock(self, kmlock: KeymasterLock, child_entry_id: str) -> None:
