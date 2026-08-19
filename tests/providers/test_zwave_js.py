@@ -22,6 +22,7 @@ from custom_components.keymaster.providers import (
 )
 from custom_components.keymaster.providers.zwave_js import ZWaveJSLockProvider
 from homeassistant.components.lock.const import LockState
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 from tests.common import async_capture_events
@@ -88,6 +89,7 @@ def setup_successful_connect(
     zwave_provider.entity_registry.async_get.return_value = mock_entity
 
     mock_zwave_entry = MagicMock()
+    mock_zwave_entry.state = ConfigEntryState.LOADED
     mock_zwave_entry.runtime_data = MagicMock()
     mock_zwave_entry.runtime_data.client = mock_zwave_client
     zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
@@ -216,6 +218,49 @@ class TestZWaveJSLockProviderConnect:
 
         assert result is False
 
+    async def test_connect_zwave_entry_not_loaded(self, zwave_provider):
+        """Test connect fails when Z-Wave config entry is not loaded."""
+        mock_entity = MagicMock()
+        mock_entity.config_entry_id = "zwave_entry_id"
+        zwave_provider.entity_registry.async_get.return_value = mock_entity
+
+        mock_zwave_entry = MagicMock()
+        mock_zwave_entry.state = ConfigEntryState.SETUP_IN_PROGRESS
+        zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
+
+        result = await zwave_provider.async_connect()
+
+        assert result is False
+
+    async def test_connect_runtime_data_missing(self, zwave_provider):
+        """Test connect fails when Z-Wave runtime_data is missing."""
+        mock_entity = MagicMock()
+        mock_entity.config_entry_id = "zwave_entry_id"
+        zwave_provider.entity_registry.async_get.return_value = mock_entity
+
+        mock_zwave_entry = MagicMock(spec=["state"])
+        mock_zwave_entry.state = ConfigEntryState.LOADED
+        zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
+
+        result = await zwave_provider.async_connect()
+
+        assert result is False
+
+    async def test_connect_client_missing_on_runtime_data(self, zwave_provider):
+        """Test connect fails when Z-Wave client attribute is None on runtime_data."""
+        mock_entity = MagicMock()
+        mock_entity.config_entry_id = "zwave_entry_id"
+        zwave_provider.entity_registry.async_get.return_value = mock_entity
+
+        mock_zwave_entry = MagicMock()
+        mock_zwave_entry.state = ConfigEntryState.LOADED
+        mock_zwave_entry.runtime_data = MagicMock(spec=[])
+        zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
+
+        result = await zwave_provider.async_connect()
+
+        assert result is False
+
     async def test_connect_client_not_connected(self, zwave_provider):
         """Test connect fails when Z-Wave client not connected."""
         mock_entity = MagicMock()
@@ -224,6 +269,7 @@ class TestZWaveJSLockProviderConnect:
         zwave_provider.entity_registry.async_get.return_value = mock_entity
 
         mock_zwave_entry = MagicMock()
+        mock_zwave_entry.state = ConfigEntryState.LOADED
         mock_zwave_entry.runtime_data = MagicMock()
         mock_zwave_entry.runtime_data.client = MagicMock()
         mock_zwave_entry.runtime_data.client.connected = False
@@ -241,6 +287,7 @@ class TestZWaveJSLockProviderConnect:
         zwave_provider.entity_registry.async_get.return_value = mock_entity
 
         mock_zwave_entry = MagicMock()
+        mock_zwave_entry.state = ConfigEntryState.LOADED
         mock_zwave_entry.runtime_data = MagicMock()
         mock_zwave_entry.runtime_data.client = mock_zwave_client
         zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
@@ -258,6 +305,7 @@ class TestZWaveJSLockProviderConnect:
         zwave_provider.entity_registry.async_get.return_value = mock_entity
 
         mock_zwave_entry = MagicMock()
+        mock_zwave_entry.state = ConfigEntryState.LOADED
         mock_zwave_entry.runtime_data = MagicMock()
         mock_zwave_entry.runtime_data.client = mock_zwave_client
         zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
@@ -1447,6 +1495,7 @@ class TestZWaveJSLockProviderDeadNode:
         zwave_provider.entity_registry.async_get.return_value = mock_entity
 
         mock_zwave_entry = MagicMock()
+        mock_zwave_entry.state = ConfigEntryState.LOADED
         mock_zwave_entry.runtime_data = MagicMock()
         mock_zwave_entry.runtime_data.client = mock_zwave_client
         zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry

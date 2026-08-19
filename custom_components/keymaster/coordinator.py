@@ -2382,10 +2382,16 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.connected = await kmlock.provider.async_connect()
 
         if not kmlock.connected:
-            _LOGGER.error(
-                "[Coordinator] %s: Provider failed to connect",
-                kmlock.lock_name,
-            )
+            if self.hass.is_running:
+                _LOGGER.error(
+                    "[Coordinator] %s: Provider failed to connect",
+                    kmlock.lock_name,
+                )
+            else:
+                _LOGGER.debug(
+                    "[Coordinator] %s: Provider not connected yet during startup",
+                    kmlock.lock_name,
+                )
             return False
 
         if kmlock.provider.lock_config_entry_id:
@@ -2634,8 +2640,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     failures,
                     backoff_secs,
                 )
-            else:
+            elif self.hass.is_running:
                 _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
+            else:
+                _LOGGER.debug(
+                    "[Coordinator] %s: Not connected yet during startup",
+                    kmlock.lock_name,
+                )
             return
 
         if not kmlock.provider:

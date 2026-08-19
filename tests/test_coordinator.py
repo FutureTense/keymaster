@@ -4263,3 +4263,113 @@ async def test_duplicate_provider_unlock_event_suppressed_after_state_change(
         await hass.async_block_till_done()
         assert mock_notify.call_count == 0
         assert len(bus_events) == 1
+
+
+class TestConnectAndUpdateLockStartup:
+    """Test startup vs runtime connection behavior in KeymasterCoordinator."""
+
+    async def test_connect_provider_fails_during_startup(self, mock_hass):
+        """Test _connect_and_update_lock logs debug (not error) when provider fails during startup."""
+        mock_hass.is_running = False
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            kmlock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            kmlock.provider = AsyncMock()
+            kmlock.provider.async_connect = AsyncMock(return_value=False)
+
+            with (
+                patch("custom_components.keymaster.coordinator._LOGGER.error") as mock_error,
+                patch("custom_components.keymaster.coordinator._LOGGER.debug") as mock_debug,
+            ):
+                result = await coordinator._connect_and_update_lock(kmlock)
+
+            assert result is False
+            assert kmlock.connected is False
+            mock_error.assert_not_called()
+            mock_debug.assert_any_call(
+                "[Coordinator] %s: Provider not connected yet during startup",
+                "Front Door",
+            )
+
+    async def test_connect_provider_fails_when_running(self, mock_hass):
+        """Test _connect_and_update_lock logs error when provider fails after startup."""
+        mock_hass.is_running = True
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            kmlock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            kmlock.provider = AsyncMock()
+            kmlock.provider.async_connect = AsyncMock(return_value=False)
+
+            with patch("custom_components.keymaster.coordinator._LOGGER.error") as mock_error:
+                result = await coordinator._connect_and_update_lock(kmlock)
+
+            assert result is False
+            assert kmlock.connected is False
+            mock_error.assert_called_once_with(
+                "[Coordinator] %s: Provider failed to connect",
+                "Front Door",
+            )
+
+    async def test_update_lock_data_not_connected_during_startup(self, mock_hass):
+        """Test _update_lock_data logs debug (not error) when not connected during startup."""
+        mock_hass.is_running = False
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator._next_retry_time = {}
+            coordinator._consecutive_failures = {}
+            kmlock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+                connected=False,
+            )
+            coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=kmlock)
+            coordinator._connect_and_update_lock = AsyncMock(return_value=False)
+
+            with (
+                patch("custom_components.keymaster.coordinator._LOGGER.error") as mock_error,
+                patch("custom_components.keymaster.coordinator._LOGGER.debug") as mock_debug,
+            ):
+                await coordinator._update_lock_data("entry_1")
+
+            mock_error.assert_not_called()
+            mock_debug.assert_any_call(
+                "[Coordinator] %s: Not connected yet during startup",
+                "Front Door",
+            )
+
+    async def test_update_lock_data_not_connected_when_running(self, mock_hass):
+        """Test _update_lock_data logs error when not connected after startup."""
+        mock_hass.is_running = True
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(mock_hass)
+            coordinator.hass = mock_hass
+            coordinator._next_retry_time = {}
+            coordinator._consecutive_failures = {}
+            kmlock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+                connected=False,
+            )
+            coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=kmlock)
+            coordinator._connect_and_update_lock = AsyncMock(return_value=False)
+
+            with patch("custom_components.keymaster.coordinator._LOGGER.error") as mock_error:
+                await coordinator._update_lock_data("entry_1")
+
+            mock_error.assert_any_call(
+                "[Coordinator] %s: Not Connected",
+                "Front Door",
+            )

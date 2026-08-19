@@ -12,6 +12,7 @@ from custom_components.keymaster.providers.schlage import (
     _make_tagged_name,
     _parse_tag,
 )
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
@@ -151,6 +152,7 @@ class TestConnect:
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
         schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
         coordinator = MagicMock()
         coordinator.data.locks = {"schlage_device_123": MagicMock()}
         schlage_entry.runtime_data = coordinator
@@ -187,13 +189,26 @@ class TestConnect:
         schlage_provider.hass.config_entries.async_get_entry.return_value = None
         assert await schlage_provider.async_connect() is False
 
+    async def test_connect_schlage_entry_not_loaded(self, schlage_provider):
+        """Test connection fails when schlage config entry is not loaded."""
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_entry"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.SETUP_IN_PROGRESS
+        schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
+        assert await schlage_provider.async_connect() is False
+
     async def test_connect_coordinator_not_available(self, schlage_provider):
         """Test connection fails when coordinator unavailable."""
         lock_entry = MagicMock()
         lock_entry.config_entry_id = "schlage_entry"
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
-        schlage_entry = MagicMock(spec_set=[])
+        schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
+        schlage_entry.runtime_data = None
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
         assert await schlage_provider.async_connect() is False
 
@@ -205,6 +220,7 @@ class TestConnect:
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
         schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
         schlage_entry.runtime_data = MagicMock()
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
         schlage_provider.device_registry.async_get.return_value = None
@@ -218,6 +234,7 @@ class TestConnect:
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
         schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
         schlage_entry.runtime_data = MagicMock()
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
 
@@ -234,6 +251,7 @@ class TestConnect:
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
         schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
         coordinator = MagicMock()
         coordinator.data.locks = {}  # Empty
         schlage_entry.runtime_data = coordinator
@@ -252,6 +270,7 @@ class TestConnect:
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
         schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
         coordinator = type("Coordinator", (), {})()
         schlage_entry.runtime_data = coordinator
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
@@ -284,6 +303,7 @@ class TestIsConnected:
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
         schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
         coordinator = MagicMock()
         coordinator.data.locks = {"dev123": MagicMock()}
         schlage_entry.runtime_data = coordinator
@@ -300,12 +320,28 @@ class TestIsConnected:
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
         schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
         coordinator = MagicMock()
         coordinator.data.locks = {}
         schlage_entry.runtime_data = coordinator
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
 
         assert await schlage_provider.async_is_connected() is False
+
+    async def test_not_connected_schlage_entry_not_loaded(self, schlage_provider):
+        """Test returns False when Schlage config entry is not loaded."""
+        schlage_provider._schlage_device_id = "dev123"
+
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_entry"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.SETUP_IN_PROGRESS
+        schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
+
+        assert await schlage_provider.async_is_connected() is False
+        assert schlage_provider._connected is False
 
     async def test_not_connected_lock_entry_missing(self, schlage_provider):
         """Test returns False when entity registry entry is missing."""
@@ -347,6 +383,7 @@ class TestIsConnected:
         schlage_provider.entity_registry.async_get.return_value = lock_entry
 
         schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
         schlage_entry.runtime_data = None  # causes AttributeError on .data.locks
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
 
