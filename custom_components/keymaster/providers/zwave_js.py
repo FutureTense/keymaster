@@ -32,6 +32,7 @@ from custom_components.keymaster.const import ATTR_NODE_ID, LockMethod
 from homeassistant.components.lock import LockState
 from homeassistant.components.zwave_js import ZWAVE_JS_NOTIFICATION_EVENT
 from homeassistant.components.zwave_js.const import ATTR_PARAMETERS, DOMAIN as ZWAVE_JS_DOMAIN
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_DEVICE_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData
 from homeassistant.helpers.device_registry import DeviceEntry
@@ -400,21 +401,35 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return False
 
-        try:
-            zwave_entry = self.hass.config_entries.async_get_entry(self.lock_config_entry_id)
-            if not zwave_entry:
-                _LOGGER.error(
-                    "[ZWaveJSProvider] Can't find Z-Wave JS config entry: %s",
-                    self.lock_config_entry_id,
-                )
-                return False
-
-            self._client = zwave_entry.runtime_data.client
-        except (KeyError, TypeError, AttributeError) as e:
+        zwave_entry = self.hass.config_entries.async_get_entry(self.lock_config_entry_id)
+        if not zwave_entry:
             _LOGGER.error(
-                "[ZWaveJSProvider] Can't access Z-Wave JS client: %s: %s",
-                e.__class__.__qualname__,
-                e,
+                "[ZWaveJSProvider] Can't find Z-Wave JS config entry: %s",
+                self.lock_config_entry_id,
+            )
+            return False
+
+        if getattr(zwave_entry, "state", None) != ConfigEntryState.LOADED:
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Z-Wave JS config entry %s is not loaded yet (state: %s)",
+                self.lock_config_entry_id,
+                getattr(zwave_entry, "state", None),
+            )
+            return False
+
+        runtime_data = getattr(zwave_entry, "runtime_data", None)
+        if runtime_data is None:
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Z-Wave JS config entry %s runtime_data not yet available",
+                self.lock_config_entry_id,
+            )
+            return False
+
+        self._client = getattr(runtime_data, "client", None)
+        if self._client is None:
+            _LOGGER.debug(
+                "[ZWaveJSProvider] Z-Wave JS client not yet available on runtime_data: %s",
+                self.lock_config_entry_id,
             )
             return False
 

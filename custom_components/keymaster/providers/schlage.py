@@ -19,6 +19,7 @@ import re
 from typing import Any, cast
 
 from custom_components.keymaster.const import CONF_SLOTS, CONF_START
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import HomeAssistantError
 
 from ._base import BaseLockProvider, CodeSlot
@@ -107,13 +108,19 @@ class SchlageLockProvider(BaseLockProvider):
             )
             return False
 
-        try:
-            coordinator = schlage_entry.runtime_data
-        except (AttributeError, TypeError) as e:
-            _LOGGER.error(
-                "[SchlageProvider] Can't access Schlage coordinator: %s: %s",
-                e.__class__.__qualname__,
-                e,
+        if getattr(schlage_entry, "state", None) != ConfigEntryState.LOADED:
+            _LOGGER.debug(
+                "[SchlageProvider] Schlage config entry %s is not loaded yet (state: %s)",
+                self.lock_config_entry_id,
+                getattr(schlage_entry, "state", None),
+            )
+            return False
+
+        coordinator = getattr(schlage_entry, "runtime_data", None)
+        if coordinator is None:
+            _LOGGER.debug(
+                "[SchlageProvider] Schlage coordinator runtime_data not yet available: %s",
+                self.lock_config_entry_id,
             )
             return False
 
@@ -176,21 +183,18 @@ class SchlageLockProvider(BaseLockProvider):
             return False
 
         schlage_entry = self.hass.config_entries.async_get_entry(lock_entry.config_entry_id)
-        if not schlage_entry:
+        if not schlage_entry or getattr(schlage_entry, "state", None) != ConfigEntryState.LOADED:
             self._connected = False
             return False
 
-        try:
-            coordinator = schlage_entry.runtime_data
-            connected = self._schlage_device_id in coordinator.data.locks
-        except (
-            AttributeError,
-            TypeError,
-        ):
-            connected = False
+        coordinator = getattr(schlage_entry, "runtime_data", None)
+        if coordinator is None or getattr(coordinator, "data", None) is None:
+            self._connected = False
+            return False
 
-        self._connected = connected
-        return connected
+        locks = getattr(coordinator.data, "locks", None)
+        self._connected = bool(locks and self._schlage_device_id in locks)
+        return self._connected
 
     async def _async_get_codes(self) -> dict[str, dict[str, str]]:
         """Call ``schlage.get_codes`` and return the response dict.
