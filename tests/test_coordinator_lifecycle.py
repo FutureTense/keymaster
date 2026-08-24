@@ -409,8 +409,8 @@ async def test_shutdown_cleanup_runs_when_pending_save_flush_fails(hass) -> None
     notify_handle = MagicMock()
     coordinator._pending_save_entry_ids = {"entry_1"}
     coordinator._refresh_keepalive_unsub = keepalive_unsub
-    coordinator._cancel_quick_refresh = quick_refresh_unsub
-    coordinator._cancel_debounced_refresh = debounced_refresh_unsub
+    coordinator._cancel_quick_refresh = {"entry_1": quick_refresh_unsub}
+    coordinator._cancel_debounced_refresh = {"entry_1": debounced_refresh_unsub}
     coordinator._notify_handle = notify_handle
     coordinator._pending_notify_entry_ids = {"entry_1"}
     coordinator._lock_coordinators["entry_1"] = MagicMock()
@@ -426,8 +426,8 @@ async def test_shutdown_cleanup_runs_when_pending_save_flush_fails(hass) -> None
     debounced_refresh_unsub.assert_called_once()
     assert coordinator._notify_handle is None
     assert coordinator._refresh_keepalive_unsub is None
-    assert coordinator._cancel_quick_refresh is None
-    assert coordinator._cancel_debounced_refresh is None
+    assert coordinator._cancel_quick_refresh == {}
+    assert coordinator._cancel_debounced_refresh == {}
     assert coordinator._lock_coordinators == {}
     assert coordinator._shutdown_requested is True
     assert coordinator._shutdown_complete is True
@@ -1372,7 +1372,7 @@ async def test_async_refresh_lock_cancels_debounce_and_reports_sync_status_dirty
     coordinator.kmlocks["entry_1"] = lock
     coordinator._sync_status_counter = SYNC_STATUS_THRESHOLD
     cancel_debounced_refresh = MagicMock()
-    coordinator._cancel_debounced_refresh = cancel_debounced_refresh
+    coordinator._cancel_debounced_refresh = {"entry_1": cancel_debounced_refresh}
     coordinator._update_lock_data = AsyncMock()
     coordinator._sync_child_locks = AsyncMock(return_value=set())
     coordinator._async_save_data = AsyncMock()
@@ -1392,7 +1392,7 @@ async def test_async_refresh_lock_cancels_debounce_and_reports_sync_status_dirty
 
     assert dirty == {"entry_1"}
     cancel_debounced_refresh.assert_called_once()
-    assert coordinator._cancel_debounced_refresh is None
+    assert "entry_1" not in coordinator._cancel_debounced_refresh
     assert coordinator._sync_status_counter == 0
     await coordinator.async_shutdown()
 
@@ -1440,14 +1440,14 @@ async def test_async_refresh_lock_health_transition_notifies_all_locks(hass) -> 
     await coordinator.async_shutdown()
 
 
-async def test_scoped_refresh_keeps_shared_debounce_for_other_dirty_locks(hass) -> None:
-    """Test scoped refresh does not strand another lock's pending debounced refresh."""
+async def test_scoped_refresh_preserves_other_entry_debounce_timer(hass) -> None:
+    """Refreshing entry_1 must not cancel entry_2's per-entry debounce timer."""
     coordinator = KeymasterCoordinator(hass)
     coordinator._initial_setup_done_event.set()
     coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
     coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
     cancel_debounced_refresh = MagicMock()
-    coordinator._cancel_debounced_refresh = cancel_debounced_refresh
+    coordinator._cancel_debounced_refresh = {"entry_2": cancel_debounced_refresh}
     coordinator._externally_dirty_entry_ids = {"entry_2"}
     coordinator._update_lock_data = AsyncMock()
     coordinator._sync_child_locks = AsyncMock(return_value=set())
@@ -1458,7 +1458,7 @@ async def test_scoped_refresh_keeps_shared_debounce_for_other_dirty_locks(hass) 
 
     assert dirty == set()
     assert coordinator._externally_dirty_entry_ids == {"entry_2"}
-    assert coordinator._cancel_debounced_refresh is cancel_debounced_refresh
+    assert "entry_2" in coordinator._cancel_debounced_refresh
     cancel_debounced_refresh.assert_not_called()
     await coordinator.async_shutdown()
 

@@ -3052,7 +3052,7 @@ class TestUpdateChildCodeSlotsSync:
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
             coordinator.kmlocks = {}
-            coordinator._quick_refresh = False
+            coordinator._quick_refresh_entry_ids = set()
             coordinator.clear_pin_from_lock = AsyncMock()
             coordinator.set_pin_on_lock = AsyncMock()
             return coordinator
@@ -3147,7 +3147,7 @@ class TestSyncUsercodeRefreshMasked:
             coordinator.kmlocks = {}
             coordinator.set_pin_on_lock = AsyncMock()
             coordinator.clear_pin_from_lock = AsyncMock()
-            coordinator._quick_refresh = False
+            coordinator._quick_refresh_entry_ids = set()
             return coordinator
 
     @staticmethod
@@ -3341,16 +3341,16 @@ async def test_async_shutdown(hass: HomeAssistant) -> None:
     mock_cancel_quick = Mock()
     mock_cancel_debounced = Mock()
 
-    coordinator._cancel_quick_refresh = mock_cancel_quick
-    coordinator._cancel_debounced_refresh = mock_cancel_debounced
+    coordinator._cancel_quick_refresh = {"entry_1": mock_cancel_quick}
+    coordinator._cancel_debounced_refresh = {"entry_1": mock_cancel_debounced}
 
     await coordinator.async_shutdown()
 
     mock_cancel_quick.assert_called_once()
     mock_cancel_debounced.assert_called_once()
 
-    assert coordinator._cancel_quick_refresh is None
-    assert coordinator._cancel_debounced_refresh is None
+    assert coordinator._cancel_quick_refresh == {}
+    assert coordinator._cancel_debounced_refresh == {}
 
 
 async def test_failed_refresh_deferred_notify_preserves_failure_state(
