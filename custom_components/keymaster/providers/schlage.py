@@ -188,13 +188,12 @@ class SchlageLockProvider(BaseLockProvider):
             return False
 
         coordinator = getattr(schlage_entry, "runtime_data", None)
-        if coordinator is None or not hasattr(coordinator, "data"):
+        if coordinator is None or getattr(coordinator, "data", None) is None:
             self._connected = False
             return False
 
-        self._connected = bool(
-            coordinator.data.locks and self._schlage_device_id in coordinator.data.locks
-        )
+        locks = getattr(coordinator.data, "locks", None)
+        self._connected = bool(locks and self._schlage_device_id in locks)
         return self._connected
 
     async def _async_get_codes(self) -> dict[str, dict[str, str]]:

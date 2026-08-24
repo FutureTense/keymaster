@@ -228,9 +228,19 @@ class TestZWaveJSLockProviderConnect:
         mock_zwave_entry.state = ConfigEntryState.SETUP_IN_PROGRESS
         zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
 
-        result = await zwave_provider.async_connect()
+        with (
+            patch("custom_components.keymaster.providers.zwave_js._LOGGER.error") as mock_error,
+            patch("custom_components.keymaster.providers.zwave_js._LOGGER.debug") as mock_debug,
+        ):
+            result = await zwave_provider.async_connect()
 
-        assert result is False
+            assert result is False
+            mock_error.assert_not_called()
+            mock_debug.assert_any_call(
+                "[ZWaveJSProvider] Z-Wave JS config entry %s is not loaded yet (state: %s)",
+                "zwave_entry_id",
+                ConfigEntryState.SETUP_IN_PROGRESS,
+            )
 
     async def test_connect_runtime_data_missing(self, zwave_provider):
         """Test connect fails when Z-Wave runtime_data is missing."""
@@ -242,9 +252,18 @@ class TestZWaveJSLockProviderConnect:
         mock_zwave_entry.state = ConfigEntryState.LOADED
         zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
 
-        result = await zwave_provider.async_connect()
+        with (
+            patch("custom_components.keymaster.providers.zwave_js._LOGGER.error") as mock_error,
+            patch("custom_components.keymaster.providers.zwave_js._LOGGER.debug") as mock_debug,
+        ):
+            result = await zwave_provider.async_connect()
 
-        assert result is False
+            assert result is False
+            mock_error.assert_not_called()
+            mock_debug.assert_any_call(
+                "[ZWaveJSProvider] Z-Wave JS config entry %s runtime_data not yet available",
+                "zwave_entry_id",
+            )
 
     async def test_connect_client_missing_on_runtime_data(self, zwave_provider):
         """Test connect fails when Z-Wave client attribute is None on runtime_data."""
@@ -257,9 +276,18 @@ class TestZWaveJSLockProviderConnect:
         mock_zwave_entry.runtime_data = MagicMock(spec=[])
         zwave_provider.hass.config_entries.async_get_entry.return_value = mock_zwave_entry
 
-        result = await zwave_provider.async_connect()
+        with (
+            patch("custom_components.keymaster.providers.zwave_js._LOGGER.error") as mock_error,
+            patch("custom_components.keymaster.providers.zwave_js._LOGGER.debug") as mock_debug,
+        ):
+            result = await zwave_provider.async_connect()
 
-        assert result is False
+            assert result is False
+            mock_error.assert_not_called()
+            mock_debug.assert_any_call(
+                "[ZWaveJSProvider] Z-Wave JS client not yet available on runtime_data: %s",
+                "zwave_entry_id",
+            )
 
     async def test_connect_client_not_connected(self, zwave_provider):
         """Test connect fails when Z-Wave client not connected."""

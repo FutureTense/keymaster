@@ -2382,7 +2382,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.connected = await kmlock.provider.async_connect()
 
         if not kmlock.connected:
-            if self.hass.is_running:
+            if self.hass.state == CoreState.running:
                 _LOGGER.error(
                     "[Coordinator] %s: Provider failed to connect",
                     kmlock.lock_name,
@@ -2593,10 +2593,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self._cancel_quick_refresh = None
 
     async def _update_lock_data(self, keymaster_config_entry_id: str) -> None:
-        """Update a single keymaster lock."""
-        kmlock: KeymasterLock | None = await self.get_lock_by_config_entry_id(
-            keymaster_config_entry_id,
-        )
+        """Fetch lock data for a given config entry."""
+        kmlock = await self.get_lock_by_config_entry_id(keymaster_config_entry_id)
+
         if not isinstance(kmlock, KeymasterLock):
             return
 
@@ -2615,33 +2614,34 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         await self._connect_and_update_lock(kmlock=kmlock)
 
         if not kmlock.connected:
-            # Track consecutive failures and apply exponential backoff
-            failures = self._consecutive_failures.get(keymaster_config_entry_id, 0) + 1
-            self._consecutive_failures[keymaster_config_entry_id] = failures
+            if self.hass.state == CoreState.running:
+                # Track consecutive failures and apply exponential backoff
+                failures = self._consecutive_failures.get(keymaster_config_entry_id, 0) + 1
+                self._consecutive_failures[keymaster_config_entry_id] = failures
 
-            # On first failure, ping the node to try to wake it.
-            # If it recovers, the next update cycle will reconnect.
-            if failures == 1 and kmlock.provider:
-                await kmlock.provider.async_ping_node()
+                # On first failure, ping the node to try to wake it.
+                # If it recovers, the next update cycle will reconnect.
+                if failures == 1 and kmlock.provider:
+                    await kmlock.provider.async_ping_node()
 
-            if failures >= BACKOFF_FAILURE_THRESHOLD:
-                exponent = failures - BACKOFF_FAILURE_THRESHOLD
-                backoff_secs = min(
-                    BACKOFF_INITIAL_SECONDS * (2**exponent),
-                    BACKOFF_MAX_SECONDS,
-                )
-                self._next_retry_time[keymaster_config_entry_id] = (
-                    dt.now().astimezone() + timedelta(seconds=backoff_secs)
-                )
-                _LOGGER.warning(
-                    "[Coordinator] %s: %d consecutive connection failures, "
-                    "backing off for %d seconds",
-                    kmlock.lock_name,
-                    failures,
-                    backoff_secs,
-                )
-            elif self.hass.is_running:
-                _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
+                if failures >= BACKOFF_FAILURE_THRESHOLD:
+                    exponent = failures - BACKOFF_FAILURE_THRESHOLD
+                    backoff_secs = min(
+                        BACKOFF_INITIAL_SECONDS * (2**exponent),
+                        BACKOFF_MAX_SECONDS,
+                    )
+                    self._next_retry_time[keymaster_config_entry_id] = (
+                        dt.now().astimezone() + timedelta(seconds=backoff_secs)
+                    )
+                    _LOGGER.warning(
+                        "[Coordinator] %s: %d consecutive connection failures, "
+                        "backing off for %d seconds",
+                        kmlock.lock_name,
+                        failures,
+                        backoff_secs,
+                    )
+                else:
+                    _LOGGER.error("[Coordinator] %s: Not Connected", kmlock.lock_name)
             else:
                 _LOGGER.debug(
                     "[Coordinator] %s: Not connected yet during startup",

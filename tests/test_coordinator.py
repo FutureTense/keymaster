@@ -27,7 +27,7 @@ from custom_components.keymaster.providers import CodeSlot
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 
@@ -93,6 +93,7 @@ def validate_lock_relationship_invariants(
 def mock_hass():
     """Create a mock Home Assistant instance."""
     hass = Mock(spec=HomeAssistant)
+    hass.state = CoreState.running
     hass.config_entries = Mock()
     hass.config = Mock()
     hass.config.path = Mock(return_value="/test/path")
@@ -4270,7 +4271,7 @@ class TestConnectAndUpdateLockStartup:
 
     async def test_connect_provider_fails_during_startup(self, mock_hass):
         """Test _connect_and_update_lock logs debug (not error) when provider fails during startup."""
-        mock_hass.is_running = False
+        mock_hass.state = CoreState.starting
         with patch.object(KeymasterCoordinator, "__init__", return_value=None):
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
@@ -4298,7 +4299,7 @@ class TestConnectAndUpdateLockStartup:
 
     async def test_connect_provider_fails_when_running(self, mock_hass):
         """Test _connect_and_update_lock logs error when provider fails after startup."""
-        mock_hass.is_running = True
+        mock_hass.state = CoreState.running
         with patch.object(KeymasterCoordinator, "__init__", return_value=None):
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
@@ -4321,8 +4322,8 @@ class TestConnectAndUpdateLockStartup:
             )
 
     async def test_update_lock_data_not_connected_during_startup(self, mock_hass):
-        """Test _update_lock_data logs debug (not error) when not connected during startup."""
-        mock_hass.is_running = False
+        """Test _update_lock_data logs debug (not error) and does not backoff during startup."""
+        mock_hass.state = CoreState.starting
         with patch.object(KeymasterCoordinator, "__init__", return_value=None):
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
@@ -4339,19 +4340,25 @@ class TestConnectAndUpdateLockStartup:
 
             with (
                 patch("custom_components.keymaster.coordinator._LOGGER.error") as mock_error,
+                patch("custom_components.keymaster.coordinator._LOGGER.warning") as mock_warning,
                 patch("custom_components.keymaster.coordinator._LOGGER.debug") as mock_debug,
             ):
-                await coordinator._update_lock_data("entry_1")
+                # Call multiple times during startup
+                for _ in range(5):
+                    await coordinator._update_lock_data("entry_1")
 
             mock_error.assert_not_called()
+            mock_warning.assert_not_called()
             mock_debug.assert_any_call(
                 "[Coordinator] %s: Not connected yet during startup",
                 "Front Door",
             )
+            assert "entry_1" not in coordinator._consecutive_failures
+            assert "entry_1" not in coordinator._next_retry_time
 
     async def test_update_lock_data_not_connected_when_running(self, mock_hass):
-        """Test _update_lock_data logs error when not connected after startup."""
-        mock_hass.is_running = True
+        """Test _update_lock_data logs error and tracks failures when not connected after startup."""
+        mock_hass.state = CoreState.running
         with patch.object(KeymasterCoordinator, "__init__", return_value=None):
             coordinator = KeymasterCoordinator(mock_hass)
             coordinator.hass = mock_hass
@@ -4373,3 +4380,4 @@ class TestConnectAndUpdateLockStartup:
                 "[Coordinator] %s: Not Connected",
                 "Front Door",
             )
+            assert coordinator._consecutive_failures["entry_1"] == 1
