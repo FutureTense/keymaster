@@ -89,7 +89,9 @@ newly added or edited line numbers in your diff are left uncovered.
 ### 4. Assert Diagnostic Logging with `caplog`
 
 When testing diagnostic logging (especially `DEBUG` or `WARNING` messages),
-ensure `caplog.set_level` is set appropriately:
+ensure `caplog.set_level` is set appropriately. Note that provider-specific
+fixtures (such as `zwave_provider` and `mock_zwave_node`) are defined within
+their respective test modules (e.g. `tests/providers/test_zwave_js.py`):
 
 ```python
 import logging

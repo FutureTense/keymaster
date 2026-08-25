@@ -27,8 +27,8 @@ source .venv/bin/activate
 # Install development, test, and lint dependencies
 pip install -r requirements_dev.txt -r requirements_test.txt -r requirements_lint.txt
 
-# Or using uv:
-uv sync
+# Or using uv pip:
+uv pip install -r requirements_dev.txt -r requirements_test.txt -r requirements_lint.txt
 ```
 
 ### 2. Frontend Environment (Lovelace Strategy)
