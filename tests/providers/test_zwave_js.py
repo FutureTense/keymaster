@@ -1457,16 +1457,25 @@ class TestZWaveJSLockProviderDeadNode:
 
         assert zwave_provider._is_node_alive() is False
 
-    def test_is_node_alive_handles_exception(self, zwave_provider, mock_zwave_node):
-        """Test _is_node_alive returns False when status check raises."""
+    def test_is_node_alive_handles_exception(self, zwave_provider, mock_zwave_node, caplog):
+        """Test _is_node_alive returns False and logs warning when status check raises."""
         type(mock_zwave_node).status = property(
             lambda self: (_ for _ in ()).throw(RuntimeError("node gone")),
         )
         zwave_provider._node = mock_zwave_node
 
         assert zwave_provider._is_node_alive() is False
+        assert "Error checking status for node 14" in caplog.text
 
-    async def test_refresh_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node):
+    def test_is_node_alive_logs_warning_when_no_node(self, zwave_provider, caplog):
+        """Test _is_node_alive logs warning when no node is available."""
+        zwave_provider._node = None
+        zwave_provider._node_id = 42
+
+        assert zwave_provider._is_node_alive() is False
+        assert "Node 42 is not available" in caplog.text
+
+    async def test_refresh_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node, caplog):
         """Test async_refresh_usercode returns None without Z-Wave call when dead."""
         mock_zwave_node.status = NodeStatus.DEAD
         zwave_provider._node = mock_zwave_node
@@ -1479,8 +1488,9 @@ class TestZWaveJSLockProviderDeadNode:
 
         assert result is None
         mock_get.assert_not_called()
+        assert "Node 14 is not alive, skipping refresh_usercode for slot 1" in caplog.text
 
-    async def test_set_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node):
+    async def test_set_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node, caplog):
         """Test async_set_usercode returns False without Z-Wave call when dead."""
         mock_zwave_node.status = NodeStatus.DEAD
         zwave_provider._node = mock_zwave_node
@@ -1493,8 +1503,9 @@ class TestZWaveJSLockProviderDeadNode:
 
         assert result is False
         mock_set.assert_not_called()
+        assert "Node 14 is not alive, skipping set_usercode for slot 1" in caplog.text
 
-    async def test_clear_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node):
+    async def test_clear_usercode_skips_when_dead(self, zwave_provider, mock_zwave_node, caplog):
         """Test async_clear_usercode returns False without Z-Wave call when dead."""
         mock_zwave_node.status = NodeStatus.DEAD
         zwave_provider._node = mock_zwave_node
@@ -1507,6 +1518,7 @@ class TestZWaveJSLockProviderDeadNode:
 
         assert result is False
         mock_clear.assert_not_called()
+        assert "Node 14 is not alive, skipping clear_usercode for slot 1" in caplog.text
 
     async def test_connect_warns_when_dead_but_proceeds(
         self,
@@ -1577,3 +1589,56 @@ class TestZWaveJSLockProviderPingNode:
         result = await zwave_provider.async_ping_node()
 
         assert result is False
+
+
+class TestZWaveJSLockProviderNodeResolution:
+    """Test dynamic node resolution and clear retry logging."""
+
+    def test_dynamic_node_resolution_refreshes_stale_node(
+        self,
+        zwave_provider,
+        mock_zwave_client,
+        mock_zwave_node,
+    ):
+        """Test that _get_node dynamically fetches updated node from controller."""
+        stale_node = MagicMock()
+        stale_node.node_id = 14
+        stale_node.status = NodeStatus.DEAD
+
+        new_node = MagicMock()
+        new_node.node_id = 14
+        new_node.status = NodeStatus.ALIVE
+
+        mock_zwave_client.driver.controller.nodes = {14: new_node}
+        zwave_provider._client = mock_zwave_client
+        zwave_provider._node_id = 14
+        zwave_provider._node = stale_node
+
+        # When node property is accessed, it should return new_node from controller
+        resolved_node = zwave_provider.node
+        assert resolved_node is new_node
+        assert zwave_provider._node is new_node
+
+    async def test_clear_usercode_warns_on_retry_if_not_cleared(
+        self,
+        zwave_provider,
+        mock_zwave_node,
+        caplog,
+    ):
+        """Test clear_usercode logs warning when verification shows code remains."""
+        zwave_provider._node = mock_zwave_node
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                return_value={"usercode": "1234"},
+            ),
+        ):
+            result = await zwave_provider.async_clear_usercode(1)
+
+        assert result is False
+        assert "Slot 1 not yet cleared after command, will retry" in caplog.text
