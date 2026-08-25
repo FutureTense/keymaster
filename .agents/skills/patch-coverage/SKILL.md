@@ -8,18 +8,16 @@ description: >-
 # Patch Coverage & Test Completeness Guide
 
 This skill provides step-by-step instructions for ensuring every change or
-bugfix introduced in Keymaster achieves **100% patch test coverage** (every
-modified/added line is exercised by automated tests) and satisfies repository
-quality gates.
+bugfix introduced in Keymaster achieves thorough **patch test coverage** (exercising
+all modified/added lines) and satisfies repository quality gates.
 
 ## Core Principles
 
-1. **100% Patch Coverage**:
-   - While overall project coverage threshold is `>= 80%`, every new line or
-     modified execution branch in a pull request should have corresponding unit
-     or integration test coverage.
-   - Codecov evaluates patch coverage on every PR and flags any un-executed
-     new lines.
+1. **Patch Coverage & Quality Gates**:
+   - The repository configures an overall project test coverage floor of **>= 80%**
+     in `pyproject.toml` (`[tool.coverage.report] fail_under = 80`).
+   - Every new line or modified execution branch in a pull request should be
+     accompanied by automated tests to ensure no regressions or untested branches.
 
 2. **Branch & Edge Case Completeness**:
    - Cover both success (`True`, result objects) and failure branches (`False`,
@@ -44,22 +42,25 @@ git diff upstream/main...HEAD custom_components/
 
 ### 2. Run Targeted Tests with Missing Line Reporting
 
-Run pytest specifically covering the modified module:
+When running targeted tests on a single file or module, include `--cov-fail-under=0`
+so pytest does not fail due to the global 80% total coverage threshold:
 
 ```bash
 # Example for provider modifications:
 pytest tests/providers/test_<provider>.py \
   --cov=custom_components/keymaster/providers/<provider>.py \
-  --cov-report=term-missing
+  --cov-report=term-missing \
+  --cov-fail-under=0
 
 # Example for coordinator modifications:
 pytest tests/test_coordinator.py \
   --cov=custom_components/keymaster/coordinator.py \
-  --cov-report=term-missing
+  --cov-report=term-missing \
+  --cov-fail-under=0
 ```
 
-Look closely at the `Missing` column in the terminal output to confirm that no
-newly added or edited line numbers are listed.
+Inspect the `Missing` column in the terminal output to confirm that no
+newly added or edited line numbers in your diff are left uncovered.
 
 ### 3. Common Uncovered Line Patterns & Solutions
 
@@ -84,18 +85,23 @@ newly added or edited line numbers are listed.
 
 ### 4. Assert Diagnostic Logging with `caplog`
 
-When adding warning/error logs, assert that the log messages are generated:
+When testing diagnostic logging (especially `DEBUG` or `WARNING` messages),
+ensure `caplog.set_level` is set appropriately:
 
 ```python
-async def test_operation_warns_when_dead(zwave_provider, mock_zwave_node, caplog):
-    """Test operation logs warning when node is dead."""
+import logging
+from zwave_js_server.const import NodeStatus
+
+async def test_operation_skips_when_node_dead(zwave_provider, mock_zwave_node, caplog):
+    """Test operation logs debug message and returns False when node is dead."""
+    caplog.set_level(logging.DEBUG)
     mock_zwave_node.status = NodeStatus.DEAD
     zwave_provider._node = mock_zwave_node
 
     result = await zwave_provider.async_clear_usercode(1)
 
     assert result is False
-    assert "Node 14 is not alive, skipping clear_usercode for slot 1" in caplog.text
+    assert "[ZWaveJSProvider] Node 14 is dead, skipping command" in caplog.text
 ```
 
 ### 5. Final Full-Suite Verification
@@ -107,4 +113,8 @@ compatibility:
 pytest --cov=custom_components/keymaster --cov-report=term-missing
 ```
 
-Ensure total coverage meets repository requirements and patch coverage is 100%.
+Or run via tox:
+
+```bash
+tox -e py314
+```

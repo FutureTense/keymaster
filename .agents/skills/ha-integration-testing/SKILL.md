@@ -2,7 +2,7 @@
 name: ha-integration-testing
 description: >-
   Workflows, conventions, and commands for writing and running async Home
-  Assistant unit and integration tests using pytest,
+  Assistant unit and integration tests using pytest, tox,
   pytest-homeassistant-custom-component, and coverage tools.
 ---
 
@@ -14,35 +14,43 @@ This skill provides patterns and commands for executing and writing tests in
 ## Running Tests
 
 Pytest options are configured in `pyproject.toml`. By default, tests filter out
-`slow` and `perf` markers.
+`slow` and `perf` markers (`addopts = "-m 'not slow and not perf'"`).
 
 ### Standard Test Execution Commands
 
 ```bash
-# Run all standard tests
+# Run all standard tests via pytest
 pytest
 
 # Run tests with verbose output
 pytest -v
 
-# Run a specific test file
-pytest tests/test_coordinator.py
+# Run targeted test file (use --cov-fail-under=0 so global 80% threshold
+# does not fail targeted run)
+pytest tests/test_coordinator.py --cov-fail-under=0
 
 # Run a specific test function
-pytest tests/test_coordinator.py::test_coordinator_update
+pytest tests/test_coordinator.py::test_coordinator_update --cov-fail-under=0
 
 # Run provider-specific tests
-pytest tests/providers/ -v
+pytest tests/providers/ -v --cov-fail-under=0
 
-# Run including slow/perf tests if explicitly needed
+# Run all tests including slow and perf tests
 pytest -m ""
+
+# Run test suite via tox (as run in CI)
+tox -e py314
 ```
 
 ### Coverage Requirements
 
-- Target coverage threshold is **80%** (enforced by `--cov-fail-under=80` in CI).
-- Review uncovered lines with
-  `pytest --cov=custom_components/keymaster --cov-report=term-missing`.
+- Target coverage threshold is **80%** (configured in `pyproject.toml` under
+  `[tool.coverage.report] fail_under = 80`).
+- Review uncovered lines with:
+
+  ```bash
+  pytest --cov=custom_components/keymaster --cov-report=term-missing
+  ```
 
 ## Key Test Patterns & Fixtures
 

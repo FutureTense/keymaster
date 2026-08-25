@@ -17,7 +17,7 @@ Keymaster consists of:
 
 ### 1. Python Environment
 
-Ensure Python 3.13 or 3.14 is installed. Set up a virtual environment:
+Ensure Python 3.14 is installed. Set up a virtual environment:
 
 ```bash
 # Create and activate virtual environment
@@ -40,21 +40,46 @@ Ensure Node.js and Yarn are installed:
 yarn install
 ```
 
-### 3. Pre-Commit Hooks
+### 3. Pre-Commit / Prek Hooks
 
-Install pre-commit hooks to automatically check lint and formatting on commit:
+Install pre-commit or prek hooks to automatically check lint and formatting on commit:
 
 ```bash
+# Using pre-commit:
 pre-commit install
+
+# Or using prek (fast Rust-based drop-in runner):
+prek install
 ```
+
+Note: `prek` is a fast local runner that reads `.pre-commit-config.yaml`.
+GitHub CI automatically runs `prek` and `pre-commit.ci`.
 
 ---
 
 ## Coding Standards & Quality Gates
 
-Before submitting any code, all quality gates must pass cleanly.
+Before submitting any code, all quality gates must pass cleanly. Adhere to the
+**100-character line length limit** enforced across Python files.
 
-### Python (Ruff & MyPy)
+### Automated Quality Gates (Tox)
+
+Keymaster uses `tox` in CI to run tests and linter suites:
+
+```bash
+# Run all CI test and lint environments
+tox
+
+# Run only the lint suite
+tox -e lint
+
+# Run only the Python 3.14 pytest suite
+tox -e py314
+```
+
+### Python (Ruff, MyPy & Codespell)
+
+You can also run individual tools directly:
 
 - **Formatting & Linting**:
 
@@ -69,7 +94,13 @@ Before submitting any code, all quality gates must pass cleanly.
 - **Type Checking**:
 
   ```bash
-  mypy custom_components/keymaster
+  mypy .
+  ```
+
+- **Spell Checking**:
+
+  ```bash
+  codespell custom_components/keymaster tests
   ```
 
 - **Async Hygiene**: Use `async_create_task` and Home Assistant async helpers.
@@ -94,19 +125,23 @@ Before submitting any code, all quality gates must pass cleanly.
 
 ## Testing
 
-Keymaster enforces automated testing with a minimum of **80% code coverage**.
+Keymaster enforces automated testing with a minimum of **80% code coverage**
+(configured in `pyproject.toml` under `[tool.coverage.report] fail_under = 80`).
 
 ### Backend Integration Tests (Pytest)
 
 ```bash
-# Run test suite
+# Run standard test suite (excludes slow and perf tests)
 pytest
 
 # Run tests with terminal coverage report
 pytest --cov=custom_components/keymaster --cov-report=term-missing
 
-# Run a specific test file
-pytest tests/test_coordinator.py
+# Run a specific test file (use --cov-fail-under=0 for targeted runs)
+pytest tests/test_coordinator.py --cov-fail-under=0
+
+# Run all tests including slow and perf markers
+pytest -m ""
 ```
 
 ### Frontend Tests (Vitest)
@@ -142,5 +177,5 @@ python3 scripts/compare_lovelace_output.py
    - `Code quality improvements to existing code or addition of tests`
 4. **Link Relevant Issues**: Reference any corresponding issue numbers
    (`fixes #123` or `related to #123`).
-5. **Passing CI**: Ensure all GitHub Actions workflows (Pytest, Vitest, Ruff,
-   MyPy, Yarn) pass.
+5. **Passing CI**: Ensure all GitHub Actions workflows (Tox, Pytest, Prek,
+   Codecov, Yarn) pass.

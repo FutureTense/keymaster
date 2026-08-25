@@ -2,8 +2,8 @@
 name: ha-code-quality
 description: >-
   Standards and commands for linting, code formatting, typing validation (Ruff,
-  MyPy, ESLint, Pre-commit), and adherence to Home Assistant Python 3.14
-  standards in Keymaster.
+  MyPy, Codespell, ESLint, Pre-commit/Prek, Tox), and adherence to Home Assistant
+  Python 3.14 standards in Keymaster.
 ---
 
 # Code Quality & Standards Guide for Keymaster
@@ -11,7 +11,18 @@ description: >-
 This skill guides linting, formatting, and static typing enforcement across the
 repository.
 
-## Python Code Quality (Ruff & MyPy)
+## Automated Quality Suite (Tox)
+
+Run the full CI lint environment:
+
+```bash
+tox -e lint
+```
+
+This runs Ruff linting, Ruff formatting check, MyPy across the entire repo
+(`mypy .`), and Codespell.
+
+## Individual Quality Tools
 
 Configuration is defined in `pyproject.toml`.
 
@@ -31,7 +42,14 @@ ruff format .
 ### Type Checking (MyPy)
 
 ```bash
-mypy custom_components/keymaster
+# Check both custom_components and tests
+mypy .
+```
+
+### Spell Checking (Codespell)
+
+```bash
+codespell custom_components/keymaster tests
 ```
 
 ## TypeScript / Frontend Linting
@@ -44,11 +62,15 @@ yarn lint
 yarn lint:fix
 ```
 
-## Pre-commit Hooks
+## Pre-commit / Prek Hooks
 
-Run pre-commit hooks before finalizing changes:
+Run pre-commit checks locally before committing:
 
 ```bash
+# Using prek (fast drop-in runner):
+prek run --all-files
+
+# Or using pre-commit:
 pre-commit run --all-files
 ```
 
@@ -57,6 +79,8 @@ pre-commit run --all-files
 - **Python Target**: Configured for Python 3.14 (`target-version = "py314"`).
   Use modern typing syntax (e.g. `list[str]`, `X | Y`,
   `from __future__ import annotations`).
+- **Line Length**: Strictly adhere to the **100-character line limit** configured
+  in `pyproject.toml`.
 - **Async Hygiene**: Use `async_create_task` or HA core async helpers; avoid
   blocking synchronous calls in the event loop.
 - **Docstrings & Comments**: Preserve existing docstrings and write clear

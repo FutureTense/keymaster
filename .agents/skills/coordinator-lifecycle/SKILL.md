@@ -2,28 +2,49 @@
 name: coordinator-lifecycle
 description: >-
   Architectural patterns and lifecycle instructions for KeymasterCoordinator,
-  child entity platforms (switch, sensor, number, text, datetime, button), and
-  migration handlers.
+  KeymasterLockCoordinator, fan-out notification architecture, child entity
+  platforms, and storage migrations.
 ---
 
 # Keymaster Coordinator & Entity Lifecycle Guide
 
-This skill guides modifications to `KeymasterCoordinator`
-(`custom_components/keymaster/coordinator.py`), entity platforms, and
-migration logic (`migrate.py`).
+This skill guides modifications to `KeymasterCoordinator`,
+`KeymasterLockCoordinator` (`custom_components/keymaster/coordinator.py`),
+entity platforms, and migration logic (`migrate.py`). For full design details,
+refer to `docs/keymaster-fanout-architecture.md`.
 
-## Coordinator State Machine Architecture
+## Coordinator Architecture & Fan-out Design
 
-`KeymasterCoordinator` is the central orchestrator responsible for:
+Keymaster separates durable storage and refresh ownership from entity-facing
+runtime notifications to prevent event loop exhaustion on large installations:
 
-- Polling and listening for lock code updates from the active
-  `BaseLockProvider`.
-- Managing per-slot configuration and runtime states (`enabled`, `pin`, `name`,
-  `sync_status`, `schedule_date_range`, `schedule_time_range`).
-- Coordinating child entities registered across entity platforms:
+| Component | Lifetime | Role | Target |
+| :--- | :--- | :--- | :--- |
+| `KeymasterCoordinator` | Runtime | Owns locks, storage, refresh | Keepalive |
+| `KeymasterLockCoordinator` | Per lock | Mirrors one lock entry | Entities |
+
+- **Entity Binding**:
+  - Entities bind to `KeymasterLockCoordinator`
+    (`CoordinatorEntity[KeymasterLockCoordinator]`), resolved via
+    `manager.async_get_lock_coordinator(config_entry.entry_id)`.
+  - Entities do NOT listen directly to `KeymasterCoordinator`.
+
+- **Notification Dispatch**:
+  - Manager state changes call
+    `async_schedule_keymaster_notifications(entry_ids, *, all_entry_ids=False)`.
+  - Flushes are deferred with `hass.loop.call_soon` to coalesce updates and
+    prevent nested event-queue overflow.
+  - Updates are pushed to per-lock coordinators via
+    `lock_coordinator.async_set_updated_data(lock)`.
+
+- **Parent-to-Child Sync**:
+  - Batched inside `async with self._parent_sync_transaction():` so multi-slot
+    child sync operations emit a single coalesced notification flush upon
+    outermost exit.
+
+- **Child Entity Platforms**:
   - `switch.py`: Slot enable/disable, notifications, schedule toggles.
-  - `text.py` / `number.py`: PIN configuration, slot count, autolock
-    parameters.
+  - `text.py` / `number.py`: PIN configuration, slot count, autolock parameters.
   - `datetime.py` / `time.py`: Access schedule date and time limits.
   - `sensor.py` / `binary_sensor.py`: Active PIN status, connection state, slot
     status sensors.
@@ -32,18 +53,28 @@ migration logic (`migrate.py`).
 
 ## Guidelines for Modifying Coordinator Logic
 
-1. **State Synchronization**:
-   - Always verify slot synchronization status (`CONNECTED`, `DISCONNECTED`,
-     `SYNCING`, `IN_SYNC`) before and after provider code changes.
-   - Dispatch updates via `async_set_updated_data` or specific entity callbacks.
+1. **State Synchronization (`Synced` Enum)**:
+   - Use the canonical states defined in `custom_components/keymaster/const.py`:
+     - `Synced.ADDING` (`"Adding"`)
+     - `Synced.DELETING` (`"Deleting"`)
+     - `Synced.DISCONNECTED` (`"Disconnected"`)
+     - `Synced.OUT_OF_SYNC` (`"Out of Sync"`)
+     - `Synced.SYNCED` (`"Synced"`)
 
-2. **Autolock Integration**:
+2. **Scheduling Notifications**:
+   - Always route updates through
+     `async_schedule_keymaster_notifications([entry_id])` rather than calling
+     entity callbacks or `async_set_updated_data` directly on the manager.
+
+3. **Autolock Integration**:
    - `autolock/` logic interacts with lock state changes and door sensors.
      Ensure timer cancellations and rescheduled locks are clean upon entity
      removal or coordinator unload.
 
-3. **Storage & Migrations**:
-   - Persistent data is managed in `migrate.py`.
+4. **Storage & Migrations**:
+   - Runtime storage is coordinator-owned via
+     `Store(hass, STORAGE_VERSION, STORAGE_KEY)`.
+   - `migrate.py` handles schema migrations only when loading legacy storage
+     formats.
    - When modifying storage schemas, bump the version and ensure backward
-     compatibility for existing HA installs upgrading from prior schema
-     revisions.
+     compatibility for prior schema revisions.

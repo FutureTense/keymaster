@@ -15,12 +15,17 @@ submitting pull requests to the Keymaster repository.
 
 Before creating a PR, ensure all verification steps pass locally:
 
-1. **Format & Linting**:
+1. **Format, Linting & Type Checking**:
 
    ```bash
+   # Run full CI lint environment via tox:
+   tox -e lint
+
+   # Or run individual tools:
    ruff check --fix .
    ruff format .
-   mypy custom_components/keymaster
+   mypy .
+   codespell custom_components/keymaster tests
    ```
 
 2. **Frontend Build & Tests (if frontend modified)**:
@@ -34,11 +39,16 @@ Before creating a PR, ensure all verification steps pass locally:
 3. **Integration Tests & Coverage**:
 
    ```bash
+   # Run standard test suite
    pytest --cov=custom_components/keymaster --cov-report=term-missing
+
+   # Or run via tox:
+   tox -e py314
    ```
 
-   - Ensure all tests pass, overall project coverage remains **>= 80%**, and
-     patch coverage on new/modified lines is **100%** (see `patch-coverage` skill).
+   - Ensure all tests pass, overall project coverage remains **>= 80%**
+     (`[tool.coverage.report] fail_under = 80`), and all newly modified/added lines
+     have thorough test coverage (see `patch-coverage` skill).
 
 ## Mandatory Pull Request Template
 
