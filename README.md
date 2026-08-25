@@ -78,3 +78,8 @@ devices:
 
 Without this setting, Keymaster will not be able to retrieve or set user codes
 on the lock.
+
+## Development
+
+See the [fan-out guard architecture](docs/keymaster-fanout-architecture.md) for
+coordinator fan-out and Home Assistant event-queue guard details.
