@@ -42,19 +42,22 @@ git diff upstream/main...HEAD custom_components/
 
 ### 2. Run Targeted Tests with Missing Line Reporting
 
-When running targeted tests on a single file or module, include `--cov-fail-under=0`
-so pytest does not fail due to the global 80% total coverage threshold:
+When running targeted tests on a single file or module, override `addopts` and
+pass `--cov-fail-under=0` so pytest scopes the terminal table to the target
+module without failing on the global 80% project threshold:
 
 ```bash
 # Example for provider modifications:
 pytest tests/providers/test_<provider>.py \
-  --cov=custom_components/keymaster/providers/<provider>.py \
+  -o addopts="-m 'not slow and not perf'" \
+  --cov=custom_components.keymaster.providers.<provider> \
   --cov-report=term-missing \
   --cov-fail-under=0
 
 # Example for coordinator modifications:
 pytest tests/test_coordinator.py \
-  --cov=custom_components/keymaster/coordinator.py \
+  -o addopts="-m 'not slow and not perf'" \
+  --cov=custom_components.keymaster.coordinator \
   --cov-report=term-missing \
   --cov-fail-under=0
 ```

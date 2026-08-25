@@ -53,7 +53,7 @@ prek install
 ```
 
 Note: `prek` is a fast local runner that reads `.pre-commit-config.yaml`.
-GitHub CI automatically runs `prek` and `pre-commit.ci`.
+GitHub CI automatically runs `prek`.
 
 ---
 
