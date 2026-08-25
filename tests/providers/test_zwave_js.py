@@ -1642,3 +1642,25 @@ class TestZWaveJSLockProviderNodeResolution:
 
         assert result is False
         assert "Slot 1 not yet cleared after command, will retry" in caplog.text
+
+    def test_get_node_id_falls_back_to_node_id_when_node_none(self, zwave_provider):
+        """Test get_node_id returns _node_id when node cannot be resolved."""
+        zwave_provider._node = None
+        zwave_provider._node_id = 99
+        assert zwave_provider.get_node_id() == 99
+
+    async def test_async_is_connected_uses_dynamic_node(
+        self,
+        zwave_provider,
+        mock_zwave_client,
+        mock_zwave_node,
+    ):
+        """Test async_is_connected verifies dynamic node presence."""
+        mock_zwave_client.driver.controller.nodes = {14: mock_zwave_node}
+        zwave_provider._client = mock_zwave_client
+        zwave_provider._node_id = 14
+        zwave_provider._node = None
+
+        connected = await zwave_provider.async_is_connected()
+        assert connected is True
+        assert zwave_provider._node is mock_zwave_node
