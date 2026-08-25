@@ -37,7 +37,8 @@ Before creating a PR, ensure all verification steps pass locally:
    pytest --cov=custom_components/keymaster --cov-report=term-missing
    ```
 
-   - Ensure all tests pass and coverage remains **>= 80%**.
+   - Ensure all tests pass, overall project coverage remains **>= 80%**, and
+     patch coverage on new/modified lines is **100%** (see `patch-coverage` skill).
 
 ## Mandatory Pull Request Template
 

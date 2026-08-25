@@ -36,5 +36,7 @@ When performing specialized workflows, refer to the corresponding skill in
 - **`ha-code-quality`**: For Ruff, MyPy, ESLint, and pre-commit checks.
 - **`coordinator-lifecycle`**: For `KeymasterCoordinator` state machine, child
   entity platforms, autolock, and storage migrations.
+- **`patch-coverage`**: For verifying and maintaining 100% patch test coverage
+  on all modified lines and branches.
 - **`submit-pr`**: For preparing, validating, and submitting pull requests
   according to repo requirements.
