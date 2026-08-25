@@ -14,7 +14,7 @@ from zwave_js_server.const import NodeStatus
 from zwave_js_server.event import Event
 from zwave_js_server.exceptions import BaseZwaveJSServerError, FailedZWaveCommand
 
-from custom_components.keymaster.const import DOMAIN
+from custom_components.keymaster.const import ATTR_NODE_ID, DOMAIN
 from custom_components.keymaster.providers import (
     create_provider,
     get_provider_class_for_lock,
@@ -22,9 +22,10 @@ from custom_components.keymaster.providers import (
 )
 from custom_components.keymaster.providers.zwave_js import ZWaveJSLockProvider
 from homeassistant.components.lock.const import LockState
+from homeassistant.components.zwave_js.const import ATTR_PARAMETERS
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import HomeAssistant
+from homeassistant.const import ATTR_DEVICE_ID, EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import Event as HAEvent, HomeAssistant
 from tests.common import async_capture_events
 from tests.const import CONFIG_DATA_910
 
@@ -1079,6 +1080,70 @@ class TestZWaveJSLockProviderEventSubscription:
         zwave_provider.hass.bus.async_listen.assert_called_once()
         # Only notification event listener when no alarm sensors configured
         assert len(zwave_provider._listeners) == 1
+
+    async def test_handle_zwave_notification_event_dispatches_correctly(
+        self,
+        zwave_provider,
+        mock_zwave_client,
+        mock_zwave_node,
+    ):
+        """Test handle_zwave_notification_event resolves node dynamically and filters/dispatches."""
+        mock_device = MagicMock()
+        mock_device.id = "device_123"
+        zwave_provider._device = mock_device
+        zwave_provider._client = mock_zwave_client
+        zwave_provider._node_id = 14
+        mock_zwave_client.driver.controller.nodes = {14: mock_zwave_node}
+        zwave_provider._node = None
+
+        mock_kmlock = MagicMock()
+        mock_kmlock.alarm_level_or_user_code_entity_id = None
+        mock_kmlock.alarm_type_or_access_control_entity_id = None
+        mock_callback = AsyncMock()
+
+        handler = None
+
+        def fake_async_listen(event_type, callback):
+            nonlocal handler
+            handler = callback
+            return MagicMock()
+
+        zwave_provider.hass.bus.async_listen.side_effect = fake_async_listen
+        zwave_provider.subscribe_lock_events(mock_kmlock, mock_callback)
+        assert handler is not None
+
+        # Test event with matching node & device
+        matching_event = HAEvent(
+            "zwave_js_notification",
+            data={
+                ATTR_NODE_ID: 14,
+                ATTR_DEVICE_ID: "device_123",
+                "command_class": 113,
+                "type": 6,
+                "event": 6,
+                ATTR_PARAMETERS: {"userId": 2},
+            },
+        )
+        await handler(matching_event)
+        zwave_provider.hass.async_create_task.assert_called_once()
+
+        # Test event with mismatching node_id ignored
+        mismatched_event = HAEvent(
+            "zwave_js_notification",
+            data={
+                ATTR_NODE_ID: 99,
+                ATTR_DEVICE_ID: "device_123",
+            },
+        )
+        zwave_provider.hass.async_create_task.reset_mock()
+        await handler(mismatched_event)
+        zwave_provider.hass.async_create_task.assert_not_called()
+
+        # Test event when node is None
+        zwave_provider._node = None
+        mock_zwave_client.driver.controller.nodes = {}
+        await handler(matching_event)
+        zwave_provider.hass.async_create_task.assert_not_called()
 
     def test_subscribe_lock_events_with_alarm_sensors(self, zwave_provider, mock_zwave_node):
         """Test subscribe_lock_events also subscribes to state changes when alarm sensors are configured."""
