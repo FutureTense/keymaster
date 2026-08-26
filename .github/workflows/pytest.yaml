@@ -5,19 +5,27 @@ on:
     branches: [beta, main]
     paths:
       - "**.py"
+      - "**.md"
+      - ".agents/**"
       - "custom_components/**"
       - "tests/**"
       - "pyproject.toml"
       - "requirements*.txt"
+      - "tox.ini"
+      - ".pre-commit-config.yaml"
       - ".github/workflows/pytest.yaml"
   pull_request:
     branches: [beta, main]
     paths:
       - "**.py"
+      - "**.md"
+      - ".agents/**"
       - "custom_components/**"
       - "tests/**"
       - "pyproject.toml"
       - "requirements*.txt"
+      - "tox.ini"
+      - ".pre-commit-config.yaml"
       - ".github/workflows/pytest.yaml"
   schedule:
     - cron: "0 7 1-28/7 * *"
