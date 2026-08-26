@@ -28,6 +28,50 @@ TypeScript/Lit Lovelace dashboard strategy.
 - **PR Template**: When drafting or submitting PRs, strictly follow
   `.github/PULL_REQUEST_TEMPLATE.md` and select exactly one type of change.
 
+## Common Commands
+
+- **Full check suite**: `tox` (runs both the `py314` tests and the `lint`
+  environment).
+- **Tests only**: `pytest`
+- **Single test file**: `pytest tests/test_config_flow.py`
+- **Single test**: `pytest tests/test_config_flow.py::test_function_name`
+- **Targeted runs**: add `--cov-fail-under=0` so a narrow selection does not
+  trip the global coverage floor (see the `patch-coverage` skill).
+- **Format, then lint**: `ruff format .` followed by `ruff check --fix .`
+- **Type check**: `mypy .`
+- **Spell check**: `codespell custom_components/keymaster tests`
+
+## Code Style
+
+Ruff owns formatting; do not hand-format against it. These settings live in
+`pyproject.toml` and are enforced by `tox -e lint`.
+
+- **Line length**: 100 characters. The `E501` lint rule is disabled, so length
+  is applied by the formatter rather than reported as a lint error.
+- **Quotes**: the formatter normalizes strings and docstrings to double quotes.
+- **Indentation**: 4 spaces, LF line endings.
+- **Imports**: Ruff's isort rules handle ordering. `homeassistant` is treated
+  as first-party and sorting is forced within sections.
+- **Docstrings**: required. The `D` rule family is enabled and the missing
+  docstring checks are not suppressed.
+- **Exceptions**: catch specific exceptions. Both bare `except:` (`E722`) and
+  blind `except Exception` (`BLE`) are flagged.
+
+Conventions that are not machine-enforced, but are expected:
+
+- Put `from __future__ import annotations` at the top of new modules.
+- Annotate public functions and methods.
+- `snake_case` for variables and functions, `PascalCase` for classes.
+
+## Home Assistant Conventions
+
+- Import `homeassistant.helpers.config_validation` as `cv` and `voluptuous` as
+  `vol`. Both aliases are enforced by Ruff's import conventions.
+- Use the `DOMAIN` constant from `const.py` for the integration namespace
+  instead of repeating the literal string.
+- Follow standard Home Assistant entity patterns for sensors, switches, and
+  the other platforms.
+
 ## Available Agent Skills
 
 When performing specialized workflows, refer to the corresponding skill in
