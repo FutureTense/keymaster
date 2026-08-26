@@ -14,7 +14,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     steps:
       - name: 📥 Checkout the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 🔍 Parse Issue Form
         uses: stefanbuck/github-issue-parser@v3
