@@ -7,7 +7,7 @@ homeassistant
 pydispatcher
 pyserial
 # Test dependencies for pytest
-pytest>=9.0.3
+pytest>=9.1.1
 pytest-cov
 pytest-homeassistant-custom-component
 pyudev
