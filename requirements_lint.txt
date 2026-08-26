@@ -3,5 +3,5 @@ codespell
 mypy
 pylint
 pylint-per-file-ignores
-ruff==0.16.0
+ruff==0.16.4
 types-PyYAML
