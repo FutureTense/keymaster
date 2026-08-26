@@ -322,9 +322,21 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     # Platform-specific state
     _node: ZwaveJSNode | None = field(default=None, init=False, repr=False)
+    _node_id: int | None = field(default=None, init=False, repr=False)
     _device: DeviceEntry | None = field(default=None, init=False, repr=False)
     _client: ZwaveJSClient | None = field(default=None, init=False, repr=False)
     _uses_credential_cc: bool = field(default=False, init=False, repr=False)
+
+    def _get_node(self) -> ZwaveJSNode | None:
+        """Get the current Z-Wave node instance, refreshing if needed."""
+        if self._node_id is None:
+            return self._node
+        if self._client and self._client.driver and self._client.driver.controller:
+            # The controller registry is authoritative when reachable, including
+            # for removals: a node popped by handle_node_removed has client=None
+            # and must not be used for commands.
+            self._node = self._client.driver.controller.nodes.get(self._node_id)
+        return self._node
 
     def _is_node_alive(self) -> bool:
         """Check if the Z-Wave node is alive (not dead).
@@ -332,27 +344,45 @@ class ZWaveJSLockProvider(BaseLockProvider):
         Returns False only for dead nodes. Asleep nodes (battery devices)
         are considered alive since they wake periodically.
         """
-        if not self._node:
+        node = self._get_node()
+        if not node:
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Node %s is not available",
+                self._node_id if self._node_id is not None else "unknown",
+            )
             return False
         try:
-            if self._node.status == NodeStatus.DEAD:
+            if node.status == NodeStatus.DEAD:
                 _LOGGER.debug(
                     "[ZWaveJSProvider] Node %s is dead, skipping command",
-                    self._node.node_id,
+                    node.node_id,
                 )
                 return False
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Error checking status for node %s: %s: %s",
+                node.node_id,
+                e.__class__.__qualname__,
+                e,
+            )
             return False
         else:
             return True
 
     async def async_ping_node(self) -> bool:
         """Ping the Z-Wave node to check if it is responsive."""
-        if not self._node:
+        node = self._get_node()
+        if not node:
             return False
         try:
-            return await self._node.async_ping()
-        except Exception:  # noqa: BLE001
+            return await node.async_ping()
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Ping failed for node %s: %s: %s",
+                node.node_id,
+                e.__class__.__qualname__,
+                e,
+            )
             return False
 
     @property
@@ -373,7 +403,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
     @property
     def node(self) -> ZwaveJSNode | None:
         """Return the Z-Wave JS node."""
-        return self._node
+        return self._get_node()
 
     @property
     def device(self) -> DeviceEntry | None:
@@ -465,6 +495,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             )
             return False
 
+        self._node_id = node_id
         self._node = self._client.driver.controller.nodes.get(node_id)
         if not self._node:
             _LOGGER.error(
@@ -509,11 +540,12 @@ class ZWaveJSLockProvider(BaseLockProvider):
         if not self._client:
             return False
 
+        node = self._get_node()
         connected = bool(
             self._client.connected
             and self._client.driver
             and self._client.driver.controller
-            and self._node,
+            and node,
         )
 
         self._connected = connected
@@ -539,12 +571,13 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     async def _verify_credential_state(self, slot_num: int, expect_present: bool) -> bool:
         """Re-read a credential slot after a transient write result."""
-        if not self._node:
+        node = self._get_node()
+        if not node:
             return False
 
         try:
-            user = await self._node.access_control.get_user(slot_num)
-            credentials = await self._node.access_control.get_credentials(slot_num)
+            user = await node.access_control.get_user(slot_num)
+            credentials = await node.access_control.get_credentials(slot_num)
         except BaseZwaveJSServerError as e:
             _LOGGER.debug(
                 "[ZWaveJSProvider] Verify failed for slot %s: %s",
@@ -560,14 +593,15 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     async def async_get_usercodes(self) -> list[CodeSlot]:
         """Get all user codes from the Z-Wave JS lock."""
-        if not self._node:
+        node = self._get_node()
+        if not node:
             _LOGGER.error("[ZWaveJSProvider] No node available for get_usercodes")
             return []
 
         if self._uses_credential_cc:
             try:
-                users = await self._node.access_control.get_users_cached()
-                credentials = await self._node.access_control.get_all_credentials_cached()
+                users = await node.access_control.get_users_cached()
+                credentials = await node.access_control.get_all_credentials_cached()
             except BaseZwaveJSServerError as e:
                 _LOGGER.error(
                     "[ZWaveJSProvider] Failed to get credentials: %s: %s",
@@ -590,7 +624,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             ]
 
         try:
-            zwave_codes = get_usercodes(self._node)
+            zwave_codes = get_usercodes(node)
         except FailedZWaveCommand as e:
             _LOGGER.error(
                 "[ZWaveJSProvider] Failed to get usercodes: %s: %s",
@@ -618,15 +652,17 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     async def async_get_usercode(self, slot_num: int) -> CodeSlot | None:
         """Get a specific user code from the lock."""
-        if not self._node:
+        node = self._get_node()
+        if not node:
+            _LOGGER.warning("[ZWaveJSProvider] No node available for get_usercode")
             return None
 
         if self._uses_credential_cc:
             try:
-                user = await self._node.access_control.get_user_cached(slot_num)
+                user = await node.access_control.get_user_cached(slot_num)
                 if user is None:
                     return CodeSlot(slot_num=slot_num, code=None, in_use=False)
-                credentials = await self._node.access_control.get_credentials_cached(slot_num)
+                credentials = await node.access_control.get_credentials_cached(slot_num)
             except BaseZwaveJSServerError as e:
                 _LOGGER.error(
                     "[ZWaveJSProvider] Failed to get credential for slot %s: %s: %s",
@@ -638,7 +674,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return self._credential_to_code_slot(user, credentials, slot_num)
 
         try:
-            zw_slot: ZwaveJSCodeSlot = get_usercode(self._node, slot_num)
+            zw_slot: ZwaveJSCodeSlot = get_usercode(node, slot_num)
             return CodeSlot(
                 slot_num=slot_num,
                 code=zw_slot[ZWAVEJS_ATTR_USERCODE] or None,
@@ -655,18 +691,25 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     async def async_refresh_usercode(self, slot_num: int) -> CodeSlot | None:
         """Get a specific user code directly from the node (forces refresh)."""
-        if not self._node:
+        node = self._get_node()
+        if not node:
+            _LOGGER.warning("[ZWaveJSProvider] No node available for refresh_usercode")
             return None
 
         if not self._is_node_alive():
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Node %s is not alive, skipping refresh_usercode for slot %s",
+                node.node_id,
+                slot_num,
+            )
             return None
 
         if self._uses_credential_cc:
             try:
-                user = await self._node.access_control.get_user(slot_num)
+                user = await node.access_control.get_user(slot_num)
                 if user is None:
                     return CodeSlot(slot_num=slot_num, code=None, in_use=False)
-                credentials = await self._node.access_control.get_credentials(slot_num)
+                credentials = await node.access_control.get_credentials(slot_num)
             except BaseZwaveJSServerError as e:
                 _LOGGER.error(
                     "[ZWaveJSProvider] Failed to refresh credential for slot %s: %s: %s",
@@ -678,7 +721,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return self._credential_to_code_slot(user, credentials, slot_num)
 
         try:
-            zw_slot: ZwaveJSCodeSlot = await get_usercode_from_node(self._node, slot_num)
+            zw_slot: ZwaveJSCodeSlot = await get_usercode_from_node(node, slot_num)
             return CodeSlot(
                 slot_num=slot_num,
                 code=zw_slot[ZWAVEJS_ATTR_USERCODE] or None,
@@ -695,16 +738,22 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
         """Set user code on a slot."""
-        if not self._node:
+        node = self._get_node()
+        if not node:
             _LOGGER.error("[ZWaveJSProvider] No node available for set_usercode")
             return False
 
         if not self._is_node_alive():
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Node %s is not alive, skipping set_usercode for slot %s",
+                node.node_id,
+                slot_num,
+            )
             return False
 
         if self._uses_credential_cc:
             try:
-                credential_result = await self._node.access_control.set_credential(
+                credential_result = await node.access_control.set_credential(
                     slot_num,
                     UserCredentialType.PIN_CODE,
                     slot_num,
@@ -739,7 +788,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
             if name:
                 try:
-                    user_result = await self._node.access_control.set_user(
+                    user_result = await node.access_control.set_user(
                         slot_num,
                         SetUserOptions(user_name=name),
                     )
@@ -764,7 +813,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return True
 
         try:
-            await set_usercode(self._node, slot_num, code)
+            await set_usercode(node, slot_num, code)
         except BaseZwaveJSServerError as e:
             _LOGGER.error(
                 "[ZWaveJSProvider] Failed to set usercode on slot %s: %s: %s",
@@ -782,16 +831,22 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     async def async_clear_usercode(self, slot_num: int) -> bool:
         """Clear user code from a slot."""
-        if not self._node:
+        node = self._get_node()
+        if not node:
             _LOGGER.error("[ZWaveJSProvider] No node available for clear_usercode")
             return False
 
         if not self._is_node_alive():
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Node %s is not alive, skipping clear_usercode for slot %s",
+                node.node_id,
+                slot_num,
+            )
             return False
 
         if self._uses_credential_cc:
             try:
-                credential_result = await self._node.access_control.delete_credential(
+                credential_result = await node.access_control.delete_credential(
                     slot_num,
                     UserCredentialType.PIN_CODE,
                     slot_num,
@@ -811,7 +866,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
                     )
                     return False
 
-                user_result = await self._node.access_control.delete_user(slot_num)
+                user_result = await node.access_control.delete_user(slot_num)
                 # LOCATION_EMPTY means the user was already absent, which is the
                 # desired post-condition for a clear operation.
                 ok_user_results = (
@@ -852,7 +907,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return False
 
         try:
-            await clear_usercode(self._node, slot_num)
+            await clear_usercode(node, slot_num)
         except BaseZwaveJSServerError as e:
             _LOGGER.error(
                 "[ZWaveJSProvider] Failed to clear usercode on slot %s: %s: %s",
@@ -869,7 +924,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         # Verify the code was cleared
         try:
-            usercode = get_usercode(self._node, slot_num)
+            usercode = get_usercode(node, slot_num)
         except BaseZwaveJSServerError as e:
             _LOGGER.error(
                 "[ZWaveJSProvider] Failed to verify clear on slot %s: %s: %s",
@@ -882,8 +937,8 @@ class ZWaveJSLockProvider(BaseLockProvider):
         # Treat both "" and full string of "0" as cleared (Schlage BE469 firmware bug workaround)
         code_value = str(usercode.get(ZWAVEJS_ATTR_USERCODE) or "")
         if code_value not in ("", "0" * len(code_value)):
-            _LOGGER.debug(
-                "[ZWaveJSProvider] Slot %s not yet cleared, will retry",
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Slot %s not yet cleared after command, will retry",
                 slot_num,
             )
             return False
@@ -962,12 +1017,13 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         async def handle_zwave_notification_event(event: Event) -> None:
             """Handle Z-Wave JS notification event."""
-            if not self._node or not self._device:
+            node = self._get_node()
+            if not node or not self._device:
                 return
 
             # Verify this event is for our lock
             if (
-                event.data.get(ATTR_NODE_ID) != self._node.node_id
+                event.data.get(ATTR_NODE_ID) != node.node_id
                 or event.data.get(ATTR_DEVICE_ID) != self._device.id
             ):
                 return
@@ -1118,14 +1174,16 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     def get_node_id(self) -> int | None:
         """Get the Z-Wave node ID."""
-        return self._node.node_id if self._node else None
+        node = self._get_node()
+        return node.node_id if node else self._node_id
 
     def get_node_status(self) -> str | None:
         """Get the Z-Wave node status."""
-        if not self._node:
+        node = self._get_node()
+        if not node:
             return None
         try:
-            node_state = dump_node_state(self._node)
+            node_state = dump_node_state(node)
             return node_state.get("status")
         except Exception:  # noqa: BLE001
             return None
