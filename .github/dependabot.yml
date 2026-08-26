@@ -17,3 +17,8 @@ updates:
       interval: "weekly"
     labels:
       - "dependencies"
+    ignore:
+      # Pinned to exact versions by pytest-homeassistant-custom-component;
+      # bumping them directly produces unsatisfiable requirements.
+      - dependency-name: "pytest"
+      - dependency-name: "pytest-cov"
