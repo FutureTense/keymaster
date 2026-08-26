@@ -67,7 +67,7 @@ jobs:
       - name: 📦 Install dependencies
         run: yarn install
       - name: 🔍 Run prek
-        uses: j178/prek-action@6ad80277337ad479fe43bd70701c3f7f8aa74db3 # v2.0.3
+        uses: j178/prek-action@4e14d07f9231acabce116ccfca13b13dd9755ece # v3.0.0
         with:
           extra-args: --all-files --skip no-commit-to-branch
 
