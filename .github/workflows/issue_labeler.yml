@@ -23,7 +23,7 @@ jobs:
           template-path: .github/ISSUE_TEMPLATE/bug_report.yml
 
       - name: 🏷️ Apply Provider Label
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const issueData = JSON.parse(`${{ steps.issue-parser.outputs.jsonString }}`);
