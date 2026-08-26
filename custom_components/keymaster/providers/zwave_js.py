@@ -329,15 +329,13 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
     def _get_node(self) -> ZwaveJSNode | None:
         """Get the current Z-Wave node instance, refreshing if needed."""
-        if (
-            self._node_id is not None
-            and self._client
-            and self._client.driver
-            and self._client.driver.controller
-        ):
-            live_node = self._client.driver.controller.nodes.get(self._node_id)
-            if live_node is not None:
-                self._node = live_node
+        if self._node_id is None:
+            return self._node
+        if self._client and self._client.driver and self._client.driver.controller:
+            # The controller registry is authoritative when reachable, including
+            # for removals: a node popped by handle_node_removed has client=None
+            # and must not be used for commands.
+            self._node = self._client.driver.controller.nodes.get(self._node_id)
         return self._node
 
     def _is_node_alive(self) -> bool:
@@ -355,7 +353,7 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return False
         try:
             if node.status == NodeStatus.DEAD:
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "[ZWaveJSProvider] Node %s is dead, skipping command",
                     node.node_id,
                 )
@@ -378,7 +376,13 @@ class ZWaveJSLockProvider(BaseLockProvider):
             return False
         try:
             return await node.async_ping()
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "[ZWaveJSProvider] Ping failed for node %s: %s: %s",
+                node.node_id,
+                e.__class__.__qualname__,
+                e,
+            )
             return False
 
     @property

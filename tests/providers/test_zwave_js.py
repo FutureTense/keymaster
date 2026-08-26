@@ -1646,14 +1646,17 @@ class TestZWaveJSLockProviderPingNode:
 
         assert result is False
 
-    async def test_ping_node_returns_false_on_exception(self, zwave_provider, mock_zwave_node):
-        """Test async_ping_node returns False when an exception occurs."""
+    async def test_ping_node_returns_false_on_exception(
+        self, zwave_provider, mock_zwave_node, caplog
+    ):
+        """Test async_ping_node returns False and logs warning when an exception occurs."""
         mock_zwave_node.async_ping = AsyncMock(side_effect=RuntimeError("network error"))
         zwave_provider._node = mock_zwave_node
 
         result = await zwave_provider.async_ping_node()
 
         assert result is False
+        assert "Ping failed for node 14: RuntimeError: network error" in caplog.text
 
 
 class TestZWaveJSLockProviderNodeResolution:
@@ -1683,6 +1686,40 @@ class TestZWaveJSLockProviderNodeResolution:
         resolved_node = zwave_provider.node
         assert resolved_node is new_node
         assert zwave_provider._node is new_node
+
+    def test_dynamic_node_resolution_clears_removed_node(
+        self,
+        zwave_provider,
+        mock_zwave_client,
+    ):
+        """Test that _get_node fails closed and clears cached reference when node was removed."""
+        stale_node = MagicMock()
+        stale_node.node_id = 14
+        stale_node.client = None
+
+        mock_zwave_client.driver.controller.nodes = {}
+        zwave_provider._client = mock_zwave_client
+        zwave_provider._node_id = 14
+        zwave_provider._node = stale_node
+
+        resolved_node = zwave_provider.node
+        assert resolved_node is None
+        assert zwave_provider._node is None
+
+    def test_dynamic_node_resolution_preserves_node_when_driver_none(
+        self,
+        zwave_provider,
+        mock_zwave_client,
+        mock_zwave_node,
+    ):
+        """Test that _get_node returns cached node when driver is transiently None."""
+        mock_zwave_client.driver = None
+        zwave_provider._client = mock_zwave_client
+        zwave_provider._node_id = 14
+        zwave_provider._node = mock_zwave_node
+
+        resolved_node = zwave_provider.node
+        assert resolved_node is mock_zwave_node
 
     async def test_clear_usercode_warns_on_retry_if_not_cleared(
         self,
