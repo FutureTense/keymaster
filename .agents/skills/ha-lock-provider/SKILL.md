@@ -45,6 +45,7 @@ When creating or modifying a provider:
    if TYPE_CHECKING:
        from ..lock import KeymasterLock
 
+
    @dataclass
    class CustomLockProvider(BaseLockProvider):
        """Custom lock provider implementation."""
