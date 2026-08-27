@@ -1246,6 +1246,35 @@ class TestLockStateEventHandlers:
             },
         )
 
+    async def test_lock_locked_with_unknown_code_slot(self, mock_coordinator, mock_kmlock):
+        """Test _lock_locked with a slot number missing from code_slots."""
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.code_slots = {}
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=7,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+
+            assert mock_notify.call_args.kwargs["message"] == "Keypad Lock by Code Slot 7"
+            assert (
+                mock_coordinator.hass.bus.fire.call_args.kwargs["event_data"]["code_slot_name"]
+                == ""
+            )
+            assert (
+                mock_coordinator.hass.bus.fire.call_args.kwargs["event_data"]["code_slot_num"] == 7
+            )
+
     async def test_lock_unlocked_starts_autolock_timer(self, mock_coordinator, mock_kmlock):
         """Test _lock_unlocked starts autolock timer and schedules data update."""
         mock_kmlock.lock_state = LockState.LOCKED
