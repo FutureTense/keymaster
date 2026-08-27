@@ -1216,6 +1216,36 @@ class TestLockStateEventHandlers:
                 },
             )
 
+    async def test_lock_locked_with_invalid_code_slot_num_coerced_to_zero(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test _lock_locked coerces non-int code_slot_num to 0."""
+        mock_kmlock.lock_notifications = False
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        await mock_coordinator._lock_locked(
+            mock_kmlock,
+            code_slot_num=None,
+            source="event",
+            event_label="Keypad Lock",
+            action_code=5,
+        )
+
+        mock_coordinator.hass.bus.fire.assert_called_once_with(
+            "keymaster_lock_state_changed",
+            event_data={
+                "notification_source": "event",
+                "lockname": "Front Door",
+                "entity_id": "lock.front_door",
+                "state": LockState.LOCKED,
+                "action_code": 5,
+                "action_text": "Keypad Lock",
+                "code_slot_num": 0,
+                "code_slot_name": "",
+            },
+        )
+
     async def test_lock_unlocked_starts_autolock_timer(self, mock_coordinator, mock_kmlock):
         """Test _lock_unlocked starts autolock timer and schedules data update."""
         mock_kmlock.lock_state = LockState.LOCKED
