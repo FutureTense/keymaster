@@ -145,6 +145,144 @@ Home Assistant `Debouncer` asyncio lock. Per-entry timers can enqueue refresh
 work independently, but the manager does not poll multiple locks at the same
 time.
 
+## Entity-coordinator coupling audit
+
+Every Keymaster entity subscribes to its per-lock coordinator, so every push
+invokes every entity's `_handle_coordinator_update`. A natural question is
+whether some entities can be detached from that value fan-out. This section
+records which entities could be decoupled, and why the rest cannot be detached
+without losing parent/child, external-write, provider read-back, or access-limit
+propagation. The measured figures below come from a single-machine benchmark on
+CPython 3.14.3 / Home Assistant 2026.8.3 (both at or above the project floor of
+Python 3.14 / HA 2026.7.0) and should be read as order-of-magnitude, not as
+guarantees.
+
+### Two entity classes
+
+Entities split into two classes by what they publish:
+
+- **Availability-only** entities carry no coordinator-derived value: on a
+  coordinator push they only update `available`. These are the buttons
+  (`button.py`, one `button.reset_lock` plus one reset button per slot) and the
+  code-slot event entities (`event.py`, one per slot). Their
+  `_handle_coordinator_update` only toggles `_attr_available`, and neither
+  overrides `_state_signature`. The event entities do publish event state
+  (last-used trigger, type, and attributes), but that state is driven by their
+  own bus listeners (`_handle_lock_event`/`_handle_reset_event` in `event.py`),
+  not by the coordinator fan-out this section is about.
+- **Value-bearing** entities publish a native value read from coordinator data.
+  These are `text`, `number`, `datetime`, `time`, `switch`, `sensor`, and
+  `binary_sensor`. Each value platform overrides `_state_signature` to include
+  its native value (for example `text.py:142`, `number.py:160`,
+  `datetime.py:126`, `time.py:148`, `switch.py:281`), and sets that value from
+  `_get_property_value()` on every update.
+
+For a lock with `N` code slots the availability-only entities number `N + 1`
+buttons plus `N` events, i.e. **`2N + 1`**. In a realistic large-install profile
+(access-limit date range on, day-of-week off, door sensor on, connected sensor
+on) the total is roughly `13N + 10` entities, so availability-only entities are
+a stable **~15%** of the entity count across three orders of magnitude of `N`.
+
+### Why availability-only entities remain coordinator-bound
+
+Detaching the `2N + 1` availability-only entities onto a targeted availability
+dispatch signal was evaluated and **rejected on measured grounds**. Two findings
+drive that decision.
+
+First, the write storm this refactor would have addressed is already gone.
+`async_write_ha_state_if_changed()` (`entity.py`) compares a state signature and
+early-returns when nothing changed, so a steady-state push whose availability is
+unchanged fires **zero** `async_write_ha_state` calls. What remains for an
+availability-only entity is only the callback invocation itself, measured at a
+stable **~1.1 µs** per entity per push.
+
+Second, that residual is a small and shrinkable slice of an already-cheap push.
+The availability-only portion is a stable ~9-10% of total push time at every
+scale:
+
+| Slots N | Full push | Availability-only | Share |
+| ---: | ---: | ---: | ---: |
+| 10 | 254 µs | 25 µs | 9.9% |
+| 100 | 2458 µs | 226 µs | 9.2% |
+| 615 | 14813 µs | 1399 µs | 9.4% |
+
+At `N = 615` (an ~8000-entity lock, the `LARGE_LOCK_WARNING_THRESHOLD` band in
+`const.py:34`) the removable slice is ~1.4 ms per push, and fan-out is already
+coalesced to roughly one push per lock per event-loop turn with a 60-second
+periodic refresh, so there is no residual storm to amplify. Profiling attributes
+the button and event handler bodies to only ~1.7% of self-time; the dominant
+cost is the `switch` value handlers plus the shared `_freeze` and
+`sync_get_lock_by_config_entry_id` paths that the refactor would not touch.
+
+The refactor's documented failure mode is **stale availability**: a new
+availability-only signal that misses a connect, disconnect, or slot add/remove
+transition would leave a button reporting "available" on a disconnected lock.
+That correctness regression is not worth a sub-millisecond, ~9% CPU saving that
+is already dominated by code the refactor does not change.
+
+### Why value-bearing config entities cannot be detached
+
+The config entities (`text`, `number`, `datetime`, `time`, `switch`) are all
+value-bearing, and each is fed by at least one propagation mechanism that writes
+into coordinator data outside of the entity's own setter. Detaching any of them
+from the coordinator fan-out would silently drop these updates. Each mechanism
+below was verified against source at `831ed44`.
+
+- **Parent/child inheritance.** `_sync_child_locks` (`coordinator.py:3036`)
+  calls `_update_child_code_slots` (`coordinator.py:3090`), which copies
+  `enabled`, `name`, `active`, and every access-limit attribute from the parent
+  slot into the child slot with `setattr` (`coordinator.py:3123`) and propagates
+  the parent PIN into the child slot (`coordinator.py:3192`). This drives the
+  child's `text` name, `number` access-limit count, `datetime` date-range, and
+  the access-limit `switch` entities. The copy is gated by the child's
+  `override_parent` config switch, which is itself a value-bearing entity.
+
+- **External writes (Rental Control).** There is no in-repo Rental Control code
+  path; a repository-wide search finds no reference to it. The coupling is
+  external: Rental Control drives Keymaster by calling the same setter services
+  these config entities expose (`text.py:146` `async_set_value`, `number.py:164`
+  `async_set_native_value`, `datetime.py:130`, `time.py:152`, and the switch
+  `async_turn_on`/`async_turn_off`). Those setters write through
+  `_set_property_value` into coordinator data and request a refresh, and the new
+  value is republished to the UI through the coordinator push. Detaching these
+  entities would leave externally driven writes unreflected.
+
+- **Provider PIN read-backs.** A refresh calls `async_get_usercodes()`
+  (`coordinator.py:2731`) and feeds the result through `_update_code_slots`
+  (`coordinator.py:2740`) to `_sync_usercode` (`coordinator.py:2831`), which
+  imports the lock-reported name (`coordinator.py:2845`), and `_sync_pin`
+  (`coordinator.py:2897`), which writes the provider-reported code into
+  `slot.pin` (`coordinator.py:2951` and `coordinator.py:3030`). This is how the
+  `text` name and PIN entities show the value the lock actually holds, including
+  codes imported from an already-provisioned lock.
+
+- **Access-limit decrements.** On a code-slot unlock, `_lock_unlocked`
+  (`coordinator.py:1360`) decrements the slot's `accesslimit_count`
+  (`coordinator.py:1482`, or the parent's at `coordinator.py:1466`) and
+  schedules a notification (`coordinator.py:1484`/`1470`). The `number`
+  "Uses Remaining" entity publishes that decremented count, so its value changes
+  without any user interaction with the entity.
+
+Each entity type the refactor listed as out of scope is confirmed value-bearing:
+the `text` name and PIN entities (fed by provider read-back and child sync), the
+`datetime` and `time` entities (child sync and external writes), the `number`
+access-limit count entity (decrements and child sync), and the config `switch`
+entities (child sync, plus `override_parent` gating the child copy). None can be
+detached without losing one of the four mechanisms above.
+
+### What could be decoupled
+
+Nothing is worth detaching today. The only entities that carry no
+coordinator-derived value are the availability-only buttons and events, and
+those are precisely the entities the rejected refactor targeted; keeping them
+coordinator-bound costs ~1.1 µs each per push against a stale-availability
+regression risk. Every remaining entity is value-bearing and is fed by parent/
+child inheritance, external writes, provider read-back, or access-limit
+decrements, so it must stay on the coordinator fan-out. If push cost ever needs
+reducing, the measured hot paths are the shared `_freeze` and
+`sync_get_lock_by_config_entry_id` helpers, which benefit every platform without
+introducing a second dispatch signal.
+
 ## Testing the guard
 
 `tests/test_coordinator_fanout_guard.py` covers both fast CI feedback and the
