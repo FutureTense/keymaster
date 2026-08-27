@@ -680,3 +680,54 @@ async def test_number_entities_can_be_preset_when_feature_disabled(
         assert kmlock.code_slots is not None
         target = kmlock.code_slots[1]
     assert getattr(target, lock_attr) == value
+
+
+async def test_number_skips_unchanged_state_writes(
+    hass: HomeAssistant, number_config_entry, coordinator
+):
+    """Test number entity only writes state when its published value changes."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=number_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, enabled=True, accesslimit_count=5)}
+    coordinator.kmlocks[number_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterNumberEntityDescription(
+        key="number.code_slots:1.accesslimit_count",
+        name="Code Slot 1: Uses Remaining",
+        icon="mdi:counter",
+        mode=NumberMode.BOX,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=1,
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=number_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterNumber(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_native_value == 5
+
+        # Identical update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Changing the exposed value writes exactly once.
+        kmlock.code_slots[1].accesslimit_count = 3
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_native_value == 3
+
+        # Availability flip still writes.
+        kmlock.connected = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 3
+        assert entity._attr_available is False

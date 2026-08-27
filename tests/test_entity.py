@@ -14,7 +14,7 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.entity import KeymasterEntity, KeymasterEntityDescription
+from custom_components.keymaster.entity import KeymasterEntity, KeymasterEntityDescription, _freeze
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
     KeymasterCodeSlotDayOfWeek,
@@ -975,3 +975,38 @@ async def test_entity_dynamic_kmlock_replacement(
     entity._set_property_value(False)
     assert kmlock2.autolock_enabled is False
     assert kmlock1.autolock_enabled is False  # untouched
+
+
+def test_freeze_produces_stable_hashable_snapshots():
+    """Test _freeze recursively converts payloads into comparable snapshots."""
+
+    # Mappings become sorted tuples keyed by str(key) and recurse into values.
+    frozen_map = _freeze({"b": [1, 2], "a": {"nested": (3, 4)}})
+    assert frozen_map == (
+        ("a", (("nested", (3, 4)),)),
+        ("b", (1, 2)),
+    )
+
+    # Lists and tuples become tuples.
+    assert _freeze([1, [2, 3]]) == (1, (2, 3))
+    assert _freeze((1, 2)) == (1, 2)
+
+    # Sets and frozensets become frozensets.
+    assert _freeze({1, 2, 3}) == frozenset({1, 2, 3})
+    assert _freeze(frozenset({4, 5})) == frozenset({4, 5})
+
+    # Scalars are returned as-is.
+    assert _freeze("value") == "value"
+    assert _freeze(None) is None
+
+    # The result must be hashable so signatures can be compared cheaply.
+    assert hash(_freeze({"x": [1, {2, 3}]})) == hash((("x", (1, frozenset({2, 3}))),))
+
+
+def test_freeze_snapshot_is_independent_of_later_mutation():
+    """Test a frozen snapshot does not reflect later in-place mutation."""
+
+    payload: dict = {"items": [1, 2]}
+    snapshot = _freeze(payload)
+    payload["items"].append(3)
+    assert snapshot == (("items", (1, 2)),)

@@ -498,3 +498,82 @@ async def test_event_entity_created_in_setup(hass: HomeAssistant):
     lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
     assert all(entity.coordinator is lock_coordinator for entity in added_entities)
     assert added_entities[0].unique_id == f"{config_entry.entry_id}_event_code_slots_1_last_used"
+
+
+async def test_event_coordinator_update_skips_unchanged_writes(hass: HomeAssistant):
+    """Test event availability updates are deduped when nothing changed."""
+    config_entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_EVENT)
+    config_entry.add_to_hass(hass)
+
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, name="Guest")}
+    coordinator.kmlocks[config_entry.entry_id] = kmlock
+
+    entity = _make_entity(hass, config_entry, coordinator)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_available is True
+
+        # Identical availability update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Availability flip still writes.
+        kmlock.connected = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_available is False
+
+
+async def test_event_real_events_always_write(hass: HomeAssistant):
+    """Test lock and reset events force a write even when availability is unchanged."""
+    config_entry = MockConfigEntry(domain=DOMAIN, title="frontdoor", data=CONFIG_DATA_EVENT)
+    config_entry.add_to_hass(hass)
+
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, name="Guest")}
+    coordinator.kmlocks[config_entry.entry_id] = kmlock
+
+    entity = _make_entity(hass, config_entry, coordinator)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        # Establish a stored signature via a coordinator update.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # A real unlock event must write even though availability is unchanged.
+        unlock_event = MagicMock()
+        unlock_event.data = {
+            ATTR_STATE: LockState.UNLOCKED,
+            ATTR_ENTITY_ID: "lock.test",
+            ATTR_CODE_SLOT: 1,
+            ATTR_CODE_SLOT_NAME: "Guest",
+            ATTR_NAME: "frontdoor",
+        }
+        entity._handle_lock_event(unlock_event)
+        assert mock_write.call_count == 2
+        assert entity.state is not None
+
+        # A code slot reset event must also always write.
+        reset_event = MagicMock()
+        reset_event.data = {
+            ATTR_CODE_SLOT: 1,
+            ATTR_ENTITY_ID: "lock.test",
+        }
+        entity._handle_reset_event(reset_event)
+        assert mock_write.call_count == 3
+        assert entity.state is None

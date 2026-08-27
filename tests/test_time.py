@@ -671,3 +671,68 @@ async def test_time_entities_can_be_preset_when_feature_disabled(
     assert entity._attr_available
     assert entity._attr_native_value == value
     assert getattr(day_of_week, attr_name) == value
+
+
+async def test_time_skips_unchanged_state_writes(hass: HomeAssistant, time_config_entry):
+    """Test time entity only writes state when its published value changes."""
+    coordinator = hass.data[DOMAIN][COORDINATOR]
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=time_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            accesslimit_day_of_week_enabled=True,
+            accesslimit_day_of_week={
+                0: KeymasterCodeSlotDayOfWeek(
+                    day_of_week_num=0,
+                    day_of_week_name="Monday",
+                    dow_enabled=True,
+                    limit_by_time=True,
+                    time_start=dt_time(8, 0, 0),
+                    time_end=dt_time(18, 0, 0),
+                )
+            },
+        )
+    }
+    coordinator.kmlocks[time_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTimeEntityDescription(
+        key="time.code_slots:1.accesslimit_day_of_week:0.time_start",
+        name="Code Slot 1: Monday - Start Time",
+        icon="mdi:clock-start",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=time_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterTime(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_native_value == dt_time(8, 0, 0)
+
+        # Identical update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Changing the exposed value writes exactly once.
+        dow = kmlock.code_slots[1].accesslimit_day_of_week
+        assert dow is not None
+        dow[0].time_start = dt_time(9, 30, 0)
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_native_value == dt_time(9, 30, 0)
+
+        # Availability flip still writes.
+        kmlock.connected = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 3
+        assert entity._attr_available is False

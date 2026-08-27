@@ -121,7 +121,7 @@ class KeymasterCodeSlotEventEntity(KeymasterEntity, EventEntity):
                 ATTR_NAME: event.data.get(ATTR_NAME, ""),
             },
         )
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed(force=True)
 
     @callback
     def _handle_reset_event(self, event: Event) -> None:
@@ -134,25 +134,25 @@ class KeymasterCodeSlotEventEntity(KeymasterEntity, EventEntity):
             return
 
         self._clear_event_state()
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed(force=True)
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle coordinator data updates for availability."""
         if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if ".code_slots" in self._property and (
             not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         self._attr_available = True
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed()
 
     def _clear_event_state(self) -> None:
         """Clear the event entity state back to None."""

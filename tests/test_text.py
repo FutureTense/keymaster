@@ -692,3 +692,50 @@ async def test_text_entity_redaction_behavior(hass: HomeAssistant, text_config_e
     # 3. No kmlock (should not redact)
     with patch.object(coordinator, "sync_get_lock_by_config_entry_id", return_value=None):
         assert entity_pin._redact_value("1234") == "1234"
+
+
+async def test_text_skips_unchanged_state_writes(
+    hass: HomeAssistant, text_config_entry, coordinator
+):
+    """Test text entity only writes state when its published value changes."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, name="Test User")}
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:1.name",
+        name="Code Slot 1: Name",
+        icon="mdi:form-textbox-lock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_native_value == "Test User"
+
+        # Identical update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Changing the exposed value writes exactly once.
+        kmlock.code_slots[1].name = "New User"
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_native_value == "New User"
+
+        # Availability flip still writes.
+        kmlock.connected = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 3
+        assert entity._attr_available is False

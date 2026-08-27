@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import logging
+from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -108,4 +109,8 @@ class KeymasterBinarySensor(KeymasterEntity, BinarySensorEntity):
     def _handle_coordinator_update(self) -> None:
         # _LOGGER.debug(f"[Binary Sensor handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
         self._attr_is_on = self._get_property_value()
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed()
+
+    def _state_signature(self) -> tuple[Any, ...]:
+        """Return a comparable snapshot including the on/off value."""
+        return (*super()._state_signature(), self._attr_is_on)

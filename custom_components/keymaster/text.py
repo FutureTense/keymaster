@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import logging
+from typing import Any
 
 from homeassistant.components.text import TextEntity, TextEntityDescription, TextMode
 from homeassistant.config_entries import ConfigEntry
@@ -104,7 +105,7 @@ class KeymasterText(KeymasterEntity, TextEntity):
         # _LOGGER.debug("[Text handle_coordinator_update] self.coordinator.data: %s", self.coordinator.data)
         if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if (
@@ -117,14 +118,14 @@ class KeymasterText(KeymasterEntity, TextEntity):
             )
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if ".code_slots" in self._property and (
             not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         self._attr_available = True
@@ -136,7 +137,11 @@ class KeymasterText(KeymasterEntity, TextEntity):
             self._property,
             log_value,
         )
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed()
+
+    def _state_signature(self) -> tuple[Any, ...]:
+        """Return a comparable snapshot including the native value."""
+        return (*super()._state_signature(), self._attr_native_value)
 
     async def async_set_value(self, value: str) -> None:
         """Set the value of a text entity."""
