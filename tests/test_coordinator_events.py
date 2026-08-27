@@ -74,6 +74,7 @@ async def test_handle_provider_lock_event_keypad_lock(hass, mock_coordinator, mo
 
     mock_coordinator._lock_locked.assert_called_once()
     args, kwargs = mock_coordinator._lock_locked.call_args
+    assert kwargs["code_slot_num"] == 1
     assert kwargs["source"] == "event"
     assert kwargs["event_label"] == "Keypad Lock"
     assert kwargs["action_code"] == 5

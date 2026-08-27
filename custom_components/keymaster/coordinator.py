@@ -993,6 +993,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         elif inferred_action == LockState.LOCKED:
             await self._lock_locked(
                 kmlock=kmlock,
+                code_slot_num=code_slot_num,
                 source="event",
                 event_label=event_label,
                 action_code=action_code,
@@ -1236,7 +1237,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 ATTR_ACTION_CODE: action_code,
                 ATTR_ACTION_TEXT: event_label,
                 ATTR_CODE_SLOT: code_slot_num,
-                ATTR_CODE_SLOT_NAME: slot.name if slot and code_slot_num != 0 else "",
+                ATTR_CODE_SLOT_NAME: (slot.name or "") if slot and code_slot_num != 0 else "",
             },
         )
 
@@ -1492,6 +1493,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     async def _lock_locked(
         self,
         kmlock: KeymasterLock,
+        code_slot_num: int = 0,
         source: str | None = None,
         event_label: str | None = None,
         action_code: int | None = None,
@@ -1528,9 +1530,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._last_unlock_code_slot.pop(kmlock.keymaster_config_entry_id, None)
         self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
         self._cancel_pending_keypad_unlock_notification(kmlock)
+        if not isinstance(code_slot_num, int):
+            code_slot_num = 0
+
         _LOGGER.debug(
-            "[lock_locked] %s: Running. source: %s, event_label: %s, action_code: %s",
+            "[lock_locked] %s: Running. code_slot_num: %s, source: %s, "
+            "event_label: %s, action_code: %s",
             kmlock.lock_name,
+            code_slot_num,
             source,
             event_label,
             action_code,
@@ -1558,13 +1565,26 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
         if kmlock.lock_notifications:
+            message = event_label
+            if code_slot_num > 0:
+                if (
+                    kmlock.code_slots
+                    and kmlock.code_slots.get(code_slot_num)
+                    and kmlock.code_slots[code_slot_num].name
+                ):
+                    message = (
+                        f"{message} by {kmlock.code_slots[code_slot_num].name} [{code_slot_num}]"
+                    )
+                else:
+                    message = f"{message} by Code Slot {code_slot_num}"
             await send_manual_notification(
                 hass=self.hass,
                 script_name=kmlock.notify_script_name,
                 title=kmlock.lock_name,
-                message=event_label,
+                message=message,
             )
 
+        slot = kmlock.code_slots.get(code_slot_num) if kmlock.code_slots else None
         self.hass.bus.fire(
             EVENT_KEYMASTER_LOCK_STATE_CHANGED,
             event_data={
@@ -1574,6 +1594,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 ATTR_STATE: LockState.LOCKED,
                 ATTR_ACTION_CODE: action_code,
                 ATTR_ACTION_TEXT: event_label,
+                ATTR_CODE_SLOT: code_slot_num,
+                ATTR_CODE_SLOT_NAME: (slot.name or "") if slot and code_slot_num != 0 else "",
             },
         )
 

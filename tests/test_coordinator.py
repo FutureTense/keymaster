@@ -1124,13 +1124,97 @@ class TestLockStateEventHandlers:
             await mock_coordinator._lock_locked(
                 mock_kmlock,
                 source="keypad",
-                event_label="Locked by User 1",
+                event_label="Keypad Lock",
             )
 
             mock_notify.assert_called_once()
             call_kwargs = mock_notify.call_args.kwargs
             assert call_kwargs["title"] == "Front Door"
-            assert call_kwargs["message"] == "Locked by User 1"
+            assert call_kwargs["message"] == "Keypad Lock"
+
+    async def test_lock_locked_with_code_slot_and_slot_name(self, mock_coordinator, mock_kmlock):
+        """Test _lock_locked with code_slot_num formats notification and fires event with slot details."""
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.code_slots = {
+            2: Mock(name="Alice", code="1234"),
+        }
+        mock_kmlock.code_slots[2].name = "Alice"
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=2,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+
+            mock_notify.assert_called_once()
+            call_kwargs = mock_notify.call_args.kwargs
+            assert call_kwargs["title"] == "Front Door"
+            assert call_kwargs["message"] == "Keypad Lock by Alice [2]"
+
+            mock_coordinator.hass.bus.fire.assert_called_once_with(
+                "keymaster_lock_state_changed",
+                event_data={
+                    "notification_source": "event",
+                    "lockname": "Front Door",
+                    "entity_id": "lock.front_door",
+                    "state": LockState.LOCKED,
+                    "action_code": 5,
+                    "action_text": "Keypad Lock",
+                    "code_slot_num": 2,
+                    "code_slot_name": "Alice",
+                },
+            )
+
+    async def test_lock_locked_with_code_slot_without_name(self, mock_coordinator, mock_kmlock):
+        """Test _lock_locked with unnamed code slot formats fallback message."""
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.code_slots = {
+            3: Mock(name=None, code="5678"),
+        }
+        mock_kmlock.code_slots[3].name = None
+        mock_coordinator._throttle = Mock()
+        mock_coordinator._throttle.is_allowed = Mock(return_value=True)
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=3,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+
+            mock_notify.assert_called_once()
+            call_kwargs = mock_notify.call_args.kwargs
+            assert call_kwargs["title"] == "Front Door"
+            assert call_kwargs["message"] == "Keypad Lock by Code Slot 3"
+
+            mock_coordinator.hass.bus.fire.assert_called_once_with(
+                "keymaster_lock_state_changed",
+                event_data={
+                    "notification_source": "event",
+                    "lockname": "Front Door",
+                    "entity_id": "lock.front_door",
+                    "state": LockState.LOCKED,
+                    "action_code": 5,
+                    "action_text": "Keypad Lock",
+                    "code_slot_num": 3,
+                    "code_slot_name": "",
+                },
+            )
 
     async def test_lock_unlocked_starts_autolock_timer(self, mock_coordinator, mock_kmlock):
         """Test _lock_unlocked starts autolock timer and schedules data update."""
