@@ -9,6 +9,7 @@ import pytest
 from custom_components.keymaster.const import CONF_REDACT_SLOT_NAMES
 from custom_components.keymaster.providers.schlage import (
     SchlageLockProvider,
+    _get_schlage_locks,
     _make_tagged_name,
     _parse_tag,
 )
@@ -141,6 +142,54 @@ class TestProperties:
 # ---------------------------------------------------------------------------
 
 
+class TestGetSchlageLocks:
+    """Tests for the shape-tolerant _get_schlage_locks helper."""
+
+    def test_data_none(self):
+        """Return None when coordinator.data is None."""
+        coordinator = MagicMock()
+        coordinator.data = None
+        assert _get_schlage_locks(coordinator) is None
+
+    def test_no_coordinator_data_attr(self):
+        """Return None when coordinator has no data attribute at all."""
+        coordinator = type("Coordinator", (), {})()
+        assert _get_schlage_locks(coordinator) is None
+
+    def test_old_shape_locks_attribute(self):
+        """HA < 2026.9: data exposes a .locks mapping."""
+        locks = {"dev123": object()}
+        data = MagicMock()
+        data.locks = locks
+        coordinator = MagicMock()
+        coordinator.data = data
+        assert _get_schlage_locks(coordinator) is locks
+
+    def test_new_shape_plain_dict(self):
+        """HA >= 2026.9: data IS the mapping, with no .locks attribute."""
+        data = {"dev123": object()}
+        coordinator = MagicMock()
+        coordinator.data = data
+        assert _get_schlage_locks(coordinator) is data
+
+    def test_locks_present_but_none(self):
+        """A .locks attribute that is None falls back to data-as-mapping."""
+
+        class DictWithNoneLocks(dict):
+            locks = None
+
+        data = DictWithNoneLocks({"dev123": object()})
+        assert _get_schlage_locks(MagicMock(data=data)) is data
+
+    def test_non_mapping_data(self):
+        """Return None when data is neither a .locks holder nor a mapping."""
+        coordinator = MagicMock()
+        # A plain object() is truthy, has no ``locks`` attribute, and is not a
+        # Mapping, so the helper must fall through to ``return None``.
+        coordinator.data = object()
+        assert _get_schlage_locks(coordinator) is None
+
+
 class TestConnect:
     """Tests for async_connect."""
 
@@ -167,6 +216,49 @@ class TestConnect:
         assert schlage_provider._connected is True
         assert schlage_provider._schlage_device_id == "schlage_device_123"
         assert schlage_provider.lock_config_entry_id == "schlage_config_entry"
+
+    async def test_connect_success_new_dict_shape(self, schlage_provider):
+        """Test successful connection with HA >= 2026.9 plain-dict data."""
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_config_entry"
+        lock_entry.device_id = "ha_device_id"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
+        coordinator = MagicMock()
+        # New shape: coordinator.data IS the mapping, no .locks attribute.
+        coordinator.data = {"schlage_device_123": MagicMock()}
+        schlage_entry.runtime_data = coordinator
+        schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
+
+        device_entry = MagicMock()
+        device_entry.identifiers = {("schlage", "schlage_device_123")}
+        schlage_provider.device_registry.async_get.return_value = device_entry
+
+        result = await schlage_provider.async_connect()
+        assert result is True
+        assert schlage_provider._connected is True
+        assert schlage_provider._schlage_device_id == "schlage_device_123"
+
+    async def test_connect_lock_not_in_dict_shape(self, schlage_provider):
+        """Test connection fails when lock absent from plain-dict data."""
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_entry"
+        lock_entry.device_id = "ha_device"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
+        coordinator = MagicMock()
+        coordinator.data = {}  # New shape, empty
+        schlage_entry.runtime_data = coordinator
+        schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
+
+        device_entry = MagicMock()
+        device_entry.identifiers = {("schlage", "schlage_device_123")}
+        schlage_provider.device_registry.async_get.return_value = device_entry
+        assert await schlage_provider.async_connect() is False
 
     async def test_connect_entity_not_found(self, schlage_provider):
         """Test connection fails when entity not in registry."""
@@ -331,6 +423,40 @@ class TestIsConnected:
         schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
 
         assert await schlage_provider.async_is_connected() is True
+
+    async def test_connected_lock_in_dict_shape(self, schlage_provider):
+        """Test returns True with HA >= 2026.9 plain-dict data."""
+        schlage_provider._schlage_device_id = "dev123"
+
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_entry"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
+        coordinator = MagicMock()
+        coordinator.data = {"dev123": MagicMock()}  # New shape
+        schlage_entry.runtime_data = coordinator
+        schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
+
+        assert await schlage_provider.async_is_connected() is True
+
+    async def test_not_connected_dict_shape_lock_absent(self, schlage_provider):
+        """Test returns False with plain-dict data missing the device id."""
+        schlage_provider._schlage_device_id = "dev123"
+
+        lock_entry = MagicMock()
+        lock_entry.config_entry_id = "schlage_entry"
+        schlage_provider.entity_registry.async_get.return_value = lock_entry
+
+        schlage_entry = MagicMock()
+        schlage_entry.state = ConfigEntryState.LOADED
+        coordinator = MagicMock()
+        coordinator.data = {"other": MagicMock()}  # New shape, wrong id
+        schlage_entry.runtime_data = coordinator
+        schlage_provider.hass.config_entries.async_get_entry.return_value = schlage_entry
+
+        assert await schlage_provider.async_is_connected() is False
 
     async def test_not_connected_lock_removed(self, schlage_provider):
         """Test returns False when lock removed from coordinator."""
