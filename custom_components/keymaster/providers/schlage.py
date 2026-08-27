@@ -13,6 +13,7 @@ services (``schlage.get_codes``, ``schlage.add_code``,
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 import logging
 import re
@@ -57,6 +58,23 @@ def _is_masked_pin(pin: str) -> bool:
         return True
     # Only treat '*' repeated as masked; allow real all-zero PINs like '0000'.
     return len(set(pin)) == 1 and pin[0] == "*"
+
+
+def _get_schlage_locks(coordinator: Any) -> Mapping[str, Any] | None:
+    """Return the Schlage coordinator's lock mapping across HA data-shape changes.
+
+    HA < 2026.9 stored a ``SchlageData`` dataclass exposing ``locks``.
+    HA >= 2026.9 stores ``dict[str, LockData]`` directly (core commit fc49ae5).
+    """
+    data = getattr(coordinator, "data", None)
+    if data is None:
+        return None
+    locks = getattr(data, "locks", None)
+    if isinstance(locks, Mapping):
+        return locks
+    if isinstance(data, Mapping):
+        return data
+    return None
 
 
 @dataclass
@@ -147,18 +165,16 @@ class SchlageLockProvider(BaseLockProvider):
             )
             return False
 
-        try:
-            if schlage_device_id not in coordinator.data.locks:
-                _LOGGER.error(
-                    "[SchlageProvider] Lock %s not found in Schlage coordinator data",
-                    schlage_device_id,
-                )
-                return False
-        except (AttributeError, TypeError) as e:
+        locks = _get_schlage_locks(coordinator)
+        if locks is None:
             _LOGGER.error(
-                "[SchlageProvider] Can't access Schlage coordinator data: %s: %s",
-                e.__class__.__qualname__,
-                e,
+                "[SchlageProvider] Can't access Schlage coordinator data",
+            )
+            return False
+        if schlage_device_id not in locks:
+            _LOGGER.error(
+                "[SchlageProvider] Lock %s not found in Schlage coordinator data",
+                schlage_device_id,
             )
             return False
 
@@ -192,7 +208,7 @@ class SchlageLockProvider(BaseLockProvider):
             self._connected = False
             return False
 
-        locks = getattr(coordinator.data, "locks", None)
+        locks = _get_schlage_locks(coordinator)
         self._connected = bool(locks and self._schlage_device_id in locks)
         return self._connected
 
