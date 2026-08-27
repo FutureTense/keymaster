@@ -1323,8 +1323,10 @@ class TestLockStateEventHandlers:
             for call in mock_coordinator.hass.bus.fire.call_args_list
         ]
         assert fired == [0, 2]
-        # Exactly one notification for one physical lock.
+        # Exactly one notification for one physical lock, and it is the generic
+        # message from the slot=0 event -- the supersede must not re-notify.
         assert mock_notify.call_count == 1
+        assert mock_notify.call_args.kwargs["message"] == "Keypad Lock"
 
     async def test_lock_locked_supersedes_slot_zero(self, mock_coordinator, mock_kmlock):
         """Test a slot>0 lock event supersedes a prior slot=0 lock event when already locked."""
