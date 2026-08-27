@@ -1223,6 +1223,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self,
         kmlock: KeymasterLock,
         state: str,
+        *,
         code_slot_num: int,
         source: str | None,
         event_label: str | None,
@@ -1254,7 +1255,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     ) -> None:
         """Fire the keymaster_lock_state_changed bus event for an unlock."""
         self._fire_lock_state_changed_event(
-            kmlock, LockState.UNLOCKED, code_slot_num, source, event_label, action_code
+            kmlock,
+            LockState.UNLOCKED,
+            code_slot_num=code_slot_num,
+            source=source,
+            event_label=event_label,
+            action_code=action_code,
         )
 
     def _fire_lock_state_changed(
@@ -1267,7 +1273,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     ) -> None:
         """Fire the keymaster_lock_state_changed bus event for a lock."""
         self._fire_lock_state_changed_event(
-            kmlock, LockState.LOCKED, code_slot_num, source, event_label, action_code
+            kmlock,
+            LockState.LOCKED,
+            code_slot_num=code_slot_num,
+            source=source,
+            event_label=event_label,
+            action_code=action_code,
         )
 
     @staticmethod
