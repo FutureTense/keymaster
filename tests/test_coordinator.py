@@ -1285,6 +1285,47 @@ class TestLockStateEventHandlers:
         mock_coordinator._fire_unlock_state_changed(mock_kmlock, 2, "event", "Keypad Unlock", 6)
         assert mock_coordinator.hass.bus.fire.call_args.kwargs["event_data"]["code_slot_name"] == ""
 
+    async def test_lock_locked_supersede_sequence_no_duplicate_side_effects(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test slot=0 then slot>0 lock re-fires with slot info without duplicating side effects."""
+        mock_coordinator._throttle = Throttle()
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.pending_retry_lock = False
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.code_slots = {2: Mock(name="slot2")}
+        mock_kmlock.code_slots[2].name = "Alice"
+
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.send_manual_notification",
+                new=AsyncMock(),
+            ) as mock_notify,
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ),
+        ):
+            for slot in (0, 2):
+                await mock_coordinator._lock_locked(
+                    mock_kmlock,
+                    code_slot_num=slot,
+                    source="event",
+                    event_label="Keypad Lock",
+                    action_code=5,
+                )
+
+        # Both events reach the bus, the second with the corrected slot.
+        fired = [
+            call.kwargs["event_data"]["code_slot_num"]
+            for call in mock_coordinator.hass.bus.fire.call_args_list
+        ]
+        assert fired == [0, 2]
+        # Exactly one notification for one physical lock.
+        assert mock_notify.call_count == 1
+
     async def test_lock_locked_supersedes_slot_zero(self, mock_coordinator, mock_kmlock):
         """Test a slot>0 lock event supersedes a prior slot=0 lock event when already locked."""
         mock_kmlock.lock_state = LockState.LOCKED
@@ -1297,34 +1338,88 @@ class TestLockStateEventHandlers:
         mock_kmlock.code_slots[2].name = "Alice"
         mock_coordinator._last_lock_code_slot[mock_kmlock.keymaster_config_entry_id] = 0
 
-        with patch(
-            "custom_components.keymaster.coordinator.send_manual_notification",
-            new=AsyncMock(),
-        ) as mock_notify:
+        await mock_coordinator._lock_locked(
+            mock_kmlock,
+            code_slot_num=2,
+            source="event",
+            event_label="Keypad Lock",
+            action_code=5,
+        )
+
+        assert mock_coordinator._last_lock_code_slot[mock_kmlock.keymaster_config_entry_id] == 2
+        mock_coordinator.hass.bus.fire.assert_called_once_with(
+            "keymaster_lock_state_changed",
+            event_data={
+                "notification_source": "event",
+                "lockname": "Front Door",
+                "entity_id": "lock.front_door",
+                "state": LockState.LOCKED,
+                "action_code": 5,
+                "action_text": "Keypad Lock",
+                "code_slot_num": 2,
+                "code_slot_name": "Alice",
+            },
+        )
+
+    async def test_lock_locked_supersede_repeated_slot_no_refire(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test repeated slot>0 lock events do not repeatedly re-fire supersede."""
+        mock_coordinator._throttle = Throttle()
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.pending_retry_lock = False
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.code_slots = {2: Mock(name="slot2")}
+        mock_kmlock.code_slots[2].name = "Alice"
+
+        for slot in (0, 2, 2):
             await mock_coordinator._lock_locked(
                 mock_kmlock,
-                code_slot_num=2,
+                code_slot_num=slot,
                 source="event",
                 event_label="Keypad Lock",
                 action_code=5,
             )
 
-            assert mock_coordinator._last_lock_code_slot[mock_kmlock.keymaster_config_entry_id] == 2
-            mock_notify.assert_called_once()
-            assert mock_notify.call_args.kwargs["message"] == "Keypad Lock by Alice [2]"
-            mock_coordinator.hass.bus.fire.assert_called_once_with(
-                "keymaster_lock_state_changed",
-                event_data={
-                    "notification_source": "event",
-                    "lockname": "Front Door",
-                    "entity_id": "lock.front_door",
-                    "state": LockState.LOCKED,
-                    "action_code": 5,
-                    "action_text": "Keypad Lock",
-                    "code_slot_num": 2,
-                    "code_slot_name": "Alice",
-                },
-            )
+        fired = [
+            call.kwargs["event_data"]["code_slot_num"]
+            for call in mock_coordinator.hass.bus.fire.call_args_list
+        ]
+        assert fired == [0, 2]
+
+    async def test_lock_locked_initial_slot_gt_zero_no_supersede(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test initial slot>0 lock event does not trigger a supersede on repeated call."""
+        mock_coordinator._throttle = Throttle()
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.pending_retry_lock = False
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.code_slots = {2: Mock(name="slot2")}
+        mock_kmlock.code_slots[2].name = "Alice"
+
+        await mock_coordinator._lock_locked(
+            mock_kmlock,
+            code_slot_num=2,
+            source="event",
+            event_label="Keypad Lock",
+            action_code=5,
+        )
+
+        assert mock_coordinator.hass.bus.fire.call_count == 1
+        assert mock_coordinator._last_lock_code_slot[mock_kmlock.keymaster_config_entry_id] == 2
+
+        # A second slot=2 call while locked is ignored
+        await mock_coordinator._lock_locked(
+            mock_kmlock,
+            code_slot_num=2,
+            source="event",
+            event_label="Keypad Lock",
+            action_code=5,
+        )
+        assert mock_coordinator.hass.bus.fire.call_count == 1
 
     async def test_lock_unlocked_starts_autolock_timer(self, mock_coordinator, mock_kmlock):
         """Test _lock_unlocked starts autolock timer and schedules data update."""

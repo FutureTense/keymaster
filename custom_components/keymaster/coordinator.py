@@ -1544,10 +1544,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         pending_provider_event = (
             kmlock.keymaster_config_entry_id in self._pending_provider_lock_event
         )
-        # Check for supersede condition before throttle: when the lock is already
-        # locked and a more informative slot>0 event arrives, re-fire the bus event
-        # with the corrected slot info so downstream consumers receive it.
-        if kmlock.lock_state == LockState.LOCKED and not pending_provider_event:
+        if (
+            kmlock.lock_state == LockState.LOCKED
+            and not kmlock.pending_retry_lock
+            and not pending_provider_event
+        ):
             prior_slot = self._last_lock_code_slot.get(kmlock.keymaster_config_entry_id)
             if isinstance(code_slot_num, int) and code_slot_num > 0 and prior_slot == 0:
                 _LOGGER.debug(
@@ -1560,22 +1561,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 self._fire_lock_state_changed(
                     kmlock, code_slot_num, source, event_label, action_code
                 )
-                if kmlock.lock_notifications:
-                    message = self._format_slot_message(kmlock, code_slot_num, event_label)
-                    await send_manual_notification(
-                        hass=self.hass,
-                        script_name=kmlock.notify_script_name,
-                        title=kmlock.lock_name,
-                        message=message,
-                    )
             if kmlock.keymaster_config_entry_id in self._state_change_autolock_started:
                 if kmlock.autolock_timer:
                     await kmlock.autolock_timer.cancel()
                     self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
                 self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
             self._cancel_pending_keypad_unlock_notification(kmlock)
-            if not kmlock.pending_retry_lock:
-                return
+            return
 
         if not self._throttle.is_allowed(
             "lock_locked",
@@ -1596,8 +1588,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._last_lock_code_slot[kmlock.keymaster_config_entry_id] = code_slot_num
         self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
         self._cancel_pending_keypad_unlock_notification(kmlock)
-        if not isinstance(code_slot_num, int):
-            code_slot_num = 0
 
         _LOGGER.debug(
             "[lock_locked] %s: Running. code_slot_num: %s, source: %s, "
