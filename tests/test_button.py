@@ -273,3 +273,44 @@ async def test_button_press_reset_code_slot(hass: HomeAssistant, button_config_e
             config_entry_id=button_config_entry.entry_id,
             code_slot_num=1,
         )
+
+
+async def test_button_skips_unchanged_state_writes(
+    hass: HomeAssistant, button_config_entry, coordinator
+):
+    """Test button entity (availability-only) dedupes unchanged writes."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=button_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, enabled=True)}
+    coordinator.kmlocks[button_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterButtonEntityDescription(
+        key="button.code_slots:1.reset",
+        name="Code Slot 1: Reset",
+        icon="mdi:lock-reset",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=button_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterButton(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_available is True
+
+        # Identical availability update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Availability flip still writes.
+        kmlock.connected = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_available is False

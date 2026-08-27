@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime as dt
 import logging
+from typing import Any
 
 from homeassistant.components.datetime import DateTimeEntity, DateTimeEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -95,7 +96,7 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
         # _LOGGER.debug(f"[DateTime handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
         if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if (
@@ -108,19 +109,23 @@ class KeymasterDateTime(KeymasterEntity, DateTimeEntity):
             )
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if ".code_slots" in self._property and (
             not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         self._attr_available = True
         self._attr_native_value = self._get_property_value()
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed()
+
+    def _state_signature(self) -> tuple[Any, ...]:
+        """Return a comparable snapshot including the native value."""
+        return (*super()._state_signature(), self._attr_native_value)
 
     async def async_set_value(self, value: dt) -> None:
         """Update the datetime entity value."""

@@ -4,6 +4,7 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from datetime import time as dt_time
 import logging
+from typing import Any
 
 from homeassistant.components.time import TimeEntity, TimeEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -100,7 +101,7 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
         # _LOGGER.debug(f"[Time handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
         if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if (
@@ -113,14 +114,14 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
             )
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if ".code_slots" in self._property and (
             not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if self._property.endswith(".time_start") or self._property.endswith(".time_end"):
@@ -137,12 +138,16 @@ class KeymasterTime(KeymasterEntity, TimeEntity):
                 or self._day_of_week_num not in accesslimit_day_of_week
             ):
                 self._attr_available = False
-                self.async_write_ha_state()
+                self.async_write_ha_state_if_changed()
                 return
 
         self._attr_available = True
         self._attr_native_value = self._get_property_value()
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed()
+
+    def _state_signature(self) -> tuple[Any, ...]:
+        """Return a comparable snapshot including the native value."""
+        return (*super()._state_signature(), self._attr_native_value)
 
     async def async_set_value(self, value: dt_time) -> None:
         """Update value for a time entity."""

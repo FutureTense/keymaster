@@ -88,7 +88,7 @@ class KeymasterButton(KeymasterEntity, ButtonEntity):
     def _handle_coordinator_update(self) -> None:
         if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if (
@@ -97,11 +97,11 @@ class KeymasterButton(KeymasterEntity, ButtonEntity):
             and self._code_slot not in self._kmlock.code_slots
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         self._attr_available = True
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed()
 
     async def async_press(self) -> None:
         """Take action when button is pressed."""

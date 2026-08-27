@@ -22,7 +22,11 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
+from custom_components.keymaster.lock import (
+    KeymasterCodeSlot,
+    KeymasterCodeSlotDayOfWeek,
+    KeymasterLock,
+)
 from custom_components.keymaster.switch import (
     KeymasterSwitch,
     KeymasterSwitchEntityDescription,
@@ -822,3 +826,198 @@ async def test_switch_available_for_override_parent(
 
     # override_parent switches should always be available (not affected by child lock logic)
     assert entity._attr_available
+
+
+async def test_switch_skips_unchanged_state_writes(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test switch only writes state when its published data changes."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.autolock_enabled = False
+    coordinator.kmlocks[switch_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.autolock_enabled",
+        name="Auto Lock",
+        icon="mdi:lock-clock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSwitch(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        # First update always writes.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_is_on is False
+
+        # Identical second update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Changing the exposed value writes exactly once.
+        kmlock.autolock_enabled = True
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_is_on is True
+
+        # Availability flip still writes.
+        kmlock.connected = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 3
+        assert entity._attr_available is False
+
+
+async def test_switch_unavailable_when_non_enabled_slot_missing(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test non-enabled code slot switch is unavailable when the slot is missing."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {}
+    coordinator.kmlocks[switch_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.code_slots:1.notifications",
+        name="Code Slot 1: Notifications",
+        icon="mdi:bell",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSwitch(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state"):
+        entity._handle_coordinator_update()
+
+    assert not entity._attr_available
+
+
+async def test_switch_unavailable_when_dow_not_enabled(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test day-of-week switch is unavailable when day-of-week limits are disabled."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, enabled=True, accesslimit_day_of_week_enabled=False)
+    }
+    coordinator.kmlocks[switch_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.code_slots:1.accesslimit_day_of_week:0.dow_enabled",
+        name="Code Slot 1: Monday Enabled",
+        icon="mdi:calendar",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSwitch(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state"):
+        entity._handle_coordinator_update()
+
+    assert not entity._attr_available
+
+
+async def test_switch_unavailable_when_limit_by_time_dow_missing(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test limit_by_time switch is unavailable when the day-of-week entry is missing."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            accesslimit_day_of_week_enabled=True,
+            accesslimit_day_of_week={},
+        )
+    }
+    coordinator.kmlocks[switch_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.code_slots:1.accesslimit_day_of_week:0.limit_by_time",
+        name="Code Slot 1: Monday Limit By Time",
+        icon="mdi:clock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSwitch(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state"):
+        entity._handle_coordinator_update()
+
+    assert not entity._attr_available
+
+
+async def test_switch_unavailable_when_include_exclude_not_time_limited(
+    hass: HomeAssistant, switch_config_entry, coordinator
+):
+    """Test include_exclude switch is unavailable when the day is not time limited."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=switch_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            accesslimit_day_of_week_enabled=True,
+            accesslimit_day_of_week={
+                0: KeymasterCodeSlotDayOfWeek(
+                    day_of_week_num=0,
+                    day_of_week_name="Monday",
+                    dow_enabled=True,
+                    limit_by_time=False,
+                )
+            },
+        )
+    }
+    coordinator.kmlocks[switch_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSwitchEntityDescription(
+        key="switch.code_slots:1.accesslimit_day_of_week:0.include_exclude",
+        name="Code Slot 1: Monday Include Exclude",
+        icon="mdi:call-split",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=switch_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSwitch(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state"):
+        entity._handle_coordinator_update()
+
+    assert not entity._attr_available

@@ -1,13 +1,17 @@
 """Test keymaster binary sensors."""
 
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from zwave_js_server.event import Event
 
-from custom_components.keymaster.binary_sensor import async_setup_entry
+from custom_components.keymaster.binary_sensor import (
+    KeymasterBinarySensor,
+    KeymasterBinarySensorEntityDescription,
+    async_setup_entry,
+)
 from custom_components.keymaster.const import (
     CONF_LOCK_ENTITY_ID,
     CONF_SLOTS,
@@ -16,7 +20,7 @@ from custom_components.keymaster.const import (
     DOMAIN,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
-from custom_components.keymaster.lock import KeymasterLock
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.entity import EntityCategory
@@ -207,3 +211,52 @@ async def test_zwavejs_network_ready(hass, client, lock_kwikset_910, integration
     assert hass.states.get(NETWORK_READY_ENTITY).state == "off"
 
     assert "Z-Wave integration not found" not in caplog.text
+
+
+async def test_binary_sensor_skips_unchanged_state_writes(hass):
+    """Test binary sensor only writes state when its published value changes."""
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="test_lock",
+        data={**CONFIG_DATA_910, CONF_START: 1, CONF_SLOTS: 1},
+    )
+    config_entry.add_to_hass(hass)
+
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    kmlock = KeymasterLock(
+        lock_name="Test Lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=config_entry.entry_id,
+    )
+    kmlock.provider = None
+    kmlock.connected = True
+    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, active=True)}
+    coordinator.kmlocks[config_entry.entry_id] = kmlock
+    hass.data.setdefault(DOMAIN, {})[COORDINATOR] = coordinator
+
+    lock_coordinator = coordinator.async_get_lock_coordinator(config_entry.entry_id)
+    entity = KeymasterBinarySensor(
+        entity_description=KeymasterBinarySensorEntityDescription(
+            key="binary_sensor.code_slots:1.active",
+            name="Code Slot 1: Active",
+            hass=hass,
+            config_entry=config_entry,
+            coordinator=lock_coordinator,
+        )
+    )
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_is_on is True
+
+        # Identical update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Changing the exposed value writes exactly once.
+        kmlock.code_slots[1].active = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_is_on is False

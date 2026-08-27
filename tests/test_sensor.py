@@ -576,3 +576,83 @@ async def test_autolock_sensor_keeps_value_when_autolock_disabled(
     assert entity._attr_available
     assert entity._attr_native_value == end_time
     assert entity._attr_extra_state_attributes["is_running"] is True
+
+
+async def test_sensor_skips_unchanged_state_writes(
+    hass: HomeAssistant, sensor_config_entry, coordinator
+):
+    """Test sensor only writes state when its published value changes."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=sensor_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    coordinator.kmlocks[sensor_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSensorEntityDescription(
+        key="sensor.lock_name",
+        name="Lock Name",
+        icon="mdi:account-lock",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=sensor_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterSensor(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_native_value == "frontdoor"
+
+        # Identical update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Changing the exposed value writes exactly once.
+        kmlock.lock_name = "backdoor"
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_native_value == "backdoor"
+
+        # Availability flip still writes.
+        kmlock.connected = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 3
+        assert entity._attr_available is False
+
+
+async def test_autolock_sensor_skips_unchanged_attribute_writes(
+    hass: HomeAssistant, sensor_config_entry, coordinator
+):
+    """Test the auto-lock timer sensor dedupes identical attribute payloads."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=sensor_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.autolock_timer = None
+    coordinator.kmlocks[sensor_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterSensorEntityDescription(
+        key="sensor.autolock_timer",
+        name="Auto Lock Timer",
+        icon="mdi:timer",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=sensor_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterAutoLockSensor(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Identical rebuilt (but not identical object) attributes are deduped.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1

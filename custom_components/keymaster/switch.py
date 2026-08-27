@@ -190,7 +190,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
         # _LOGGER.debug(f"[Switch handle_coordinator_update] self.coordinator.data: {self.coordinator.data}")
         if not self._kmlock or not self._kmlock.connected:
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if (
@@ -207,7 +207,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             )
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if (
@@ -216,7 +216,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             and (not self._kmlock.code_slots or self._code_slot not in self._kmlock.code_slots)
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         if (
@@ -229,7 +229,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             )
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         code_slots: MutableMapping[int, KeymasterCodeSlot] | None = self._kmlock.code_slots
@@ -246,7 +246,7 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             or not accesslimit_dow[self._day_of_week_num].dow_enabled
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         # if self._property.endswith(".include_exclude") and (
@@ -271,12 +271,16 @@ class KeymasterSwitch(KeymasterEntity, SwitchEntity):
             or not accesslimit_dow[self._day_of_week_num].limit_by_time
         ):
             self._attr_available = False
-            self.async_write_ha_state()
+            self.async_write_ha_state_if_changed()
             return
 
         self._attr_available = True
         self._attr_is_on = self._get_property_value()
-        self.async_write_ha_state()
+        self.async_write_ha_state_if_changed()
+
+    def _state_signature(self) -> tuple[Any, ...]:
+        """Return a comparable snapshot including the on/off value."""
+        return (*super()._state_signature(), self._attr_is_on)
 
     async def async_turn_on(self, **_: Any) -> None:
         """Turn the entity on."""

@@ -438,3 +438,56 @@ async def test_datetime_entities_can_be_preset_when_feature_disabled(
     assert entity._attr_available
     assert entity._attr_native_value == value
     assert getattr(kmlock.code_slots[1], attr_name) == value
+
+
+async def test_datetime_skips_unchanged_state_writes(
+    hass: HomeAssistant, datetime_config_entry, coordinator
+):
+    """Test datetime entity only writes state when its published value changes."""
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=datetime_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            accesslimit_date_range_enabled=True,
+            accesslimit_date_range_start=datetime(2024, 1, 1, 0, 0, 0),
+        )
+    }
+    coordinator.kmlocks[datetime_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterDateTimeEntityDescription(
+        key="datetime.code_slots:1.accesslimit_date_range_start",
+        name="Code Slot 1: Date Range Start",
+        icon="mdi:calendar-start",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=datetime_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterDateTime(entity_description=entity_description)
+
+    with patch.object(entity, "async_write_ha_state") as mock_write:
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+        assert entity._attr_native_value == datetime(2024, 1, 1, 0, 0, 0)
+
+        # Identical update is suppressed.
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 1
+
+        # Changing the exposed value writes exactly once.
+        kmlock.code_slots[1].accesslimit_date_range_start = datetime(2024, 6, 1, 0, 0, 0)
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 2
+        assert entity._attr_native_value == datetime(2024, 6, 1, 0, 0, 0)
+
+        # Availability flip still writes.
+        kmlock.connected = False
+        entity._handle_coordinator_update()
+        assert mock_write.call_count == 3
+        assert entity._attr_available is False
