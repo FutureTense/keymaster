@@ -325,6 +325,8 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
         kmlock = coordinator.sync_get_lock_by_config_entry_id(config_entry.entry_id)
         if kmlock:
+            coordinator._cancel_pending_keypad_lock_notification(kmlock)  # noqa: SLF001
+            coordinator._cancel_pending_keypad_unlock_notification(kmlock)  # noqa: SLF001
             await KeymasterCoordinator._unsubscribe_listeners(kmlock)  # noqa: SLF001
             if kmlock.provider:
                 await kmlock.provider.async_unload()

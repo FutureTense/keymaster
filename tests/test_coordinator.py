@@ -29,6 +29,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
 from homeassistant.core import CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util.dt import utcnow
 
 
 def validate_lock_relationship_invariants(
@@ -102,6 +103,9 @@ def mock_hass():
     hass.bus.async_fire = Mock()
     hass.states = Mock()
     hass.states.get = Mock(return_value=None)
+    hass.loop = Mock()
+    hass.loop.time = Mock(return_value=0.0)
+    hass.loop.call_at = Mock(return_value=Mock(cancel=Mock()))
     return hass
 
 
@@ -117,6 +121,7 @@ def mock_coordinator(mock_hass) -> Any:
         coordinator._last_unlock_code_slot = {}
         coordinator._last_lock_code_slot = {}
         coordinator._pending_keypad_unlock_notifications = {}
+        coordinator._pending_keypad_lock_notifications = {}
         coordinator._state_change_autolock_started = set()
         coordinator._pending_provider_unlock_event = set()
         coordinator._pending_provider_lock_event = set()
@@ -1115,6 +1120,7 @@ class TestLockStateEventHandlers:
         """Test _lock_locked sends notification when enabled."""
         mock_kmlock.lock_notifications = True
         mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.code_slots = {}
         mock_coordinator._throttle = Mock()
         mock_coordinator._throttle.is_allowed = Mock(return_value=True)
 
@@ -1297,6 +1303,8 @@ class TestLockStateEventHandlers:
         mock_kmlock.autolock_timer = None
         mock_kmlock.code_slots = {2: Mock(name="slot2")}
         mock_kmlock.code_slots[2].name = "Alice"
+        # notifications disabled for this slot so supersede falls back to generic / does not re-notify
+        mock_kmlock.code_slots[2].notifications = False
 
         with (
             patch(
@@ -1338,15 +1346,26 @@ class TestLockStateEventHandlers:
             2: Mock(name="Alice", code="1234"),
         }
         mock_kmlock.code_slots[2].name = "Alice"
+        mock_kmlock.code_slots[2].notifications = False
         mock_coordinator._last_lock_code_slot[mock_kmlock.keymaster_config_entry_id] = 0
 
-        await mock_coordinator._lock_locked(
-            mock_kmlock,
-            code_slot_num=2,
-            source="event",
-            event_label="Keypad Lock",
-            action_code=5,
-        )
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.send_manual_notification",
+                new=AsyncMock(),
+            ),
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ),
+        ):
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=2,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
 
         assert mock_coordinator._last_lock_code_slot[mock_kmlock.keymaster_config_entry_id] == 2
         mock_coordinator.hass.bus.fire.assert_called_once_with(
@@ -1374,6 +1393,7 @@ class TestLockStateEventHandlers:
         mock_kmlock.autolock_timer = None
         mock_kmlock.code_slots = {2: Mock(name="slot2")}
         mock_kmlock.code_slots[2].name = "Alice"
+        mock_kmlock.code_slots[2].notifications = False
 
         for slot in (0, 2, 2):
             await mock_coordinator._lock_locked(
@@ -1401,6 +1421,7 @@ class TestLockStateEventHandlers:
         mock_kmlock.autolock_timer = None
         mock_kmlock.code_slots = {2: Mock(name="slot2")}
         mock_kmlock.code_slots[2].name = "Alice"
+        mock_kmlock.code_slots[2].notifications = False
 
         await mock_coordinator._lock_locked(
             mock_kmlock,
@@ -1422,6 +1443,257 @@ class TestLockStateEventHandlers:
             action_code=5,
         )
         assert mock_coordinator.hass.bus.fire.call_count == 1
+
+    async def test_lock_locked_per_slot_notification_enabled(self, mock_coordinator, mock_kmlock):
+        """Test lock notification sent when slot notifications enabled and lock_notifications disabled."""
+        mock_coordinator._throttle = Throttle()
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.pending_retry_lock = False
+        mock_kmlock.lock_notifications = False
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.code_slots = {
+            3: Mock(name="Alice", notifications=True),
+        }
+        mock_kmlock.code_slots[3].name = "Alice"
+        mock_kmlock.code_slots[3].notifications = True
+
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.send_manual_notification",
+                new=AsyncMock(),
+            ) as mock_notify,
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ),
+        ):
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=3,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+
+            mock_notify.assert_called_once()
+            assert mock_notify.call_args.kwargs["message"] == "Keypad Lock by Alice [3]"
+
+    async def test_lock_locked_supersedes_global_when_slot_notifications_enabled(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test per-slot lock notification supersedes global notification to prevent duplicates."""
+        mock_coordinator._throttle = Throttle()
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.pending_retry_lock = False
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.code_slots = {
+            3: Mock(name="Alice", notifications=True),
+        }
+        mock_kmlock.code_slots[3].name = "Alice"
+        mock_kmlock.code_slots[3].notifications = True
+
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.send_manual_notification",
+                new=AsyncMock(),
+            ) as mock_notify,
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ),
+        ):
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=3,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+
+            # Only 1 notification should be dispatched, formatted for the slot
+            assert mock_notify.call_count == 1
+            assert mock_notify.call_args.kwargs["message"] == "Keypad Lock by Alice [3]"
+
+    async def test_lock_locked_defers_keypad_lock_when_slot_notifications_exist(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test slot=0 Keypad Lock notification is deferred when slots have notifications enabled."""
+        mock_coordinator._throttle = Throttle()
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.pending_retry_lock = False
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.code_slots = {
+            1: Mock(notifications=True),
+        }
+        mock_kmlock.code_slots[1].notifications = True
+
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.send_manual_notification",
+                new=AsyncMock(),
+            ) as mock_notify,
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ),
+        ):
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=0,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+
+            # Deferred, so no notification sent immediately
+            mock_notify.assert_not_called()
+            assert (
+                mock_kmlock.keymaster_config_entry_id
+                in mock_coordinator._pending_keypad_lock_notifications
+            )
+
+    async def test_send_deferred_keypad_lock_notification(self, mock_coordinator, mock_kmlock):
+        """Test deferred keypad lock callback fires global notification when uncancelled."""
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.code_slots = {}
+        mock_coordinator._last_lock_code_slot[mock_kmlock.keymaster_config_entry_id] = 0
+        mock_coordinator._pending_keypad_lock_notifications[
+            mock_kmlock.keymaster_config_entry_id
+        ] = Mock()
+
+        with patch(
+            "custom_components.keymaster.coordinator.send_manual_notification",
+            new=AsyncMock(),
+        ) as mock_notify:
+            await mock_coordinator._send_deferred_keypad_lock_notification(
+                mock_kmlock,
+                "Keypad Lock",
+                utcnow(),
+            )
+
+            mock_notify.assert_called_once()
+            assert mock_notify.call_args.kwargs["message"] == "Keypad Lock"
+            assert (
+                mock_kmlock.keymaster_config_entry_id
+                not in mock_coordinator._pending_keypad_lock_notifications
+            )
+            assert (
+                mock_coordinator._last_lock_code_slot.get(mock_kmlock.keymaster_config_entry_id)
+                is None
+            )
+
+    async def test_lock_locked_supersede_with_slot_notification(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test slot=0 deferred lock superseded by slot>0 with slot notifications dispatches slot notification."""
+        mock_coordinator._throttle = Throttle()
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.pending_retry_lock = False
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.code_slots = {
+            2: Mock(name="Alice", notifications=True),
+        }
+        mock_kmlock.code_slots[2].name = "Alice"
+        mock_kmlock.code_slots[2].notifications = True
+
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.send_manual_notification",
+                new=AsyncMock(),
+            ) as mock_notify,
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ),
+        ):
+            # 1. First event: slot=0 (provisional) -> defers notification
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=0,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+            assert mock_notify.call_count == 0
+            assert (
+                mock_kmlock.keymaster_config_entry_id
+                in mock_coordinator._pending_keypad_lock_notifications
+            )
+
+            # 2. Second event: slot=2 (supersede) -> cancels deferral, sends slot notification
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=2,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+
+            assert mock_notify.call_count == 1
+            assert mock_notify.call_args.kwargs["message"] == "Keypad Lock by Alice [2]"
+            assert (
+                mock_kmlock.keymaster_config_entry_id
+                not in mock_coordinator._pending_keypad_lock_notifications
+            )
+
+    async def test_lock_locked_supersede_without_slot_notification_falls_back_to_global(
+        self, mock_coordinator, mock_kmlock
+    ):
+        """Test slot=0 deferred lock superseded by slot>0 without slot notifications dispatches global notification."""
+        mock_coordinator._throttle = Throttle()
+        mock_kmlock.lock_state = LockState.UNLOCKED
+        mock_kmlock.pending_retry_lock = False
+        mock_kmlock.lock_notifications = True
+        mock_kmlock.notify_script_name = "notify_script"
+        mock_kmlock.autolock_timer = None
+        mock_kmlock.code_slots = {
+            1: Mock(name="Bob", notifications=True),
+            2: Mock(name="Alice", notifications=False),
+        }
+        mock_kmlock.code_slots[1].name = "Bob"
+        mock_kmlock.code_slots[1].notifications = True
+        mock_kmlock.code_slots[2].name = "Alice"
+        mock_kmlock.code_slots[2].notifications = False
+
+        with (
+            patch(
+                "custom_components.keymaster.coordinator.send_manual_notification",
+                new=AsyncMock(),
+            ) as mock_notify,
+            patch(
+                "custom_components.keymaster.coordinator.dismiss_persistent_notification",
+                new=AsyncMock(),
+            ),
+        ):
+            # 1. slot=0 deferred because slot 1 has notifications=True
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=0,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+            assert mock_notify.call_count == 0
+
+            # 2. slot=2 arrives (notifications=False). Cancels deferral, fallback sends global notification
+            await mock_coordinator._lock_locked(
+                mock_kmlock,
+                code_slot_num=2,
+                source="event",
+                event_label="Keypad Lock",
+                action_code=5,
+            )
+
+            assert mock_notify.call_count == 1
+            assert mock_notify.call_args.kwargs["message"] == "Keypad Lock"
 
     async def test_lock_unlocked_starts_autolock_timer(self, mock_coordinator, mock_kmlock):
         """Test _lock_unlocked starts autolock timer and schedules data update."""

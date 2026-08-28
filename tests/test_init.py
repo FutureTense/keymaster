@@ -184,6 +184,11 @@ async def test_unload_entry_preserves_pending_all_lock_notification(hass) -> Non
     async def unload_platform(*_: object) -> bool:
         return True
 
+    cancel_unlock_timer = Mock()
+    cancel_lock_timer = Mock()
+    coordinator._pending_keypad_unlock_notifications[entry.entry_id] = cancel_unlock_timer
+    coordinator._pending_keypad_lock_notifications[entry.entry_id] = cancel_lock_timer
+
     with (
         patch.object(
             hass.config_entries,
@@ -198,6 +203,10 @@ async def test_unload_entry_preserves_pending_all_lock_notification(hass) -> Non
         assert await async_unload_entry(hass, entry)
 
     assert not pending_handle.cancelled()
+    cancel_unlock_timer.assert_called_once()
+    cancel_lock_timer.assert_called_once()
+    assert entry.entry_id not in coordinator._pending_keypad_unlock_notifications
+    assert entry.entry_id not in coordinator._pending_keypad_lock_notifications
 
     await hass.async_block_till_done()
 
