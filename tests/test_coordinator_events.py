@@ -706,6 +706,61 @@ async def test_keypad_lock_deferred_notification_cancelled_on_shutdown(
     mock_notify.assert_not_called()
 
 
+async def test_keypad_lock_deferred_notification_cancelled_on_unlock(
+    hass,
+    coordinator_for_unlock_test,
+):
+    """Test pending keypad lock notification is cancelled when lock is unlocked within deferral window."""
+    coordinator = coordinator_for_unlock_test
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="test_entry_unlock_cancels_lock_notif",
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "notify_front_door"
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Rich", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
+
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new=AsyncMock(),
+    ) as mock_notify:
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Lock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_lock_notifications
+
+        # Unlock within the 1-second deferral window
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=1,
+            source="valid_code_entered",
+            event_label="Keypad Unlock",
+            action_code=6,
+        )
+        await hass.async_block_till_done()
+        assert (
+            kmlock.keymaster_config_entry_id not in coordinator._pending_keypad_lock_notifications
+        )
+
+        # Advance timer past 1 second
+        async_fire_time_changed(hass, fire_all=True)
+        await hass.async_block_till_done()
+
+    # Only unlock notification should have fired, no deferred lock notification
+    assert mock_notify.call_count == 1
+    assert mock_notify.call_args.kwargs["message"] == "Keypad Unlock by Rich [1]"
+
+
 async def test_late_slot_event_after_deferred_global_does_not_duplicate_notification(
     hass,
     coordinator_for_unlock_test,
