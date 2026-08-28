@@ -303,6 +303,52 @@ async def test_fire_closure_bails_when_entry_cleared_race(hass, store, kmlock):
     await cleanup()
 
 
+async def test_cancel_does_not_orphan_fire_armed_during_await(hass, store, kmlock):
+    """A start() that interleaves with cancel() keeps its armed fire.
+
+    cancel() awaits the in-flight ScheduledFire. If a start() installs a
+    replacement during that await, clearing `_scheduled` unconditionally
+    drops the new fire without cancelling it, and the entry cancel() then
+    clears belongs to the timer that fire was meant to run — so it wakes
+    up, finds no entry, bails, and the lock never engages.
+    """
+    timer, action, _, cleanup = make_timer(hass, store, kmlock=kmlock)
+    await timer.recover()
+    await timer.start(duration=300)
+
+    first = timer._scheduled
+    assert first is not None
+    original_cancel = first.cancel
+    gate = asyncio.Event()
+    calls: list[int] = []
+
+    async def gated_cancel() -> None:
+        """Hold only the first cancel() inside its await."""
+        calls.append(1)
+        if len(calls) == 1:
+            await gate.wait()
+        await original_cancel()
+
+    first.cancel = gated_cancel
+
+    cancel_task = asyncio.create_task(timer.cancel())
+    await asyncio.sleep(0)  # let cancel() reach the await
+
+    await timer.start(duration=600)  # re-arm while cancel() is suspended
+    second = timer._scheduled
+
+    gate.set()
+    await cancel_task
+
+    assert timer._scheduled is second
+    assert timer.state == TimerState.ACTIVE
+    assert timer.is_running
+    assert await store.read("t1") is not None
+    assert action.await_count == 0
+
+    await cleanup()
+
+
 async def test_action_failure_preserves_entry_for_replay(hass, store, kmlock):
     """Preserve store entry on action failure for replay on next restart.
 

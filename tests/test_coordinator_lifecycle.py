@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.keymaster.autolock.store import TimerEntry
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
@@ -25,10 +26,12 @@ from custom_components.keymaster.const import (
 from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
+from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -2221,3 +2224,82 @@ async def test_update_lock_rebuilds_relationships_when_parent_changes(hass):
 
     coordinator._rebuild_lock_relationships.assert_awaited_once()
     await coordinator.async_shutdown()
+
+
+def _autolock_kmlock(
+    *,
+    lock_state: str,
+    autolock_enabled: bool,
+    entry_id: str = "entry_1",
+) -> KeymasterLock:
+    """Build a kmlock with equal day/night autolock so sun position is moot."""
+    return KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=entry_id,
+        lock_state=lock_state,
+        autolock_enabled=autolock_enabled,
+        autolock_min_day=5,
+        autolock_min_night=5,
+    )
+
+
+async def test_setup_timer_arms_lock_already_unlocked_at_startup(hass):
+    """Arm autolock for a lock that was already unlocked when HA started.
+
+    A door open before startup never produces an unlocked transition, so
+    without arming from the adopted state nothing schedules the autolock
+    and the lock stays unlocked indefinitely.
+    """
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = _autolock_kmlock(lock_state=LockState.UNLOCKED, autolock_enabled=True)
+
+    await coordinator._setup_timer(kmlock)
+
+    assert kmlock.autolock_timer is not None
+    assert kmlock.autolock_timer.is_running
+    assert kmlock.autolock_timer.duration == 300
+    await kmlock.autolock_timer.cancel()
+
+
+async def test_setup_timer_does_not_arm_when_autolock_disabled(hass):
+    """A lock with autolock off is left alone, unlocked or not."""
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = _autolock_kmlock(lock_state=LockState.UNLOCKED, autolock_enabled=False)
+
+    await coordinator._setup_timer(kmlock)
+
+    assert kmlock.autolock_timer is not None
+    assert not kmlock.autolock_timer.is_running
+
+
+async def test_setup_timer_does_not_arm_locked_lock(hass):
+    """A lock that is locked at startup gets no timer."""
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = _autolock_kmlock(lock_state=LockState.LOCKED, autolock_enabled=True)
+
+    await coordinator._setup_timer(kmlock)
+
+    assert kmlock.autolock_timer is not None
+    assert not kmlock.autolock_timer.is_running
+
+
+async def test_setup_timer_keeps_recovered_timer_over_startup_arm(hass):
+    """A timer restored from the store wins over the startup arm.
+
+    Otherwise a restart mid-countdown would restart the clock instead of
+    honoring the remaining time.
+    """
+    coordinator = KeymasterCoordinator(hass)
+    await coordinator._timer_store.write(
+        "entry_1_autolock",
+        TimerEntry(end_time=dt_util.utcnow() + timedelta(seconds=900), duration=900),
+    )
+    kmlock = _autolock_kmlock(lock_state=LockState.UNLOCKED, autolock_enabled=True)
+
+    await coordinator._setup_timer(kmlock)
+
+    assert kmlock.autolock_timer is not None
+    assert kmlock.autolock_timer.is_running
+    assert kmlock.autolock_timer.duration == 900
+    await kmlock.autolock_timer.cancel()
