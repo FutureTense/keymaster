@@ -24,18 +24,42 @@ jobs:
 
       - name: 🏷️ Apply Provider Label
         uses: actions/github-script@v9
+        env:
+          # Pass the parser output through the environment rather than
+          # interpolating it into the script body. Untrusted issue content
+          # (e.g. backticks or ${...} in an issue body) must never be parsed
+          # as JavaScript source. See CWE-94 (script injection).
+          ISSUE_JSON: ${{ steps.issue-parser.outputs.jsonString }}
         with:
           script: |
-            const issueData = JSON.parse(`${{ steps.issue-parser.outputs.jsonString }}`);
+            // Providers offered by .github/ISSUE_TEMPLATE/bug_report.yml's
+            // lock-provider dropdown. Only these produce a label so that
+            // untrusted input cannot create arbitrary labels.
+            const validProviders = [
+              'local_akuvox',
+              'schlage',
+              'zha',
+              'zigbee2mqtt',
+              'zwave_js',
+            ];
+
+            let issueData;
+            try {
+              issueData = JSON.parse(process.env.ISSUE_JSON || '{}');
+            } catch (error) {
+              core.info(`Could not parse issue payload: ${error.message}`);
+              return;
+            }
+
             const provider = issueData['lock-provider'];
 
-            if (provider) {
-              const labelName = `provider: ${provider}`;
-
+            if (provider && validProviders.includes(provider)) {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                labels: [labelName]
+                labels: [`provider: ${provider}`],
               });
+            } else if (provider) {
+              core.info(`Ignoring unrecognized lock provider: ${provider}`);
             }
