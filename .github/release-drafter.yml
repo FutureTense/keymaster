@@ -5,39 +5,51 @@ change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
 sort-direction: ascending
 categories:
   - title: "💥 Breaking Change 💥"
-    labels:
-      - "breaking-change"
+    semver-increment: major
+    when:
+      label: "breaking-change"
   - title: "✨ New Features ✨"
-    labels:
-      - "enhancement"
-      - "feature"
+    semver-increment: minor
+    when:
+      labels:
+        - "enhancement"
+        - "feature"
   - title: "🐛 Bug Fixes 🐛"
-    labels:
-      - "fix"
-      - "bugfix"
-      - "bug"
+    semver-increment: patch
+    when:
+      labels:
+        - "fix"
+        - "bugfix"
+        - "bug"
   - title: "⚡ Performance ⚡"
-    labels:
-      - "performance"
+    semver-increment: patch
+    when:
+      label: "performance"
   - title: "🔧 Maintenance 🔧"
     collapse-after: 3
-    labels:
-      - "chore"
-      - "documentation"
-      - "maintenance"
-      - "repo"
-      - "dependencies"
-      - "github_actions"
-      - "refactor"
-      - "style"
-      - "build"
-      - "revert"
+    semver-increment: patch
+    when:
+      labels:
+        - "chore"
+        - "documentation"
+        - "maintenance"
+        - "repo"
+        - "dependencies"
+        - "github_actions"
+        - "refactor"
+        - "style"
+        - "build"
+        - "revert"
   - title: "🎓 Code Quality 🎓"
     collapse-after: 3
-    labels:
-      - "code-quality"
-      - "CI"
-      - "test"
+    semver-increment: patch
+    when:
+      labels:
+        - "code-quality"
+        - "CI"
+        - "test"
+  - type: version-resolver
+    semver-increment: patch
 autolabeler:
   - label: "breaking-change"
     title:
@@ -75,30 +87,6 @@ autolabeler:
   - label: "build"
     title:
       - '/^build(\([^)]+\))?:/i'
-version-resolver:
-  major:
-    labels:
-      - "breaking-change"
-  minor:
-    labels:
-      - "feature"
-      - "enhancement"
-  patch:
-    labels:
-      - "bug"
-      - "fix"
-      - "bugfix"
-      - "performance"
-      - "refactor"
-      - "style"
-      - "build"
-      - "chore"
-      - "documentation"
-      - "CI"
-      - "test"
-      - "code-quality"
-      - "revert"
-  default: patch
 # yamllint disable rule:line-length
 template: |
   [![Downloads for this release](https://img.shields.io/github/downloads/FutureTense/keymaster/v$RESOLVED_VERSION/total.svg)](https://github.com/FutureTense/keymaster/releases/v$RESOLVED_VERSION)
