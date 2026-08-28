@@ -618,6 +618,94 @@ async def test_keypad_unlock_deferred_global_notification_fires_without_slot_eve
     )
 
 
+async def test_keypad_lock_deferred_global_notification_fires_without_slot_event(
+    hass,
+    coordinator_for_unlock_test,
+):
+    """Test deferred global keypad lock text fires after delay if no slot detail arrives."""
+    coordinator = coordinator_for_unlock_test
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="test_entry_deferred_keypad_lock",
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "notify_front_door"
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Rich", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
+
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new=AsyncMock(),
+    ) as mock_notify:
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Lock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        mock_notify.assert_not_called()
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_lock_notifications
+
+        async_fire_time_changed(hass, fire_all=True)
+        await hass.async_block_till_done()
+
+    mock_notify.assert_called_once_with(
+        hass=hass,
+        script_name="notify_front_door",
+        title="Front Door",
+        message="Keypad Lock",
+    )
+    assert kmlock.keymaster_config_entry_id not in coordinator._pending_keypad_lock_notifications
+
+
+async def test_keypad_lock_deferred_notification_cancelled_on_shutdown(
+    hass,
+    coordinator_for_unlock_test,
+):
+    """Test pending keypad lock notifications are cancelled when coordinator is shut down."""
+    coordinator = coordinator_for_unlock_test
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="test_entry_shutdown_keypad_lock",
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "notify_front_door"
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Rich", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
+
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new=AsyncMock(),
+    ) as mock_notify:
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Lock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_lock_notifications
+
+        await coordinator.async_shutdown()
+        assert len(coordinator._pending_keypad_lock_notifications) == 0
+
+        async_fire_time_changed(hass, fire_all=True)
+        await hass.async_block_till_done()
+
+    mock_notify.assert_not_called()
+
+
 async def test_late_slot_event_after_deferred_global_does_not_duplicate_notification(
     hass,
     coordinator_for_unlock_test,
