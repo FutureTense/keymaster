@@ -20,6 +20,7 @@ categories:
     labels:
       - "performance"
   - title: "🔧 Maintenance 🔧"
+    collapse-after: 3
     labels:
       - "chore"
       - "documentation"
@@ -32,6 +33,7 @@ categories:
       - "build"
       - "revert"
   - title: "🎓 Code Quality 🎓"
+    collapse-after: 3
     labels:
       - "code-quality"
       - "CI"
