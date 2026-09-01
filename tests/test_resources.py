@@ -72,7 +72,6 @@ async def test_register_strategy_resource_creates_new(hass: HomeAssistant, mock_
     call_args = mock_storage_resources.async_create_item.call_args[0][0]
     assert call_args["res_type"] == "module"
     assert call_args["url"] == STRATEGY_PATH
-    assert hass.data[DOMAIN]["resources"] is True
 
 
 async def test_register_strategy_resource_already_exists(
@@ -185,36 +184,50 @@ async def test_register_strategy_resource_yaml_mode_subsequent_debug(
 
 
 async def test_cleanup_strategy_resource_removes(hass: HomeAssistant, mock_storage_resources):
-    """Test cleaning up strategy resource."""
+    """Test cleaning up strategy resource removes it from the collection."""
     mock_storage_resources.async_items.return_value = [{"id": "resource_id", "url": STRATEGY_PATH}]
     hass.data[LOVELACE_DOMAIN] = MagicMock()
     hass.data[LOVELACE_DOMAIN].resources = mock_storage_resources
 
-    await async_cleanup_strategy_resource(hass, {"resources": True})
+    await async_cleanup_strategy_resource(hass)
 
-    mock_storage_resources.async_delete_item.assert_called_once_with("resource_id")
+    mock_storage_resources.async_delete_item.assert_awaited_once_with("resource_id")
 
 
-async def test_cleanup_strategy_resource_not_auto_registered(
+async def test_cleanup_strategy_resource_removes_after_restart(
     hass: HomeAssistant, mock_storage_resources
 ):
-    """Test cleanup skipped when not auto-registered."""
+    """Test cleanup removes the resource after a restart short-circuited registration.
+
+    Regression test for issue #706: with STRATEGY_PATH already present in the
+    collection (as it is after a Home Assistant restart), registration
+    short-circuits on the ``already_registered`` early return. Cleanup must
+    still remove the resource by keying off the collection contents rather than
+    an in-memory flag that is never set on that path.
+    """
+    mock_storage_resources.async_items.return_value = [{"id": "resource_id", "url": STRATEGY_PATH}]
     hass.data[LOVELACE_DOMAIN] = MagicMock()
     hass.data[LOVELACE_DOMAIN].resources = mock_storage_resources
+    hass.data[DOMAIN] = {}
 
-    await async_cleanup_strategy_resource(hass, {"resources": False})
+    # Simulate the post-restart registration call: it short-circuits because the
+    # resource is already present and never creates a new item.
+    await async_register_strategy_resource(hass)
+    mock_storage_resources.async_create_item.assert_not_called()
 
-    mock_storage_resources.async_delete_item.assert_not_called()
+    await async_cleanup_strategy_resource(hass)
+
+    mock_storage_resources.async_delete_item.assert_awaited_once_with("resource_id")
 
 
 async def test_cleanup_strategy_resource_not_found(hass: HomeAssistant, mock_storage_resources):
-    """Test cleanup when resource not found."""
+    """Test cleanup is a no-op when STRATEGY_PATH is absent from the collection."""
     mock_storage_resources.async_items.return_value = []  # No resources
     hass.data[LOVELACE_DOMAIN] = MagicMock()
     hass.data[LOVELACE_DOMAIN].resources = mock_storage_resources
 
     # Should not raise
-    await async_cleanup_strategy_resource(hass, {"resources": True})
+    await async_cleanup_strategy_resource(hass)
 
     mock_storage_resources.async_delete_item.assert_not_called()
 
@@ -222,14 +235,29 @@ async def test_cleanup_strategy_resource_not_found(hass: HomeAssistant, mock_sto
 async def test_cleanup_strategy_resource_yaml_mode_skipped(
     hass: HomeAssistant, mock_yaml_resources, caplog
 ):
-    """Test cleanup skipped in YAML mode after registration."""
+    """Test cleanup refuses to remove a present resource in YAML mode."""
+    mock_yaml_resources.async_items.return_value = [{"url": STRATEGY_PATH, "type": "module"}]
     hass.data[LOVELACE_DOMAIN] = MagicMock()
     hass.data[LOVELACE_DOMAIN].resources = mock_yaml_resources
 
     with caplog.at_level(logging.DEBUG):
-        await async_cleanup_strategy_resource(hass, {"resources": True})
+        await async_cleanup_strategy_resource(hass)
 
     assert "YAML mode" in caplog.text
+
+
+async def test_cleanup_strategy_resource_yaml_mode_absent(
+    hass: HomeAssistant, mock_yaml_resources, caplog
+):
+    """Test cleanup in YAML mode is silent when STRATEGY_PATH is absent."""
+    mock_yaml_resources.async_items.return_value = [{"url": "/local/other.js", "type": "module"}]
+    hass.data[LOVELACE_DOMAIN] = MagicMock()
+    hass.data[LOVELACE_DOMAIN].resources = mock_yaml_resources
+
+    with caplog.at_level(logging.DEBUG):
+        await async_cleanup_strategy_resource(hass)
+
+    assert "YAML mode" not in caplog.text
 
 
 async def test_cleanup_strategy_resource_no_resources(hass: HomeAssistant):
@@ -237,4 +265,4 @@ async def test_cleanup_strategy_resource_no_resources(hass: HomeAssistant):
     # No lovelace domain
 
     # Should not raise
-    await async_cleanup_strategy_resource(hass, {"resources": True})
+    await async_cleanup_strategy_resource(hass)

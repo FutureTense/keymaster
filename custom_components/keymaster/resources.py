@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.lovelace.const import CONF_RESOURCE_TYPE_WS, DOMAIN as LL_DOMAIN
 from homeassistant.components.lovelace.resources import (
@@ -69,26 +68,20 @@ async def async_register_strategy_resource(hass: HomeAssistant) -> None:
         {CONF_RESOURCE_TYPE_WS: "module", CONF_URL: STRATEGY_PATH}
     )
     _LOGGER.debug("Registered strategy module (resource ID %s)", data[CONF_ID])
-    hass.data[DOMAIN]["resources"] = True
 
 
-async def async_cleanup_strategy_resource(hass: HomeAssistant, hass_data: dict[str, Any]) -> None:
-    """Remove the Lovelace strategy resource if we registered it."""
+async def async_cleanup_strategy_resource(hass: HomeAssistant) -> None:
+    """Remove the Lovelace strategy resource if it is present in the collection."""
     resources = get_lovelace_resources(hass)
     if not resources:
         return
 
     if isinstance(resources, ResourceYAMLCollection):
-        if hass_data.get("resources"):
+        if any(data[CONF_URL] == STRATEGY_PATH for data in resources.async_items()):
             _LOGGER.debug(
-                "Resources switched to YAML mode after registration, "
-                "skipping automatic removal for %s",
+                "Resources are in YAML mode, skipping automatic removal for %s",
                 STRATEGY_PATH,
             )
-        return
-
-    if not hass_data.get("resources"):
-        _LOGGER.debug("Strategy module not automatically registered, skipping removal")
         return
 
     try:
@@ -100,5 +93,4 @@ async def async_cleanup_strategy_resource(hass: HomeAssistant, hass_data: dict[s
         return
 
     await resources.async_delete_item(resource_id)
-    hass_data["resources"] = False
     _LOGGER.debug("Removed strategy module (resource ID %s)", resource_id)
