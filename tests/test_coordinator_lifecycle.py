@@ -2303,3 +2303,178 @@ async def test_setup_timer_keeps_recovered_timer_over_startup_arm(hass):
     assert kmlock.autolock_timer.is_running
     assert kmlock.autolock_timer.duration == 900
     await kmlock.autolock_timer.cancel()
+
+
+async def test_async_refresh_all_locks_survives_entry_removal_mid_update(hass) -> None:
+    """Refresh survives a kmlock removed while an update await is suspended.
+
+    Reproduces issue #705: a deferred ``_delete_lock`` timer can pop an
+    entry from ``self.kmlocks`` while ``async_refresh_all_locks`` is
+    suspended mid-iteration. Iterating the live mapping raised
+    ``RuntimeError: dictionary changed size during iteration``.
+    """
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
+    coordinator._sync_child_locks = AsyncMock(return_value=set())
+    coordinator._async_save_data = AsyncMock()
+    coordinator._schedule_quick_refresh_if_needed = AsyncMock()
+
+    processed: list[str] = []
+
+    async def update_lock_data(keymaster_config_entry_id: str) -> None:
+        processed.append(keymaster_config_entry_id)
+        # Suspend, then simulate a deferred _delete_lock timer firing.
+        await asyncio.sleep(0)
+        coordinator.kmlocks.pop("entry_2", None)
+
+    coordinator._update_lock_data = update_lock_data
+
+    await coordinator.async_refresh_all_locks()
+
+    assert processed == ["entry_1"]
+    assert "entry_2" not in coordinator.kmlocks
+    await coordinator.async_shutdown()
+
+
+async def test_async_refresh_all_locks_survives_entry_removal_mid_child_sync(hass) -> None:
+    """Refresh survives a kmlock removed while a child-sync await is suspended.
+
+    Covers the second awaited iteration over ``self.kmlocks`` in
+    ``async_refresh_all_locks`` (the ``_sync_child_locks`` loop).
+    """
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
+    coordinator._update_lock_data = AsyncMock()
+    coordinator._async_save_data = AsyncMock()
+    coordinator._schedule_quick_refresh_if_needed = AsyncMock()
+
+    synced: list[str] = []
+
+    async def sync_child_locks(keymaster_config_entry_id: str) -> set[str]:
+        synced.append(keymaster_config_entry_id)
+        await asyncio.sleep(0)
+        coordinator.kmlocks.pop("entry_2", None)
+        return set()
+
+    coordinator._sync_child_locks = sync_child_locks
+
+    await coordinator.async_refresh_all_locks()
+
+    assert synced == ["entry_1"]
+    assert "entry_2" not in coordinator.kmlocks
+    await coordinator.async_shutdown()
+
+
+async def test_setup_timers_survives_entry_removal_mid_setup(hass) -> None:
+    """_setup_timers survives a kmlock removed while a timer setup awaits."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
+
+    handled: list[str] = []
+
+    async def setup_timer(kmlock: KeymasterLock) -> None:
+        handled.append(kmlock.keymaster_config_entry_id)
+        await asyncio.sleep(0)
+        coordinator.kmlocks.pop("entry_2", None)
+
+    coordinator._setup_timer = setup_timer
+
+    await coordinator._setup_timers()
+
+    assert handled == ["entry_1"]
+    assert "entry_2" not in coordinator.kmlocks
+    await coordinator.async_shutdown()
+
+
+async def test_update_door_and_lock_state_survives_entry_removal(hass) -> None:
+    """_update_door_and_lock_state survives a kmlock removed mid-iteration."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    lock_1 = _make_lock("entry_1", "lock_1")
+    lock_1.lock_state = LockState.LOCKED
+    lock_2 = _make_lock("entry_2", "lock_2")
+    coordinator.kmlocks["entry_1"] = lock_1
+    coordinator.kmlocks["entry_2"] = lock_2
+    hass.states.async_set("lock.lock_1", LockState.UNLOCKED)
+
+    triggered: list[str] = []
+
+    async def lock_unlocked(
+        kmlock: KeymasterLock,
+        code_slot_num: int | None = None,
+        source: str | None = None,
+        event_label: str | None = None,
+        action_code: int | None = None,
+    ) -> None:
+        triggered.append(kmlock.keymaster_config_entry_id)
+        await asyncio.sleep(0)
+        coordinator.kmlocks.pop("entry_2", None)
+
+    coordinator._lock_unlocked = lock_unlocked
+
+    await coordinator._update_door_and_lock_state(trigger_actions_if_changed=True)
+
+    assert triggered == ["entry_1"]
+    assert "entry_2" not in coordinator.kmlocks
+    await coordinator.async_shutdown()
+
+
+async def test_verify_lock_configuration_survives_entry_removal(hass) -> None:
+    """_verify_lock_configuration survives a kmlock removed during delete await."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks["entry_1"] = _make_lock("entry_1", "lock_1")
+    coordinator.kmlocks["entry_2"] = _make_lock("entry_2", "lock_2")
+
+    deleted: list[str] = []
+
+    async def delete_lock(config_entry_id: str, immediate: bool = False) -> None:
+        deleted.append(config_entry_id)
+        await asyncio.sleep(0)
+        coordinator.kmlocks.pop("entry_2", None)
+
+    coordinator.delete_lock_by_config_entry_id = delete_lock
+
+    await coordinator._verify_lock_configuration()
+
+    assert deleted == ["entry_1"]
+    assert "entry_2" not in coordinator.kmlocks
+    await coordinator.async_shutdown()
+
+
+async def test_async_setup_update_listeners_survives_entry_removal(hass) -> None:
+    """_async_setup's listener loop survives a kmlock removed mid-iteration."""
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._rebuild_lock_relationships = AsyncMock()
+    coordinator._update_door_and_lock_state = AsyncMock()
+    coordinator._setup_timers = AsyncMock()
+    coordinator._verify_lock_configuration = AsyncMock()
+
+    lock_1 = _make_lock("entry_1", "lock_1")
+    lock_2 = _make_lock("entry_2", "lock_2")
+
+    async def load_data() -> dict[str, KeymasterLock]:
+        return {"entry_1": lock_1, "entry_2": lock_2}
+
+    coordinator._async_load_data = load_data
+
+    listened: list[str] = []
+
+    async def update_listeners(kmlock: KeymasterLock) -> None:
+        listened.append(kmlock.keymaster_config_entry_id)
+        await asyncio.sleep(0)
+        coordinator.kmlocks.pop("entry_2", None)
+
+    coordinator._update_listeners = update_listeners
+
+    await coordinator._async_setup()
+
+    assert listened == ["entry_1"]
+    assert "entry_2" not in coordinator.kmlocks
+    await coordinator.async_shutdown()
