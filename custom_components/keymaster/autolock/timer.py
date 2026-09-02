@@ -117,8 +117,13 @@ class AutolockTimer:
             await self._scheduled.cancel()
             self._scheduled = None
         end_time = dt_util.utcnow() + timedelta(seconds=duration)
-        self._entry = TimerEntry(end_time=end_time, duration=duration)
-        await self._store.write(self._timer_id, self._entry)
+        entry = TimerEntry(end_time=end_time, duration=duration)
+        await self._store.write(self._timer_id, entry)
+        # Assign the in-memory entry only after the awaited write returns.
+        # If we assigned before the await, a cancel() that interleaves while
+        # start() is suspended here would clear `_entry`, and start() would
+        # resume into `_schedule_remaining()` and trip its assertion. See #748.
+        self._entry = entry
         self._schedule_remaining()
         self._state = TimerState.ACTIVE
         _LOGGER.debug(
