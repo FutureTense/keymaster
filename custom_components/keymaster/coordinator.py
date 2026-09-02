@@ -1674,7 +1674,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
                 self._state_change_autolock_started.discard(kmlock.keymaster_config_entry_id)
             self._cancel_pending_keypad_unlock_notification(kmlock)
-            self._cancel_pending_keypad_lock_notification(kmlock)
             return
 
         if not self._throttle.is_allowed(

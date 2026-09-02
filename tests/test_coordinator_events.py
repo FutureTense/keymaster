@@ -1757,3 +1757,270 @@ async def test_lock_unlocked_supersede_bypasses_throttle(hass, coordinator_for_u
     assert fired_events[0][ATTR_CODE_SLOT] == 0
     assert fired_events[1][ATTR_CODE_SLOT] == 3
     assert fired_events[1][ATTR_CODE_SLOT_NAME] == "Alice"
+
+
+async def test_keypad_lock_duplicate_slot0_still_emits_deferred_notification(
+    hass,
+    coordinator_for_unlock_test,
+):
+    """Test a duplicate slot=0 keypad lock keeps the deferred notification armed.
+
+    Regression for #746: a provisional slot=0 keypad lock arms the 1-second
+    deferral. A duplicate slot=0 event arriving inside that window finds the
+    lock already LOCKED and previously cancelled the deferral unconditionally,
+    suppressing the notification entirely. The deferred "Keypad Lock" must
+    still fire.
+    """
+    coordinator = coordinator_for_unlock_test
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="test_entry_dup_slot0_lock",
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "notify_front_door"
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Rich", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
+
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new=AsyncMock(),
+    ) as mock_notify:
+        # First provisional slot=0 lock arms the deferral.
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Lock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_lock_notifications
+
+        # Duplicate slot=0 lock inside the deferral window (already LOCKED).
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Lock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        mock_notify.assert_not_called()
+        # Deferral must remain armed after the duplicate.
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_lock_notifications
+
+        async_fire_time_changed(hass, fire_all=True)
+        await hass.async_block_till_done()
+
+    mock_notify.assert_called_once_with(
+        hass=hass,
+        script_name="notify_front_door",
+        title="Front Door",
+        message="Keypad Lock",
+    )
+    assert kmlock.keymaster_config_entry_id not in coordinator._pending_keypad_lock_notifications
+
+
+async def test_keypad_unlock_duplicate_slot0_still_emits_deferred_notification(
+    hass,
+    coordinator_for_unlock_test,
+):
+    """Test the equivalent duplicate slot=0 unlock still emits its notification.
+
+    Symmetry guard for #746: ensures the lock-side fix does not regress the
+    unlock path, whose already-UNLOCKED early return already preserves the
+    deferred notification on a duplicate slot=0 event.
+    """
+    coordinator = coordinator_for_unlock_test
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="test_entry_dup_slot0_unlock",
+    )
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "notify_front_door"
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, name="Rich", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
+
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new=AsyncMock(),
+    ) as mock_notify:
+        # First provisional slot=0 unlock arms the deferral.
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_unlock_notifications
+
+        # Duplicate slot=0 unlock inside the deferral window (already UNLOCKED).
+        await coordinator._lock_unlocked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Unlock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        mock_notify.assert_not_called()
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_unlock_notifications
+
+        async_fire_time_changed(hass, fire_all=True)
+        await hass.async_block_till_done()
+
+    mock_notify.assert_called_once_with(
+        hass=hass,
+        script_name="notify_front_door",
+        title="Front Door",
+        message="Keypad Unlock",
+    )
+
+
+async def test_keypad_lock_slot0_superseded_by_slot_notification(
+    hass,
+    coordinator_for_unlock_test,
+):
+    """Test slot=0 lock superseded by a slot>0 event (0 -> 2) is unaffected.
+
+    Exercises the had_pending_notification supersede branch: the provisional
+    slot=0 deferral is cancelled and replaced by the per-code-slot lock
+    notification for the revealed slot. Behavior must match the pre-fix path.
+    """
+    coordinator = coordinator_for_unlock_test
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="test_entry_lock_supersede",
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "notify_front_door"
+    kmlock.code_slots = {
+        2: KeymasterCodeSlot(number=2, name="Guest", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
+
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new=AsyncMock(),
+    ) as mock_notify:
+        # Provisional slot=0 lock arms the deferral.
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Lock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_lock_notifications
+
+        # Revealed slot=2 supersedes the provisional slot=0.
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=2,
+            source="valid_code_entered",
+            event_label="Keypad Lock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+
+        # Supersede cancels the deferral immediately.
+        assert (
+            kmlock.keymaster_config_entry_id not in coordinator._pending_keypad_lock_notifications
+        )
+
+        async_fire_time_changed(hass, fire_all=True)
+        await hass.async_block_till_done()
+
+    mock_notify.assert_called_once_with(
+        hass=hass,
+        script_name="notify_front_door",
+        title="Front Door",
+        message="Keypad Lock by Guest [2]",
+    )
+
+
+async def test_keypad_lock_duplicate_slot0_then_superseded(
+    hass,
+    coordinator_for_unlock_test,
+):
+    """Test slot=0 duplicate then slot>0 supersede (0 -> 0 -> 2).
+
+    The duplicate slot=0 now keeps the deferral armed (the #746 fix); the
+    following slot=2 event supersedes it via the had_pending_notification
+    branch, emitting exactly one per-code-slot lock notification and leaving
+    no pending deferral.
+    """
+    coordinator = coordinator_for_unlock_test
+    kmlock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="test_entry_lock_dup_then_supersede",
+    )
+    kmlock.lock_state = LockState.UNLOCKED
+    kmlock.lock_notifications = True
+    kmlock.notify_script_name = "notify_front_door"
+    kmlock.code_slots = {
+        2: KeymasterCodeSlot(number=2, name="Guest", enabled=True, notifications=True)
+    }
+    coordinator.kmlocks[kmlock.keymaster_config_entry_id] = kmlock
+
+    with patch(
+        "custom_components.keymaster.coordinator.send_manual_notification",
+        new=AsyncMock(),
+    ) as mock_notify:
+        # Provisional slot=0 lock arms the deferral.
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Lock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+
+        # Duplicate slot=0 keeps the deferral armed.
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=0,
+            source="relay_a_triggered",
+            event_label="Keypad Lock",
+            action_code=1,
+        )
+        await hass.async_block_till_done()
+        assert kmlock.keymaster_config_entry_id in coordinator._pending_keypad_lock_notifications
+
+        # Revealed slot=2 supersedes the provisional slot=0.
+        await coordinator._lock_locked(
+            kmlock=kmlock,
+            code_slot_num=2,
+            source="valid_code_entered",
+            event_label="Keypad Lock",
+            action_code=2,
+        )
+        await hass.async_block_till_done()
+        assert (
+            kmlock.keymaster_config_entry_id not in coordinator._pending_keypad_lock_notifications
+        )
+
+        async_fire_time_changed(hass, fire_all=True)
+        await hass.async_block_till_done()
+
+    mock_notify.assert_called_once_with(
+        hass=hass,
+        script_name="notify_front_door",
+        title="Front Door",
+        message="Keypad Lock by Guest [2]",
+    )
