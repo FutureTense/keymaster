@@ -25,8 +25,11 @@ State machine (recover() must be the first transition, from FRESH only):
 Invariants:
     1. The store entry mirrors the most recent ACTIVE state. cancel() and
        successful fire remove it; start() and recover() (active) write it.
-    2. cancel() awaits any in-flight callback before returning. After
-       cancel() returns, no further action firing can happen.
+    2. cancel() awaits the in-flight callback for the fire it is
+       cancelling before returning. After cancel() returns, that fire
+       can no longer run its action. This is scoped to the cancelled
+       fire: a start() that interleaved with cancel() and took ownership
+       of the timer (see cancel()'s early return) can still fire.
     3. The action snapshot is the live kmlock from `get_kmlock()` — never
        a captured reference. Reload swaps kmlocks transparently.
 """
@@ -147,6 +150,11 @@ class AutolockTimer:
             await scheduled.cancel()
             if self._scheduled is not scheduled:
                 # A start() interleaved with the await and owns the timer now.
+                _LOGGER.debug(
+                    "[AutolockTimer] %s: cancel() yielded to an interleaved"
+                    " start(); leaving the new timer armed",
+                    self._timer_id,
+                )
                 return
             self._scheduled = None
         if self._state == TimerState.ACTIVE:

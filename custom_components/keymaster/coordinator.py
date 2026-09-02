@@ -1863,8 +1863,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
         recovered = await kmlock.autolock_timer.recover()
         if kmlock.lock_state == LockState.UNLOCKED and kmlock.autolock_enabled and not recovered:
-            # Already unlocked at startup: no unlocked transition will arrive
-            # to arm the timer, so arm it from the state we adopted.
+            # Unlocked with no persisted timer to honor: no unlocked
+            # transition will arrive to arm the timer, so arm it from the
+            # state we adopted. This runs both at startup and at runtime via
+            # add_lock(), so a lock added while unlocked arms immediately.
             #
             # Gate on `not recovered` rather than `not is_running`: recover()
             # may have consumed an expired entry and fired. If the recovery
