@@ -92,7 +92,7 @@ async def _flush_pending_save_after_setup(
 
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     """Set up integration."""
-    hass.data.setdefault(DOMAIN, {"resources": False})
+    hass.data.setdefault(DOMAIN, {})
 
     # Expose strategy javascript
     await hass.http.async_register_static_paths(
@@ -350,8 +350,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         _LOGGER.debug(
             "[async_unload_entry] Last keymaster entry unloaded, cleaning up strategy resource"
         )
-        hass_data = hass.data.get(DOMAIN, {})
-        await async_cleanup_strategy_resource(hass, hass_data)
+        await async_cleanup_strategy_resource(hass)
 
     return unload_ok
 
