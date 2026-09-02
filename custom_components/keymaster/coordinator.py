@@ -542,7 +542,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             await self._rebuild_lock_relationships()
             await self._update_door_and_lock_state()
             await self._setup_timers()
-            for lock in self.kmlocks.values():
+            for entry_id in list(self.kmlocks):
+                lock = self.kmlocks.get(entry_id)
+                if lock is None:
+                    continue
                 await self._update_listeners(lock)
         finally:
             # Set the event unconditionally to prevent deadlocks on failed setup
@@ -751,10 +754,13 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     async def _verify_lock_configuration(self) -> None:
         """Verify lock configuration and update as needed."""
-        for lock in self.kmlocks:
+        for lock in list(self.kmlocks):
+            kmlock = self.kmlocks.get(lock)
+            if kmlock is None:
+                continue
             _LOGGER.debug("================================")
             _LOGGER.debug("[verify_lock_configuration] Verifying %s", lock)
-            config_entry_id: str = self.kmlocks[lock].keymaster_config_entry_id
+            config_entry_id: str = kmlock.keymaster_config_entry_id
             config_entry: ConfigEntry | None = self.hass.config_entries.async_get_entry(
                 config_entry_id,
             )
@@ -1823,7 +1829,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         return int(minutes) * 60
 
     async def _setup_timers(self) -> None:
-        for kmlock in self.kmlocks.values():
+        for entry_id in list(self.kmlocks):
+            kmlock = self.kmlocks.get(entry_id)
+            if kmlock is None:
+                continue
             if not isinstance(kmlock, KeymasterLock):
                 continue
             await self._setup_timer(kmlock)
@@ -1901,12 +1910,15 @@ class KeymasterCoordinator(DataUpdateCoordinator):
     ) -> None:
         # _LOGGER.debug("[update_door_and_lock_state] Running")
         entry_id_filter = set(entry_ids) if entry_ids is not None else None
-        locks = (
-            (self.kmlocks[entry_id] for entry_id in entry_id_filter if entry_id in self.kmlocks)
+        entry_ids_to_process = (
+            [entry_id for entry_id in entry_id_filter if entry_id in self.kmlocks]
             if entry_id_filter is not None
-            else self.kmlocks.values()
+            else list(self.kmlocks)
         )
-        for kmlock in locks:
+        for entry_id in entry_ids_to_process:
+            kmlock = self.kmlocks.get(entry_id)
+            if kmlock is None:
+                continue
             if isinstance(kmlock.lock_entity_id, str) and kmlock.lock_entity_id:
                 lock_state = None
                 if temp_lock_state := self.hass.states.get(kmlock.lock_entity_id):
@@ -2725,7 +2737,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             dirty.update(await self._sync_child_locks(parent_entry_id))
         if self._sync_status_counter > SYNC_STATUS_THRESHOLD:
             before_sync_status = {
-                lock_entry_id: self._lock_snapshot(lock_entry_id) for lock_entry_id in self.kmlocks
+                lock_entry_id: self._lock_snapshot(lock_entry_id)
+                for lock_entry_id in list(self.kmlocks)
             }
             self._sync_status_counter = 0
             await self._update_door_and_lock_state(trigger_actions_if_changed=True)
@@ -2759,14 +2772,18 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             cancel()
         self._cancel_debounced_refresh.clear()
 
-        for keymaster_config_entry_id in self.kmlocks:
+        for keymaster_config_entry_id in list(self.kmlocks):
+            if keymaster_config_entry_id not in self.kmlocks:
+                continue
             before = self._lock_snapshot(keymaster_config_entry_id)
             await self._update_lock_data(keymaster_config_entry_id=keymaster_config_entry_id)
             if before != self._lock_snapshot(keymaster_config_entry_id):
                 dirty_entry_ids.add(keymaster_config_entry_id)
 
         # Propagate parent kmlock settings to child kmlocks
-        for keymaster_config_entry_id in self.kmlocks:
+        for keymaster_config_entry_id in list(self.kmlocks):
+            if keymaster_config_entry_id not in self.kmlocks:
+                continue
             dirty_entry_ids.update(
                 await self._sync_child_locks(keymaster_config_entry_id=keymaster_config_entry_id)
             )
@@ -2774,7 +2791,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         # Handle sync status update if necessary
         if self._sync_status_counter > SYNC_STATUS_THRESHOLD:
             before_sync_status = {
-                entry_id: self._lock_snapshot(entry_id) for entry_id in self.kmlocks
+                entry_id: self._lock_snapshot(entry_id) for entry_id in list(self.kmlocks)
             }
             self._sync_status_counter = 0
             await self._update_door_and_lock_state(trigger_actions_if_changed=True)
