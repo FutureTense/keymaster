@@ -125,6 +125,17 @@ class BaseLockProvider(ABC):
         return False
 
     @property
+    def lock_event_label_is_authoritative(self) -> bool:
+        """Whether provider event labels should take precedence over entity state.
+
+        Providers that dispatch callbacks from an operation event payload can set
+        this to True when the entity state may still contain the pre-operation
+        value. The default preserves the existing behavior for providers whose
+        labels may be derived from stale state or sensor data.
+        """
+        return False
+
+    @property
     def supports_connection_status(self) -> bool:
         """Whether provider can report lock connection status.
 

@@ -49,6 +49,11 @@ class ZHALockProvider(BaseLockProvider):
         return True
 
     @property
+    def lock_event_label_is_authoritative(self) -> bool:
+        """ZHA operation reports describe the operation before entity state updates."""
+        return True
+
+    @property
     def supports_connection_status(self) -> bool:
         """ZHA can report connection status."""
         return True

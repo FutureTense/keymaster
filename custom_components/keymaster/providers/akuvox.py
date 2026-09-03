@@ -113,6 +113,11 @@ class AkuvoxLockProvider(BaseLockProvider):
         """Whether provider supports real-time event updates."""
         return True
 
+    @property
+    def lock_event_label_is_authoritative(self) -> bool:
+        """Akuvox webhook events describe the operation before entity state updates."""
+        return True
+
     async def async_connect(self) -> bool:
         """Connect to the Akuvox lock."""
         self._connected = False

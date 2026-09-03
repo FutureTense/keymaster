@@ -171,6 +171,7 @@ class TestBaseLockProviderDefaultImplementations:
         # Test defaults
         assert provider.supports_push_updates is False
         assert provider.supports_connection_status is False
+        assert provider.lock_event_label_is_authoritative is False
         assert provider.connected is False
         provider._connected = True
         assert provider.connected is True

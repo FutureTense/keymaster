@@ -178,6 +178,10 @@ class TestZWaveJSLockProviderProperties:
         """Test supports_connection_status returns True."""
         assert zwave_provider.supports_connection_status is True
 
+    def test_lock_event_label_is_authoritative(self, zwave_provider):
+        """Test lock_event_label_is_authoritative inherits the base default."""
+        assert zwave_provider.lock_event_label_is_authoritative is False
+
     def test_node_returns_none_initially(self, zwave_provider):
         """Test node property returns None before connection."""
         assert zwave_provider.node is None

@@ -971,18 +971,26 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
         # Disambiguate between the event label and the entity state:
         # - If the entity state differs from our last-tracked state, the state
-        #   has genuinely changed and is authoritative. This handles providers
-        #   that derive event_label from a sensor which may be stale (e.g.
-        #   Z-Wave JS alarm_type/access_control fallback in handle_lock_state_change).
-        # - Otherwise, trust the label's semantics. Some providers (e.g. Akuvox
-        #   webhooks) fire events before the entity state updates, so falling
-        #   back to `new_state` in that case would drop the event.
+        #   has genuinely changed and is authoritative for providers that can
+        #   derive event_label from a stale sensor (e.g. Z-Wave JS
+        #   alarm_type/access_control fallback in handle_lock_state_change).
+        # - Some providers dispatch an operation event before the entity state
+        #   updates (e.g. Zigbee2MQTT, ZHA, Akuvox). For those provider-declared
+        #   authoritative labels, trust an unambiguous label before new_state.
         # - If the label is ambiguous, fall back to new_state.
         label_lower = event_label.lower() if event_label else ""
+        provider_label_is_authoritative = (
+            kmlock.provider is not None
+            and kmlock.provider.lock_event_label_is_authoritative is True
+        )
         state_changed = (
             new_state in (LockState.LOCKED, LockState.UNLOCKED) and new_state != kmlock.lock_state
         )
-        if state_changed:
+        if provider_label_is_authoritative and "unlock" in label_lower:
+            inferred_action = LockState.UNLOCKED
+        elif provider_label_is_authoritative and "lock" in label_lower and "jam" not in label_lower:
+            inferred_action = LockState.LOCKED
+        elif state_changed:
             inferred_action = new_state
         elif "unlock" in label_lower:
             inferred_action = LockState.UNLOCKED
