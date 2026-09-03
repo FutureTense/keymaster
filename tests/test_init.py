@@ -290,6 +290,9 @@ async def test_parent_title_resolves_to_parent_entry_id_during_setup(hass):
 
         mock_device_registry = Mock()
         mock_device_registry.async_get_or_create = Mock()
+        mock_parent_device = Mock(id="parent_device_123")
+        mock_device_registry.async_get_device_by_identifier = Mock(return_value=mock_parent_device)
+        mock_device_registry.async_get_device = Mock(return_value=mock_parent_device)
         mock_device_registry_get.return_value = mock_device_registry
 
         assert await async_setup_entry(hass, child_entry)
@@ -304,12 +307,113 @@ async def test_parent_title_resolves_to_parent_entry_id_during_setup(hass):
     assert add_lock_call["kmlock"].parent_config_entry_id == parent_entry.entry_id
 
     device_registry_call = mock_device_registry.async_get_or_create.call_args.kwargs
-    assert device_registry_call["via_device"] == (DOMAIN, parent_entry.entry_id)
+    assert device_registry_call["via_device_id"] == "parent_device_123"
+    assert "via_device" not in device_registry_call
+    mock_device_registry.async_get_device_by_identifier.assert_called_once_with(
+        (DOMAIN, parent_entry.entry_id), config_entry_id=parent_entry.entry_id
+    )
 
     lovelace_await_args = mock_generate_lovelace.await_args
     assert lovelace_await_args is not None
     lovelace_call = lovelace_await_args.kwargs
     assert lovelace_call["parent_config_entry_id"] == parent_entry.entry_id
+
+
+async def test_parent_via_device_fallback_for_older_ha_versions(hass):
+    """Test legacy via_device fallback when async_get_device_by_identifier is not present."""
+    parent_data = _build_entry_data("front_door", "lock.front_door")
+    parent_entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=parent_data, version=4)
+    parent_entry.add_to_hass(hass)
+
+    child_data = _build_entry_data("garage_door", "lock.garage_door")
+    child_data[CONF_PARENT] = "Front Door"
+    child_data[CONF_PARENT_ENTRY_ID] = parent_entry.entry_id
+    child_entry = MockConfigEntry(domain=DOMAIN, title="Garage Door", data=child_data, version=4)
+    child_entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+        patch("custom_components.keymaster.dr.async_get") as mock_device_registry_get,
+        patch(
+            "custom_components.keymaster.async_generate_lovelace",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+        ),
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = True
+        mock_coordinator.kmlocks = {}
+        mock_coordinator.add_lock = AsyncMock()
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
+
+        mock_device_registry = Mock(spec=["async_get_or_create"])
+        mock_device_registry_get.return_value = mock_device_registry
+
+        assert await async_setup_entry(hass, child_entry)
+
+    device_registry_call = mock_device_registry.async_get_or_create.call_args.kwargs
+    assert device_registry_call["via_device"] == (DOMAIN, parent_entry.entry_id)
+    assert "via_device_id" not in device_registry_call
+
+
+async def test_parent_device_not_registered_yet_skips_via_device_id(hass):
+    """Test via_device_id is omitted when parent entry exists but parent device is not yet registered."""
+    parent_data = _build_entry_data("front_door", "lock.front_door")
+    parent_entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data=parent_data, version=4)
+    parent_entry.add_to_hass(hass)
+
+    child_data = _build_entry_data("garage_door", "lock.garage_door")
+    child_data[CONF_PARENT] = "Front Door"
+    child_data[CONF_PARENT_ENTRY_ID] = parent_entry.entry_id
+    child_entry = MockConfigEntry(domain=DOMAIN, title="Garage Door", data=child_data, version=4)
+    child_entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+        patch("custom_components.keymaster.dr.async_get") as mock_device_registry_get,
+        patch(
+            "custom_components.keymaster.async_generate_lovelace",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+        ),
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = True
+        mock_coordinator.kmlocks = {}
+        mock_coordinator.add_lock = AsyncMock()
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
+
+        mock_device_registry = Mock()
+        mock_device_registry.async_get_or_create = Mock()
+        mock_device_registry.async_get_device_by_identifier = Mock(return_value=None)
+        mock_device_registry_get.return_value = mock_device_registry
+
+        assert await async_setup_entry(hass, child_entry)
+
+    device_registry_call = mock_device_registry.async_get_or_create.call_args.kwargs
+    assert "via_device_id" not in device_registry_call
+    assert "via_device" not in device_registry_call
+    mock_device_registry.async_get_device_by_identifier.assert_called_once_with(
+        (DOMAIN, parent_entry.entry_id), config_entry_id=parent_entry.entry_id
+    )
 
 
 async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(hass):
@@ -344,6 +448,9 @@ async def test_setup_entry_calls_add_lock_with_update_true_for_existing_lock(has
         mock_device_registry_get.return_value = mock_device_registry
 
         assert await async_setup_entry(hass, entry)
+
+    device_registry_call = mock_device_registry.async_get_or_create.call_args.kwargs
+    assert device_registry_call["via_device_id"] is None
 
     add_lock_await_args = mock_coordinator.add_lock.await_args
     assert add_lock_await_args is not None
