@@ -9,11 +9,10 @@ import functools
 import logging
 from pathlib import Path
 import sys
-from typing import Any
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.core_config import Config
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
@@ -115,34 +114,58 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     return True
 
 
+@callback
 def _async_get_or_create_device(
     device_registry: dr.DeviceRegistry, config_entry: ConfigEntry
 ) -> None:
     """Register or get the device entry in the device registry."""
-    device_kwargs: dict[str, Any] = {
-        "config_entry_id": config_entry.entry_id,
-        "identifiers": {(DOMAIN, config_entry.entry_id)},
-        "name": config_entry.data.get(CONF_LOCK_NAME),
-        "configuration_url": "https://github.com/FutureTense/keymaster",
-    }
     if hasattr(device_registry, "async_get_device_by_identifier"):
         # Home Assistant 2026.8+ supports via_device_id
-        via_device_id: str | None = None
         if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
             if parent_device := device_registry.async_get_device_by_identifier(
                 (DOMAIN, parent_entry_id),
                 config_entry_id=parent_entry_id,
             ):
-                via_device_id = parent_device.id
-        device_kwargs["via_device_id"] = via_device_id
+                device_registry.async_get_or_create(
+                    config_entry_id=config_entry.entry_id,
+                    identifiers={(DOMAIN, config_entry.entry_id)},
+                    name=config_entry.data.get(CONF_LOCK_NAME),
+                    configuration_url="https://github.com/FutureTense/keymaster",
+                    via_device_id=parent_device.id,
+                )
+            else:
+                # Parent device not registered yet; leave any existing link intact
+                _LOGGER.debug(
+                    "[init] Parent device for entry %s not registered yet; skipping via_device_id",
+                    parent_entry_id,
+                )
+                device_registry.async_get_or_create(
+                    config_entry_id=config_entry.entry_id,
+                    identifiers={(DOMAIN, config_entry.entry_id)},
+                    name=config_entry.data.get(CONF_LOCK_NAME),
+                    configuration_url="https://github.com/FutureTense/keymaster",
+                )
+        else:
+            # Genuinely parentless; explicitly clear any stale via link
+            device_registry.async_get_or_create(
+                config_entry_id=config_entry.entry_id,
+                identifiers={(DOMAIN, config_entry.entry_id)},
+                name=config_entry.data.get(CONF_LOCK_NAME),
+                configuration_url="https://github.com/FutureTense/keymaster",
+                via_device_id=None,
+            )
     else:
         # Fallback for earlier Home Assistant versions
         via_device: tuple[str, str] | None = None
         if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
             via_device = (DOMAIN, parent_entry_id)
-        device_kwargs["via_device"] = via_device
-
-    device_registry.async_get_or_create(**device_kwargs)
+        device_registry.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            name=config_entry.data.get(CONF_LOCK_NAME),
+            configuration_url="https://github.com/FutureTense/keymaster",
+            via_device=via_device,
+        )
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
