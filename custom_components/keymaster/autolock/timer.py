@@ -25,8 +25,11 @@ State machine (recover() must be the first transition, from FRESH only):
 Invariants:
     1. The store entry mirrors the most recent ACTIVE state. cancel() and
        successful fire remove it; start() and recover() (active) write it.
-    2. cancel() awaits any in-flight callback before returning. After
-       cancel() returns, no further action firing can happen.
+    2. cancel() awaits the in-flight callback for the fire it is
+       cancelling before returning. After cancel() returns, that fire
+       can no longer run its action. This is scoped to the cancelled
+       fire: a start() that interleaved with cancel() and took ownership
+       of the timer (see cancel()'s early return) can still fire.
     3. The action snapshot is the live kmlock from `get_kmlock()` — never
        a captured reference. Reload swaps kmlocks transparently.
 """
@@ -84,30 +87,37 @@ class AutolockTimer:
         self._entry: TimerEntry | None = None
         self._scheduled: ScheduledFire | None = None
 
-    async def recover(self) -> None:
+    async def recover(self) -> bool:
         """Load any persisted entry left over from a prior process.
 
         - No entry: stay DONE (idle).
         - Active entry: move to ACTIVE, schedule the remaining delay.
         - Expired entry: fire the action immediately. On success → DONE.
           On failure → re-persist for retry on next restart.
+
+        Returns True when a persisted entry was consumed (active or
+        expired), and False when there was nothing to recover. Callers
+        use this to decide whether to arm a fresh startup timer: an
+        expired entry that fired (whether the action succeeded or was
+        re-persisted for replay) must not be overwritten by a fresh arm.
         """
         if self._state != TimerState.FRESH:
             raise RuntimeError(f"recover() requires FRESH state, got {self._state}")
         entry = await self._store.read(self._timer_id)
         if entry is None:
             self._state = TimerState.DONE
-            return
+            return False
         if entry.end_time <= dt_util.utcnow():
             # Set state to ACTIVE before firing so _fire's success and
             # failure paths leave a usable post-recover state.
             self._entry = entry
             self._state = TimerState.ACTIVE
             await self._fire(now=dt_util.utcnow(), entry=entry)
-            return
+            return True
         self._entry = entry
         self._schedule_remaining()
         self._state = TimerState.ACTIVE
+        return True
 
     async def start(self, duration: int) -> None:
         """Start (or restart) the timer for `duration` seconds."""
@@ -117,8 +127,13 @@ class AutolockTimer:
             await self._scheduled.cancel()
             self._scheduled = None
         end_time = dt_util.utcnow() + timedelta(seconds=duration)
-        self._entry = TimerEntry(end_time=end_time, duration=duration)
-        await self._store.write(self._timer_id, self._entry)
+        entry = TimerEntry(end_time=end_time, duration=duration)
+        await self._store.write(self._timer_id, entry)
+        # Assign the in-memory entry only after the awaited write returns.
+        # If we assigned before the await, a cancel() that interleaves while
+        # start() is suspended here would clear `_entry`, and start() would
+        # resume into `_schedule_remaining()` and trip its assertion. See #748.
+        self._entry = entry
         self._schedule_remaining()
         self._state = TimerState.ACTIVE
         _LOGGER.debug(
@@ -135,6 +150,11 @@ class AutolockTimer:
             await scheduled.cancel()
             if self._scheduled is not scheduled:
                 # A start() interleaved with the await and owns the timer now.
+                _LOGGER.debug(
+                    "[AutolockTimer] %s: cancel() yielded to an interleaved"
+                    " start(); leaving the new timer armed",
+                    self._timer_id,
+                )
                 return
             self._scheduled = None
         if self._state == TimerState.ACTIVE:

@@ -11,6 +11,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.keymaster.autolock.store import TimerEntry
+from custom_components.keymaster.autolock.timer import TimerState
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
@@ -2253,6 +2254,7 @@ async def test_setup_timer_arms_lock_already_unlocked_at_startup(hass):
     """
     coordinator = KeymasterCoordinator(hass)
     kmlock = _autolock_kmlock(lock_state=LockState.UNLOCKED, autolock_enabled=True)
+    coordinator.kmlocks["entry_1"] = kmlock
 
     await coordinator._setup_timer(kmlock)
 
@@ -2266,6 +2268,7 @@ async def test_setup_timer_does_not_arm_when_autolock_disabled(hass):
     """A lock with autolock off is left alone, unlocked or not."""
     coordinator = KeymasterCoordinator(hass)
     kmlock = _autolock_kmlock(lock_state=LockState.UNLOCKED, autolock_enabled=False)
+    coordinator.kmlocks["entry_1"] = kmlock
 
     await coordinator._setup_timer(kmlock)
 
@@ -2277,6 +2280,7 @@ async def test_setup_timer_does_not_arm_locked_lock(hass):
     """A lock that is locked at startup gets no timer."""
     coordinator = KeymasterCoordinator(hass)
     kmlock = _autolock_kmlock(lock_state=LockState.LOCKED, autolock_enabled=True)
+    coordinator.kmlocks["entry_1"] = kmlock
 
     await coordinator._setup_timer(kmlock)
 
@@ -2296,6 +2300,7 @@ async def test_setup_timer_keeps_recovered_timer_over_startup_arm(hass):
         TimerEntry(end_time=dt_util.utcnow() + timedelta(seconds=900), duration=900),
     )
     kmlock = _autolock_kmlock(lock_state=LockState.UNLOCKED, autolock_enabled=True)
+    coordinator.kmlocks["entry_1"] = kmlock
 
     await coordinator._setup_timer(kmlock)
 
@@ -2303,6 +2308,61 @@ async def test_setup_timer_keeps_recovered_timer_over_startup_arm(hass):
     assert kmlock.autolock_timer.is_running
     assert kmlock.autolock_timer.duration == 900
     await kmlock.autolock_timer.cancel()
+
+
+async def test_setup_timer_recover_raises_preserves_replay_entry(hass):
+    """Recovery that consumes an expired entry and raises keeps the replay.
+
+    Regression for #747. When recover() fires an expired entry and the
+    action raises, the entry is re-persisted for replay on the next
+    restart and is_running reports False. The startup arm must be skipped
+    so a fresh start() does not overwrite the preserved replay entry.
+    """
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = _autolock_kmlock(lock_state=LockState.UNLOCKED, autolock_enabled=True)
+    coordinator.kmlocks["entry_1"] = kmlock
+    # Distinctive duration so an overwrite by the startup arm is visible.
+    await coordinator._timer_store.write(
+        "entry_1_autolock",
+        TimerEntry(end_time=dt_util.utcnow() - timedelta(seconds=5), duration=123),
+    )
+    coordinator._timer_triggered = AsyncMock(side_effect=RuntimeError("lock offline"))
+
+    await coordinator._setup_timer(kmlock)
+
+    persisted = await coordinator._timer_store.read("entry_1_autolock")
+    assert persisted is not None, "replay entry must survive"
+    assert persisted.duration == 123, "startup arm overwrote the replay entry"
+    assert kmlock.autolock_timer is not None
+    assert not kmlock.autolock_timer.is_running
+    coordinator._timer_triggered.assert_awaited_once()
+    await kmlock.autolock_timer.cancel()
+
+
+async def test_setup_timer_recover_succeeds_no_spurious_arm(hass):
+    """Recovery that consumes an expired entry and succeeds does not re-arm.
+
+    Regression for #747. When recover() fires an expired entry and the
+    action succeeds, the lock is already engaged; lock_state is still the
+    pre-recovery UNLOCKED value only in memory, so a fresh startup arm
+    would schedule a spurious timer (and notification). It must be skipped.
+    """
+    coordinator = KeymasterCoordinator(hass)
+    kmlock = _autolock_kmlock(lock_state=LockState.UNLOCKED, autolock_enabled=True)
+    coordinator.kmlocks["entry_1"] = kmlock
+    await coordinator._timer_store.write(
+        "entry_1_autolock",
+        TimerEntry(end_time=dt_util.utcnow() - timedelta(seconds=5), duration=123),
+    )
+    coordinator._timer_triggered = AsyncMock()
+
+    await coordinator._setup_timer(kmlock)
+
+    assert kmlock.autolock_timer is not None
+    assert not kmlock.autolock_timer.is_running, "no spurious fresh arm"
+    assert kmlock.autolock_timer.state == TimerState.DONE
+    assert await coordinator._timer_store.read("entry_1_autolock") is None
+    coordinator._timer_triggered.assert_awaited_once()
 
 
 async def test_async_refresh_all_locks_survives_entry_removal_mid_update(hass) -> None:

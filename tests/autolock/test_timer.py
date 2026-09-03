@@ -349,6 +349,55 @@ async def test_cancel_does_not_orphan_fire_armed_during_await(hass, store, kmloc
     await cleanup()
 
 
+async def test_start_survives_cancel_interleaving_store_write(hass, store, kmlock):
+    """Regression for FutureTense/keymaster#748.
+
+    A re-arming start() that suspends inside `await self._store.write(...)`
+    while a concurrent cancel() runs to completion must not resume into
+    `_schedule_remaining()` with a cleared `_entry`. Before the fix,
+    `_entry` was assigned before the awaited write; cancel() cleared it,
+    and start() tripped `assert self._entry is not None` (AssertionError).
+    """
+    # ACTIVE timer with a live ScheduledFire.
+    await store.write(
+        "t1", TimerEntry(end_time=dt_util.utcnow() + timedelta(seconds=300), duration=300)
+    )
+    timer, action, _, cleanup = make_timer(hass, store, kmlock=kmlock)
+    await timer.recover()
+    assert timer.is_running
+
+    write_reached = asyncio.Event()
+    release = asyncio.Event()
+    real_write = store.write
+
+    async def gated_write(timer_id: str, entry: TimerEntry) -> None:
+        """Suspend start() at the store write until released."""
+        write_reached.set()
+        await release.wait()
+        await real_write(timer_id, entry)
+
+    store.write = gated_write
+    try:
+        start_task = asyncio.create_task(timer.start(duration=600))
+        await write_reached.wait()  # start() suspended at the store write
+
+        # cancel() runs to completion: sees `_scheduled is None`, clears
+        # `_entry`, removes the store entry, transitions to DONE.
+        await timer.cancel()
+
+        release.set()
+        await start_task  # must not raise AssertionError
+    finally:
+        store.write = real_write
+
+    assert timer.state == TimerState.ACTIVE
+    assert timer.is_running
+    assert timer.duration == 600
+    assert await store.read("t1") is not None
+    assert action.await_count == 0
+    await cleanup()
+
+
 async def test_action_failure_preserves_entry_for_replay(hass, store, kmlock):
     """Preserve store entry on action failure for replay on next restart.
 
