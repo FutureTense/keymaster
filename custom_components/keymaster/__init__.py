@@ -9,6 +9,7 @@ import functools
 import logging
 from pathlib import Path
 import sys
+from typing import Any
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
@@ -114,6 +115,36 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     return True
 
 
+def _async_get_or_create_device(
+    device_registry: dr.DeviceRegistry, config_entry: ConfigEntry
+) -> None:
+    """Register or get the device entry in the device registry."""
+    device_kwargs: dict[str, Any] = {
+        "config_entry_id": config_entry.entry_id,
+        "identifiers": {(DOMAIN, config_entry.entry_id)},
+        "name": config_entry.data.get(CONF_LOCK_NAME),
+        "configuration_url": "https://github.com/FutureTense/keymaster",
+    }
+    if hasattr(device_registry, "async_get_device_by_identifier"):
+        # Home Assistant 2026.8+ supports via_device_id
+        via_device_id: str | None = None
+        if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
+            if parent_device := device_registry.async_get_device_by_identifier(
+                (DOMAIN, parent_entry_id),
+                config_entry_id=parent_entry_id,
+            ):
+                via_device_id = parent_device.id
+        device_kwargs["via_device_id"] = via_device_id
+    else:
+        # Fallback for earlier Home Assistant versions
+        via_device: tuple[str, str] | None = None
+        if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
+            via_device = (DOMAIN, parent_entry_id)
+        device_kwargs["via_device"] = via_device
+
+    device_registry.async_get_or_create(**device_kwargs)
+
+
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up is called when Home Assistant is loading our component."""
     updated_config = config_entry.data.copy()
@@ -179,25 +210,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         coordinator = hass.data[DOMAIN][COORDINATOR]
 
     device_registry = dr.async_get(hass)
-
-    via_device: tuple[str, str] | None = None
-    if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
-        via_device = (DOMAIN, parent_entry_id)
-
-    # _LOGGER.debug(
-    #     f"[init async_setup_entry] name: {config_entry.data.get(CONF_LOCK_NAME)}, "
-    #     f"parent_name: {config_entry.data.get(CONF_PARENT)}, "
-    #     f"parent_entry_id: {config_entry.data.get(CONF_PARENT_ENTRY_ID)}, "
-    #     f"via_device: {via_device}"
-    # )
-
-    device_registry.async_get_or_create(
-        config_entry_id=config_entry.entry_id,
-        identifiers={(DOMAIN, config_entry.entry_id)},
-        name=config_entry.data.get(CONF_LOCK_NAME),
-        configuration_url="https://github.com/FutureTense/keymaster",
-        via_device=via_device,
-    )
+    _async_get_or_create_device(device_registry, config_entry)
 
     # _LOGGER.debug(f"[init async_setup_entry] device: {device}")
 
