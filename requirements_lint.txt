@@ -1,7 +1,0 @@
-codespell
-# Lint dependencies for ruff, mypy, and pylint
-mypy
-pylint
-pylint-per-file-ignores
-ruff==0.16.5
-types-PyYAML

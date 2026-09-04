@@ -317,9 +317,9 @@ The guard test is meaningful on both old and new Home Assistant versions.
 `homeassistant.core._MAX_QUEUED_EVENT_DISPATCHES`. If the installed Home
 Assistant predates 2026.7, `_ensure_event_bus_guard()` installs a compatibility
 shim with the same raise-on-too-many-nested-dispatches semantics used by the
-test. The repository does not pin `homeassistant` in `requirements_test.txt`, so
-newer CI can exercise the real guard while older local environments exercise the
-shim.
+test. The repository does not pin `homeassistant` in the `test` dependency
+group, so newer CI can exercise the real guard while older local environments
+exercise the shim.
 
 ## Validation commands
 
