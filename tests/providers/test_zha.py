@@ -162,6 +162,10 @@ class TestProperties:
         """Test supports_connection_status property."""
         assert provider.supports_connection_status is True
 
+    def test_lock_event_label_is_authoritative(self, provider):
+        """Test lock_event_label_is_authoritative property."""
+        assert provider.lock_event_label_is_authoritative is True
+
 
 class TestConnect:
     """Test ZHALockProvider async_connect."""

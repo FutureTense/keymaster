@@ -126,6 +126,10 @@ class TestProperties:
         """Test connection status is supported."""
         assert schlage_provider.supports_connection_status is True
 
+    def test_lock_event_label_is_authoritative(self, schlage_provider):
+        """Test lock_event_label_is_authoritative inherits the base default."""
+        assert schlage_provider.lock_event_label_is_authoritative is False
+
     def test_redact_slot_names_default(self, schlage_provider):
         """Test redact_slot_names property default."""
         schlage_provider.keymaster_config_entry.options = {}

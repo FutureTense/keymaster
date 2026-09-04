@@ -68,6 +68,11 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         return True
 
     @property
+    def lock_event_label_is_authoritative(self) -> bool:
+        """Zigbee2MQTT action payloads can arrive with the pre-operation state."""
+        return True
+
+    @property
     def supports_connection_status(self) -> bool:
         """Zigbee2MQTT can report connection status."""
         return True

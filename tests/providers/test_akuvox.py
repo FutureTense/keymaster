@@ -197,6 +197,10 @@ class TestProperties:
         """Test supports_push_updates property."""
         assert provider.supports_push_updates is True
 
+    def test_lock_event_label_is_authoritative(self, provider):
+        """Test lock_event_label_is_authoritative property."""
+        assert provider.lock_event_label_is_authoritative is True
+
 
 # ---------------------------------------------------------------------------
 # async_connect

@@ -1,10 +1,13 @@
 """Tests for KeymasterCoordinator event handling."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from custom_components.keymaster.const import (
+    ATTR_ACTION_CODE,
+    ATTR_ACTION_TEXT,
     ATTR_CODE_SLOT,
     ATTR_CODE_SLOT_NAME,
     ATTR_NOTIFICATION_SOURCE,
@@ -163,6 +166,102 @@ async def test_handle_provider_lock_event_lock_label_overrides_stale_state(
 
     mock_coordinator._lock_locked.assert_called_once()
     mock_coordinator._lock_unlocked.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_zigbee2mqtt_label_overrides_changed_state(
+    hass, coordinator_for_unlock_test
+):
+    """Test that Z2M authoritative labels beat stale pre-operation entity state."""
+    coordinator = coordinator_for_unlock_test
+    events: list[dict[str, Any]] = []
+    hass.bus.async_listen(
+        EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+        lambda event: events.append(event.data),
+    )
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.provider = MagicMock()
+    kmlock.provider.lock_event_label_is_authoritative = True
+    kmlock.lock_state = LockState.UNLOCKED
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            name="Rich",
+            enabled=True,
+        )
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+    coordinator._pending_provider_unlock_event.add(kmlock.keymaster_config_entry_id)
+    hass.states.async_set(kmlock.lock_entity_id, LockState.LOCKED)
+
+    await coordinator._handle_provider_lock_event(
+        kmlock=kmlock,
+        code_slot_num=1,
+        event_label="Unlocked via Keypad",
+        action_code=1,
+    )
+    await hass.async_block_till_done()
+
+    assert kmlock.lock_state == LockState.UNLOCKED
+    assert len(events) == 1
+    assert events[0][ATTR_STATE] == LockState.UNLOCKED
+    assert events[0][ATTR_ACTION_TEXT] == "Unlocked via Keypad"
+    assert events[0][ATTR_ACTION_CODE] == 1
+    assert events[0][ATTR_CODE_SLOT] == 1
+    assert events[0][ATTR_CODE_SLOT_NAME] == "Rich"
+
+
+@pytest.mark.asyncio
+async def test_handle_provider_lock_event_authoritative_lock_label_overrides_changed_state(
+    hass, coordinator_for_unlock_test
+):
+    """Test that authoritative lock labels beat stale pre-operation entity state."""
+    coordinator = coordinator_for_unlock_test
+    events: list[dict[str, Any]] = []
+    hass.bus.async_listen(
+        EVENT_KEYMASTER_LOCK_STATE_CHANGED,
+        lambda event: events.append(event.data),
+    )
+
+    kmlock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test_lock",
+        keymaster_config_entry_id="test_entry",
+    )
+    kmlock.provider = MagicMock()
+    kmlock.provider.lock_event_label_is_authoritative = True
+    kmlock.lock_state = LockState.LOCKED
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            name="Rich",
+            enabled=True,
+        )
+    }
+    coordinator.kmlocks["test_entry"] = kmlock
+    coordinator._pending_provider_lock_event.add(kmlock.keymaster_config_entry_id)
+    hass.states.async_set(kmlock.lock_entity_id, LockState.UNLOCKED)
+
+    await coordinator._handle_provider_lock_event(
+        kmlock=kmlock,
+        code_slot_num=1,
+        event_label="Locked via Keypad",
+        action_code=5,
+    )
+    await hass.async_block_till_done()
+
+    assert kmlock.lock_state == LockState.LOCKED
+    assert len(events) == 1
+    assert events[0][ATTR_STATE] == LockState.LOCKED
+    assert events[0][ATTR_ACTION_TEXT] == "Locked via Keypad"
+    assert events[0][ATTR_ACTION_CODE] == 5
+    assert events[0][ATTR_CODE_SLOT] == 1
+    assert events[0][ATTR_CODE_SLOT_NAME] == "Rich"
 
 
 @pytest.mark.asyncio
