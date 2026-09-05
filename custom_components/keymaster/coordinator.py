@@ -902,35 +902,40 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             result: MutableMapping = {}
             for field in _serializable_dataclass_fields(instance.__class__):
                 field_name: str = field.name
-
-                field_value: Any = getattr(instance, field_name)
-
-                # Convert datetime object to ISO string
-                if isinstance(field_value, dt):
-                    field_value = field_value.isoformat()
-
-                # Convert time object to ISO string
-                if isinstance(field_value, dt_time):
-                    field_value = field_value.isoformat()
-
-                if isinstance(field_value, list):
-                    result[field_name] = [
-                        (
-                            self._kmlocks_to_dict(item)
-                            if hasattr(item, "__dataclass_fields__")
-                            else item
-                        )
-                        for item in field_value
-                    ]
-                elif isinstance(field_value, dict):
-                    result[field_name] = {
-                        k: (self._kmlocks_to_dict(v) if hasattr(v, "__dataclass_fields__") else v)
-                        for k, v in field_value.items()
-                    }
-                else:
-                    result[field_name] = field_value
+                result[field_name] = self._kmlock_field_to_dict(getattr(instance, field_name))
             return result
         return instance
+
+    def _kmlock_field_to_dict(self, field_value: Any) -> object:
+        """Convert a dataclass field value to a JSON-compatible value."""
+        field_value = self._kmlock_temporal_value_to_dict(field_value)
+        return self._kmlock_collection_value_to_dict(field_value)
+
+    def _kmlock_temporal_value_to_dict(self, field_value: Any) -> Any:
+        """Convert temporal field values while preserving existing ordered checks."""
+        if isinstance(field_value, dt):
+            field_value = field_value.isoformat()
+
+        if isinstance(field_value, dt_time):
+            field_value = field_value.isoformat()
+
+        return field_value
+
+    def _kmlock_collection_value_to_dict(self, field_value: Any) -> object:
+        """Convert collection field values while preserving existing recursive behavior."""
+        if isinstance(field_value, list):
+            return [
+                self._kmlocks_to_dict(item) if hasattr(item, "__dataclass_fields__") else item
+                for item in field_value
+            ]
+
+        if isinstance(field_value, dict):
+            return {
+                k: (self._kmlocks_to_dict(v) if hasattr(v, "__dataclass_fields__") else v)
+                for k, v in field_value.items()
+            }
+
+        return field_value
 
     async def _rebuild_lock_relationships(self) -> None:
         for keymaster_config_entry_id, kmlock in self.kmlocks.items():

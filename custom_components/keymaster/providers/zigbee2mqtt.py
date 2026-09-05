@@ -343,22 +343,7 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             coros = [self._async_query_slot(i) for i in missing_slots]
             results = await asyncio.gather(*coros, return_exceptions=True)
             for slot_num, res in zip(missing_slots, results, strict=False):
-                if isinstance(res, CodeSlot):
-                    self._usercodes_cache[slot_num] = res
-                elif isinstance(res, HomeAssistantError):
-                    _LOGGER.warning(
-                        "[Zigbee2MQTTProvider] Error querying slot %s: %s",
-                        slot_num,
-                        res,
-                    )
-                elif isinstance(res, Exception):
-                    _LOGGER.error(
-                        "[Zigbee2MQTTProvider] Unexpected error querying slot %s: %s",
-                        slot_num,
-                        res,
-                    )
-                elif isinstance(res, BaseException):
-                    raise res
+                self._handle_usercode_query_result(slot_num, res)
 
         result: list[CodeSlot] = []
         for i in range(slot_start, slot_start + slot_count):
@@ -366,6 +351,26 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             if slot_data:
                 result.append(slot_data)
         return result
+
+    def _handle_usercode_query_result(self, slot_num: int, res: CodeSlot | BaseException) -> None:
+        """Handle one slot query result using most-specific-first matching."""
+        match res:
+            case CodeSlot():
+                self._usercodes_cache[slot_num] = res
+            case HomeAssistantError():
+                _LOGGER.warning(
+                    "[Zigbee2MQTTProvider] Error querying slot %s: %s",
+                    slot_num,
+                    res,
+                )
+            case Exception():
+                _LOGGER.error(
+                    "[Zigbee2MQTTProvider] Unexpected error querying slot %s: %s",
+                    slot_num,
+                    res,
+                )
+            case BaseException():
+                raise res
 
     async def async_get_usercode(self, slot_num: int) -> CodeSlot | None:
         """Get a specific user code from the lock cache."""
