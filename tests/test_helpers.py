@@ -2,9 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
-from custom_components.keymaster.const import DOMAIN
+from custom_components.keymaster.const import COORDINATOR, DOMAIN
 from custom_components.keymaster.helpers import (
     Throttle,
+    _get_kmlock_for_entry,
     async_has_supported_provider,
     call_hass_service,
     delete_code_slot_entities,
@@ -244,6 +245,31 @@ def test_async_has_supported_provider_no_args(hass):
     """Test async_has_supported_provider returns False with no arguments."""
     result = async_has_supported_provider(hass)
     assert result is False
+
+
+def test_get_kmlock_for_entry_without_domain_data(hass):
+    """Test loaded lock lookup returns None when domain data is absent."""
+    hass.data.pop(DOMAIN, None)
+
+    assert _get_kmlock_for_entry(hass, "entry-id") is None
+
+
+def test_get_kmlock_for_entry_without_coordinator(hass):
+    """Test loaded lock lookup returns None when coordinator data is absent."""
+    hass.data[DOMAIN] = {}
+
+    assert _get_kmlock_for_entry(hass, "entry-id") is None
+
+
+def test_get_kmlock_for_entry_with_coordinator(hass):
+    """Test loaded lock lookup delegates to the coordinator when present."""
+    kmlock = MagicMock()
+    coordinator = MagicMock()
+    coordinator.sync_get_lock_by_config_entry_id.return_value = kmlock
+    hass.data[DOMAIN] = {COORDINATOR: coordinator}
+
+    assert _get_kmlock_for_entry(hass, "entry-id") is kmlock
+    coordinator.sync_get_lock_by_config_entry_id.assert_called_once_with("entry-id")
 
 
 def test_throttle_reset_existing_func_missing_key():
