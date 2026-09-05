@@ -25,10 +25,10 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install development, test, and lint dependencies
-pip install -r requirements_dev.txt
+pip install --group dev
 
 # Or using uv pip:
-uv pip install -r requirements_dev.txt
+uv pip install --group dev
 ```
 
 ### 2. Frontend Environment (Lovelace Strategy)

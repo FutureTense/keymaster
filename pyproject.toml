@@ -1,3 +1,37 @@
+[dependency-groups]
+test = [
+    # Additional HA ecosystem packages required by tests
+    "aiohttp_cors",
+    "aiousbwatcher",
+    "asyncio_mqtt",
+    "homeassistant",
+    "pydispatcher",
+    "pyserial",
+    "voluptuous",
+    "pyyaml",
+    # Test dependencies for pytest
+    "pytest-homeassistant-custom-component>=0.13.357",
+    "pyudev",
+    "serialx",
+    "zeroconf",
+    "zigpy",
+    "zwave-js-server-python",
+]
+lint = [
+    "codespell",
+    # Lint dependencies for ruff, mypy, and pylint
+    "mypy",
+    "pylint",
+    "pylint-per-file-ignores",
+    "ruff==0.16.5",
+    "types-PyYAML",
+]
+dev = [
+    # Development dependencies - includes test and lint
+    {include-group = "test"},
+    {include-group = "lint"},
+]
+
 [tool.coverage.report]
 show_missing = true
 fail_under = 80
