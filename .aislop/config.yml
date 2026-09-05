@@ -1,0 +1,21 @@
+# aislop static-analysis configuration.
+#
+# Only the keys set here override aislop's built-in defaults; everything else
+# (exclude paths, engine toggles, quality thresholds, scoring weights) still
+# comes from aislop's defaults.
+version: 1
+
+rules:
+  # keymaster is a Home Assistant custom integration - effectively a plugin.
+  # Much of its dependency surface is dictated by the Home Assistant runtime
+  # and cannot be pinned by this repository, so committing lockfiles produces
+  # constant Dependabot churn on dependencies the maintainers cannot update.
+  # `uv.lock`, `yarn.lock`, and `package-lock.json` are therefore intentionally
+  # gitignored.
+  #
+  # With no lockfile present, `npm audit` returns ENOLOCK and aislop emits an
+  # informational "dependency audit skipped" finding on every scan. That is a
+  # deliberate trade-off, not a defect, so the rule is disabled.
+  #
+  # See https://github.com/FutureTense/keymaster/issues/652
+  security/dependency-audit-skipped: off
