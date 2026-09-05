@@ -267,7 +267,9 @@ def _has_value(value: Any) -> bool:
 
 def _get_kmlock_for_entry(hass: HomeAssistant, entry_id: str) -> KeymasterLock | None:
     """Return the loaded lock for a config entry if the coordinator exists."""
-    coordinator = hass.data.get(DOMAIN, {}).get(COORDINATOR)
+    coordinator = None
+    if DOMAIN in hass.data:
+        coordinator = hass.data[DOMAIN].get(COORDINATOR)
     if coordinator is None:
         return None
     return coordinator.sync_get_lock_by_config_entry_id(entry_id)
