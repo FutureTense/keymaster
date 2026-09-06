@@ -2955,6 +2955,41 @@ class TestKmlocksToDict:
         assert result["slots"][1]["name"] == "slot1"
         assert result["slots"][2]["name"] == "slot2"
 
+    def test_kmlocks_to_dict_preserves_ordered_field_serialization(self, coordinator_for_dict):
+        """Test field serialization preserves temporal, collection, and scalar semantics."""
+
+        @dataclass
+        class Inner:
+            value: int
+
+        @dataclass
+        class Outer:
+            timestamp: dt
+            start_time: dt_time
+            items: list
+            slots: dict
+            name: str
+
+        timestamp = dt(2025, 1, 15, 12, 30, 0)
+        start_time = dt_time(8, 30, 0)
+        instance = Outer(
+            timestamp=timestamp,
+            start_time=start_time,
+            items=[Inner(value=1), "plain-list-item"],
+            slots={"nested": Inner(value=2), "plain": "plain-dict-value"},
+            name="plain-scalar",
+        )
+
+        result = coordinator_for_dict._kmlocks_to_dict(instance)
+
+        assert isinstance(result, dict)
+        assert result["timestamp"] == timestamp.isoformat()
+        assert isinstance(result["timestamp"], str)
+        assert result["start_time"] == start_time.isoformat()
+        assert result["items"] == [{"value": 1}, "plain-list-item"]
+        assert result["slots"] == {"nested": {"value": 2}, "plain": "plain-dict-value"}
+        assert result["name"] == "plain-scalar"
+
 
 class TestStorageAndMigration:
     """Test cases for Home Assistant Store persistence and legacy JSON migration."""

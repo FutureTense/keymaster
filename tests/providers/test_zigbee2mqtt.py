@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any, NamedTuple
 from unittest.mock import ANY, AsyncMock, MagicMock, PropertyMock, patch
 
@@ -994,6 +995,45 @@ class TestCoverageExtra:
             pytest.raises(CustomBaseException),
         ):
             await provider.async_get_usercodes()
+
+    async def test_get_usercodes_preserves_ordered_query_result_handling(
+        self,
+        provider,
+        mock_hass,
+        caplog,
+    ):
+        """Test query result handling preserves specific-before-generic exception order."""
+        await connect_provider(provider, mock_hass)
+        caplog.set_level(logging.DEBUG)
+
+        with patch.object(
+            provider,
+            "_async_query_slot",
+            side_effect=[
+                CodeSlot(1, "1111", True),
+                HomeAssistantError("expected"),
+                RuntimeError("unexpected"),
+                CodeSlot(4, "4444", True),
+                CodeSlot(5, "5555", True),
+                CodeSlot(6, "6666", True),
+            ],
+        ):
+            result = await provider.async_get_usercodes()
+
+        assert provider._usercodes_cache[1] == CodeSlot(1, "1111", True)
+        assert CodeSlot(1, "1111", True) in result
+        assert CodeSlot(4, "4444", True) in result
+        warning_messages = [
+            record.getMessage() for record in caplog.records if record.levelno == logging.WARNING
+        ]
+        error_messages = [
+            record.getMessage() for record in caplog.records if record.levelno == logging.ERROR
+        ]
+        assert "[Zigbee2MQTTProvider] Error querying slot 2: expected" in warning_messages
+        assert not any("slot 2" in message for message in error_messages)
+        assert (
+            "[Zigbee2MQTTProvider] Unexpected error querying slot 3: unexpected" in error_messages
+        )
 
     async def test_base_topic_prefers_device_name_over_ieee_identifier(self, provider, mock_hass):
         """Test that base_topic prefers device_entry.name over identifier suffix."""
