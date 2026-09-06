@@ -484,7 +484,9 @@ class ZHALockProvider(BaseLockProvider):
 
             command = event.data.get("command")
             if command == "programming_event_notification":
-                coordinator = self.hass.data.get(DOMAIN, {}).get(COORDINATOR)
+                coordinator = None
+                if DOMAIN in self.hass.data:
+                    coordinator = self.hass.data[DOMAIN].get(COORDINATOR)
                 if coordinator:
                     self.hass.async_create_task(
                         coordinator.async_refresh(),

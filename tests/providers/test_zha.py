@@ -861,6 +861,80 @@ class TestLockEvents:
         unsub()
         assert provider._event_unsub is None
 
+    @pytest.mark.parametrize("hass_data", [{}, {DOMAIN: {}}])
+    async def test_programming_event_without_coordinator_skips_refresh_task(
+        self, provider, mock_hass, mock_zha_gateway, hass_data
+    ):
+        """Test programming events do not schedule refreshes when coordinator data is absent."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        captured_callback = None
+
+        def mock_listen(event_type, callback_fn):
+            nonlocal captured_callback
+            captured_callback = callback_fn
+            return lambda: None
+
+        mock_hass.bus.async_listen = MagicMock(side_effect=mock_listen)
+        unsub = provider.subscribe_lock_events(MagicMock(), AsyncMock())
+        assert captured_callback is not None
+
+        mock_hass.data = hass_data
+        mock_hass.async_create_task.reset_mock()
+
+        captured_callback(
+            Event(
+                "zha_event",
+                {
+                    "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                    "command": "programming_event_notification",
+                },
+            )
+        )
+        await asyncio.sleep(0.01)
+
+        mock_hass.async_create_task.assert_not_called()
+        unsub()
+
+    async def test_programming_event_with_coordinator_schedules_refresh_task(
+        self, provider, mock_hass, mock_zha_gateway
+    ):
+        """Test programming events schedule a refresh when coordinator data is present."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        captured_callback = None
+
+        def mock_listen(event_type, callback_fn):
+            nonlocal captured_callback
+            captured_callback = callback_fn
+            return lambda: None
+
+        mock_hass.bus.async_listen = MagicMock(side_effect=mock_listen)
+        unsub = provider.subscribe_lock_events(MagicMock(), AsyncMock())
+        assert captured_callback is not None
+
+        coordinator = MagicMock()
+        coordinator.async_refresh = AsyncMock()
+        mock_hass.data = {DOMAIN: {COORDINATOR: coordinator}}
+        mock_hass.async_create_task.reset_mock()
+
+        captured_callback(
+            Event(
+                "zha_event",
+                {
+                    "device_ieee": "00:0d:6f:00:0b:90:57:f6",
+                    "command": "programming_event_notification",
+                },
+            )
+        )
+        await asyncio.sleep(0.01)
+
+        mock_hass.async_create_task.assert_called_once()
+        coordinator.async_refresh.assert_called_once()
+        unsub()
+
     def test_get_platform_data(self, provider):
         """Test get_platform_data returns ZHA specific data."""
         provider._device_ieee = "00:0d:6f:00:0b:90:57:f6"
