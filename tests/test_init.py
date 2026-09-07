@@ -316,7 +316,7 @@ async def test_parent_title_resolves_to_parent_entry_id_during_setup(hass):
     lovelace_await_args = mock_generate_lovelace.await_args
     assert lovelace_await_args is not None
     lovelace_call = lovelace_await_args.kwargs
-    assert lovelace_call["parent_config_entry_id"] == parent_entry.entry_id
+    assert lovelace_call["spec"].parent_config_entry_id == parent_entry.entry_id
 
 
 async def test_parent_via_device_fallback_for_older_ha_versions(hass):

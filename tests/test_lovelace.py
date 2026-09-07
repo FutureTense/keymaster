@@ -11,7 +11,18 @@ from unittest.mock import MagicMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.keymaster.const import (
+    CONF_ADVANCED_DATE_RANGE,
+    CONF_ADVANCED_DAY_OF_WEEK,
+    CONF_DOOR_SENSOR_ENTITY_ID,
+    CONF_HIDE_PINS,
+    CONF_LOCK_ENTITY_ID,
+    CONF_PARENT_ENTRY_ID,
+    CONF_SLOTS,
+    CONF_START,
+)
 from custom_components.keymaster.lovelace import (
+    KeymasterLovelaceSpec,
     _find_battery_entity,
     _generate_date_range_entities,
     async_generate_lovelace,
@@ -74,6 +85,37 @@ def _extract_entity_refs(entities: list) -> list:
     return refs
 
 
+def test_lovelace_spec_from_config_entry_preserves_config_values():
+    """Test Lovelace spec construction from config entry data."""
+    config_entry = MockConfigEntry(
+        domain="keymaster",
+        data={
+            CONF_START: 3,
+            CONF_SLOTS: 4,
+            CONF_LOCK_ENTITY_ID: "lock.frontdoor",
+            CONF_ADVANCED_DATE_RANGE: True,
+            CONF_ADVANCED_DAY_OF_WEEK: False,
+            CONF_DOOR_SENSOR_ENTITY_ID: "binary_sensor.frontdoor",
+            CONF_PARENT_ENTRY_ID: "parent_entry_id",
+            CONF_HIDE_PINS: True,
+        },
+    )
+
+    spec = KeymasterLovelaceSpec.from_config_entry(config_entry)
+
+    assert spec == KeymasterLovelaceSpec(
+        keymaster_config_entry_id=config_entry.entry_id,
+        code_slot_start=3,
+        code_slots=4,
+        lock_entity="lock.frontdoor",
+        advanced_date_range=True,
+        advanced_day_of_week=False,
+        door_sensor="binary_sensor.frontdoor",
+        parent_config_entry_id="parent_entry_id",
+        hide_pins=True,
+    )
+
+
 # =============================================================================
 # generate_view_config() tests - Core view generation logic
 # =============================================================================
@@ -90,13 +132,15 @@ async def test_generate_view_config_basic(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=2,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            door_sensor="binary_sensor.frontdoor",
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=2,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                door_sensor="binary_sensor.frontdoor",
+            ),
         )
 
     # Check view structure
@@ -130,12 +174,14 @@ async def test_generate_view_config_sections_structure(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
     section = view["sections"][0]
@@ -172,12 +218,14 @@ async def test_generate_view_config_slot_entities(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
     entities = view["sections"][0]["cards"][1]["card"]["entities"]
@@ -211,12 +259,14 @@ async def test_generate_view_config_custom_slot_start(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=10,
-            code_slots=2,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=10,
+                code_slots=2,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
     sections = view["sections"]
@@ -238,13 +288,15 @@ async def test_generate_view_config_badges_no_door(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            door_sensor=None,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                door_sensor=None,
+            ),
         )
 
     badges = view["badges"]
@@ -279,12 +331,14 @@ async def test_generate_view_config_badges_with_battery(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
     badges = view["badges"]
@@ -312,12 +366,14 @@ async def test_generate_view_config_badges_without_battery(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
     badges = view["badges"]
@@ -551,13 +607,15 @@ async def test_generate_view_config_badges_with_door(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            door_sensor="binary_sensor.frontdoor",
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                door_sensor="binary_sensor.frontdoor",
+            ),
         )
 
     badges = view["badges"]
@@ -583,12 +641,14 @@ async def test_generate_view_config_advanced_date_range(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=True,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=True,
+                advanced_day_of_week=False,
+            ),
         )
 
     entities = view["sections"][0]["cards"][1]["card"]["entities"]
@@ -613,12 +673,14 @@ async def test_generate_view_config_advanced_day_of_week(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=True,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=True,
+            ),
         )
 
     entities = view["sections"][0]["cards"][1]["card"]["entities"]
@@ -643,13 +705,15 @@ async def test_generate_view_config_child_lock(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="backdoor",
-            keymaster_config_entry_id="child_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.backdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            parent_config_entry_id="parent_entry_id",
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="child_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.backdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                parent_config_entry_id="parent_entry_id",
+            ),
         )
 
     # Check badges for Parent Lock badge
@@ -683,13 +747,15 @@ async def test_generate_view_config_child_lock_parent_entities(hass: HomeAssista
         view = generate_view_config(
             hass=hass,
             kmlock_name="backdoor",
-            keymaster_config_entry_id="child_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.backdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            parent_config_entry_id="parent_entry_id",
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="child_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.backdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                parent_config_entry_id="parent_entry_id",
+            ),
         )
 
     # Get parent view entities
@@ -718,14 +784,16 @@ async def test_generate_view_config_child_lock_hide_pins(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="backdoor",
-            keymaster_config_entry_id="child_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.backdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            parent_config_entry_id="parent_entry_id",
-            hide_pins=True,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="child_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.backdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                parent_config_entry_id="parent_entry_id",
+                hide_pins=True,
+            ),
         )
 
     # Get parent view conditional card (second card in the grid, after heading)
@@ -761,14 +829,16 @@ async def test_generate_view_config_child_lock_no_hide_pins(hass: HomeAssistant)
         view = generate_view_config(
             hass=hass,
             kmlock_name="backdoor",
-            keymaster_config_entry_id="child_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.backdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            parent_config_entry_id="parent_entry_id",
-            hide_pins=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="child_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.backdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                parent_config_entry_id="parent_entry_id",
+                hide_pins=False,
+            ),
         )
 
     # Get parent view card
@@ -797,13 +867,15 @@ async def test_generate_view_config_child_lock_override_parent(hass: HomeAssista
         view = generate_view_config(
             hass=hass,
             kmlock_name="backdoor",
-            keymaster_config_entry_id="child_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.backdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            parent_config_entry_id="parent_entry_id",
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="child_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.backdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                parent_config_entry_id="parent_entry_id",
+            ),
         )
 
     # Verify the view contains override_parent entity somewhere in its structure
@@ -823,12 +895,14 @@ async def test_generate_view_config_slugified_path(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="Front Door Lock",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
     # Path should be slugified
@@ -855,12 +929,14 @@ async def test_async_generate_lovelace_creates_folder(hass: HomeAssistant):
         await async_generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
         mock_create_folder.assert_called_once()
@@ -883,12 +959,14 @@ async def test_async_generate_lovelace_writes_yaml(hass: HomeAssistant):
         await async_generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
         mock_write_yaml.assert_called_once()
@@ -917,12 +995,14 @@ async def test_async_generate_lovelace_filename_matches_lock_name(hass: HomeAssi
         await async_generate_lovelace(
             hass=hass,
             kmlock_name="my_special_lock",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.special",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.special",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+            ),
         )
 
         filename = mock_write_yaml.call_args[0][1]
@@ -947,29 +1027,33 @@ async def test_async_generate_lovelace_delegates_to_view_config(hass: HomeAssist
         await async_generate_lovelace(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=2,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=True,
-            advanced_day_of_week=True,
-            door_sensor="binary_sensor.door",
-            parent_config_entry_id="parent_id",
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=2,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=True,
+                advanced_day_of_week=True,
+                door_sensor="binary_sensor.door",
+                parent_config_entry_id="parent_id",
+            ),
         )
 
         # Verify generate_view_config was called with correct params
         mock_view_config.assert_called_once_with(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=2,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=True,
-            advanced_day_of_week=True,
-            door_sensor="binary_sensor.door",
-            parent_config_entry_id="parent_id",
-            hide_pins=False,
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=2,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=True,
+                advanced_day_of_week=True,
+                door_sensor="binary_sensor.door",
+                parent_config_entry_id="parent_id",
+                hide_pins=False,
+            ),
         )
 
         # Verify written data contains the view config
@@ -1036,13 +1120,15 @@ async def test_generate_view_config_badges_autolock_timer(hass: HomeAssistant):
         view = generate_view_config(
             hass=hass,
             kmlock_name="frontdoor",
-            keymaster_config_entry_id="test_entry_id",
-            code_slot_start=1,
-            code_slots=1,
-            lock_entity="lock.frontdoor",
-            advanced_date_range=False,
-            advanced_day_of_week=False,
-            door_sensor="binary_sensor.frontdoor",
+            spec=KeymasterLovelaceSpec(
+                keymaster_config_entry_id="test_entry_id",
+                code_slot_start=1,
+                code_slots=1,
+                lock_entity="lock.frontdoor",
+                advanced_date_range=False,
+                advanced_day_of_week=False,
+                door_sensor="binary_sensor.frontdoor",
+            ),
         )
 
     badges = view["badges"]

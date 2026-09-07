@@ -6,22 +6,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .const import (
-    CONF_ADVANCED_DATE_RANGE,
-    CONF_ADVANCED_DAY_OF_WEEK,
-    CONF_DOOR_SENSOR_ENTITY_ID,
-    CONF_HIDE_PINS,
-    CONF_LOCK_ENTITY_ID,
-    CONF_LOCK_NAME,
-    CONF_PARENT_ENTRY_ID,
-    CONF_SLOTS,
-    CONF_START,
-    COORDINATOR,
-    DOMAIN,
-    SERVICE_REGENERATE_LOVELACE,
-)
+from .const import CONF_LOCK_NAME, COORDINATOR, DOMAIN, SERVICE_REGENERATE_LOVELACE
 from .coordinator import KeymasterCoordinator
-from .lovelace import async_generate_lovelace
+from .lovelace import KeymasterLovelaceSpec, async_generate_lovelace
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -76,15 +63,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             await async_generate_lovelace(
                 hass=hass,
                 kmlock_name=config_entry.data[CONF_LOCK_NAME],
-                keymaster_config_entry_id=config_entry.entry_id,
-                parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
-                code_slot_start=config_entry.data[CONF_START],
-                code_slots=config_entry.data[CONF_SLOTS],
-                lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
-                advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
-                advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
-                door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
-                hide_pins=config_entry.data.get(CONF_HIDE_PINS, False),
+                spec=KeymasterLovelaceSpec.from_config_entry(config_entry),
             )
 
     # hass.services.async_register(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
+from dataclasses import dataclass
 import functools
 import logging
 from pathlib import Path
@@ -11,13 +12,55 @@ from typing import Any
 import yaml
 
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN, SensorDeviceClass
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import slugify
 
-from .const import DAY_NAMES, DOMAIN
+from .const import (
+    CONF_ADVANCED_DATE_RANGE,
+    CONF_ADVANCED_DAY_OF_WEEK,
+    CONF_DOOR_SENSOR_ENTITY_ID,
+    CONF_HIDE_PINS,
+    CONF_LOCK_ENTITY_ID,
+    CONF_PARENT_ENTRY_ID,
+    CONF_SLOTS,
+    CONF_START,
+    DAY_NAMES,
+    DOMAIN,
+)
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, kw_only=True)
+class KeymasterLovelaceSpec:
+    """Configuration values used to build Keymaster Lovelace views."""
+
+    keymaster_config_entry_id: str
+    code_slot_start: int
+    code_slots: int
+    lock_entity: str
+    advanced_date_range: bool
+    advanced_day_of_week: bool
+    door_sensor: str | None = None
+    parent_config_entry_id: str | None = None
+    hide_pins: bool = False
+
+    @classmethod
+    def from_config_entry(cls, config_entry: ConfigEntry) -> KeymasterLovelaceSpec:
+        """Build a Lovelace spec from a Keymaster config entry."""
+        return cls(
+            keymaster_config_entry_id=config_entry.entry_id,
+            parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
+            code_slot_start=config_entry.data[CONF_START],
+            code_slots=config_entry.data[CONF_SLOTS],
+            lock_entity=config_entry.data[CONF_LOCK_ENTITY_ID],
+            advanced_date_range=config_entry.data[CONF_ADVANCED_DATE_RANGE],
+            advanced_day_of_week=config_entry.data[CONF_ADVANCED_DAY_OF_WEEK],
+            door_sensor=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
+            hide_pins=config_entry.data.get(CONF_HIDE_PINS, False),
+        )
 
 
 @callback
@@ -137,15 +180,7 @@ def generate_view_config(
     hass: HomeAssistant,
     kmlock_name: str,
     *,
-    keymaster_config_entry_id: str,
-    code_slot_start: int,
-    code_slots: int,
-    lock_entity: str,
-    advanced_date_range: bool,
-    advanced_day_of_week: bool,
-    door_sensor: str | None = None,
-    parent_config_entry_id: str | None = None,
-    hide_pins: bool = False,
+    spec: KeymasterLovelaceSpec,
 ) -> MutableMapping[str, Any]:
     """Generate the complete Lovelace view configuration for a keymaster lock.
 
@@ -153,23 +188,23 @@ def generate_view_config(
     """
     badges = generate_badges_config(
         hass=hass,
-        keymaster_config_entry_id=keymaster_config_entry_id,
-        lock_entity=lock_entity,
-        door_sensor=door_sensor,
-        parent_config_entry_id=parent_config_entry_id,
+        keymaster_config_entry_id=spec.keymaster_config_entry_id,
+        lock_entity=spec.lock_entity,
+        door_sensor=spec.door_sensor,
+        parent_config_entry_id=spec.parent_config_entry_id,
     )
 
     sections: list[MutableMapping[str, Any]] = [
         generate_section_config(
             hass=hass,
-            keymaster_config_entry_id=keymaster_config_entry_id,
+            keymaster_config_entry_id=spec.keymaster_config_entry_id,
             slot_num=slot_num,
-            advanced_date_range=advanced_date_range,
-            advanced_day_of_week=advanced_day_of_week,
-            parent_config_entry_id=parent_config_entry_id,
-            hide_pins=hide_pins,
+            advanced_date_range=spec.advanced_date_range,
+            advanced_day_of_week=spec.advanced_day_of_week,
+            parent_config_entry_id=spec.parent_config_entry_id,
+            hide_pins=spec.hide_pins,
         )
-        for slot_num in range(code_slot_start, code_slot_start + code_slots)
+        for slot_num in range(spec.code_slot_start, spec.code_slot_start + spec.code_slots)
     ]
 
     return {
@@ -186,15 +221,7 @@ async def async_generate_lovelace(
     hass: HomeAssistant,
     kmlock_name: str,
     *,
-    keymaster_config_entry_id: str,
-    code_slot_start: int,
-    code_slots: int,
-    lock_entity: str,
-    advanced_date_range: bool,
-    advanced_day_of_week: bool,
-    door_sensor: str | None = None,
-    parent_config_entry_id: str | None = None,
-    hide_pins: bool = False,
+    spec: KeymasterLovelaceSpec,
 ) -> None:
     """Create the lovelace file for the keymaster lock."""
     folder: str = hass.config.path("custom_components", DOMAIN, "lovelace")
@@ -203,15 +230,7 @@ async def async_generate_lovelace(
     view_config = generate_view_config(
         hass=hass,
         kmlock_name=kmlock_name,
-        keymaster_config_entry_id=keymaster_config_entry_id,
-        code_slot_start=code_slot_start,
-        code_slots=code_slots,
-        lock_entity=lock_entity,
-        advanced_date_range=advanced_date_range,
-        advanced_day_of_week=advanced_day_of_week,
-        door_sensor=door_sensor,
-        parent_config_entry_id=parent_config_entry_id,
-        hide_pins=hide_pins,
+        spec=spec,
     )
     lovelace: list[MutableMapping[str, Any]] = [view_config]
 
