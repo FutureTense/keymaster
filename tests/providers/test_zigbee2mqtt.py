@@ -189,10 +189,15 @@ class TestConnect:
         """Test connection fails when lock entity is not found in Entity Registry."""
         provider.entity_registry.async_get.return_value = None
 
-        result = await provider.async_connect()
+        with patch("custom_components.keymaster.providers.zigbee2mqtt._LOGGER.error") as mock_log:
+            result = await provider.async_connect()
 
         assert result is False
         assert provider.connected is False
+        mock_log.assert_called_once_with(
+            "[Zigbee2MQTTProvider] Can't find lock in Entity Registry: %s",
+            "lock.test_lock",
+        )
 
     async def test_connect_platform_not_mqtt(self, provider):
         """Test connection fails when lock entity platform is not mqtt."""
@@ -200,10 +205,16 @@ class TestConnect:
         lock_entry.platform = "zwave_js"
         provider.entity_registry.async_get.return_value = lock_entry
 
-        result = await provider.async_connect()
+        with patch("custom_components.keymaster.providers.zigbee2mqtt._LOGGER.error") as mock_log:
+            result = await provider.async_connect()
 
         assert result is False
         assert provider.connected is False
+        mock_log.assert_called_once_with(
+            "[Zigbee2MQTTProvider] Lock platform is not mqtt: %s (%s)",
+            "lock.test_lock",
+            "zwave_js",
+        )
 
     async def test_connect_device_not_found(self, provider):
         """Test connection fails when lock device is not found in registry."""
@@ -214,17 +225,27 @@ class TestConnect:
         provider.entity_registry.async_get.return_value = lock_entry
         provider.device_registry.async_get.return_value = None
 
-        result = await provider.async_connect()
+        with patch("custom_components.keymaster.providers.zigbee2mqtt._LOGGER.error") as mock_log:
+            result = await provider.async_connect()
 
         assert result is False
         assert provider.connected is False
+        mock_log.assert_called_once_with(
+            "[Zigbee2MQTTProvider] Can't find lock device in Device Registry: %s",
+            "lock.test_lock",
+        )
 
     async def test_connect_platform_not_z2m(self, provider, mock_hass):
         """Test connection fails when lock device is not a Z2M device."""
         setup_successful_connect(provider, mock_hass, identifiers={("mqtt", "not_z2m_device")})
-        result = await provider.async_connect()
+        with patch("custom_components.keymaster.providers.zigbee2mqtt._LOGGER.error") as mock_log:
+            result = await provider.async_connect()
         assert result is False
         assert provider.connected is False
+        mock_log.assert_called_once_with(
+            "[Zigbee2MQTTProvider] Lock device is not a Zigbee2MQTT device: %s",
+            "lock.test_lock",
+        )
 
     async def test_connect_handles_bulk_users_message(self, provider, mock_hass):
         """Test that incoming bulk users messages update the cache."""
@@ -245,7 +266,6 @@ class TestConnect:
 
         assert callback_captured is not None
 
-        # Test bulk update.
         payload = {
             "users": {
                 "1": {"pin_code": "1234", "status": "enabled"},
@@ -328,8 +348,85 @@ class TestConnect:
         msg = ReceiveMessage("zigbee2mqtt/my_lock", "invalid json", 0, False)
 
         assert callback_captured is not None
-        callback_captured(msg)
+        with patch("custom_components.keymaster.providers.zigbee2mqtt._LOGGER.error") as mock_log:
+            callback_captured(msg)
         assert len(provider._usercodes_cache) == 0
+        mock_log.assert_not_called()
+
+    async def test_connect_ignores_non_object_json(self, provider, mock_hass):
+        """Test that non-object JSON payloads are ignored gracefully."""
+        setup_successful_connect(provider, mock_hass)
+
+        callback_captured = None
+
+        def mock_subscribe(hass, topic, callback_fn):
+            nonlocal callback_captured
+            callback_captured = callback_fn
+            return lambda: None
+
+        with patch(
+            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
+        ) as mock_sub:
+            mock_sub.side_effect = mock_subscribe
+            await provider.async_connect()
+
+        assert callback_captured is not None
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", "[1, 2, 3]", 0, False))
+
+        assert provider._usercodes_cache == {}
+        provider.hass.async_create_task.assert_not_called()
+
+    def test_cache_slot_and_resolve_resolves_pending_future_once(self, provider):
+        """Test caching a slot resolves a pending future only while it is not done."""
+        future = MagicMock()
+        future.done.side_effect = [False, True]
+        slot_data = CodeSlot(slot_num=1, code="1234", in_use=True)
+        provider._pending_usercode_futures[1] = future
+
+        provider._cache_slot_and_resolve(slot_data)
+        provider._cache_slot_and_resolve(slot_data)
+
+        assert provider._usercodes_cache[1] == slot_data
+        future.set_result.assert_called_once_with(slot_data)
+
+    def test_cache_slot_and_resolve_skips_done_future(self, provider):
+        """Test caching a slot does not resolve an already-done pending future."""
+        future = MagicMock()
+        future.done.return_value = True
+        slot_data = CodeSlot(slot_num=2, code=None, in_use=False)
+        provider._pending_usercode_futures[2] = future
+
+        provider._cache_slot_and_resolve(slot_data)
+
+        assert provider._usercodes_cache[2] == slot_data
+        future.set_result.assert_not_called()
+
+    def test_handle_bulk_users_payload_skips_invalid_entries(self, provider):
+        """Test invalid bulk users entries skip only those slots."""
+        provider._handle_bulk_users_payload(
+            {
+                "bad": {"pin_code": "0000", "status": "enabled"},
+                "2": "not a dict",
+                "1": {"pin_code": "1234", "status": "enabled"},
+            }
+        )
+
+        assert provider._usercodes_cache == {1: CodeSlot(slot_num=1, code="1234", in_use=True)}
+
+    def test_code_slot_payload_pin_absent_and_present_branches(self, provider):
+        """Test pin_code-absent branches differ from present-without-value branches."""
+        assert provider._code_slot_from_bulk_user(1, {"status": "enabled"}) == CodeSlot(
+            slot_num=1, code=None, in_use=True
+        )
+        assert provider._code_slot_from_bulk_user(
+            2, {"pin_code": "", "status": "enabled"}
+        ) == CodeSlot(slot_num=2, code=None, in_use=False)
+        assert provider._code_slot_from_pin_data(3, {"user": 3, "user_enabled": True}) == CodeSlot(
+            slot_num=3, code=None, in_use=True
+        )
+        assert provider._code_slot_from_pin_data(
+            4, {"user": 4, "pin_code": "", "user_enabled": True}
+        ) == CodeSlot(slot_num=4, code=None, in_use=False)
 
 
 class TestIsConnected:
