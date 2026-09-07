@@ -1,11 +1,12 @@
 """Tests for the Coordinator."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
 from datetime import datetime as dt, time as dt_time, timedelta
 import json
 import random
+import typing
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -2853,6 +2854,275 @@ class TestDictToKmlocksConversion:
         new_lock.inherit_state_from(old_lock)
 
         assert new_lock.child_config_entry_ids == []
+
+    def test_dict_to_kmlocks_converts_datetime_and_time_strings(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Temporal ISO strings convert to datetime and time instances."""
+        data = {
+            "number": 1,
+            "accesslimit_date_range_start": "2025-01-15T12:30:00",
+            "time_start": "08:30:00",
+        }
+
+        slot = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlot)
+        day = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlotDayOfWeek)
+
+        assert slot.accesslimit_date_range_start == dt(2025, 1, 15, 12, 30, 0)
+        assert day.time_start == dt_time(8, 30, 0)
+
+    def test_dict_to_kmlocks_preserves_malformed_datetime_string(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Malformed temporal strings remain unchanged instead of raising."""
+        data = {"number": 1, "accesslimit_date_range_start": "not-a-datetime"}
+
+        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlot)
+
+        assert result.accesslimit_date_range_start == "not-a-datetime"
+
+    def test_dict_to_kmlocks_converts_mapping_dataclass_values_and_int_keys(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Mapping dataclass values recurse and digit-string int keys are coerced."""
+        data = {
+            "number": 1,
+            "accesslimit_day_of_week": {
+                "0": {
+                    "day_of_week_num": 0,
+                    "day_of_week_name": "monday",
+                    "dow_enabled": False,
+                },
+                "not-digit": {
+                    "day_of_week_num": 1,
+                    "day_of_week_name": "tuesday",
+                },
+            },
+        }
+
+        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlot)
+
+        assert isinstance(result.accesslimit_day_of_week[0], KeymasterCodeSlotDayOfWeek)
+        assert result.accesslimit_day_of_week[0].dow_enabled is False
+        assert isinstance(
+            result.accesslimit_day_of_week["not-digit"],
+            KeymasterCodeSlotDayOfWeek,
+        )
+
+    def test_dict_to_kmlocks_copies_plain_mapping_values_without_key_coercion(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Plain mapping values are copied and string keys remain strings."""
+
+        @dataclass
+        class PlainMapping:
+            values: dict[str, int]
+
+        data = {"values": {"1": 1, "two": 2}}
+
+        with patch.dict(
+            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            {"values": MutableMapping[str, int]},
+        ):
+            result = coordinator_for_conversion._dict_to_kmlocks(data, PlainMapping)
+
+        assert result.values == {"1": 1, "two": 2}
+
+    def test_dict_to_kmlocks_mapping_non_dict_value_does_not_fall_through(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Mapping-typed non-dict values are not processed as dataclasses or lists."""
+
+        @dataclass
+        class Inner:
+            value: int
+
+        @dataclass
+        class MappingWithListValue:
+            ambiguous: Any
+
+        data = {"ambiguous": [{"value": 1}, "plain"]}
+
+        with patch.dict(
+            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            {"ambiguous": MutableMapping[Inner, str]},
+        ):
+            result = coordinator_for_conversion._dict_to_kmlocks(data, MappingWithListValue)
+
+        assert result.ambiguous == [{"value": 1}, "plain"]
+
+    def test_dict_to_kmlocks_mapping_without_type_args_preserves_value(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Mapping-typed fields without key/value args pass through unchanged."""
+
+        @dataclass
+        class BareMapping:
+            ambiguous: Any
+
+        data = {"ambiguous": {"1": "one"}}
+
+        with patch.dict(
+            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            {"ambiguous": typing.MutableMapping},
+        ):
+            result = coordinator_for_conversion._dict_to_kmlocks(data, BareMapping)
+
+        assert result.ambiguous == {"1": "one"}
+
+    def test_dict_to_kmlocks_converts_nested_dataclass_field(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Nested dataclass fields recurse when serialized as dictionaries."""
+
+        @dataclass
+        class Inner:
+            value: int
+
+        @dataclass
+        class Outer:
+            inner: Any
+
+        data = {"inner": {"value": 1}}
+
+        with patch.dict(
+            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            {"inner": Inner},
+        ):
+            result = coordinator_for_conversion._dict_to_kmlocks(data, Outer)
+
+        assert result.inner == Inner(value=1)
+
+    def test_dict_to_kmlocks_preserves_list_when_item_type_is_not_dataclass(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Lists are unchanged when their item type is not a dataclass."""
+
+        @dataclass
+        class ListContainer:
+            items: list
+
+        data = {"items": [{"value": 1}, "plain"]}
+
+        with patch.dict(
+            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            {"items": list[int]},
+        ):
+            result = coordinator_for_conversion._dict_to_kmlocks(data, ListContainer)
+
+        assert result.items == [{"value": 1}, "plain"]
+
+    def test_dict_to_kmlocks_optional_union_unwraps_single_non_none_type(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Optional-style Unions unwrap only when one non-None type remains."""
+
+        @dataclass
+        class OptionalDate:
+            maybe_timestamp: Any
+
+        data = {"maybe_timestamp": "2025-01-15T12:30:00"}
+
+        with patch.dict(
+            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            {"maybe_timestamp": typing.Union[dt, None]},  # noqa: UP007
+        ):
+            result = coordinator_for_conversion._dict_to_kmlocks(data, OptionalDate)
+
+        assert result.maybe_timestamp == dt(2025, 1, 15, 12, 30, 0)
+
+    def test_dict_to_kmlocks_union_with_multiple_non_none_types_stays_wrapped(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Multi-type Unions are not unwrapped or converted."""
+
+        @dataclass
+        class MultiTypeUnion:
+            maybe_timestamp: Any
+
+        timestamp = "2025-01-15T12:30:00"
+        data = {"maybe_timestamp": timestamp}
+
+        with patch.dict(
+            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            {"maybe_timestamp": typing.Union[dt, str, None]},  # noqa: UP007
+        ):
+            result = coordinator_for_conversion._dict_to_kmlocks(data, MultiTypeUnion)
+
+        assert result.maybe_timestamp == timestamp
+
+    def test_dict_to_kmlocks_converts_list_dataclasses_and_preserves_plain_items(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Lists recurse only for dict items when their item type is a dataclass."""
+
+        @dataclass
+        class Inner:
+            value: int
+
+        @dataclass
+        class ListContainer:
+            items: list
+
+        data = {"items": [{"value": 1}, "plain"]}
+
+        with patch.dict(
+            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            {"items": list[Inner]},
+        ):
+            result = coordinator_for_conversion._dict_to_kmlocks(data, ListContainer)
+
+        assert result.items == [Inner(value=1), "plain"]
+
+    def test_dict_to_kmlocks_round_trips_kmlocks_to_dict_output(
+        self,
+        coordinator_for_conversion,
+    ):
+        """Serialized lock output deserializes back to the expected dataclasses."""
+        lock = KeymasterLock(
+            lock_name="Test",
+            lock_entity_id="lock.test",
+            keymaster_config_entry_id="entry_1",
+            code_slots={
+                1: KeymasterCodeSlot(
+                    number=1,
+                    accesslimit_date_range_start=dt(2025, 1, 15, 12, 30, 0),
+                    accesslimit_day_of_week={
+                        0: KeymasterCodeSlotDayOfWeek(
+                            day_of_week_num=0,
+                            day_of_week_name="monday",
+                            time_start=dt_time(8, 30, 0),
+                        ),
+                    },
+                ),
+            },
+        )
+
+        stored = coordinator_for_conversion._kmlocks_to_dict(lock)
+        result = coordinator_for_conversion._dict_to_kmlocks(stored, KeymasterLock)
+
+        assert isinstance(result, KeymasterLock)
+        assert result.code_slots is not None
+        result_slot = result.code_slots[1]
+        assert isinstance(result_slot, KeymasterCodeSlot)
+        assert result_slot.accesslimit_date_range_start == dt(2025, 1, 15, 12, 30, 0)
+        assert result_slot.accesslimit_day_of_week is not None
+        assert isinstance(
+            result_slot.accesslimit_day_of_week[0],
+            KeymasterCodeSlotDayOfWeek,
+        )
+        assert result_slot.accesslimit_day_of_week[0].time_start == dt_time(8, 30, 0)
 
 
 class TestKmlocksToDict:
