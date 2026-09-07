@@ -24,11 +24,11 @@ from custom_components.keymaster.const import (
 from custom_components.keymaster.lovelace import (
     KeymasterLovelaceSpec,
     _find_battery_entity,
-    _generate_date_range_entities,
     async_generate_lovelace,
     delete_lovelace,
     generate_view_config,
 )
+from custom_components.keymaster.lovelace_code_slots import _generate_date_range_entities
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
