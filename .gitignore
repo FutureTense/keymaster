@@ -11,6 +11,7 @@ venv
 .coverage
 coverage.xml
 .tox
+.aislop/history.jsonl
 ha-core/
 
 # Node.js / TypeScript build
