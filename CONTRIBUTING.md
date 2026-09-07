@@ -25,6 +25,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install development, test, and lint dependencies
+# Requires pip >= 25.1 for --group support
 pip install --group dev
 
 # Or using uv pip:

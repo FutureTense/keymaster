@@ -89,14 +89,19 @@ with patch("custom_components.keymaster.lovelace.er"):
 
     lovelace_module._map_property_to_entity_id = passthrough_map
 
-    from custom_components.keymaster.lovelace import generate_view_config
+    from custom_components.keymaster.lovelace import KeymasterLovelaceSpec, generate_view_config
 
     mock_hass = MagicMock()
     test_cases = TEST_CASES_PLACEHOLDER
 
     results = {}
     for name, params in test_cases:
-        result = generate_view_config(hass=mock_hass, **params)
+        kmlock_name = params.pop("kmlock_name")
+        result = generate_view_config(
+            hass=mock_hass,
+            kmlock_name=kmlock_name,
+            spec=KeymasterLovelaceSpec(**params),
+        )
         results[name] = result
 
     print(json.dumps(results, indent=2, sort_keys=True))
