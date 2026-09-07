@@ -731,26 +731,19 @@ def _generate_date_range_entities(
     ]
 
 
-def _generate_parent_view_card_ll_config(
+def _generate_parent_view_entities(
     code_slot_num: int,
     advanced_date_range: bool,
     advanced_day_of_week: bool,
     parent_pin_entity_id: str | None = None,
-) -> MutableMapping[str, Any]:
-    """Build the parent-view conditional card for a child lock code slot.
-
-    Shows parent's settings alongside child's status when override_parent is off.
-    When parent_pin_entity_id is provided, the PIN row is replaced with a
-    read-only markdown card that indicates whether the slot is occupied.
-    """
+) -> list[MutableMapping[str, Any]]:
+    """Build entity rows for a child lock parent-view card."""
     entities: list[MutableMapping[str, Any]] = [
         _generate_entity_card_ll_config(
             code_slot_num, "text", "name", "Name", parent=True, type_="simple-entity"
         ),
     ]
 
-    # Only include PIN as an entity row when not hiding; when hiding, a
-    # separate markdown card is added via vertical-stack below.
     if not parent_pin_entity_id:
         entities.append(
             _generate_entity_card_ll_config(
@@ -801,20 +794,15 @@ def _generate_parent_view_card_ll_config(
             *(_generate_dow_entities(code_slot_num, parent=True) if advanced_day_of_week else ()),
         ]
     )
+    return entities
 
-    entities_card: MutableMapping[str, Any] = {
-        "type": "entities",
-        "show_header_toggle": False,
-        "state_color": True,
-        "entities": entities,
-    }
 
-    # When hiding PINs, wrap in a vertical-stack: the entities card (without
-    # the PIN row) plus a markdown card showing slot occupancy. Markdown is a
-    # card type and cannot be used as an entities-row, so vertical-stack is
-    # needed to combine them.
+def _generate_parent_view_inner_card(
+    entities_card: MutableMapping[str, Any], parent_pin_entity_id: str | None
+) -> MutableMapping[str, Any]:
+    """Build the parent-view inner card, adding masked PIN markdown when needed."""
     if parent_pin_entity_id:
-        inner_card: MutableMapping[str, Any] = {
+        return {
             "type": "vertical-stack",
             "cards": [
                 entities_card,
@@ -832,8 +820,34 @@ def _generate_parent_view_card_ll_config(
                 },
             ],
         }
-    else:
-        inner_card = entities_card
+    return entities_card
+
+
+def _generate_parent_view_card_ll_config(
+    code_slot_num: int,
+    advanced_date_range: bool,
+    advanced_day_of_week: bool,
+    parent_pin_entity_id: str | None = None,
+) -> MutableMapping[str, Any]:
+    """Build the parent-view conditional card for a child lock code slot.
+
+    Shows parent's settings alongside child's status when override_parent is off.
+    When parent_pin_entity_id is provided, the PIN row is replaced with a
+    read-only markdown card that indicates whether the slot is occupied.
+    """
+    entities = _generate_parent_view_entities(
+        code_slot_num,
+        advanced_date_range,
+        advanced_day_of_week,
+        parent_pin_entity_id=parent_pin_entity_id,
+    )
+
+    entities_card: MutableMapping[str, Any] = {
+        "type": "entities",
+        "show_header_toggle": False,
+        "state_color": True,
+        "entities": entities,
+    }
 
     return {
         "type": "conditional",
@@ -842,7 +856,7 @@ def _generate_parent_view_card_ll_config(
                 code_slot_num, "override_parent", state="off", needs_type=True
             )
         ],
-        "card": inner_card,
+        "card": _generate_parent_view_inner_card(entities_card, parent_pin_entity_id),
     }
 
 
