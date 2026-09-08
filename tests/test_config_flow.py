@@ -8,7 +8,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 import voluptuous as vol
 
-from custom_components.keymaster.config_flow_schema import _get_entities, _get_schema
+from custom_components.keymaster.config_flow_schema import get_entities, get_schema
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
@@ -43,7 +43,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_no_locks_abort(hass):
     """Test the flow aborts when no locks are available."""
-    with patch("custom_components.keymaster.config_flow_schema._get_entities", return_value=[]):
+    with patch("custom_components.keymaster.config_flow_schema.get_entities", return_value=[]):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
@@ -113,7 +113,7 @@ async def test_form(test_user_input, title, final_config_flow_data, hass, mock_g
 
 async def test_get_schema_preserves_field_order_and_markers(hass, mock_get_entities):
     """Test config flow schema fields keep their UI order and marker type."""
-    schema = _get_schema(
+    schema = get_schema(
         hass=hass,
         user_input=None,
         default_dict={
@@ -161,10 +161,10 @@ async def test_get_schema_preserves_field_order_and_markers(hass, mock_get_entit
 async def test_get_schema_raises_without_flow_when_no_locks(hass):
     """Test schema generation raises without a flow when no locks are available."""
     with (
-        patch("custom_components.keymaster.config_flow_schema._get_entities", return_value=[]),
+        patch("custom_components.keymaster.config_flow_schema.get_entities", return_value=[]),
         pytest.raises(ValueError, match="No lock entities found"),
     ):
-        _get_schema(
+        get_schema(
             hass=hass,
             user_input=None,
             default_dict={CONF_NOTIFY_SCRIPT_NAME: None},
@@ -182,7 +182,7 @@ async def test_get_entities_filters_excludes_and_sorts(hass):
         ]
     )
 
-    assert _get_entities(
+    assert get_entities(
         hass,
         "test_domain",
         search=["keep"],
@@ -190,7 +190,7 @@ async def test_get_entities_filters_excludes_and_sorts(hass):
         exclude_entities=["test.keep_z"],
         filter_func=lambda _, entity_id: not entity_id.endswith("blocked"),
     ) == ["test.extra", "test.keep_a"]
-    assert _get_entities(hass, "missing_domain", extra_entities=["test.extra"]) == ["test.extra"]
+    assert get_entities(hass, "missing_domain", extra_entities=["test.extra"]) == ["test.extra"]
 
 
 @pytest.mark.parametrize(
@@ -424,10 +424,10 @@ async def test_get_entities(hass):
 
     assert state.state == LockState.UNLOCKED
 
-    assert KWIKSET_910_LOCK_ENTITY in _get_entities(
+    assert KWIKSET_910_LOCK_ENTITY in get_entities(
         hass, LOCK_DOMAIN, extra_entities=["lock.fake"], exclude_entities=["lock.fake"]
     )
-    assert "(none)" in _get_entities(hass, SCRIPT_DOMAIN, extra_entities=[NONE_TEXT])
+    assert "(none)" in get_entities(hass, SCRIPT_DOMAIN, extra_entities=[NONE_TEXT])
 
 
 async def test_options_flow(hass):

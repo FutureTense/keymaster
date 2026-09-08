@@ -106,7 +106,7 @@ class KeymasterConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] is None:
             self._data[CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID] = NONE_TEXT
 
-        notify_scripts = config_flow_schema._get_entities(  # noqa: SLF001
+        notify_scripts = config_flow_schema.get_entities(
             hass=self.hass,
             domain=SCRIPT_DOMAIN,
             extra_entities=[NONE_TEXT],
@@ -224,7 +224,7 @@ async def _start_config_flow(
                     )
                 return cls.async_abort(reason="reconfigure_successful")
 
-    data_schema = config_flow_schema._get_schema(  # noqa: SLF001
+    data_schema = config_flow_schema.get_schema(
         hass=cls.hass,
         user_input=user_input,
         default_dict=defaults,

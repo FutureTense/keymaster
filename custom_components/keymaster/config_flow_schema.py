@@ -67,7 +67,7 @@ def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) ->
     return data
 
 
-def _get_entities(
+def get_entities(
     hass: HomeAssistant,
     domain: str,
     *,
@@ -164,7 +164,7 @@ def _entity_schema_fields(
             CONF_DOOR_SENSOR_ENTITY_ID,
             default=get_default(CONF_DOOR_SENSOR_ENTITY_ID, NONE_TEXT),
         ): vol.In(
-            _get_entities(
+            get_entities(
                 hass=hass,
                 domain=BINARY_DOMAIN,
                 extra_entities=[NONE_TEXT],
@@ -174,7 +174,7 @@ def _entity_schema_fields(
             CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
             default=get_default(CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID, NONE_TEXT),
         ): vol.In(
-            _get_entities(
+            get_entities(
                 hass=hass,
                 domain=SENSOR_DOMAIN,
                 search=["alarm_level", "user_code", "alarmlevel"],
@@ -188,7 +188,7 @@ def _entity_schema_fields(
                 NONE_TEXT,
             ),
         ): vol.In(
-            _get_entities(
+            get_entities(
                 hass=hass,
                 domain=SENSOR_DOMAIN,
                 search=["alarm_type", "access_control", "alarmtype"],
@@ -199,7 +199,7 @@ def _entity_schema_fields(
             CONF_NOTIFY_SCRIPT_NAME,
             default=script_default,
         ): vol.In(
-            _get_entities(
+            get_entities(
                 hass=hass,
                 domain=SCRIPT_DOMAIN,
                 extra_entities=[NONE_TEXT],
@@ -223,7 +223,7 @@ def _advanced_schema_fields(get_default: DefaultGetter) -> SchemaFields:
     }
 
 
-def _get_schema(
+def get_schema(
     hass: HomeAssistant,
     user_input: MutableMapping[str, Any] | None,
     default_dict: MutableMapping[str, Any],
@@ -249,7 +249,7 @@ def _get_schema(
     elif script_default != NONE_TEXT and not script_default.startswith("script."):
         script_default = f"script.{script_default}"
     _LOGGER.debug("[get_schema] script_default: %s (%s)", script_default, type(script_default))
-    lock_entities = _get_entities(
+    lock_entities = get_entities(
         hass=hass,
         domain=LOCK_DOMAIN,
         exclude_entities=_get_locks_in_use(hass=hass, exclude=_get_default(CONF_LOCK_ENTITY_ID)),
