@@ -789,112 +789,181 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             field_values: MutableMapping = {}
 
             for field in _serializable_dataclass_fields(cls):
-                field_name: str = field.name
-
-                field_type: type | None = keymasterlock_type_lookup.get(field_name)
-                if not field_type and isinstance(field.type, type):
-                    field_type = field.type
-
-                field_value: Any = data.get(field_name)
-
-                origin_type = get_origin(field_type)
-                type_args = get_args(field_type)
-
-                # _LOGGER.debug(
-                #     f"[dict_to_kmlocks] field_name: {field_name}, field_type: {field_type}, "
-                #     f"origin_type: {origin_type}, type_args: {type_args}, "
-                #     f"field_value_type: {type(field_value)}, field_value: {field_value}"
-                # )
-
-                # Handle optional types (Union)
-                if origin_type is Union:
-                    non_optional_types = [t for t in type_args if t is not type(None)]
-                    if len(non_optional_types) == 1:
-                        field_type = non_optional_types[0]
-                        origin_type = get_origin(field_type)
-                        type_args = get_args(field_type)
-                        # _LOGGER.debug(
-                        #     f"[dict_to_kmlocks] Updated for Union: "
-                        #     f"field_name: {field_name}, field_type: {field_type}, "
-                        #     f"origin_type: {origin_type}, type_args: {type_args}"
-                        # )
-
-                # Convert datetime string to datetime object
-                if isinstance(field_value, str) and field_type == dt:
-                    # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to datetime")
-                    with contextlib.suppress(ValueError):
-                        field_value = dt.fromisoformat(field_value)
-
-                # Convert time string to time object
-                elif isinstance(field_value, str) and field_type == dt_time:
-                    # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to time")
-                    with contextlib.suppress(ValueError):
-                        field_value = dt_time.fromisoformat(field_value)
-
-                # _LOGGER.debug(f"[dict_to_kmlocks] isinstance(origin_type, type): {isinstance(origin_type, type)}")
-                # if isinstance(origin_type, type):
-                # _LOGGER.debug(f"[dict_to_kmlocks] issubclass(origin_type, MutableMapping): {issubclass(origin_type, MutableMapping)}, origin_type == dict: {origin_type == dict}")
-
-                # Handle MutableMapping types: when origin_type is MutableMapping
-                if isinstance(origin_type, type) and (
-                    issubclass(origin_type, MutableMapping) or origin_type is dict
-                ):
-                    if len(type_args) == 2:
-                        key_type, value_type = type_args
-                        # _LOGGER.debug(
-                        #     f"[dict_to_kmlocks] field_name: {field_name}: Is MutableMapping or dict. key_type: {key_type}, "
-                        #     f"value_type: {value_type}, isinstance(field_value, dict): {isinstance(field_value, dict)}, "
-                        #     f"is_dataclass(value_type): {is_dataclass(value_type)}"
-                        # )
-                        if isinstance(field_value, dict):
-                            # If the value_type is a dataclass, recursively process it
-                            if is_dataclass(value_type) and isinstance(value_type, type):
-                                # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting dict items for {field_name}")
-                                field_value = {
-                                    (
-                                        int(k)
-                                        if key_type is int and isinstance(k, str) and k.isdigit()
-                                        else k
-                                    ): self._dict_to_kmlocks(v, value_type)
-                                    for k, v in field_value.items()
-                                }
-                            else:
-                                # If value_type is not a dataclass, just copy the value
-                                field_value = {
-                                    (
-                                        int(k)
-                                        if key_type is int and isinstance(k, str) and k.isdigit()
-                                        else k
-                                    ): v
-                                    for k, v in field_value.items()
-                                }
-
-                elif (
-                    isinstance(field_value, dict)
-                    and is_dataclass(field_type)
-                    and isinstance(field_type, type)
-                ):
-                    # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting nested dataclass: {field_name}")
-                    field_value = self._dict_to_kmlocks(field_value, field_type)
-
-                elif isinstance(field_value, list) and type_args:
-                    list_type = type_args[0]
-                    if is_dataclass(list_type) and isinstance(list_type, type):
-                        # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting list of dataclasses: {field_name}")
-                        field_value = [
-                            (
-                                self._dict_to_kmlocks(item, list_type)
-                                if isinstance(item, dict)
-                                else item
-                            )
-                            for item in field_value
-                        ]
-
-                field_values[field_name] = field_value
+                field_values[field.name] = self._kmlock_field_from_dict(data, field)
 
             return cls(**field_values)
 
         return data
+
+    def _kmlock_field_type_from_dict(self, field_name: str, field_type: Any) -> Any:
+        """Resolve the stored type metadata for a Keymaster lock field."""
+        resolved_type = keymasterlock_type_lookup.get(field_name)
+        if not resolved_type and isinstance(field_type, type):
+            resolved_type = field_type
+        return resolved_type
+
+    def _kmlock_field_from_dict(self, data: dict, field: Any) -> Any:
+        """Convert one serialized dataclass field to its runtime value."""
+        field_name: str = field.name
+        field_type = self._kmlock_field_type_from_dict(field_name, field.type)
+        field_value: Any = data.get(field_name)
+
+        origin_type = get_origin(field_type)
+        type_args = get_args(field_type)
+
+        # _LOGGER.debug(
+        #     f"[dict_to_kmlocks] field_name: {field_name}, field_type: {field_type}, "
+        #     f"origin_type: {origin_type}, type_args: {type_args}, "
+        #     f"field_value_type: {type(field_value)}, field_value: {field_value}"
+        # )
+
+        field_type, origin_type, type_args = self._kmlock_optional_type_from_dict(
+            field_name,
+            field_type,
+            origin_type,
+            type_args,
+        )
+        field_value = self._kmlock_temporal_value_from_dict(field_name, field_value, field_type)
+        return self._kmlock_collection_value_from_dict(
+            field_name,
+            field_value,
+            field_type,
+            origin_type,
+            type_args,
+        )
+
+    def _kmlock_optional_type_from_dict(
+        self,
+        field_name: str,
+        field_type: Any,
+        origin_type: Any,
+        type_args: tuple[Any, ...],
+    ) -> tuple[Any, Any, tuple[Any, ...]]:
+        """Unwrap Optional fields while preserving existing Union handling."""
+        # Handle optional types (Union)
+        if origin_type is not Union:
+            return field_type, origin_type, type_args
+
+        non_optional_types = [t for t in type_args if t is not type(None)]
+        if len(non_optional_types) != 1:
+            return field_type, origin_type, type_args
+
+        field_type = non_optional_types[0]
+        origin_type = get_origin(field_type)
+        type_args = get_args(field_type)
+        # _LOGGER.debug(
+        #     f"[dict_to_kmlocks] Updated for Union: "
+        #     f"field_name: {field_name}, field_type: {field_type}, "
+        #     f"origin_type: {origin_type}, type_args: {type_args}"
+        # )
+        return field_type, origin_type, type_args
+
+    def _kmlock_temporal_value_from_dict(
+        self,
+        field_name: str,
+        field_value: Any,
+        field_type: Any,
+    ) -> Any:
+        """Convert serialized temporal strings while preserving fallback behavior."""
+        # Convert datetime string to datetime object
+        if isinstance(field_value, str) and field_type == dt:
+            # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to datetime")
+            with contextlib.suppress(ValueError):
+                field_value = dt.fromisoformat(field_value)
+
+        # Convert time string to time object
+        elif isinstance(field_value, str) and field_type == dt_time:
+            # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to time")
+            with contextlib.suppress(ValueError):
+                field_value = dt_time.fromisoformat(field_value)
+
+        return field_value
+
+    @staticmethod
+    def _kmlock_key_from_dict(key: Any, key_type: Any) -> Any:
+        """Convert serialized dictionary keys to their runtime type when required."""
+        if key_type is int and isinstance(key, str) and key.isdigit():
+            return int(key)
+        return key
+
+    def _kmlock_collection_value_from_dict(
+        self,
+        field_name: str,
+        field_value: Any,
+        field_type: Any,
+        origin_type: Any,
+        type_args: tuple[Any, ...],
+    ) -> Any:
+        """Convert serialized collection and nested dataclass values."""
+        # _LOGGER.debug(f"[dict_to_kmlocks] isinstance(origin_type, type): {isinstance(origin_type, type)}")
+        # if isinstance(origin_type, type):
+        # _LOGGER.debug(f"[dict_to_kmlocks] issubclass(origin_type, MutableMapping): {issubclass(origin_type, MutableMapping)}, origin_type == dict: {origin_type == dict}")
+
+        # Handle MutableMapping types: when origin_type is MutableMapping
+        if isinstance(origin_type, type) and (
+            issubclass(origin_type, MutableMapping) or origin_type is dict
+        ):
+            return self._kmlock_mapping_value_from_dict(field_name, field_value, type_args)
+
+        if (
+            isinstance(field_value, dict)
+            and is_dataclass(field_type)
+            and isinstance(field_type, type)
+        ):
+            # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting nested dataclass: {field_name}")
+            return self._dict_to_kmlocks(field_value, field_type)
+
+        if isinstance(field_value, list) and type_args:
+            return self._kmlock_list_value_from_dict(field_name, field_value, type_args)
+
+        return field_value
+
+    def _kmlock_mapping_value_from_dict(
+        self,
+        field_name: str,
+        field_value: Any,
+        type_args: tuple[Any, ...],
+    ) -> Any:
+        """Convert serialized mapping values without falling through to other branches."""
+        if len(type_args) != 2:
+            return field_value
+
+        key_type, value_type = type_args
+        # _LOGGER.debug(
+        #     f"[dict_to_kmlocks] field_name: {field_name}: Is MutableMapping or dict. key_type: {key_type}, "
+        #     f"value_type: {value_type}, isinstance(field_value, dict): {isinstance(field_value, dict)}, "
+        #     f"is_dataclass(value_type): {is_dataclass(value_type)}"
+        # )
+        if not isinstance(field_value, dict):
+            return field_value
+
+        # If the value_type is a dataclass, recursively process it
+        if is_dataclass(value_type) and isinstance(value_type, type):
+            # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting dict items for {field_name}")
+            return {
+                self._kmlock_key_from_dict(k, key_type): self._dict_to_kmlocks(v, value_type)
+                for k, v in field_value.items()
+            }
+
+        # If value_type is not a dataclass, just copy the value
+        return {self._kmlock_key_from_dict(k, key_type): v for k, v in field_value.items()}
+
+    def _kmlock_list_value_from_dict(
+        self,
+        field_name: str,
+        field_value: list,
+        type_args: tuple[Any, ...],
+    ) -> Any:
+        """Convert serialized lists containing nested dataclass dictionaries."""
+        list_type = type_args[0]
+        if not (is_dataclass(list_type) and isinstance(list_type, type)):
+            return field_value
+
+        # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting list of dataclasses: {field_name}")
+        return [
+            self._dict_to_kmlocks(item, list_type) if isinstance(item, dict) else item
+            for item in field_value
+        ]
 
     def _kmlocks_to_dict(self, instance: object) -> object:
         """Recursively convert a dataclass instance to a dictionary for JSON export."""
