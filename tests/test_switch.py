@@ -75,6 +75,161 @@ async def coordinator(hass: HomeAssistant, switch_config_entry):
     return manager.async_get_lock_coordinator(switch_config_entry.entry_id)
 
 
+async def _created_switch_props(hass: HomeAssistant, data, parent_name="parent_lock"):
+    """Return switch entity props created for config data."""
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="frontdoor",
+        data=data,
+        version=3,
+    )
+    config_entry.add_to_hass(hass)
+
+    manager = KeymasterCoordinator(hass)
+    manager._initial_setup_done_event.set()
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][COORDINATOR] = manager
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=config_entry.entry_id,
+        parent_name=parent_name,
+    )
+    manager.kmlocks[config_entry.entry_id] = kmlock
+    entities = []
+
+    def mock_add_entities(new_entities, update_before_add=False):
+        del update_before_add
+        entities.extend(new_entities)
+
+    await async_setup_entry(hass, config_entry, mock_add_entities)
+
+    return [entity.entity_description.key for entity in entities]
+
+
+async def test_switch_descriptor_props_preserve_order(hass: HomeAssistant):
+    """Test switch setup preserves descriptor prop values and ordering."""
+    props = await _created_switch_props(hass, CONFIG_DATA_SWITCH)
+
+    assert props == [
+        "switch.autolock_enabled",
+        "switch.lock_notifications",
+        "switch.door_notifications",
+        "switch.retry_lock",
+        "switch.code_slots:1.override_parent",
+        "switch.code_slots:1.enabled",
+        "switch.code_slots:1.notifications",
+        "switch.code_slots:1.accesslimit_count_enabled",
+        "switch.code_slots:1.accesslimit_date_range_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week:0.dow_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week:0.include_exclude",
+        "switch.code_slots:1.accesslimit_day_of_week:0.limit_by_time",
+        "switch.code_slots:1.accesslimit_day_of_week:1.dow_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week:1.include_exclude",
+        "switch.code_slots:1.accesslimit_day_of_week:1.limit_by_time",
+        "switch.code_slots:1.accesslimit_day_of_week:2.dow_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week:2.include_exclude",
+        "switch.code_slots:1.accesslimit_day_of_week:2.limit_by_time",
+        "switch.code_slots:1.accesslimit_day_of_week:3.dow_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week:3.include_exclude",
+        "switch.code_slots:1.accesslimit_day_of_week:3.limit_by_time",
+        "switch.code_slots:1.accesslimit_day_of_week:4.dow_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week:4.include_exclude",
+        "switch.code_slots:1.accesslimit_day_of_week:4.limit_by_time",
+        "switch.code_slots:1.accesslimit_day_of_week:5.dow_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week:5.include_exclude",
+        "switch.code_slots:1.accesslimit_day_of_week:5.limit_by_time",
+        "switch.code_slots:1.accesslimit_day_of_week:6.dow_enabled",
+        "switch.code_slots:1.accesslimit_day_of_week:6.include_exclude",
+        "switch.code_slots:1.accesslimit_day_of_week:6.limit_by_time",
+        "switch.code_slots:2.override_parent",
+        "switch.code_slots:2.enabled",
+        "switch.code_slots:2.notifications",
+        "switch.code_slots:2.accesslimit_count_enabled",
+        "switch.code_slots:2.accesslimit_date_range_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week:0.dow_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week:0.include_exclude",
+        "switch.code_slots:2.accesslimit_day_of_week:0.limit_by_time",
+        "switch.code_slots:2.accesslimit_day_of_week:1.dow_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week:1.include_exclude",
+        "switch.code_slots:2.accesslimit_day_of_week:1.limit_by_time",
+        "switch.code_slots:2.accesslimit_day_of_week:2.dow_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week:2.include_exclude",
+        "switch.code_slots:2.accesslimit_day_of_week:2.limit_by_time",
+        "switch.code_slots:2.accesslimit_day_of_week:3.dow_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week:3.include_exclude",
+        "switch.code_slots:2.accesslimit_day_of_week:3.limit_by_time",
+        "switch.code_slots:2.accesslimit_day_of_week:4.dow_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week:4.include_exclude",
+        "switch.code_slots:2.accesslimit_day_of_week:4.limit_by_time",
+        "switch.code_slots:2.accesslimit_day_of_week:5.dow_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week:5.include_exclude",
+        "switch.code_slots:2.accesslimit_day_of_week:5.limit_by_time",
+        "switch.code_slots:2.accesslimit_day_of_week:6.dow_enabled",
+        "switch.code_slots:2.accesslimit_day_of_week:6.include_exclude",
+        "switch.code_slots:2.accesslimit_day_of_week:6.limit_by_time",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("data_updates", "parent_name", "present_props", "absent_props"),
+    [
+        (
+            {CONF_DOOR_SENSOR_ENTITY_ID: None},
+            "parent_lock",
+            ["switch.code_slots:1.override_parent"],
+            ["switch.door_notifications", "switch.retry_lock"],
+        ),
+        (
+            {CONF_DOOR_SENSOR_ENTITY_ID: ""},
+            "parent_lock",
+            ["switch.door_notifications", "switch.retry_lock"],
+            [],
+        ),
+        (
+            {},
+            None,
+            ["switch.door_notifications", "switch.retry_lock"],
+            ["switch.code_slots:1.override_parent"],
+        ),
+        (
+            {CONF_ADVANCED_DATE_RANGE: False},
+            "parent_lock",
+            ["switch.code_slots:1.accesslimit_day_of_week_enabled"],
+            ["switch.code_slots:1.accesslimit_date_range_enabled"],
+        ),
+        (
+            {CONF_ADVANCED_DAY_OF_WEEK: False},
+            "parent_lock",
+            ["switch.code_slots:1.accesslimit_date_range_enabled"],
+            [
+                "switch.code_slots:1.accesslimit_day_of_week_enabled",
+                "switch.code_slots:1.accesslimit_day_of_week:0.dow_enabled",
+            ],
+        ),
+    ],
+)
+async def test_switch_descriptor_gates_preserve_contract(
+    hass: HomeAssistant, data_updates, parent_name, present_props, absent_props
+):
+    """Test switch descriptor gates preserve their existing behavior."""
+    props = await _created_switch_props(
+        hass,
+        CONFIG_DATA_SWITCH | {CONF_SLOTS: 1} | data_updates,
+        parent_name,
+    )
+
+    assert "switch.autolock_enabled" in props
+    assert "switch.lock_notifications" in props
+    for prop in present_props:
+        assert prop in props
+    for prop in absent_props:
+        assert prop not in props
+
+
 async def test_switch_entities_created_with_lock_coordinator(
     hass: HomeAssistant, switch_config_entry
 ):
