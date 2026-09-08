@@ -167,7 +167,7 @@ async def auto_unload(hass: HomeAssistant):
 def mock_get_entities():
     """Mock available entities."""
     with patch(
-        "custom_components.keymaster.config_flow._get_entities",
+        "custom_components.keymaster.config_flow_schema.get_entities",
         autospec=True,
     ) as mock_entities:
         mock_entities.side_effect = side_effect_get_entities
