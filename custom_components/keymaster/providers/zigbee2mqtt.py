@@ -131,6 +131,44 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         self._connected = False
         self._initial_state_received = asyncio.Event()
 
+        if not self._validate_zigbee2mqtt_device():
+            return False
+
+        # Subscribe to lock's state topic to cache user code updates
+        @callback
+        def handle_state_message(msg: mqtt.ReceiveMessage) -> None:
+            """Handle incoming state updates."""
+            try:
+                payload = json.loads(msg.payload)
+            except ValueError:
+                return
+            if not isinstance(payload, dict):
+                return
+
+            self._handle_state_payload(payload)
+            if self._initial_state_received:
+                self._initial_state_received.set()
+
+        # Listen to state topic for code changes
+        state_topic = self.state_topic
+        if not state_topic:
+            _LOGGER.error("[Zigbee2MQTTProvider] Base topic could not be derived from device name")
+            return False
+
+        self._listeners.append(
+            await mqtt.async_subscribe(self.hass, state_topic, handle_state_message)
+        )
+
+        self._connected = True
+        _LOGGER.debug(
+            "[Zigbee2MQTTProvider] Connected to lock %s (base_topic: %s)",
+            self.lock_entity_id,
+            self.base_topic,
+        )
+        return True
+
+    def _validate_zigbee2mqtt_device(self) -> bool:
+        """Validate that the configured lock entity is a Zigbee2MQTT MQTT device."""
         lock_entry = self.entity_registry.async_get(self.lock_entity_id)
         if not lock_entry:
             _LOGGER.error(
@@ -171,102 +209,84 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
             )
             return False
 
-        # Subscribe to lock's state topic to cache user code updates
-        @callback
-        def handle_state_message(msg: mqtt.ReceiveMessage) -> None:
-            """Handle incoming state updates."""
-            if self._initial_state_received:
-                self._initial_state_received.set()
-            try:
-                payload = json.loads(msg.payload)
-            except ValueError:
-                return
-
-            action = payload.get("action")
-            action_slot_num = payload.get("action_user")
-            if action or action_slot_num:
-                self.hass.async_create_task(
-                    self._async_handle_action(action, action_slot_num, payload)
-                )
-
-            # Parse bulk users list if available.
-            if "users" in payload and isinstance(payload["users"], dict):
-                for slot_str, info in payload["users"].items():
-                    try:
-                        km_slot_num = int(slot_str)
-                    except ValueError:
-                        continue
-
-                    status = info.get("status")
-                    if "pin_code" not in info:
-                        in_use = status == "enabled"
-                        code = None
-                    else:
-                        code_val = info["pin_code"]
-                        code = _get_pin_code_value(code_val)
-                        in_use = bool(code and status == "enabled")
-
-                    slot_data = CodeSlot(
-                        slot_num=km_slot_num,
-                        code=code,
-                        in_use=in_use,
-                    )
-                    self._usercodes_cache[km_slot_num] = slot_data
-
-                    # Resolve pending future if any
-                    if km_slot_num in self._pending_usercode_futures:
-                        fut = self._pending_usercode_futures[km_slot_num]
-                        if not fut.done():
-                            fut.set_result(slot_data)
-
-            if "pin_code" in payload and isinstance(payload["pin_code"], dict):
-                pin_data = payload["pin_code"]
-                user_slot = pin_data.get("user")
-                if isinstance(user_slot, int):
-                    user_enabled = pin_data.get("user_enabled", False)
-                    if "pin_code" not in pin_data:
-                        slot_data = CodeSlot(
-                            slot_num=user_slot,
-                            code=None,
-                            in_use=bool(user_enabled),
-                        )
-                        self._usercodes_cache[user_slot] = slot_data
-                        if user_slot in self._pending_usercode_futures:
-                            fut = self._pending_usercode_futures[user_slot]
-                            if not fut.done():
-                                fut.set_result(slot_data)
-                    else:
-                        code_val = pin_data["pin_code"]
-                        code = _get_pin_code_value(code_val)
-                        in_use = bool(code and user_enabled)
-                        slot_data = CodeSlot(
-                            slot_num=user_slot,
-                            code=code,
-                            in_use=in_use,
-                        )
-                        self._usercodes_cache[user_slot] = slot_data
-                        if user_slot in self._pending_usercode_futures:
-                            fut = self._pending_usercode_futures[user_slot]
-                            if not fut.done():
-                                fut.set_result(slot_data)
-
-        # Listen to state topic for code changes
-        state_topic = self.state_topic
-        if not state_topic:
-            _LOGGER.error("[Zigbee2MQTTProvider] Base topic could not be derived from device name")
-            return False
-
-        self._listeners.append(
-            await mqtt.async_subscribe(self.hass, state_topic, handle_state_message)
-        )
-
-        self._connected = True
-        _LOGGER.debug(
-            "[Zigbee2MQTTProvider] Connected to lock %s (base_topic: %s)",
-            self.lock_entity_id,
-            self.base_topic,
-        )
         return True
+
+    def _handle_state_payload(self, payload: dict[str, Any]) -> None:
+        """Handle a decoded Zigbee2MQTT state payload."""
+        action = payload.get("action")
+        action_slot_num = payload.get("action_user")
+        if action or action_slot_num:
+            self.hass.async_create_task(self._async_handle_action(action, action_slot_num, payload))
+
+        # Parse bulk users list if available.
+        if "users" in payload and isinstance(payload["users"], dict):
+            self._handle_bulk_users_payload(payload["users"])
+
+        if "pin_code" in payload and isinstance(payload["pin_code"], dict):
+            self._handle_pin_code_payload(payload["pin_code"])
+
+    def _handle_bulk_users_payload(self, users: dict[str, Any]) -> None:
+        """Update cached slots from a Zigbee2MQTT bulk users payload."""
+        for slot_str, info in users.items():
+            try:
+                km_slot_num = int(slot_str)
+            except ValueError:
+                continue
+            if not isinstance(info, dict):
+                continue
+
+            self._cache_slot_and_resolve(self._code_slot_from_bulk_user(km_slot_num, info))
+
+    def _code_slot_from_bulk_user(self, slot_num: int, info: dict[str, Any]) -> CodeSlot:
+        """Create a code slot from one bulk users payload entry."""
+        status = info.get("status")
+        if "pin_code" not in info:
+            in_use = status == "enabled"
+            code = None
+        else:
+            code_val = info["pin_code"]
+            code = _get_pin_code_value(code_val)
+            in_use = bool(code and status == "enabled")
+
+        return CodeSlot(
+            slot_num=slot_num,
+            code=code,
+            in_use=in_use,
+        )
+
+    def _handle_pin_code_payload(self, pin_data: dict[str, Any]) -> None:
+        """Update cached slots from a Zigbee2MQTT single pin_code payload."""
+        user_slot = pin_data.get("user")
+        if isinstance(user_slot, int):
+            self._cache_slot_and_resolve(self._code_slot_from_pin_data(user_slot, pin_data))
+
+    def _code_slot_from_pin_data(self, user_slot: int, pin_data: dict[str, Any]) -> CodeSlot:
+        """Create a code slot from one single pin_code payload."""
+        user_enabled = pin_data.get("user_enabled", False)
+        if "pin_code" not in pin_data:
+            return CodeSlot(
+                slot_num=user_slot,
+                code=None,
+                in_use=bool(user_enabled),
+            )
+
+        code_val = pin_data["pin_code"]
+        code = _get_pin_code_value(code_val)
+        in_use = bool(code and user_enabled)
+        return CodeSlot(
+            slot_num=user_slot,
+            code=code,
+            in_use=in_use,
+        )
+
+    def _cache_slot_and_resolve(self, slot_data: CodeSlot) -> None:
+        """Cache a code slot and resolve any pending query future."""
+        slot_num = slot_data.slot_num
+        self._usercodes_cache[slot_num] = slot_data
+        if slot_num in self._pending_usercode_futures:
+            fut = self._pending_usercode_futures[slot_num]
+            if not fut.done():
+                fut.set_result(slot_data)
 
     async def async_is_connected(self) -> bool:
         """Check if Zigbee2MQTT lock connection is active."""
