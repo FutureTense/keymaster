@@ -351,6 +351,8 @@ class TestConnect:
         with patch("custom_components.keymaster.providers.zigbee2mqtt._LOGGER.error") as mock_log:
             callback_captured(msg)
         assert len(provider._usercodes_cache) == 0
+        assert provider._initial_state_received is not None
+        assert not provider._initial_state_received.is_set()
         mock_log.assert_not_called()
 
     async def test_connect_ignores_non_object_json(self, provider, mock_hass):
@@ -374,7 +376,58 @@ class TestConnect:
         callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", "[1, 2, 3]", 0, False))
 
         assert provider._usercodes_cache == {}
+        assert provider._initial_state_received is not None
+        assert not provider._initial_state_received.is_set()
         provider.hass.async_create_task.assert_not_called()
+
+    async def test_connect_valid_dict_json_sets_initial_state(self, provider, mock_hass):
+        """Test that a valid JSON object payload marks the initial state received."""
+        setup_successful_connect(provider, mock_hass)
+
+        callback_captured = None
+
+        def mock_subscribe(hass, topic, callback_fn):
+            nonlocal callback_captured
+            callback_captured = callback_fn
+            return lambda: None
+
+        with patch(
+            "homeassistant.components.mqtt.async_subscribe", new_callable=AsyncMock
+        ) as mock_sub:
+            mock_sub.side_effect = mock_subscribe
+            await provider.async_connect()
+
+        assert callback_captured is not None
+        assert provider._initial_state_received is not None
+        assert not provider._initial_state_received.is_set()
+
+        payload = {"users": {"1": {"pin_code": "1234", "status": "enabled"}}}
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", json.dumps(payload), 0, False))
+
+        assert provider._usercodes_cache[1] == CodeSlot(slot_num=1, code="1234", in_use=True)
+        assert provider._initial_state_received.is_set()
+
+    async def test_get_usercodes_waits_after_only_malformed_payloads(self, provider, mock_hass):
+        """Test malformed payloads do not skip the retained-state wait."""
+        mock_subscribe = await connect_provider(provider, mock_hass)
+        callback_captured = mock_subscribe.call_args[0][2]
+        provider.state_wait_timeout = 0.05
+
+        callback_captured(ReceiveMessage("zigbee2mqtt/my_lock", "invalid json", 0, False))
+
+        async def mock_query_slot(slot_num):
+            return CodeSlot(slot_num=slot_num, code=f"{slot_num}" * 4, in_use=True)
+
+        with patch.object(provider, "_async_query_slot", side_effect=mock_query_slot) as mock_query:
+            task = asyncio.create_task(provider.async_get_usercodes())
+            await asyncio.sleep(0.01)
+            assert not task.done()
+
+            result = await task
+
+        assert mock_query.call_count == 6
+        assert len(result) == 6
+        assert result[0] == CodeSlot(slot_num=1, code="1111", in_use=True)
 
     def test_cache_slot_and_resolve_resolves_pending_future_once(self, provider):
         """Test caching a slot resolves a pending future only while it is not done."""

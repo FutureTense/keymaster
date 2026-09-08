@@ -138,8 +138,6 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
         @callback
         def handle_state_message(msg: mqtt.ReceiveMessage) -> None:
             """Handle incoming state updates."""
-            if self._initial_state_received:
-                self._initial_state_received.set()
             try:
                 payload = json.loads(msg.payload)
             except ValueError:
@@ -148,6 +146,8 @@ class Zigbee2MQTTLockProvider(BaseLockProvider):
                 return
 
             self._handle_state_payload(payload)
+            if self._initial_state_received:
+                self._initial_state_received.set()
 
         # Listen to state topic for code changes
         state_topic = self.state_topic
