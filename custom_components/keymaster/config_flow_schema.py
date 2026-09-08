@@ -45,11 +45,11 @@ if TYPE_CHECKING:
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
-type DefaultGetter = Callable[..., Any]
-type SchemaFields = dict[Any, Any]
+DefaultGetter = Callable[..., Any]
+SchemaFields = dict[Any, Any]
 
 
-def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) -> list:
+def _available_parent_locks(hass: HomeAssistant, entry_id: str | None = None) -> list[str]:
     """Return other keymaster locks if they are not already a child lock."""
 
     data: list[str] = [NONE_TEXT]
