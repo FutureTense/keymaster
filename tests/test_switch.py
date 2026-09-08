@@ -1,6 +1,7 @@
 """Tests for keymaster Switch platform."""
 
 import asyncio
+import logging
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -34,6 +35,7 @@ from custom_components.keymaster.switch import (
 )
 from homeassistant.components.lock.const import LockState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.entity import EntityCategory
 
 CONFIG_DATA_SWITCH = {
@@ -254,6 +256,20 @@ async def test_switch_entities_created_with_lock_coordinator(
     assert entities
     assert all(entity.coordinator is lock_coordinator for entity in entities)
     assert entities[0].unique_id == f"{switch_config_entry.entry_id}_switch_autolock_enabled"
+
+
+async def test_switch_setup_raises_when_lock_not_found(
+    hass: HomeAssistant, switch_config_entry, caplog: pytest.LogCaptureFixture
+):
+    """Test switch setup raises and logs when the lock is missing."""
+    manager: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+    manager._initial_setup_done_event.set()
+    caplog.set_level(logging.ERROR, logger="custom_components.keymaster.switch")
+
+    with pytest.raises(PlatformNotReady):
+        await async_setup_entry(hass, switch_config_entry, Mock())
+
+    assert f"Lock not found for config entry {switch_config_entry.entry_id}" in caplog.messages
 
 
 async def test_switch_entity_initialization(hass: HomeAssistant, switch_config_entry, coordinator):
