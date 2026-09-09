@@ -166,18 +166,18 @@ async def test_delete_code_slot_entities(hass):
     code_slot_num = 1
 
     # Create some entities to delete
-    entity_registry.async_get_or_create(
+    entity = entity_registry.async_get_or_create(
         "binary_sensor",
         DOMAIN,
         f"{config_entry_id}_binary_sensor_code_slots_{code_slot_num}_active",
         suggested_object_id=f"code_slots_{code_slot_num}_active",
     )
+    assert entity_registry.async_get(entity.entity_id) is not None
 
     # Delete entities
     await delete_code_slot_entities(hass, config_entry_id, code_slot_num)
 
-    # Verify it didn't crash
-    assert True
+    assert entity_registry.async_get(entity.entity_id) is None
 
 
 async def test_delete_code_slot_entities_removes_all(hass):
