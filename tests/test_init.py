@@ -358,7 +358,7 @@ async def test_self_referential_parent_entry_id_clears_during_setup(hass):
         mock_coordinator.add_lock = AsyncMock()
         mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
 
-        mock_device_registry = Mock()
+        mock_device_registry = Mock(spec=["async_get_or_create", "async_get_device_by_identifier"])
         mock_device_registry.async_get_or_create = Mock()
         mock_device_registry_get.return_value = mock_device_registry
 
@@ -378,6 +378,127 @@ async def test_self_referential_parent_entry_id_clears_during_setup(hass):
     assert lovelace_await_args is not None
     lovelace_call = lovelace_await_args.kwargs
     assert lovelace_call["spec"].parent_config_entry_id is None
+
+
+async def test_parent_title_resolution_does_not_match_current_entry(hass):
+    """Test parent title resolution does not set an entry as its own parent."""
+    entry_id = "self-title-match-entry"
+    entry_data = _build_entry_data("Front Door", "lock.front_door")
+    entry_data[CONF_PARENT] = "Front Door"
+    entry_data[CONF_PARENT_ENTRY_ID] = None
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Front Door",
+        data=entry_data,
+        entry_id=entry_id,
+        version=4,
+    )
+    entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+        patch("custom_components.keymaster.dr.async_get") as mock_device_registry_get,
+        patch("custom_components.keymaster.async_generate_lovelace", new_callable=AsyncMock),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+        ),
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = True
+        mock_coordinator.kmlocks = {}
+        mock_coordinator.add_lock = AsyncMock()
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
+
+        mock_device_registry = Mock(spec=["async_get_or_create", "async_get_device_by_identifier"])
+        mock_device_registry.async_get_or_create = Mock()
+        mock_device_registry_get.return_value = mock_device_registry
+
+        assert await async_setup_entry(hass, entry)
+
+    assert entry.data[CONF_PARENT_ENTRY_ID] is None
+    add_lock_await_args = mock_coordinator.add_lock.await_args
+    assert add_lock_await_args is not None
+    assert add_lock_await_args.kwargs["kmlock"].parent_config_entry_id is None
+
+
+async def test_parent_title_resolution_prefers_matching_sibling_entry(hass):
+    """Test parent title resolution skips self and continues to a matching sibling."""
+    current_entry_id = "current-shared-name-entry"
+    parent_entry_id = "genuine-parent-entry"
+    current_data = _build_entry_data("Shared Door", "lock.shared_door_current")
+    current_data[CONF_PARENT] = "Shared Door"
+    current_data[CONF_PARENT_ENTRY_ID] = None
+    current_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Shared Door",
+        data=current_data,
+        entry_id=current_entry_id,
+        version=4,
+    )
+    parent_data = _build_entry_data("Shared Door", "lock.shared_door_parent")
+    parent_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Shared Door",
+        data=parent_data,
+        entry_id=parent_entry_id,
+        version=4,
+    )
+    current_entry.add_to_hass(hass)
+    parent_entry.add_to_hass(hass)
+    async_entries = hass.config_entries.async_entries
+
+    hass.data.setdefault(DOMAIN, {})
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+        patch("custom_components.keymaster.dr.async_get") as mock_device_registry_get,
+        patch("custom_components.keymaster.async_generate_lovelace", new_callable=AsyncMock),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            hass.config_entries,
+            "async_entries",
+            side_effect=lambda domain=None, *args, **kwargs: (
+                [current_entry, parent_entry]
+                if domain == DOMAIN
+                else async_entries(domain, *args, **kwargs)
+            ),
+        ),
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = True
+        mock_coordinator.kmlocks = {}
+        mock_coordinator.add_lock = AsyncMock()
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
+
+        mock_device_registry = Mock(spec=["async_get_or_create", "async_get_device_by_identifier"])
+        mock_device_registry.async_get_or_create = Mock()
+        mock_parent_device = Mock(id="parent_device_123")
+        mock_device_registry.async_get_device_by_identifier = Mock(return_value=mock_parent_device)
+        mock_device_registry_get.return_value = mock_device_registry
+
+        assert await async_setup_entry(hass, current_entry)
+
+    assert current_entry.data[CONF_PARENT_ENTRY_ID] == parent_entry_id
+    add_lock_await_args = mock_coordinator.add_lock.await_args
+    assert add_lock_await_args is not None
+    assert add_lock_await_args.kwargs["kmlock"].parent_config_entry_id == parent_entry_id
+    mock_device_registry.async_get_device_by_identifier.assert_called_once_with(
+        (DOMAIN, parent_entry_id), config_entry_id=parent_entry_id
+    )
 
 
 async def test_parent_via_device_fallback_for_older_ha_versions(hass):

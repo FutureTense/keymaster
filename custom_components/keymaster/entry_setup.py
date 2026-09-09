@@ -56,6 +56,8 @@ def normalize_config_data(hass: HomeAssistant, config_entry: ConfigEntry) -> dic
         updated_config[CONF_PARENT_ENTRY_ID] = None
     elif updated_config.get(CONF_PARENT_ENTRY_ID) is None:
         for entry in hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id == config_entry.entry_id:
+                continue
             if updated_config.get(CONF_PARENT) in (entry.title, entry.data.get(CONF_LOCK_NAME)):
                 updated_config[CONF_PARENT_ENTRY_ID] = entry.entry_id
                 break
