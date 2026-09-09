@@ -319,6 +319,67 @@ async def test_parent_title_resolves_to_parent_entry_id_during_setup(hass):
     assert lovelace_call["spec"].parent_config_entry_id == parent_entry.entry_id
 
 
+async def test_self_referential_parent_entry_id_clears_during_setup(hass):
+    """Test setup clears a parent entry ID that points to its own entry."""
+    entry_id = "self-referential-entry"
+    entry_data = _build_entry_data("front_door", "lock.front_door")
+    entry_data[CONF_PARENT] = "Ghost Parent"
+    entry_data[CONF_PARENT_ENTRY_ID] = entry_id
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Front Door",
+        data=entry_data,
+        entry_id=entry_id,
+        version=4,
+    )
+    entry.add_to_hass(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+
+    with (
+        patch("custom_components.keymaster.async_setup_services", new_callable=AsyncMock),
+        patch("custom_components.keymaster.KeymasterCoordinator") as mock_coordinator_class,
+        patch("custom_components.keymaster.dr.async_get") as mock_device_registry_get,
+        patch(
+            "custom_components.keymaster.async_generate_lovelace",
+            new_callable=AsyncMock,
+        ) as mock_generate_lovelace,
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+        ),
+    ):
+        mock_coordinator = mock_coordinator_class.return_value
+        mock_coordinator.initial_setup = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
+        mock_coordinator.last_update_success = True
+        mock_coordinator.kmlocks = {}
+        mock_coordinator.add_lock = AsyncMock()
+        mock_coordinator.async_flush_pending_save_data_if_setup_complete = AsyncMock()
+
+        mock_device_registry = Mock()
+        mock_device_registry.async_get_or_create = Mock()
+        mock_device_registry_get.return_value = mock_device_registry
+
+        assert await async_setup_entry(hass, entry)
+
+    assert entry.data[CONF_PARENT_ENTRY_ID] is None
+
+    add_lock_await_args = mock_coordinator.add_lock.await_args
+    assert add_lock_await_args is not None
+    add_lock_call = add_lock_await_args.kwargs
+    assert add_lock_call["kmlock"].parent_config_entry_id is None
+
+    device_registry_call = mock_device_registry.async_get_or_create.call_args.kwargs
+    assert device_registry_call["via_device_id"] is None
+
+    lovelace_await_args = mock_generate_lovelace.await_args
+    assert lovelace_await_args is not None
+    lovelace_call = lovelace_await_args.kwargs
+    assert lovelace_call["spec"].parent_config_entry_id is None
+
+
 async def test_parent_via_device_fallback_for_older_ha_versions(hass):
     """Test legacy via_device fallback when async_get_device_by_identifier is not present."""
     parent_data = _build_entry_data("front_door", "lock.front_door")
