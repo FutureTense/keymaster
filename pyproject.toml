@@ -10,7 +10,7 @@ test = [
     "voluptuous",
     "pyyaml",
     # Test dependencies for pytest
-    "pytest-homeassistant-custom-component>=0.13.357",
+    "pytest-homeassistant-custom-component>=0.13.364",
     "pyudev",
     "serialx",
     "zeroconf",
