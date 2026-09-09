@@ -5,10 +5,8 @@ import json
 
 import pytest
 
-from custom_components.keymaster.migrate import (
-    _migrate_2to3_build_delete_list,
-    _migrate_2to3_validate_and_convert_property,
-)
+from custom_components.keymaster.migrate import _migrate_2to3_validate_and_convert_property
+from custom_components.keymaster.migrate_delete_list import build_delete_list
 
 from .common import load_fixture
 
@@ -100,7 +98,7 @@ async def test_build_delete_list_matches_golden_fixture(case_name: str):
     """Test delete-list output matches the characterized migration fixture."""
     case = DELETE_LIST_CASES[case_name]
 
-    result = await _migrate_2to3_build_delete_list(**case["params"])
+    result = await build_delete_list(**case["params"])
 
     assert len(result) == case["count"]
     assert result == case["entity_ids"]
@@ -120,7 +118,7 @@ async def test_build_delete_list_includes_parent_lock_entities(
     """Test parent-lock delete-list branches are present in parent cases."""
     case = DELETE_LIST_CASES[case_name]
 
-    result = await _migrate_2to3_build_delete_list(**case["params"])
+    result = await build_delete_list(**case["params"])
 
     assert len(result) == case["count"]
     assert f"input_text.{lock_name}_{parent_lock_name}_parent" in result
