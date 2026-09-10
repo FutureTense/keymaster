@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import MutableMapping
 from datetime import datetime as dt, timedelta
 import functools
 import logging
 from pathlib import Path
 import sys
+from typing import TYPE_CHECKING
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.core_config import Config
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.event import async_call_later
-from homeassistant.util import slugify
 
 from .const import (
     CONF_ADVANCED_DATE_RANGE,
@@ -27,33 +26,22 @@ from .const import (
     CONF_ALARM_TYPE,
     CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
     CONF_CHILD_LOCKS_FILE,
-    CONF_DOOR_SENSOR_ENTITY_ID,
     CONF_ENTITY_ID,
     CONF_HIDE_PINS,
     CONF_LOCK_ENTITY_ID,
     CONF_LOCK_NAME,
-    CONF_NOTIFY_SCRIPT_NAME,
-    CONF_PARENT,
-    CONF_PARENT_ENTRY_ID,
-    CONF_REDACT_PIN_CODES,
-    CONF_REDACT_SLOT_NAMES,
-    CONF_SLOTS,
-    CONF_START,
     COORDINATOR,
-    DAY_NAMES,
     DEFAULT_ADVANCED_DATE_RANGE,
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_HIDE_PINS,
-    DEFAULT_REDACT_PIN_CODES,
-    DEFAULT_REDACT_SLOT_NAMES,
     DOMAIN,
     LOCK_COORDINATORS,
-    NORMALIZED_TO_NONE_SENTINELS,
     PLATFORMS,
     STRATEGY_FILENAME,
     STRATEGY_PATH,
 )
 from .coordinator import KeymasterCoordinator
+from .entry_setup import async_get_or_create_device, build_kmlock, normalize_config_data
 from .helpers import (
     async_clear_large_lock_ack,
     async_delete_large_lock_repair_issue,
@@ -61,12 +49,14 @@ from .helpers import (
     async_update_all_large_lock_repair_issues,
     async_update_large_lock_repair_issue,
 )
-from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 from .lovelace import KeymasterLovelaceSpec, async_generate_lovelace
 from .migrate import migrate_2to3
 from .resources import async_cleanup_strategy_resource, async_register_strategy_resource
 from .services import async_setup_services
 from .websocket import async_setup as async_websocket_setup
+
+if TYPE_CHECKING:
+    from .lock import KeymasterLock
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -114,96 +104,64 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     return True
 
 
-@callback
-def _async_get_or_create_device(
-    device_registry: dr.DeviceRegistry, config_entry: ConfigEntry
+async def _async_get_or_create_coordinator(hass: HomeAssistant) -> KeymasterCoordinator:
+    """Create or retrieve the shared keymaster coordinator."""
+    if COORDINATOR in hass.data[DOMAIN]:
+        return hass.data[DOMAIN][COORDINATOR]
+
+    coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
+    hass.data[DOMAIN][COORDINATOR] = coordinator
+    setup_success = True
+    try:
+        await coordinator.initial_setup()
+        await coordinator.async_refresh()
+        setup_success = coordinator.last_update_success
+    except Exception as err:
+        hass.data[DOMAIN].pop(COORDINATOR, None)
+        if isinstance(err, ConfigEntryNotReady | TypeError | AttributeError):
+            raise
+        raise ConfigEntryNotReady(f"Error during initial setup: {err}") from err
+
+    if not setup_success:
+        hass.data[DOMAIN].pop(COORDINATOR, None)
+        raise ConfigEntryNotReady from coordinator.last_exception
+
+    return coordinator
+
+
+async def _async_apply_large_lock_repairs(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    kmlock: KeymasterLock,
 ) -> None:
-    """Register or get the device entry in the device registry."""
-    if hasattr(device_registry, "async_get_device_by_identifier"):
-        # Home Assistant 2026.8+ supports via_device_id
-        if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
-            if parent_device := device_registry.async_get_device_by_identifier(
-                (DOMAIN, parent_entry_id),
-                config_entry_id=parent_entry_id,
-            ):
-                device_registry.async_get_or_create(
-                    config_entry_id=config_entry.entry_id,
-                    identifiers={(DOMAIN, config_entry.entry_id)},
-                    name=config_entry.data.get(CONF_LOCK_NAME),
-                    configuration_url="https://github.com/FutureTense/keymaster",
-                    via_device_id=parent_device.id,
-                )
-            else:
-                # Parent device not registered yet; leave any existing link intact
-                _LOGGER.debug(
-                    "[init] Parent device for entry %s not registered yet; skipping via_device_id",
-                    parent_entry_id,
-                )
-                device_registry.async_get_or_create(
-                    config_entry_id=config_entry.entry_id,
-                    identifiers={(DOMAIN, config_entry.entry_id)},
-                    name=config_entry.data.get(CONF_LOCK_NAME),
-                    configuration_url="https://github.com/FutureTense/keymaster",
-                )
-        else:
-            # Genuinely parentless; explicitly clear any stale via link
-            device_registry.async_get_or_create(
-                config_entry_id=config_entry.entry_id,
-                identifiers={(DOMAIN, config_entry.entry_id)},
-                name=config_entry.data.get(CONF_LOCK_NAME),
-                configuration_url="https://github.com/FutureTense/keymaster",
-                via_device_id=None,
-            )
-    else:
-        # Fallback for earlier Home Assistant versions
-        via_device: tuple[str, str] | None = None
-        if parent_entry_id := config_entry.data.get(CONF_PARENT_ENTRY_ID):
-            via_device = (DOMAIN, parent_entry_id)
-        device_registry.async_get_or_create(
-            config_entry_id=config_entry.entry_id,
-            identifiers={(DOMAIN, config_entry.entry_id)},
-            name=config_entry.data.get(CONF_LOCK_NAME),
-            configuration_url="https://github.com/FutureTense/keymaster",
-            via_device=via_device,
+    """Update large-lock repair issues for a keymaster lock setup."""
+    try:
+        await async_load_large_lock_ack_store(hass)
+        supports_connection_status = True
+        if kmlock.provider:
+            supports_connection_status = kmlock.provider.supports_connection_status
+        await async_update_large_lock_repair_issue(
+            hass,
+            config_entry,
+            supports_connection_status=supports_connection_status,
         )
+    except Exception:
+        _LOGGER.exception(
+            "Failed to update large-lock repair issue for %s",
+            config_entry.entry_id,
+        )
+
+    if not hass.data[DOMAIN].get(_LARGE_LOCK_REPAIR_SWEEP_DONE):
+        hass.data[DOMAIN][_LARGE_LOCK_REPAIR_SWEEP_DONE] = True
+        try:
+            await async_update_all_large_lock_repair_issues(hass)
+        except Exception:
+            _LOGGER.exception("Failed to update large-lock repair issues during setup sweep")
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up is called when Home Assistant is loading our component."""
-    updated_config = config_entry.data.copy()
-
-    for prop in (
-        CONF_PARENT,
-        CONF_NOTIFY_SCRIPT_NAME,
-        CONF_DOOR_SENSOR_ENTITY_ID,
-        CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID,
-        CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID,
-    ):
-        if config_entry.data.get(prop) in NORMALIZED_TO_NONE_SENTINELS:
-            updated_config[prop] = None
-
-    if config_entry.data.get(CONF_PARENT_ENTRY_ID) == config_entry.entry_id:
-        updated_config[CONF_PARENT_ENTRY_ID] = None
-
-    if updated_config.get(CONF_PARENT) is None:
-        updated_config[CONF_PARENT_ENTRY_ID] = None
-    elif updated_config.get(CONF_PARENT_ENTRY_ID) is None:
-        for entry in hass.config_entries.async_entries(DOMAIN):
-            if updated_config.get(CONF_PARENT) in (entry.title, entry.data.get(CONF_LOCK_NAME)):
-                updated_config[CONF_PARENT_ENTRY_ID] = entry.entry_id
-                break
-
-    if not updated_config.get(CONF_NOTIFY_SCRIPT_NAME):
-        updated_config[CONF_NOTIFY_SCRIPT_NAME] = (
-            f"keymaster_{slugify(updated_config.get(CONF_LOCK_NAME, ''))}_manual_notify"
-        )
-    elif isinstance(updated_config.get(CONF_NOTIFY_SCRIPT_NAME), str) and updated_config[
-        CONF_NOTIFY_SCRIPT_NAME
-    ].startswith("script."):
-        updated_config[CONF_NOTIFY_SCRIPT_NAME] = updated_config[CONF_NOTIFY_SCRIPT_NAME].split(
-            ".", maxsplit=1
-        )[1]
-
+    updated_config = normalize_config_data(hass, config_entry)
     if updated_config != config_entry.data:
         hass.config_entries.async_update_entry(config_entry, data=updated_config)
 
@@ -212,67 +170,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     await async_setup_services(hass)
     await async_register_strategy_resource(hass)
 
-    if COORDINATOR not in hass.data[DOMAIN]:
-        coordinator: KeymasterCoordinator = KeymasterCoordinator(hass)
-        hass.data[DOMAIN][COORDINATOR] = coordinator
-        setup_success = True
-        try:
-            await coordinator.initial_setup()
-            await coordinator.async_refresh()
-            setup_success = coordinator.last_update_success
-        except Exception as err:
-            hass.data[DOMAIN].pop(COORDINATOR, None)
-            if isinstance(err, ConfigEntryNotReady | TypeError | AttributeError):
-                raise
-            raise ConfigEntryNotReady(f"Error during initial setup: {err}") from err
-
-        if not setup_success:
-            hass.data[DOMAIN].pop(COORDINATOR, None)
-            raise ConfigEntryNotReady from coordinator.last_exception
-    else:
-        coordinator = hass.data[DOMAIN][COORDINATOR]
+    coordinator = await _async_get_or_create_coordinator(hass)
 
     device_registry = dr.async_get(hass)
-    _async_get_or_create_device(device_registry, config_entry)
+    async_get_or_create_device(device_registry, config_entry)
 
     # _LOGGER.debug(f"[init async_setup_entry] device: {device}")
 
-    code_slots: MutableMapping[int, KeymasterCodeSlot] = {}
-    for x in range(
-        config_entry.data[CONF_START],
-        config_entry.data[CONF_START] + config_entry.data[CONF_SLOTS],
-    ):
-        dow_slots: MutableMapping[int, KeymasterCodeSlotDayOfWeek] = {}
-        for i, dow in enumerate(DAY_NAMES):
-            dow_slots[i] = KeymasterCodeSlotDayOfWeek(day_of_week_num=i, day_of_week_name=dow)
-        code_slots[x] = KeymasterCodeSlot(number=x, accesslimit_day_of_week=dow_slots)
-
-    kmlock = KeymasterLock(
-        lock_name=config_entry.data[CONF_LOCK_NAME],
-        lock_entity_id=config_entry.data[CONF_LOCK_ENTITY_ID],
-        keymaster_config_entry_id=config_entry.entry_id,
-        alarm_level_or_user_code_entity_id=config_entry.data.get(
-            CONF_ALARM_LEVEL_OR_USER_CODE_ENTITY_ID
-        ),
-        alarm_type_or_access_control_entity_id=config_entry.data.get(
-            CONF_ALARM_TYPE_OR_ACCESS_CONTROL_ENTITY_ID
-        ),
-        door_sensor_entity_id=config_entry.data.get(CONF_DOOR_SENSOR_ENTITY_ID),
-        number_of_code_slots=config_entry.data[CONF_SLOTS],
-        starting_code_slot=config_entry.data[CONF_START],
-        code_slots=code_slots,
-        parent_name=config_entry.data.get(CONF_PARENT),
-        parent_config_entry_id=config_entry.data.get(CONF_PARENT_ENTRY_ID),
-        notify_script_name=config_entry.data.get(CONF_NOTIFY_SCRIPT_NAME),
-        redact_slot_names=config_entry.options.get(
-            CONF_REDACT_SLOT_NAMES,
-            config_entry.data.get(CONF_REDACT_SLOT_NAMES, DEFAULT_REDACT_SLOT_NAMES),
-        ),
-        redact_pin_codes=config_entry.options.get(
-            CONF_REDACT_PIN_CODES,
-            config_entry.data.get(CONF_REDACT_PIN_CODES, DEFAULT_REDACT_PIN_CODES),
-        ),
-    )
+    kmlock = build_kmlock(config_entry)
 
     needs_update = config_entry.entry_id in coordinator.kmlocks
     try:
@@ -286,29 +191,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         hass.data[DOMAIN].setdefault(LOCK_COORDINATORS, {})[config_entry.entry_id] = (
             lock_coordinator
         )
-
-        try:
-            await async_load_large_lock_ack_store(hass)
-            supports_connection_status = True
-            if kmlock.provider:
-                supports_connection_status = kmlock.provider.supports_connection_status
-            await async_update_large_lock_repair_issue(
-                hass,
-                config_entry,
-                supports_connection_status=supports_connection_status,
-            )
-        except Exception:
-            _LOGGER.exception(
-                "Failed to update large-lock repair issue for %s",
-                config_entry.entry_id,
-            )
-
-        if not hass.data[DOMAIN].get(_LARGE_LOCK_REPAIR_SWEEP_DONE):
-            hass.data[DOMAIN][_LARGE_LOCK_REPAIR_SWEEP_DONE] = True
-            try:
-                await async_update_all_large_lock_repair_issues(hass)
-            except Exception:
-                _LOGGER.exception("Failed to update large-lock repair issues during setup sweep")
+        await _async_apply_large_lock_repairs(hass, config_entry, kmlock)
 
         await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
         await async_generate_lovelace(
