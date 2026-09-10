@@ -38,7 +38,7 @@ from .const import (
     DOMAIN,
     NONE_TEXT,
 )
-from .helpers import async_update_large_lock_repair_issue
+from .large_lock_repairs import async_update_large_lock_repair_issue
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 

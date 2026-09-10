@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 from custom_components.keymaster.const import COORDINATOR, DOMAIN
 from custom_components.keymaster.helpers import (
     Throttle,
-    _get_kmlock_for_entry,
     async_has_supported_provider,
     call_hass_service,
     delete_code_slot_entities,
@@ -13,6 +12,7 @@ from custom_components.keymaster.helpers import (
     send_manual_notification,
     send_persistent_notification,
 )
+from custom_components.keymaster.large_lock_repairs import _get_kmlock_for_entry
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 

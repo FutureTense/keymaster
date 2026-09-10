@@ -12,10 +12,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
 from .const import DOMAIN, LARGE_LOCK_WARNING_THRESHOLD
-from .helpers import (
-    _supports_connection_status,
+from .large_lock_repairs import (
     async_set_large_lock_ack,
     projected_lock_entity_count,
+    provider_supports_connection_status,
 )
 
 
@@ -51,7 +51,7 @@ class LargeLockConfigurationRepairFlow(RepairsFlow):
 
             projected = projected_lock_entity_count(
                 config_entry.data,
-                supports_connection_status=_supports_connection_status(self.hass, entry_id),
+                supports_connection_status=provider_supports_connection_status(self.hass, entry_id),
             )
             if projected >= LARGE_LOCK_WARNING_THRESHOLD:
                 await async_set_large_lock_ack(self.hass, entry_id, projected)
