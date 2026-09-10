@@ -28,9 +28,8 @@ from custom_components.keymaster.const import (
     LARGE_LOCK_WARNING_THRESHOLD,
     NONE_TEXT,
 )
-from custom_components.keymaster.helpers import (
+from custom_components.keymaster.large_lock_repairs import (
     LARGE_LOCK_ENTITY_WARNING_THRESHOLD,
-    _supports_connection_status,
     async_clear_large_lock_ack,
     async_get_large_lock_ack,
     async_set_large_lock_ack,
@@ -38,6 +37,7 @@ from custom_components.keymaster.helpers import (
     async_update_large_lock_repair_issue,
     large_lock_repair_issue_id,
     projected_lock_entity_count,
+    provider_supports_connection_status,
 )
 from custom_components.keymaster.lock import KeymasterLock
 from custom_components.keymaster.repairs import (
@@ -795,7 +795,7 @@ async def test_setup_sweep_entry_failure_logs_and_continues(
     caplog.set_level(logging.ERROR)
 
     with patch(
-        "custom_components.keymaster.helpers.async_update_large_lock_repair_issue",
+        "custom_components.keymaster.large_lock_repairs.async_update_large_lock_repair_issue",
         new_callable=AsyncMock,
         side_effect=Exception("per-entry repair update failed"),
     ):
@@ -805,10 +805,10 @@ async def test_setup_sweep_entry_failure_logs_and_continues(
     assert _issue(hass, disabled_entry.entry_id) is None
 
 
-@pytest.mark.parametrize("supports_connection_status", [True, False])
+@pytest.mark.parametrize("expected_supports", [True, False])
 async def test_supports_connection_status_uses_loaded_provider(
     hass: Any,
-    supports_connection_status: bool,
+    expected_supports: bool,
 ) -> None:
     """Test helper returns the loaded provider's connection-status support."""
     entry_id = "entry-with-provider"
@@ -818,7 +818,7 @@ async def test_supports_connection_status_uses_loaded_provider(
         keymaster_config_entry_id=entry_id,
         provider=cast(
             Any,
-            SimpleNamespace(supports_connection_status=supports_connection_status),
+            SimpleNamespace(supports_connection_status=expected_supports),
         ),
     )
     hass.data.setdefault(DOMAIN, {})[COORDINATOR] = SimpleNamespace(
@@ -827,7 +827,7 @@ async def test_supports_connection_status_uses_loaded_provider(
         )
     )
 
-    assert _supports_connection_status(hass, entry_id) is supports_connection_status
+    assert provider_supports_connection_status(hass, entry_id) is expected_supports
 
 
 async def test_supports_connection_status_defaults_true_without_loaded_provider(hass: Any) -> None:
@@ -836,7 +836,7 @@ async def test_supports_connection_status_defaults_true_without_loaded_provider(
         sync_get_lock_by_config_entry_id=lambda requested_entry_id: None
     )
 
-    assert _supports_connection_status(hass, "missing-entry") is True
+    assert provider_supports_connection_status(hass, "missing-entry") is True
 
 
 async def test_setup_checks_all_existing_entries(hass: Any) -> None:

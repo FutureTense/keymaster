@@ -42,7 +42,7 @@ from .const import (
 )
 from .coordinator import KeymasterCoordinator
 from .entry_setup import async_get_or_create_device, build_kmlock, normalize_config_data
-from .helpers import (
+from .large_lock_repairs import (
     async_clear_large_lock_ack,
     async_delete_large_lock_repair_issue,
     async_load_large_lock_ack_store,
