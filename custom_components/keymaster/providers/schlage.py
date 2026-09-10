@@ -33,6 +33,9 @@ SCHLAGE_DOMAIN = "schlage"
 # Format: [KM:XX] Friendly Name
 _SLOT_TAG_RE = re.compile(r"^\[KM:(\d+)\]\s*(.*)")
 
+_TaggedCode = tuple[str, str, int, str]
+_UntaggedCode = tuple[str, str, str]
+
 
 def _make_tagged_name(slot_num: int, name: str | None = None) -> str:
     """Create a tagged code name with keymaster slot number."""
@@ -77,6 +80,29 @@ def _get_schlage_locks(coordinator: Any) -> Mapping[str, Any] | None:
     return None
 
 
+def _partition_codes(
+    codes: dict[str, dict[str, str]],
+) -> tuple[list[_TaggedCode], list[_UntaggedCode], set[int]]:
+    """Partition Schlage codes into tagged and untagged collections."""
+    assigned_slots: set[int] = set()
+    # (code_id, pin, slot, friendly_name)
+    tagged: list[_TaggedCode] = []
+    # (code_id, pin, original_name)
+    untagged: list[_UntaggedCode] = []
+
+    for code_id, code_data in codes.items():
+        name = code_data.get("name", "")
+        pin = code_data.get("code", "")
+        slot_num, friendly_name = _parse_tag(name)
+        if slot_num is not None:
+            tagged.append((code_id, pin, slot_num, friendly_name))
+            assigned_slots.add(slot_num)
+        else:
+            untagged.append((code_id, pin, name))
+
+    return tagged, untagged, assigned_slots
+
+
 @dataclass
 class SchlageLockProvider(BaseLockProvider):
     """Schlage WiFi lock provider implementation.
@@ -98,25 +124,15 @@ class SchlageLockProvider(BaseLockProvider):
         """Whether provider can report lock connection status."""
         return True
 
-    async def async_connect(self) -> bool:
-        """Connect to the Schlage lock."""
-        self._connected = False
-
-        lock_entry = self.entity_registry.async_get(self.lock_entity_id)
-        if not lock_entry:
-            _LOGGER.error(
-                "[SchlageProvider] Can't find lock in Entity Registry: %s",
-                self.lock_entity_id,
-            )
-            return False
-
+    def _get_schlage_coordinator(self, lock_entry: Any) -> Any | None:
+        """Return the loaded Schlage coordinator for the lock entry."""
         self.lock_config_entry_id = lock_entry.config_entry_id
         if not self.lock_config_entry_id:
             _LOGGER.error(
                 "[SchlageProvider] Lock has no config entry: %s",
                 self.lock_entity_id,
             )
-            return False
+            return None
 
         schlage_entry = self.hass.config_entries.async_get_entry(self.lock_config_entry_id)
         if not schlage_entry:
@@ -124,7 +140,7 @@ class SchlageLockProvider(BaseLockProvider):
                 "[SchlageProvider] Can't find Schlage config entry: %s",
                 self.lock_config_entry_id,
             )
-            return False
+            return None
 
         if getattr(schlage_entry, "state", None) != ConfigEntryState.LOADED:
             _LOGGER.debug(
@@ -132,7 +148,7 @@ class SchlageLockProvider(BaseLockProvider):
                 self.lock_config_entry_id,
                 getattr(schlage_entry, "state", None),
             )
-            return False
+            return None
 
         coordinator = getattr(schlage_entry, "runtime_data", None)
         if coordinator is None:
@@ -140,8 +156,12 @@ class SchlageLockProvider(BaseLockProvider):
                 "[SchlageProvider] Schlage coordinator runtime_data not yet available: %s",
                 self.lock_config_entry_id,
             )
-            return False
+            return None
 
+        return coordinator
+
+    def _get_schlage_device_id(self, lock_entry: Any) -> str | None:
+        """Return the Schlage device identifier for the lock entry."""
         device_entry = None
         if lock_entry.device_id:
             device_entry = self.device_registry.async_get(lock_entry.device_id)
@@ -150,7 +170,7 @@ class SchlageLockProvider(BaseLockProvider):
                 "[SchlageProvider] Can't find lock in Device Registry: %s",
                 self.lock_entity_id,
             )
-            return False
+            return None
 
         schlage_device_id: str | None = None
         for identifier in device_entry.identifiers:
@@ -163,8 +183,12 @@ class SchlageLockProvider(BaseLockProvider):
                 "[SchlageProvider] Unable to get Schlage device ID for lock: %s",
                 self.lock_entity_id,
             )
-            return False
+            return None
 
+        return schlage_device_id
+
+    def _schlage_lock_exists(self, coordinator: Any, schlage_device_id: str) -> bool:
+        """Return whether the Schlage lock is present in coordinator data."""
         locks = _get_schlage_locks(coordinator)
         if locks is None:
             _LOGGER.error(
@@ -176,6 +200,31 @@ class SchlageLockProvider(BaseLockProvider):
                 "[SchlageProvider] Lock %s not found in Schlage coordinator data",
                 schlage_device_id,
             )
+            return False
+
+        return True
+
+    async def async_connect(self) -> bool:
+        """Connect to the Schlage lock."""
+        self._connected = False
+
+        lock_entry = self.entity_registry.async_get(self.lock_entity_id)
+        if not lock_entry:
+            _LOGGER.error(
+                "[SchlageProvider] Can't find lock in Entity Registry: %s",
+                self.lock_entity_id,
+            )
+            return False
+
+        coordinator = self._get_schlage_coordinator(lock_entry)
+        if coordinator is None:
+            return False
+
+        schlage_device_id = self._get_schlage_device_id(lock_entry)
+        if not schlage_device_id:
+            return False
+
+        if not self._schlage_lock_exists(coordinator, schlage_device_id):
             return False
 
         self._schlage_device_id = schlage_device_id
@@ -262,45 +311,15 @@ class SchlageLockProvider(BaseLockProvider):
             blocking=True,
         )
 
-    async def async_get_usercodes(self) -> list[CodeSlot]:
-        """Get all user codes from the Schlage lock.
-
-        Codes already bearing a ``[KM:<slot>]`` tag are mapped to the
-        embedded slot number.  Untagged codes are assigned to the next
-        available slot and their names are updated on the lock to include
-        the tag (via delete + re-add with the same PIN).
-
-        Only codes whose slot numbers fall within the configured managed
-        range are returned.  Tagged codes outside the range and untagged
-        codes that cannot be assigned to a managed slot are left untouched.
-        """
-        codes = await self._async_get_codes()
-        if not codes:
-            return []
-
-        # Determine the managed slot range from the keymaster config.
-        slot_start: int = self.keymaster_config_entry.data.get(CONF_START, 1)
-        slot_count: int = self.keymaster_config_entry.data.get(CONF_SLOTS, 0)
-        managed_range = set(range(slot_start, slot_start + slot_count))
-
-        result: list[CodeSlot] = []
-        assigned_slots: set[int] = set()
-
-        # (code_id, pin, slot, friendly_name)
-        tagged: list[tuple[str, str, int, str]] = []
-        # (code_id, pin, original_name)
-        untagged: list[tuple[str, str, str]] = []
-
-        for code_id, code_data in codes.items():
-            name = code_data.get("name", "")
-            pin = code_data.get("code", "")
-            slot_num, friendly_name = _parse_tag(name)
-            if slot_num is not None:
-                tagged.append((code_id, pin, slot_num, friendly_name))
-                assigned_slots.add(slot_num)
-            else:
-                untagged.append((code_id, pin, name))
-
+    def _append_tagged_codes(
+        self,
+        tagged: list[_TaggedCode],
+        managed_range: set[int],
+        slot_start: int,
+        slot_count: int,
+        result: list[CodeSlot],
+    ) -> None:
+        """Append already-tagged managed codes to the result list."""
         # Emit already-tagged codes that fall within the managed range.
         # Sort by code_id for deterministic dedup, then keep the first per slot.
         tagged.sort(key=lambda t: t[0])
@@ -333,6 +352,62 @@ class SchlageLockProvider(BaseLockProvider):
                 )
             )
 
+    async def _async_tag_untagged_code(
+        self, original_name: str, pin: str, prospective_slot: int, tagged_name: str
+    ) -> bool:
+        """Tag an untagged Schlage code on the lock."""
+        if _is_masked_pin(pin):
+            _LOGGER.debug(
+                "[SchlageProvider] Skipping untaggable code '%s' (slot %d): "
+                "PIN appears masked or empty",
+                self.redact_name(original_name),
+                prospective_slot,
+            )
+            return False
+
+        try:
+            await self._async_add_code(tagged_name, pin)
+        except HomeAssistantError as e:
+            _LOGGER.error(
+                "[SchlageProvider] Failed to tag code '%s' for slot %d: %s: %s",
+                self.redact_name(original_name),
+                prospective_slot,
+                e.__class__.__qualname__,
+                e,
+            )
+            return False
+
+        try:
+            await self._async_delete_code(original_name)
+        except HomeAssistantError as e:
+            _LOGGER.warning(
+                "[SchlageProvider] Tagged code added but failed to delete "
+                "original '%s' for slot %d: %s. Attempting rollback.",
+                self.redact_name(original_name),
+                prospective_slot,
+                e,
+            )
+            try:
+                await self._async_delete_code(tagged_name)
+            except HomeAssistantError:
+                _LOGGER.error(
+                    "[SchlageProvider] Rollback failed for tagged code '%s'. "
+                    "Lock may have duplicate entries.",
+                    self.redact_name(tagged_name),
+                )
+            return False
+
+        return True
+
+    async def _async_assign_untagged_codes(
+        self,
+        untagged: list[_UntaggedCode],
+        assigned_slots: set[int],
+        managed_range: set[int],
+        slot_start: int,
+        result: list[CodeSlot],
+    ) -> None:
+        """Assign virtual slots to untagged codes and append successful tags."""
         # Assign virtual slots to untagged codes and tag them on the lock.
         # Only codes that are successfully tagged get a managed slot; masked
         # PINs and tagging failures are skipped to avoid slot drift.
@@ -357,45 +432,10 @@ class SchlageLockProvider(BaseLockProvider):
             prospective_slot = next_slot
             tagged_name = _make_tagged_name(prospective_slot, original_name)
 
-            if _is_masked_pin(pin):
-                _LOGGER.debug(
-                    "[SchlageProvider] Skipping untaggable code '%s' (slot %d): "
-                    "PIN appears masked or empty",
-                    self.redact_name(original_name),
-                    prospective_slot,
-                )
-                continue
-
-            try:
-                await self._async_add_code(tagged_name, pin)
-            except HomeAssistantError as e:
-                _LOGGER.error(
-                    "[SchlageProvider] Failed to tag code '%s' for slot %d: %s: %s",
-                    self.redact_name(original_name),
-                    prospective_slot,
-                    e.__class__.__qualname__,
-                    e,
-                )
-                continue
-
-            try:
-                await self._async_delete_code(original_name)
-            except HomeAssistantError as e:
-                _LOGGER.warning(
-                    "[SchlageProvider] Tagged code added but failed to delete "
-                    "original '%s' for slot %d: %s. Attempting rollback.",
-                    self.redact_name(original_name),
-                    prospective_slot,
-                    e,
-                )
-                try:
-                    await self._async_delete_code(tagged_name)
-                except HomeAssistantError:
-                    _LOGGER.error(
-                        "[SchlageProvider] Rollback failed for tagged code '%s'. "
-                        "Lock may have duplicate entries.",
-                        self.redact_name(tagged_name),
-                    )
+            tagged_successfully = await self._async_tag_untagged_code(
+                original_name, pin, prospective_slot, tagged_name
+            )
+            if not tagged_successfully:
                 continue
 
             slot_num = prospective_slot
@@ -416,6 +456,34 @@ class SchlageLockProvider(BaseLockProvider):
                     name=original_name,
                 )
             )
+
+    async def async_get_usercodes(self) -> list[CodeSlot]:
+        """Get all user codes from the Schlage lock.
+
+        Codes already bearing a ``[KM:<slot>]`` tag are mapped to the
+        embedded slot number.  Untagged codes are assigned to the next
+        available slot and their names are updated on the lock to include
+        the tag (via delete + re-add with the same PIN).
+
+        Only codes whose slot numbers fall within the configured managed
+        range are returned.  Tagged codes outside the range and untagged
+        codes that cannot be assigned to a managed slot are left untouched.
+        """
+        codes = await self._async_get_codes()
+        if not codes:
+            return []
+
+        # Determine the managed slot range from the keymaster config.
+        slot_start: int = self.keymaster_config_entry.data.get(CONF_START, 1)
+        slot_count: int = self.keymaster_config_entry.data.get(CONF_SLOTS, 0)
+        managed_range = set(range(slot_start, slot_start + slot_count))
+
+        result: list[CodeSlot] = []
+        tagged, untagged, assigned_slots = _partition_codes(codes)
+        self._append_tagged_codes(tagged, managed_range, slot_start, slot_count, result)
+        await self._async_assign_untagged_codes(
+            untagged, assigned_slots, managed_range, slot_start, result
+        )
 
         return result
 

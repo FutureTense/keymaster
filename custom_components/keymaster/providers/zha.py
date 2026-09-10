@@ -27,6 +27,102 @@ _LOGGER = logging.getLogger(__name__)
 ZCL_DUPLICATE_CODE_STATUS = 3
 
 
+def _parse_operation_event_args(args: Any) -> tuple[Any, Any, Any]:
+    """Extract code slot, operation, and source from ZHA operation event args."""
+    code_slot = None
+    operation = None
+    source = None
+
+    if isinstance(args, dict):
+        # Real zha_event uses ZCL field names, not display labels.
+        code_slot = args.get("user_id")
+        operation = args.get("operation_event_code")
+        source = args.get("operation_event_source")
+    elif isinstance(args, list | tuple):
+        if len(args) >= 3:
+            operation = args[0]
+            source = args[1]
+            code_slot = args[2]
+
+    return code_slot, operation, source
+
+
+def _operation_event_value(operation: Any) -> DoorLock.OperationEvent | None:
+    """Convert a raw ZHA operation event to a DoorLock operation enum value."""
+    op_val = None
+    if operation is not None:
+        try:
+            op_val = DoorLock.OperationEvent(int(operation))
+        except TypeError:
+            with contextlib.suppress(KeyError):
+                op_val = DoorLock.OperationEvent[str(operation)]
+        except ValueError:
+            with contextlib.suppress(KeyError):
+                op_val = DoorLock.OperationEvent[str(operation)]
+    return op_val
+
+
+def _operation_event_source_value(source: Any) -> DoorLock.OperationEventSource | None:
+    """Convert a raw ZHA operation event source to a DoorLock source enum value."""
+    src_val = None
+    if source is not None:
+        try:
+            src_val = DoorLock.OperationEventSource(int(source))
+        except TypeError:
+            with contextlib.suppress(KeyError):
+                src_val = DoorLock.OperationEventSource[str(source)]
+        except ValueError:
+            with contextlib.suppress(KeyError):
+                src_val = DoorLock.OperationEventSource[str(source)]
+    return src_val
+
+
+def _operation_event_label_action(
+    op_val: DoorLock.OperationEvent | None,
+    src_val: DoorLock.OperationEventSource | None,
+    operation: Any,
+    source: Any,
+) -> tuple[str, int | None]:
+    """Return a keymaster event label and action code for a ZHA operation event."""
+    is_keypad = src_val == DoorLock.OperationEventSource.Keypad
+    is_unlock = op_val in {
+        DoorLock.OperationEvent.Unlock,
+        DoorLock.OperationEvent.KeyUnlock,
+        DoorLock.OperationEvent.Manual_Unlock,
+        DoorLock.OperationEvent.ScheduleUnlock,
+    }
+    is_lock = op_val in {
+        DoorLock.OperationEvent.Lock,
+        DoorLock.OperationEvent.KeyLock,
+        DoorLock.OperationEvent.Manual_Lock,
+        DoorLock.OperationEvent.ScheduleLock,
+        DoorLock.OperationEvent.AutoLock,
+        DoorLock.OperationEvent.OnTouchLock,
+    }
+
+    if is_keypad:
+        if is_unlock:
+            event_label = "Unlocked via Keypad"
+            action_code = 1
+        elif is_lock:
+            event_label = "Keypad Lock"
+            action_code = 5
+        else:
+            event_label = f"Keypad {operation}"
+            action_code = None
+    elif is_unlock:
+        event_label = "Unlocked via RF"
+        action_code = None
+    elif is_lock:
+        event_label = "Locked via RF"
+        action_code = None
+    else:
+        event_label = f"Lock Event: {operation} via {source}"
+        action_code = None
+
+    return event_label, action_code
+
+
 @dataclass
 class ZHALockProvider(BaseLockProvider):
     """ZHA lock provider implementation."""
@@ -354,49 +450,7 @@ class ZHALockProvider(BaseLockProvider):
             if status is None and isinstance(result, list | tuple) and len(result) > 0:
                 status = result[0]
             if status is not None and status != 0:
-                # Some ZHA locks (e.g. Yale YRD210) return ZCL_DUPLICATE_CODE_STATUS (3)
-                # when set_pin_code is called on a slot that already holds that same code.
-                # If the code is already in use in a different slot, this is a genuine
-                # duplicate PIN error across slots and the write failed (so we return False,
-                # which is a behavior change to enforce duplicate rejection).
-                # Note: This cross-slot duplicate detection is best-effort and cache-dependent;
-                # on a cold start with an empty cache, it may not be detected and will soft-succeed.
-                if int(status) == ZCL_DUPLICATE_CODE_STATUS:
-                    duplicate_elsewhere = any(
-                        slot.in_use and slot.code == code
-                        for s_num, slot in self._usercodes_cache.items()
-                        if s_num != slot_num
-                    )
-                    if duplicate_elsewhere:
-                        _LOGGER.warning(
-                            "Lock %s slot %s set_pin_code returned status %s "
-                            "(Duplicate PIN); code already exists in another slot",
-                            self.lock_entity_id,
-                            slot_num,
-                            status,
-                        )
-                        return False
-
-                    _LOGGER.debug(
-                        "Lock %s slot %s set_pin_code returned status %s "
-                        "(Duplicate PIN); treating as success (likely already set in this slot)",
-                        self.lock_entity_id,
-                        slot_num,
-                        status,
-                    )
-                    self._usercodes_cache[slot_num] = CodeSlot(
-                        slot_num=slot_num,
-                        code=code,
-                        in_use=True,
-                    )
-                    return True
-                _LOGGER.error(
-                    "Lock %s slot %s set_pin_code rejected: status %s",
-                    self.lock_entity_id,
-                    slot_num,
-                    status,
-                )
-                return False
+                return self._handle_set_pin_status(status, slot_num, code)
             self._usercodes_cache[slot_num] = CodeSlot(
                 slot_num=slot_num,
                 code=code,
@@ -411,6 +465,52 @@ class ZHALockProvider(BaseLockProvider):
             return False
         else:
             return True
+
+    def _handle_set_pin_status(self, status: Any, slot_num: int, code: str) -> bool:
+        """Handle a non-success set_pin_code status."""
+        # Some ZHA locks (e.g. Yale YRD210) return ZCL_DUPLICATE_CODE_STATUS (3)
+        # when set_pin_code is called on a slot that already holds that same code.
+        # If the code is already in use in a different slot, this is a genuine
+        # duplicate PIN error across slots and the write failed (so we return False,
+        # which is a behavior change to enforce duplicate rejection).
+        # Note: This cross-slot duplicate detection is best-effort and cache-dependent;
+        # on a cold start with an empty cache, it may not be detected and will soft-succeed.
+        if int(status) == ZCL_DUPLICATE_CODE_STATUS:
+            duplicate_elsewhere = any(
+                slot.in_use and slot.code == code
+                for s_num, slot in self._usercodes_cache.items()
+                if s_num != slot_num
+            )
+            if duplicate_elsewhere:
+                _LOGGER.warning(
+                    "Lock %s slot %s set_pin_code returned status %s "
+                    "(Duplicate PIN); code already exists in another slot",
+                    self.lock_entity_id,
+                    slot_num,
+                    status,
+                )
+                return False
+
+            _LOGGER.debug(
+                "Lock %s slot %s set_pin_code returned status %s "
+                "(Duplicate PIN); treating as success (likely already set in this slot)",
+                self.lock_entity_id,
+                slot_num,
+                status,
+            )
+            self._usercodes_cache[slot_num] = CodeSlot(
+                slot_num=slot_num,
+                code=code,
+                in_use=True,
+            )
+            return True
+        _LOGGER.error(
+            "Lock %s slot %s set_pin_code rejected: status %s",
+            self.lock_entity_id,
+            slot_num,
+            status,
+        )
+        return False
 
     async def async_clear_usercode(self, slot_num: int) -> bool:
         """Clear user code from ZHA lock."""
@@ -478,104 +578,7 @@ class ZHALockProvider(BaseLockProvider):
         @ha_callback
         def handle_zha_event(event: Event) -> None:
             """Handle incoming ZHA events."""
-            device_ieee = event.data.get("device_ieee")
-            if device_ieee != self._device_ieee:
-                return
-
-            command = event.data.get("command")
-            if command == "programming_event_notification":
-                coordinator = None
-                if DOMAIN in self.hass.data:
-                    coordinator = self.hass.data[DOMAIN].get(COORDINATOR)
-                if coordinator:
-                    self.hass.async_create_task(
-                        coordinator.async_refresh(),
-                        f"Refresh {self.lock_entity_id} after ZHA programming event",
-                    )
-                return
-
-            if command != "operation_event_notification":
-                return
-
-            args = event.data.get("args", {})
-            code_slot = None
-            operation = None
-            source = None
-
-            if isinstance(args, dict):
-                # Real zha_event uses ZCL field names, not display labels.
-                code_slot = args.get("user_id")
-                operation = args.get("operation_event_code")
-                source = args.get("operation_event_source")
-            elif isinstance(args, list | tuple):
-                if len(args) >= 3:
-                    operation = args[0]
-                    source = args[1]
-                    code_slot = args[2]
-
-            # user_id == 0 is a master/system event, not a slot operation
-            if code_slot is None or code_slot == 0:
-                return
-
-            op_val = None
-            src_val = None
-            if operation is not None:
-                try:
-                    op_val = DoorLock.OperationEvent(int(operation))
-                except TypeError:
-                    with contextlib.suppress(KeyError):
-                        op_val = DoorLock.OperationEvent[str(operation)]
-                except ValueError:
-                    with contextlib.suppress(KeyError):
-                        op_val = DoorLock.OperationEvent[str(operation)]
-
-            if source is not None:
-                try:
-                    src_val = DoorLock.OperationEventSource(int(source))
-                except TypeError:
-                    with contextlib.suppress(KeyError):
-                        src_val = DoorLock.OperationEventSource[str(source)]
-                except ValueError:
-                    with contextlib.suppress(KeyError):
-                        src_val = DoorLock.OperationEventSource[str(source)]
-
-            is_keypad = src_val == DoorLock.OperationEventSource.Keypad
-            is_unlock = op_val in {
-                DoorLock.OperationEvent.Unlock,
-                DoorLock.OperationEvent.KeyUnlock,
-                DoorLock.OperationEvent.Manual_Unlock,
-                DoorLock.OperationEvent.ScheduleUnlock,
-            }
-            is_lock = op_val in {
-                DoorLock.OperationEvent.Lock,
-                DoorLock.OperationEvent.KeyLock,
-                DoorLock.OperationEvent.Manual_Lock,
-                DoorLock.OperationEvent.ScheduleLock,
-                DoorLock.OperationEvent.AutoLock,
-                DoorLock.OperationEvent.OnTouchLock,
-            }
-
-            if is_keypad:
-                if is_unlock:
-                    event_label = "Unlocked via Keypad"
-                    action_code = 1
-                elif is_lock:
-                    event_label = "Keypad Lock"
-                    action_code = 5
-                else:
-                    event_label = f"Keypad {operation}"
-                    action_code = None
-            elif is_unlock:
-                event_label = "Unlocked via RF"
-                action_code = None
-            elif is_lock:
-                event_label = "Locked via RF"
-                action_code = None
-            else:
-                event_label = f"Lock Event: {operation} via {source}"
-                action_code = None
-
-            self.hass.async_create_task(callback(code_slot, event_label, action_code))
+            self._handle_zha_event(event, callback)
 
         unsub = self.hass.bus.async_listen("zha_event", handle_zha_event)
         self._listeners.append(unsub)
@@ -588,6 +591,48 @@ class ZHALockProvider(BaseLockProvider):
 
         self._event_unsub = unsubscribe
         return unsubscribe
+
+    def _handle_zha_event(self, event: Event, callback: LockEventCallback) -> None:
+        """Handle incoming ZHA events."""
+        device_ieee = event.data.get("device_ieee")
+        if device_ieee != self._device_ieee:
+            return
+
+        command = event.data.get("command")
+        if command == "programming_event_notification":
+            self._handle_zha_programming_event()
+            return
+
+        if command != "operation_event_notification":
+            return
+
+        self._handle_zha_operation_event(event, callback)
+
+    def _handle_zha_programming_event(self) -> None:
+        """Handle incoming ZHA programming events."""
+        coordinator = None
+        if DOMAIN in self.hass.data:
+            coordinator = self.hass.data[DOMAIN].get(COORDINATOR)
+        if coordinator:
+            self.hass.async_create_task(
+                coordinator.async_refresh(),
+                f"Refresh {self.lock_entity_id} after ZHA programming event",
+            )
+
+    def _handle_zha_operation_event(self, event: Event, callback: LockEventCallback) -> None:
+        """Handle incoming ZHA operation events."""
+        args = event.data.get("args", {})
+        code_slot, operation, source = _parse_operation_event_args(args)
+
+        # user_id == 0 is a master/system event, not a slot operation
+        if code_slot is None or code_slot == 0:
+            return
+
+        op_val = _operation_event_value(operation)
+        src_val = _operation_event_source_value(source)
+        event_label, action_code = _operation_event_label_action(op_val, src_val, operation, source)
+
+        self.hass.async_create_task(callback(code_slot, event_label, action_code))
 
     def subscribe_connection_events(self, callback: ConnectionCallback) -> Callable[[], None]:
         """Notify on lock entity availability transitions."""
