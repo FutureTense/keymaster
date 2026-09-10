@@ -2,11 +2,13 @@
 
 import builtins
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import Enum
 import importlib
 import sys
 from types import ModuleType, SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -24,7 +26,12 @@ from custom_components.keymaster.providers.zwave_js import ZWaveJSLockProvider
 from homeassistant.components.lock.const import LockState
 from homeassistant.components.zwave_js.const import ATTR_PARAMETERS
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_DEVICE_ID, EVENT_HOMEASSISTANT_STARTED
+from homeassistant.const import (
+    ATTR_DEVICE_ID,
+    EVENT_HOMEASSISTANT_STARTED,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import Event as HAEvent, HomeAssistant
 from tests.common import async_capture_events
 from tests.const import CONFIG_DATA_910
@@ -351,6 +358,16 @@ class TestZWaveJSLockProviderConnect:
 
         assert result is False
 
+    async def test_connect_node_missing_from_controller(self, zwave_provider, mock_zwave_client):
+        """Test connect fails when the Z-Wave controller has no matching node."""
+        setup_successful_connect(zwave_provider, mock_zwave_client)
+        mock_zwave_client.driver.controller.nodes = {}
+
+        result = await zwave_provider.async_connect()
+
+        assert result is False
+        assert zwave_provider.node is None
+
     async def test_connect_success(self, zwave_provider, mock_zwave_client, mock_zwave_node):
         """Test successful connection."""
         mock_device = setup_successful_connect(zwave_provider, mock_zwave_client)
@@ -620,6 +637,24 @@ class TestZWaveJSLockProviderUsercodes:
             "custom_components.keymaster.providers.zwave_js.clear_usercode",
             new_callable=AsyncMock,
             side_effect=BaseZwaveJSServerError("error"),
+        ):
+            result = await zwave_provider.async_clear_usercode(1)
+
+        assert result is False
+
+    async def test_clear_usercode_verify_error(self, zwave_provider, mock_zwave_node):
+        """Test clear_usercode returns False when verification raises."""
+        zwave_provider._node = mock_zwave_node
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                side_effect=BaseZwaveJSServerError("verify failed"),
+            ),
         ):
             result = await zwave_provider.async_clear_usercode(1)
 
@@ -1065,6 +1100,47 @@ class TestZWaveJSLockProviderCredentialCC:
 class TestZWaveJSLockProviderEventSubscription:
     """Test ZWaveJSLockProvider event subscription."""
 
+    def _provider_with_real_hass(self, hass: HomeAssistant) -> ZWaveJSLockProvider:
+        """Create a Z-Wave JS provider backed by the real Home Assistant fixture."""
+        config_entry = MagicMock()
+        config_entry.entry_id = "keymaster_test_entry"
+        return ZWaveJSLockProvider(
+            hass=hass,
+            lock_entity_id="lock.test_lock",
+            keymaster_config_entry=config_entry,
+            device_registry=MagicMock(),
+            entity_registry=MagicMock(),
+        )
+
+    def _alarm_kmlock(
+        self,
+        *,
+        lock_entity_id: str = "lock.test_lock",
+        alarm_level_entity_id: str | None = "sensor.test_alarm_level",
+        alarm_type_entity_id: str | None = "sensor.test_access_control",
+    ) -> Any:
+        """Create a mock Keymaster lock with alarm sensor entity IDs."""
+        return SimpleNamespace(
+            lock_entity_id=lock_entity_id,
+            alarm_level_or_user_code_entity_id=alarm_level_entity_id,
+            alarm_type_or_access_control_entity_id=alarm_type_entity_id,
+        )
+
+    async def _fire_lock_state_change(
+        self,
+        hass: HomeAssistant,
+        *,
+        old_state: str = LockState.UNLOCKED,
+        new_state: str = LockState.LOCKED,
+        entity_id: str = "lock.test_lock",
+    ) -> None:
+        """Fire a lock state transition and drain pending tasks."""
+        hass.states.async_set(entity_id, old_state)
+        await hass.async_block_till_done()
+        hass.states.async_set(entity_id, new_state)
+        await hass.async_block_till_done()
+        await hass.async_block_till_done()
+
     def test_subscribe_lock_events(self, zwave_provider, mock_zwave_node):
         """Test subscribe_lock_events registers listener for notification events."""
         zwave_provider._node = mock_zwave_node
@@ -1083,6 +1159,35 @@ class TestZWaveJSLockProviderEventSubscription:
         assert unsub is not None
         zwave_provider.hass.bus.async_listen.assert_called_once()
         # Only notification event listener when no alarm sensors configured
+        assert len(zwave_provider._listeners) == 1
+
+    @pytest.mark.parametrize(
+        ("alarm_level_entity_id", "alarm_type_entity_id"),
+        [
+            ("sensor.test_alarm_level", None),
+            (None, "sensor.test_access_control"),
+            (None, None),
+        ],
+    )
+    def test_subscribe_lock_events_requires_both_alarm_sensors(
+        self,
+        zwave_provider,
+        alarm_level_entity_id,
+        alarm_type_entity_id,
+    ):
+        """Test state listener registration requires both alarm sensor IDs."""
+        mock_kmlock = self._alarm_kmlock(
+            alarm_level_entity_id=alarm_level_entity_id,
+            alarm_type_entity_id=alarm_type_entity_id,
+        )
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event",
+        ) as mock_track:
+            zwave_provider.subscribe_lock_events(mock_kmlock, AsyncMock())
+
+        mock_track.assert_not_called()
+        zwave_provider.hass.bus.async_listen.assert_called_once()
         assert len(zwave_provider._listeners) == 1
 
     async def test_handle_zwave_notification_event_dispatches_correctly(
@@ -1149,6 +1254,86 @@ class TestZWaveJSLockProviderEventSubscription:
         await handler(matching_event)
         zwave_provider.hass.async_create_task.assert_not_called()
 
+    async def test_zwave_notification_event_uses_non_keypad_activity(
+        self,
+        hass,
+        mock_zwave_node,
+    ):
+        """Test Z-Wave notification event label fallbacks and non-keypad activity."""
+        provider = self._provider_with_real_hass(hass)
+        provider._node = mock_zwave_node
+        mock_zwave_node.node_id = 14
+        provider._device = SimpleNamespace(id="device_123")
+        callback = AsyncMock()
+
+        provider.subscribe_lock_events(self._alarm_kmlock(alarm_level_entity_id=None), callback)
+        hass.bus.async_fire(
+            "zwave_js_notification",
+            {
+                ATTR_NODE_ID: 14,
+                ATTR_DEVICE_ID: "device_123",
+                "command_class": 113,
+                "type": 6,
+                "event": 3,
+                ATTR_PARAMETERS: {"userId": 9},
+            },
+        )
+        await hass.async_block_till_done()
+        await hass.async_block_till_done()
+
+        hass.bus.async_fire(
+            "zwave_js_notification",
+            {
+                ATTR_NODE_ID: 14,
+                ATTR_DEVICE_ID: "device_123",
+                "command_class": 113,
+                "type": 6,
+                "event": 999,
+                "event_label": "Controller Label",
+                ATTR_PARAMETERS: {"userId": 9},
+            },
+        )
+        await hass.async_block_till_done()
+        await hass.async_block_till_done()
+
+        hass.bus.async_fire(
+            "zwave_js_notification",
+            {
+                ATTR_NODE_ID: 14,
+                ATTR_DEVICE_ID: "device_123",
+                "command_class": 98,
+                "type": 6,
+                "event": 0,
+                "event_label": "Plain Label",
+                ATTR_PARAMETERS: {"userId": 4},
+            },
+        )
+        await hass.async_block_till_done()
+        await hass.async_block_till_done()
+
+        callback.assert_has_awaits(
+            [
+                call(0, "RF Lock", 3),
+                call(9, "Controller Label", 999),
+                call(4, "Plain Label", 0),
+            ]
+        )
+
+    def test_get_activity_for_sensor_event_ignores_unknown_sensor_type(self, zwave_provider):
+        """Test sensor activity lookup ignores unrecognized sensor entities."""
+        assert (
+            zwave_provider.get_activity_for_sensor_event(
+                "sensor.front_door_battery",
+                6,
+                LockState.UNLOCKED,
+            )
+            is None
+        )
+
+    def test_get_activity_for_sensor_event_returns_none_for_unmapped_value(self, zwave_provider):
+        """Test sensor activity lookup returns None for unmapped sensor values."""
+        assert zwave_provider.get_activity_for_sensor_event("sensor.test_alarm_type", 999) is None
+
     def test_subscribe_lock_events_with_alarm_sensors(self, zwave_provider, mock_zwave_node):
         """Test subscribe_lock_events also subscribes to state changes when alarm sensors are configured."""
         zwave_provider._node = mock_zwave_node
@@ -1210,6 +1395,178 @@ class TestZWaveJSLockProviderEventSubscription:
 
         # Stale successfully unsubscribed listeners should be cleaned up from self._listeners
         assert mock_unsub_success not in zwave_provider._listeners
+
+    async def test_lock_state_change_event_ignores_empty_event(self, zwave_provider):
+        """Test lock state handler ignores a falsy event."""
+        handler = None
+
+        def fake_track_state_change_event(*, hass, entity_ids, action):
+            nonlocal handler
+            handler = action
+            return MagicMock()
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event",
+            side_effect=fake_track_state_change_event,
+        ):
+            zwave_provider.subscribe_lock_events(self._alarm_kmlock(), AsyncMock())
+
+        assert handler is not None
+        await handler(None)
+        zwave_provider.hass.async_create_task.assert_not_called()
+
+    async def test_lock_state_change_event_ignores_different_entity(self, zwave_provider):
+        """Test lock state handler ignores changes for other entities."""
+        handler = None
+
+        def fake_track_state_change_event(*, hass, entity_ids, action):
+            nonlocal handler
+            handler = action
+            return MagicMock()
+
+        with patch(
+            "custom_components.keymaster.providers.zwave_js.async_track_state_change_event",
+            side_effect=fake_track_state_change_event,
+        ):
+            zwave_provider.subscribe_lock_events(self._alarm_kmlock(), AsyncMock())
+
+        assert handler is not None
+        event = HAEvent(
+            "state_changed",
+            {
+                "entity_id": "lock.other_lock",
+                "old_state": SimpleNamespace(state=LockState.UNLOCKED),
+                "new_state": SimpleNamespace(state=LockState.LOCKED),
+            },
+        )
+        await handler(event)
+        zwave_provider.hass.async_create_task.assert_not_called()
+
+    async def test_lock_state_change_event_ignores_non_lock_old_state(self, hass):
+        """Test alarm fallback ignores transitions from non-locked states."""
+        provider = self._provider_with_real_hass(hass)
+        callback = AsyncMock()
+        provider.subscribe_lock_events(self._alarm_kmlock(), callback)
+        hass.states.async_set("sensor.test_alarm_level", "7")
+        hass.states.async_set("sensor.test_access_control", "6")
+        await hass.async_block_till_done()
+
+        await self._fire_lock_state_change(
+            hass,
+            old_state=LockState.JAMMED,
+            new_state=LockState.LOCKED,
+        )
+
+        callback.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        ("alarm_level_value", "alarm_type_value"),
+        [
+            (STATE_UNKNOWN, "6"),
+            (STATE_UNAVAILABLE, "6"),
+            (None, "6"),
+            ("7", STATE_UNKNOWN),
+            ("7", STATE_UNAVAILABLE),
+            ("7", None),
+        ],
+    )
+    async def test_lock_state_change_event_requires_usable_alarm_sensors(
+        self,
+        hass,
+        alarm_level_value,
+        alarm_type_value,
+    ):
+        """Test alarm fallback does not dispatch when either alarm sensor is unusable."""
+        provider = self._provider_with_real_hass(hass)
+        callback = AsyncMock()
+        provider.subscribe_lock_events(self._alarm_kmlock(), callback)
+        if alarm_level_value is not None:
+            hass.states.async_set("sensor.test_alarm_level", alarm_level_value)
+        if alarm_type_value is not None:
+            hass.states.async_set("sensor.test_access_control", alarm_type_value)
+        await hass.async_block_till_done()
+
+        await self._fire_lock_state_change(hass)
+
+        callback.assert_not_awaited()
+
+    async def test_lock_state_change_event_dispatches_keypad_activity(self, hass):
+        """Test alarm fallback uses the alarm level as keypad code slot."""
+        provider = self._provider_with_real_hass(hass)
+        callback = AsyncMock()
+        provider.subscribe_lock_events(self._alarm_kmlock(), callback)
+        hass.states.async_set("sensor.test_alarm_level", "7")
+        hass.states.async_set("sensor.test_access_control", "6")
+        await hass.async_block_till_done()
+
+        await self._fire_lock_state_change(hass)
+
+        callback.assert_awaited_once_with(7, "Keypad Unlock", 6)
+
+    async def test_lock_state_change_event_dispatches_non_keypad_activity(self, hass):
+        """Test alarm fallback uses code slot zero for non-keypad activities."""
+        provider = self._provider_with_real_hass(hass)
+        callback = AsyncMock()
+        provider.subscribe_lock_events(self._alarm_kmlock(), callback)
+        hass.states.async_set("sensor.test_alarm_level", "8")
+        hass.states.async_set("sensor.test_access_control", "4")
+        await hass.async_block_till_done()
+
+        await self._fire_lock_state_change(hass)
+
+        callback.assert_awaited_once_with(0, "RF Unlock", 4)
+
+    async def test_lock_state_change_event_dispatches_unknown_activity(self, hass):
+        """Test alarm fallback emits the unknown label when no activity resolves."""
+        provider = self._provider_with_real_hass(hass)
+        callback = AsyncMock()
+        provider.subscribe_lock_events(self._alarm_kmlock(), callback)
+        hass.states.async_set("sensor.test_alarm_level", "9")
+        hass.states.async_set("sensor.test_access_control", "999")
+        await hass.async_block_till_done()
+
+        await self._fire_lock_state_change(hass)
+
+        callback.assert_awaited_once_with(0, "Unknown Lock Event", 999)
+
+    async def test_lock_state_change_event_passes_state_for_stale_sensor(self, hass):
+        """Test alarm fallback passes lock state when the alarm type sensor is stale."""
+        provider = self._provider_with_real_hass(hass)
+        callback = AsyncMock()
+        provider.subscribe_lock_events(self._alarm_kmlock(), callback)
+        hass.states.async_set("sensor.test_alarm_level", "10")
+        hass.states.async_set("sensor.test_access_control", "6")
+        await hass.async_block_till_done()
+        alarm_type_state = hass.states.get("sensor.test_access_control")
+        assert alarm_type_state is not None
+        stale_now = zwave_js_provider.dt_util.as_utc(alarm_type_state.last_changed) + timedelta(
+            seconds=6,
+        )
+
+        with patch("custom_components.keymaster.providers.zwave_js.dt_util.utcnow") as mock_utcnow:
+            mock_utcnow.return_value = stale_now
+            await self._fire_lock_state_change(hass, new_state=LockState.LOCKED)
+
+        callback.assert_awaited_once_with(0, "RF Lock", 6)
+
+    async def test_lock_state_change_event_omits_state_for_fresh_sensor(self, hass):
+        """Test alarm fallback omits lock state when the alarm type sensor is fresh."""
+        provider = self._provider_with_real_hass(hass)
+        callback = AsyncMock()
+        provider.get_activity_for_sensor_event = MagicMock(return_value=None)
+        provider.subscribe_lock_events(self._alarm_kmlock(), callback)
+        hass.states.async_set("sensor.test_alarm_level", "10")
+        hass.states.async_set("sensor.test_access_control", "6")
+        await hass.async_block_till_done()
+
+        await self._fire_lock_state_change(hass, new_state=LockState.LOCKED)
+
+        provider.get_activity_for_sensor_event.assert_called_once_with(
+            sensor_entity_id="sensor.test_access_control",
+            sensor_value=6,
+            lock_state=None,
+        )
+        callback.assert_awaited_once_with(0, "Unknown Lock Event", 6)
 
 
 class TestZWaveJSLockProviderDiagnostics:
