@@ -129,6 +129,15 @@ class TestUpdateSlotInitialState:
 class TestSyncPinImport:
     """Tests for _sync_pin code import behavior."""
 
+    async def test_sync_pin_skips_lock_without_code_slots(self, mock_coordinator, kmlock):
+        """Lock without code slots should not try to set or clear PINs."""
+        kmlock.code_slots = None
+
+        await mock_coordinator._sync_pin(kmlock, 1, "5678")
+
+        mock_coordinator.clear_pin_from_lock.assert_not_awaited()
+        mock_coordinator.set_pin_on_lock.assert_not_awaited()
+
     async def test_sync_pin_imports_code_when_pin_is_none(self, mock_coordinator, kmlock):
         """Lock-reported code should be imported when slot has never had a PIN."""
         slot = KeymasterCodeSlot(number=1, pin=None, active=True, enabled=True)
