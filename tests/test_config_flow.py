@@ -8,7 +8,11 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 import voluptuous as vol
 
-from custom_components.keymaster.config_flow_schema import get_entities, get_schema
+from custom_components.keymaster.config_flow_schema import (
+    _available_parent_locks,
+    get_entities,
+    get_schema,
+)
 from custom_components.keymaster.const import (
     CONF_ADVANCED_DATE_RANGE,
     CONF_ADVANCED_DAY_OF_WEEK,
@@ -169,6 +173,77 @@ async def test_get_schema_raises_without_flow_when_no_locks(hass):
             user_input=None,
             default_dict={CONF_NOTIFY_SCRIPT_NAME: None},
         )
+
+
+async def test_available_parent_locks_returns_none_when_domain_not_loaded(hass):
+    """Test parent lock lookup returns only none before keymaster data exists."""
+    entry = MockConfigEntry(domain=DOMAIN, title="Front Door", data={}, entry_id="front_door")
+    entry.add_to_hass(hass)
+
+    assert _available_parent_locks(hass) == [NONE_TEXT]
+
+
+async def test_available_parent_locks_filters_self_and_child_entries(hass):
+    """Test parent lock lookup excludes the current entry and child locks."""
+    hass.data[DOMAIN] = {}
+    current_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Front Door",
+        data={CONF_PARENT: None},
+        entry_id="front_door",
+    )
+    eligible_without_parent_key = MockConfigEntry(
+        domain=DOMAIN,
+        title="Back Door",
+        data={},
+        entry_id="back_door",
+    )
+    eligible_with_no_parent = MockConfigEntry(
+        domain=DOMAIN,
+        title="Garage Door",
+        data={CONF_PARENT: None},
+        entry_id="garage_door",
+    )
+    child_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Guest Door",
+        data={CONF_PARENT: "Front Door"},
+        entry_id="guest_door",
+    )
+    for entry in (
+        current_entry,
+        eligible_without_parent_key,
+        eligible_with_no_parent,
+        child_entry,
+    ):
+        entry.add_to_hass(hass)
+
+    assert _available_parent_locks(hass, entry_id="front_door") == [
+        NONE_TEXT,
+        "Back Door",
+        "Garage Door",
+    ]
+
+
+async def test_available_parent_locks_includes_current_entry_when_entry_id_is_none(hass):
+    """Test parent lock lookup does not exclude entries when no entry ID is given."""
+    hass.data[DOMAIN] = {}
+    current_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Front Door",
+        data={CONF_PARENT: None},
+        entry_id="front_door",
+    )
+    child_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Guest Door",
+        data={CONF_PARENT: "Front Door"},
+        entry_id="guest_door",
+    )
+    for entry in (current_entry, child_entry):
+        entry.add_to_hass(hass)
+
+    assert _available_parent_locks(hass, entry_id=None) == [NONE_TEXT, "Front Door"]
 
 
 async def test_get_entities_filters_excludes_and_sorts(hass):

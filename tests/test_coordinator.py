@@ -692,31 +692,41 @@ class TestRebuildLockRelationships:
         # Assert
         assert len(parent_lock.child_config_entry_ids) == 0
 
-    async def test_rebuild_with_circular_reference_prevention(self, mock_coordinator):
-        """Test that circular parent-child references are handled without crash."""
-        # Arrange: Lock A claims B as child, B claims A as child
+    async def test_rebuild_defensively_handles_existing_circular_references(self, mock_coordinator):
+        """Test defensive handling of circular references from pre-existing data."""
+        # Arrange: Lock A claims B as child, B claims A as child. The config flow
+        # guard in _available_parent_locks prevents this state through the UI.
         lock_a = Mock(spec=KeymasterLock)
         lock_a.keymaster_config_entry_id = "lock_a"
         lock_a.lock_name = "Lock A"
         lock_a.child_config_entry_ids = ["lock_b"]
-        lock_a.parent_config_entry_id = "lock_b"  # Circular!
+        lock_a.parent_config_entry_id = "lock_b"
         lock_a.parent_name = "Lock B"
 
         lock_b = Mock(spec=KeymasterLock)
         lock_b.keymaster_config_entry_id = "lock_b"
         lock_b.lock_name = "Lock B"
         lock_b.child_config_entry_ids = ["lock_a"]
-        lock_b.parent_config_entry_id = "lock_a"  # Circular!
+        lock_b.parent_config_entry_id = "lock_a"
         lock_b.parent_name = "Lock A"
 
         mock_coordinator.kmlocks = {"lock_a": lock_a, "lock_b": lock_b}
+        original_lock_a_parent = lock_a.parent_config_entry_id
+        original_lock_b_parent = lock_b.parent_config_entry_id
+        original_lock_a_children = lock_a.child_config_entry_ids.copy()
+        original_lock_b_children = lock_b.child_config_entry_ids.copy()
 
-        # Act - should handle gracefully without infinite loop or crash
+        # Act
         await mock_coordinator._rebuild_lock_relationships()
 
-        # Assert: Function completed without errors
-        # Note: Circular refs may persist but shouldn't crash
-        assert True  # If we got here, no crash occurred
+        # Assert: The single-pass rebuild leaves the existing cycle unchanged
+        # without duplicating child relationships.
+        assert lock_a.parent_config_entry_id == original_lock_a_parent
+        assert lock_b.parent_config_entry_id == original_lock_b_parent
+        assert lock_a.child_config_entry_ids == original_lock_a_children
+        assert lock_b.child_config_entry_ids == original_lock_b_children
+        assert len(lock_a.child_config_entry_ids) == len(set(lock_a.child_config_entry_ids))
+        assert len(lock_b.child_config_entry_ids) == len(set(lock_b.child_config_entry_ids))
 
     async def test_rebuild_preserves_parent_name_relationships(self, mock_coordinator):
         """Test that parent-child relationships via parent_name are established."""
