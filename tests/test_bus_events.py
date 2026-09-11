@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from importlib import import_module
 from typing import Any
 
-import pytest
-
+from custom_components.keymaster.bus_events import (
+    fire_lock_state_changed,
+    fire_unlock_state_changed,
+)
 from custom_components.keymaster.const import (
     ATTR_ACTION_CODE,
     ATTR_ACTION_TEXT,
@@ -21,15 +22,8 @@ from homeassistant.components.lock.const import LockState
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_STATE
 
 
-@pytest.mark.xfail(
-    raises=ImportError,
-    reason="extracted in the following commit; refs #768",
-    strict=True,
-)
 async def test_fire_unlock_state_changed_fires_expected_bus_event(hass) -> None:
     """Unlock helper emits the existing keymaster lock state changed event payload."""
-    bus_events = import_module("custom_components.keymaster.bus_events")
-
     events: list[Any] = []
     hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, events.append)
     lock = KeymasterLock(
@@ -39,13 +33,13 @@ async def test_fire_unlock_state_changed_fires_expected_bus_event(hass) -> None:
         code_slots={1: KeymasterCodeSlot(number=1, name="Guest")},
     )
 
-    bus_events.fire_unlock_state_changed(
+    fire_unlock_state_changed(
         hass,
         lock,
-        1,
-        "event",
-        "Keypad Unlock",
-        6,
+        code_slot_num=1,
+        source="event",
+        event_label="Keypad Unlock",
+        action_code=6,
     )
     await hass.async_block_till_done()
 
@@ -62,15 +56,8 @@ async def test_fire_unlock_state_changed_fires_expected_bus_event(hass) -> None:
     }
 
 
-@pytest.mark.xfail(
-    raises=ImportError,
-    reason="extracted in the following commit; refs #768",
-    strict=True,
-)
 async def test_fire_lock_state_changed_omits_slot_name_for_slot_zero(hass) -> None:
     """Lock helper preserves the legacy empty slot name for slot zero events."""
-    bus_events = import_module("custom_components.keymaster.bus_events")
-
     events: list[Any] = []
     hass.bus.async_listen(EVENT_KEYMASTER_LOCK_STATE_CHANGED, events.append)
     lock = KeymasterLock(
@@ -80,7 +67,14 @@ async def test_fire_lock_state_changed_omits_slot_name_for_slot_zero(hass) -> No
         code_slots={0: KeymasterCodeSlot(number=0, name="Manual")},
     )
 
-    bus_events.fire_lock_state_changed(hass, lock, 0, None, "Manual Lock", None)
+    fire_lock_state_changed(
+        hass,
+        lock,
+        code_slot_num=0,
+        source=None,
+        event_label="Manual Lock",
+        action_code=None,
+    )
     await hass.async_block_till_done()
 
     assert len(events) == 1

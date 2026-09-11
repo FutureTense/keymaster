@@ -7,11 +7,12 @@ from datetime import datetime as dt, time as dt_time, timedelta
 import json
 import random
 import typing
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from custom_components.keymaster.bus_events import fire_unlock_state_changed
 from custom_components.keymaster.const import (
     BACKOFF_FAILURE_THRESHOLD,
     BACKOFF_MAX_SECONDS,
@@ -25,6 +26,14 @@ from custom_components.keymaster.lock import (
     KeymasterLock,
 )
 from custom_components.keymaster.providers import CodeSlot
+from custom_components.keymaster.serialization import (
+    decode_pin,
+    dict_to_kmlocks,
+    encode_pin,
+    kmlocks_to_dict,
+    migrate_legacy_json,
+    process_loaded_data,
+)
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
@@ -1299,7 +1308,14 @@ class TestLockStateEventHandlers:
         """Test unnamed slots emit '' (not None) as code_slot_name on unlock."""
         mock_kmlock.code_slots = {2: Mock()}
         mock_kmlock.code_slots[2].name = None
-        mock_coordinator._fire_unlock_state_changed(mock_kmlock, 2, "event", "Keypad Unlock", 6)
+        fire_unlock_state_changed(
+            mock_coordinator.hass,
+            mock_kmlock,
+            code_slot_num=2,
+            source="event",
+            event_label="Keypad Unlock",
+            action_code=6,
+        )
         assert mock_coordinator.hass.bus.fire.call_args.kwargs["event_data"]["code_slot_name"] == ""
 
     async def test_lock_locked_supersede_sequence_no_duplicate_side_effects(
@@ -2654,7 +2670,7 @@ class TestPinEncodeDecode:
         pin = "1234"
         unique_id = "test_entry_123"
 
-        encoded = KeymasterCoordinator._encode_pin(pin, unique_id)
+        encoded = encode_pin(pin, unique_id)
 
         # Result should be base64 encoded
         assert encoded is not None
@@ -2667,8 +2683,8 @@ class TestPinEncodeDecode:
         pin = "1234"
         unique_id = "test_entry_123"
 
-        encoded = KeymasterCoordinator._encode_pin(pin, unique_id)
-        decoded = KeymasterCoordinator._decode_pin(encoded, unique_id)
+        encoded = encode_pin(pin, unique_id)
+        decoded = decode_pin(encoded, unique_id)
 
         assert decoded == pin
 
@@ -2682,16 +2698,16 @@ class TestPinEncodeDecode:
         ]
 
         for pin, unique_id in test_cases:
-            encoded = KeymasterCoordinator._encode_pin(pin, unique_id)
-            decoded = KeymasterCoordinator._decode_pin(encoded, unique_id)
+            encoded = encode_pin(pin, unique_id)
+            decoded = decode_pin(encoded, unique_id)
             assert decoded == pin, f"Failed for pin={pin}, unique_id={unique_id}"
 
     def test_encode_different_unique_ids_produce_different_results(self):
         """Test that different unique IDs produce different encodings."""
         pin = "1234"
 
-        encoded1 = KeymasterCoordinator._encode_pin(pin, "id_1")
-        encoded2 = KeymasterCoordinator._encode_pin(pin, "id_2")
+        encoded1 = encode_pin(pin, "id_1")
+        encoded2 = encode_pin(pin, "id_2")
 
         assert encoded1 != encoded2
 
@@ -2807,7 +2823,7 @@ class TestDictToKmlocksConversion:
 
     def test_dict_to_kmlocks_non_dataclass_returns_data(self, coordinator_for_conversion):
         """Test that non-dataclass data is returned as-is."""
-        result = coordinator_for_conversion._dict_to_kmlocks({"key": "value"}, str)
+        result = dict_to_kmlocks({"key": "value"}, str)
 
         assert result == {"key": "value"}
 
@@ -2823,7 +2839,7 @@ class TestDictToKmlocksConversion:
             "time_end": None,
         }
 
-        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlotDayOfWeek)
+        result = dict_to_kmlocks(data, KeymasterCodeSlotDayOfWeek)
 
         assert isinstance(result, KeymasterCodeSlotDayOfWeek)
         assert result.day_of_week_num == 0
@@ -2836,7 +2852,7 @@ class TestDictToKmlocksConversion:
             "lock_entity_id": "lock.test",
             "keymaster_config_entry_id": "entry_1",
         }
-        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterLock)
+        result = dict_to_kmlocks(data, KeymasterLock)
 
         assert isinstance(result, KeymasterLock)
         # masked_code_slots is init=False, so gets its default (empty set)
@@ -2853,7 +2869,7 @@ class TestDictToKmlocksConversion:
             "keymaster_config_entry_id": "entry_1",
             "code_slots": {},
         }
-        old_lock = coordinator_for_conversion._dict_to_kmlocks(stored_lock, KeymasterLock)
+        old_lock = dict_to_kmlocks(stored_lock, KeymasterLock)
         new_lock = KeymasterLock(
             lock_name="Test",
             lock_entity_id="lock.test",
@@ -2876,8 +2892,8 @@ class TestDictToKmlocksConversion:
             "time_start": "08:30:00",
         }
 
-        slot = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlot)
-        day = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlotDayOfWeek)
+        slot = dict_to_kmlocks(data, KeymasterCodeSlot)
+        day = dict_to_kmlocks(data, KeymasterCodeSlotDayOfWeek)
 
         assert slot.accesslimit_date_range_start == dt(2025, 1, 15, 12, 30, 0)
         assert day.time_start == dt_time(8, 30, 0)
@@ -2889,7 +2905,7 @@ class TestDictToKmlocksConversion:
         """Malformed temporal strings remain unchanged instead of raising."""
         data = {"number": 1, "accesslimit_date_range_start": "not-a-datetime"}
 
-        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlot)
+        result = dict_to_kmlocks(data, KeymasterCodeSlot)
 
         assert result.accesslimit_date_range_start == "not-a-datetime"
 
@@ -2913,7 +2929,7 @@ class TestDictToKmlocksConversion:
             },
         }
 
-        result = coordinator_for_conversion._dict_to_kmlocks(data, KeymasterCodeSlot)
+        result = dict_to_kmlocks(data, KeymasterCodeSlot)
 
         assert isinstance(result.accesslimit_day_of_week[0], KeymasterCodeSlotDayOfWeek)
         assert result.accesslimit_day_of_week[0].dow_enabled is False
@@ -2935,10 +2951,10 @@ class TestDictToKmlocksConversion:
         data = {"values": {"1": 1, "two": 2}}
 
         with patch.dict(
-            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            "custom_components.keymaster.serialization.keymasterlock_type_lookup",
             {"values": MutableMapping[str, int]},
         ):
-            result = coordinator_for_conversion._dict_to_kmlocks(data, PlainMapping)
+            result = dict_to_kmlocks(data, PlainMapping)
 
         assert result.values == {"1": 1, "two": 2}
 
@@ -2959,10 +2975,10 @@ class TestDictToKmlocksConversion:
         data = {"ambiguous": [{"value": 1}, "plain"]}
 
         with patch.dict(
-            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            "custom_components.keymaster.serialization.keymasterlock_type_lookup",
             {"ambiguous": MutableMapping[Inner, str]},
         ):
-            result = coordinator_for_conversion._dict_to_kmlocks(data, MappingWithListValue)
+            result = dict_to_kmlocks(data, MappingWithListValue)
 
         assert result.ambiguous == [{"value": 1}, "plain"]
 
@@ -2979,10 +2995,10 @@ class TestDictToKmlocksConversion:
         data = {"ambiguous": {"1": "one"}}
 
         with patch.dict(
-            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            "custom_components.keymaster.serialization.keymasterlock_type_lookup",
             {"ambiguous": typing.MutableMapping},
         ):
-            result = coordinator_for_conversion._dict_to_kmlocks(data, BareMapping)
+            result = dict_to_kmlocks(data, BareMapping)
 
         assert result.ambiguous == {"1": "one"}
 
@@ -3003,10 +3019,10 @@ class TestDictToKmlocksConversion:
         data = {"inner": {"value": 1}}
 
         with patch.dict(
-            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            "custom_components.keymaster.serialization.keymasterlock_type_lookup",
             {"inner": Inner},
         ):
-            result = coordinator_for_conversion._dict_to_kmlocks(data, Outer)
+            result = dict_to_kmlocks(data, Outer)
 
         assert result.inner == Inner(value=1)
 
@@ -3023,10 +3039,10 @@ class TestDictToKmlocksConversion:
         data = {"items": [{"value": 1}, "plain"]}
 
         with patch.dict(
-            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            "custom_components.keymaster.serialization.keymasterlock_type_lookup",
             {"items": list[int]},
         ):
-            result = coordinator_for_conversion._dict_to_kmlocks(data, ListContainer)
+            result = dict_to_kmlocks(data, ListContainer)
 
         assert result.items == [{"value": 1}, "plain"]
 
@@ -3043,10 +3059,10 @@ class TestDictToKmlocksConversion:
         data = {"maybe_timestamp": "2025-01-15T12:30:00"}
 
         with patch.dict(
-            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            "custom_components.keymaster.serialization.keymasterlock_type_lookup",
             {"maybe_timestamp": typing.Union[dt, None]},  # noqa: UP007
         ):
-            result = coordinator_for_conversion._dict_to_kmlocks(data, OptionalDate)
+            result = dict_to_kmlocks(data, OptionalDate)
 
         assert result.maybe_timestamp == dt(2025, 1, 15, 12, 30, 0)
 
@@ -3064,10 +3080,10 @@ class TestDictToKmlocksConversion:
         data = {"maybe_timestamp": timestamp}
 
         with patch.dict(
-            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            "custom_components.keymaster.serialization.keymasterlock_type_lookup",
             {"maybe_timestamp": typing.Union[dt, str, None]},  # noqa: UP007
         ):
-            result = coordinator_for_conversion._dict_to_kmlocks(data, MultiTypeUnion)
+            result = dict_to_kmlocks(data, MultiTypeUnion)
 
         assert result.maybe_timestamp == timestamp
 
@@ -3088,10 +3104,10 @@ class TestDictToKmlocksConversion:
         data = {"items": [{"value": 1}, "plain"]}
 
         with patch.dict(
-            "custom_components.keymaster.coordinator.keymasterlock_type_lookup",
+            "custom_components.keymaster.serialization.keymasterlock_type_lookup",
             {"items": list[Inner]},
         ):
-            result = coordinator_for_conversion._dict_to_kmlocks(data, ListContainer)
+            result = dict_to_kmlocks(data, ListContainer)
 
         assert result.items == [Inner(value=1), "plain"]
 
@@ -3119,8 +3135,8 @@ class TestDictToKmlocksConversion:
             },
         )
 
-        stored = coordinator_for_conversion._kmlocks_to_dict(lock)
-        result = coordinator_for_conversion._dict_to_kmlocks(stored, KeymasterLock)
+        stored = cast(dict[str, Any], kmlocks_to_dict(lock))
+        result = dict_to_kmlocks(stored, KeymasterLock)
 
         assert isinstance(result, KeymasterLock)
         assert result.code_slots is not None
@@ -3148,7 +3164,7 @@ class TestKmlocksToDict:
 
     def test_kmlocks_to_dict_non_dataclass(self, coordinator_for_dict):
         """Test that non-dataclass is returned as-is."""
-        result = coordinator_for_dict._kmlocks_to_dict("just a string")
+        result = kmlocks_to_dict("just a string")
 
         assert result == "just a string"
 
@@ -3161,7 +3177,7 @@ class TestKmlocksToDict:
         )
         lock.masked_code_slots.add(1)
 
-        result = coordinator_for_dict._kmlocks_to_dict(lock)
+        result = kmlocks_to_dict(lock)
 
         assert isinstance(result, dict)
         assert "masked_code_slots" not in result
@@ -3175,7 +3191,7 @@ class TestKmlocksToDict:
 
         instance = TestClass(timestamp=dt(2025, 1, 15, 12, 30, 0))
 
-        result = coordinator_for_dict._kmlocks_to_dict(instance)
+        result = kmlocks_to_dict(instance)
 
         assert isinstance(result, dict)
         assert result["timestamp"] == "2025-01-15T12:30:00"
@@ -3189,7 +3205,7 @@ class TestKmlocksToDict:
 
         instance = TestClass(start_time=dt_time(8, 30, 0))
 
-        result = coordinator_for_dict._kmlocks_to_dict(instance)
+        result = kmlocks_to_dict(instance)
 
         assert isinstance(result, dict)
         assert result["start_time"] == "08:30:00"
@@ -3209,7 +3225,7 @@ class TestKmlocksToDict:
         inner2 = Inner(value=2)
         instance = Outer(items=[inner1, inner2])
 
-        result = coordinator_for_dict._kmlocks_to_dict(instance)
+        result = kmlocks_to_dict(instance)
 
         assert isinstance(result, dict)
         assert len(result["items"]) == 2
@@ -3229,7 +3245,7 @@ class TestKmlocksToDict:
 
         instance = Outer(slots={1: Inner(name="slot1"), 2: Inner(name="slot2")})
 
-        result = coordinator_for_dict._kmlocks_to_dict(instance)
+        result = kmlocks_to_dict(instance)
 
         assert isinstance(result, dict)
         assert result["slots"][1]["name"] == "slot1"
@@ -3260,7 +3276,7 @@ class TestKmlocksToDict:
             name="plain-scalar",
         )
 
-        result = coordinator_for_dict._kmlocks_to_dict(instance)
+        result = kmlocks_to_dict(instance)
 
         assert isinstance(result, dict)
         assert result["timestamp"] == timestamp.isoformat()
@@ -3438,7 +3454,7 @@ class TestStorageAndMigration:
         with json_file.open("w") as f:
             json.dump(sample_lock_dict, f)
 
-        result = coordinator_for_storage._migrate_legacy_json(json_file, str(json_folder))
+        result = migrate_legacy_json(json_file, str(json_folder))
 
         # File should be deleted
         assert not json_file.exists()
@@ -3457,7 +3473,7 @@ class TestStorageAndMigration:
         with json_file.open("w") as f:
             json.dump({}, f)
 
-        result = coordinator_for_storage._migrate_legacy_json(json_file, str(json_folder))
+        result = migrate_legacy_json(json_file, str(json_folder))
 
         # File should be deleted
         assert not json_file.exists()
@@ -3473,7 +3489,7 @@ class TestStorageAndMigration:
         with json_file.open("w") as f:
             f.write("not valid json {{{")
 
-        result = coordinator_for_storage._migrate_legacy_json(json_file, str(json_folder))
+        result = migrate_legacy_json(json_file, str(json_folder))
 
         # File should still be deleted
         assert not json_file.exists()
@@ -3495,7 +3511,7 @@ class TestStorageAndMigration:
             json.dump({}, f)
         other_file.write_text("some content")
 
-        coordinator_for_storage._migrate_legacy_json(json_file, str(json_folder))
+        migrate_legacy_json(json_file, str(json_folder))
 
         # JSON file should be deleted
         assert not json_file.exists()
@@ -3508,7 +3524,7 @@ class TestStorageAndMigration:
     def test_process_loaded_data_decodes_pins(self, coordinator_for_storage):
         """Test that encoded PINs are decoded when loading."""
         # Encode a PIN the same way _async_save_data would
-        encoded_pin = KeymasterCoordinator._encode_pin("1234", "entry1")
+        encoded_pin = encode_pin("1234", "entry1")
 
         config = {
             "entry1": {
@@ -3524,8 +3540,9 @@ class TestStorageAndMigration:
             },
         }
 
-        result = coordinator_for_storage._process_loaded_data(config)
+        result = process_loaded_data(config)
 
+        assert result["entry1"].code_slots is not None
         assert result["entry1"].code_slots[1].pin == "1234"
 
     def test_process_loaded_data_adds_runtime_fields(self, coordinator_for_storage):
@@ -3539,7 +3556,7 @@ class TestStorageAndMigration:
             },
         }
 
-        result = coordinator_for_storage._process_loaded_data(config)
+        result = process_loaded_data(config)
 
         assert result["entry1"].autolock_timer is None
         assert result["entry1"].listeners == []
@@ -3568,10 +3585,11 @@ class TestStorageAndMigration:
         saved_data = coordinator_for_storage._store.async_save.call_args[0][0]
 
         # Simulate reload by processing the saved data
-        reloaded = coordinator_for_storage._process_loaded_data(saved_data)
+        reloaded = process_loaded_data(saved_data)
 
         # Verify the data matches
         assert reloaded["entry1"].lock_name == "Test Lock"
+        assert reloaded["entry1"].code_slots is not None
         assert reloaded["entry1"].code_slots[1].name == "User 1"
         assert reloaded["entry1"].code_slots[1].pin == "5678"
         assert reloaded["entry1"].code_slots[1].enabled is True

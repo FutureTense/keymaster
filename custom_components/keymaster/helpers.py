@@ -228,3 +228,56 @@ async def dismiss_persistent_notification(hass: HomeAssistant, notification_id: 
     """Clear or dismisss a persistent notification."""
     _LOGGER.debug("[dismiss_persistent_notification] notification_id: %s", notification_id)
     persistent_notification.async_dismiss(hass=hass, notification_id=notification_id)
+
+
+def format_slot_message(
+    kmlock: KeymasterLock,
+    code_slot_num: int,
+    event_label: str | None,
+) -> str | None:
+    """Append code slot details to a notification message."""
+    if code_slot_num <= 0:
+        return event_label
+    slot = kmlock.code_slots.get(code_slot_num) if kmlock.code_slots else None
+    if slot and slot.name:
+        return f"{event_label} by {slot.name} [{code_slot_num}]"
+    return f"{event_label} by Code Slot {code_slot_num}"
+
+
+def global_notification_superseded(
+    kmlock: KeymasterLock,
+    code_slot_num: int,
+) -> bool:
+    """Return whether per-slot notification should replace global lock/unlock text."""
+    if not kmlock.code_slots:
+        return False
+
+    if code_slot_num > 0:
+        slot = kmlock.code_slots.get(code_slot_num)
+        return bool(slot and slot.notifications)
+
+    return False
+
+
+def should_defer_keypad_unlock_notification(
+    kmlock: KeymasterLock,
+    code_slot_num: int,
+    event_label: str | None,
+) -> bool:
+    """Return whether a slot=0 keypad unlock may be superseded by slot details."""
+    if code_slot_num != 0 or event_label != "Keypad Unlock" or not kmlock.code_slots:
+        return False
+
+    return any(slot.notifications for slot in kmlock.code_slots.values())
+
+
+def should_defer_keypad_lock_notification(
+    kmlock: KeymasterLock,
+    code_slot_num: int,
+    event_label: str | None,
+) -> bool:
+    """Return whether a slot=0 keypad lock may be superseded by slot details."""
+    if code_slot_num != 0 or event_label != "Keypad Lock" or not kmlock.code_slots:
+        return False
+
+    return any(slot.notifications for slot in kmlock.code_slots.values())

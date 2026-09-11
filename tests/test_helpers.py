@@ -1,9 +1,6 @@
 """Test keymaster helpers."""
 
-from importlib import import_module
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from custom_components.keymaster.const import COORDINATOR, DOMAIN
 from custom_components.keymaster.helpers import (
@@ -12,8 +9,12 @@ from custom_components.keymaster.helpers import (
     call_hass_service,
     delete_code_slot_entities,
     dismiss_persistent_notification,
+    format_slot_message,
+    global_notification_superseded,
     send_manual_notification,
     send_persistent_notification,
+    should_defer_keypad_lock_notification,
+    should_defer_keypad_unlock_notification,
 )
 from custom_components.keymaster.large_lock_repairs import _get_kmlock_for_entry
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
@@ -297,18 +298,8 @@ async def test_dismiss_persistent_notification(hass):
     mock_dismiss.assert_called_once_with(hass=hass, notification_id="test_notification_id")
 
 
-@pytest.mark.xfail(
-    raises=ImportError,
-    reason="extracted in the following commit; refs #768",
-    strict=True,
-)
 def test_format_slot_message_uses_slot_name_when_available():
     """Slot notification messages include configured slot names."""
-    helpers = import_module("custom_components.keymaster.helpers")
-    try:
-        format_slot_message = helpers.format_slot_message
-    except AttributeError as exc:
-        raise ImportError("format_slot_message is not extracted yet") from exc
     lock = KeymasterLock(
         lock_name="Front Door",
         lock_entity_id="lock.front_door",
@@ -319,18 +310,8 @@ def test_format_slot_message_uses_slot_name_when_available():
     assert format_slot_message(lock, 3, "Keypad Unlock") == "Keypad Unlock by Guest [3]"
 
 
-@pytest.mark.xfail(
-    raises=ImportError,
-    reason="extracted in the following commit; refs #768",
-    strict=True,
-)
 def test_global_notification_superseded_only_for_notifying_slot():
     """Global notifications are superseded only when the slot sends its own notification."""
-    helpers = import_module("custom_components.keymaster.helpers")
-    try:
-        global_notification_superseded = helpers.global_notification_superseded
-    except AttributeError as exc:
-        raise ImportError("global_notification_superseded is not extracted yet") from exc
     lock = KeymasterLock(
         lock_name="Front Door",
         lock_entity_id="lock.front_door",
@@ -346,19 +327,8 @@ def test_global_notification_superseded_only_for_notifying_slot():
     assert global_notification_superseded(lock, 0) is False
 
 
-@pytest.mark.xfail(
-    raises=ImportError,
-    reason="extracted in the following commit; refs #768",
-    strict=True,
-)
 def test_should_defer_keypad_notifications_for_slot_zero_keypad_events():
     """Keypad slot-zero events defer when any slot notification can supersede them."""
-    helpers = import_module("custom_components.keymaster.helpers")
-    try:
-        should_defer_keypad_lock_notification = helpers.should_defer_keypad_lock_notification
-        should_defer_keypad_unlock_notification = helpers.should_defer_keypad_unlock_notification
-    except AttributeError as exc:
-        raise ImportError("keypad notification predicates are not extracted yet") from exc
     lock = KeymasterLock(
         lock_name="Front Door",
         lock_entity_id="lock.front_door",
