@@ -9,10 +9,15 @@ from custom_components.keymaster.helpers import (
     call_hass_service,
     delete_code_slot_entities,
     dismiss_persistent_notification,
+    format_slot_message,
+    global_notification_superseded,
     send_manual_notification,
     send_persistent_notification,
+    should_defer_keypad_lock_notification,
+    should_defer_keypad_unlock_notification,
 )
 from custom_components.keymaster.large_lock_repairs import _get_kmlock_for_entry
+from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
@@ -291,3 +296,47 @@ async def test_dismiss_persistent_notification(hass):
         await dismiss_persistent_notification(hass, "test_notification_id")
 
     mock_dismiss.assert_called_once_with(hass=hass, notification_id="test_notification_id")
+
+
+def test_format_slot_message_uses_slot_name_when_available():
+    """Slot notification messages include configured slot names."""
+    lock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry-one",
+        code_slots={3: KeymasterCodeSlot(number=3, name="Guest")},
+    )
+
+    assert format_slot_message(lock, 3, "Keypad Unlock") == "Keypad Unlock by Guest [3]"
+
+
+def test_global_notification_superseded_only_for_notifying_slot():
+    """Global notifications are superseded only when the slot sends its own notification."""
+    lock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry-one",
+        code_slots={
+            1: KeymasterCodeSlot(number=1, notifications=True),
+            2: KeymasterCodeSlot(number=2, notifications=False),
+        },
+    )
+
+    assert global_notification_superseded(lock, 1) is True
+    assert global_notification_superseded(lock, 2) is False
+    assert global_notification_superseded(lock, 0) is False
+
+
+def test_should_defer_keypad_notifications_for_slot_zero_keypad_events():
+    """Keypad slot-zero events defer when any slot notification can supersede them."""
+    lock = KeymasterLock(
+        lock_name="Front Door",
+        lock_entity_id="lock.front_door",
+        keymaster_config_entry_id="entry-one",
+        code_slots={1: KeymasterCodeSlot(number=1, notifications=True)},
+    )
+
+    assert should_defer_keypad_unlock_notification(lock, 0, "Keypad Unlock") is True
+    assert should_defer_keypad_lock_notification(lock, 0, "Keypad Lock") is True
+    assert should_defer_keypad_unlock_notification(lock, 1, "Keypad Unlock") is False
+    assert should_defer_keypad_lock_notification(lock, 0, "Manual Lock") is False
