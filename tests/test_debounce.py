@@ -32,6 +32,7 @@ from custom_components.keymaster.lock import (
 )
 from custom_components.keymaster.number import KeymasterNumber, KeymasterNumberEntityDescription
 from custom_components.keymaster.providers._base import BaseLockProvider
+from custom_components.keymaster.serialization import kmlocks_to_dict
 from custom_components.keymaster.switch import KeymasterSwitch, KeymasterSwitchEntityDescription
 from custom_components.keymaster.text import KeymasterText, KeymasterTextEntityDescription
 from custom_components.keymaster.time import KeymasterTime, KeymasterTimeEntityDescription
@@ -584,13 +585,11 @@ class TestSerializationExclusion:
     """Test that last_code_set_at is excluded from storage serialization."""
 
     async def test_kmlocks_to_dict_excludes_last_code_set_at(self, hass: HomeAssistant):
-        """_kmlocks_to_dict should not include last_code_set_at."""
-        coordinator = KeymasterCoordinator(hass)
-
+        """kmlocks_to_dict should not include last_code_set_at."""
         slot = KeymasterCodeSlot(number=1, enabled=True, pin="1234")
         slot.last_code_set_at = utcnow()
 
-        result = coordinator._kmlocks_to_dict(slot)
+        result = kmlocks_to_dict(slot)
 
         assert isinstance(result, dict)
         assert "last_code_set_at" not in result

@@ -3,23 +3,19 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 from collections.abc import AsyncIterator, Callable, Iterable, MutableMapping
 import contextlib
 from contextlib import asynccontextmanager
-from dataclasses import fields, is_dataclass
 from datetime import datetime as dt, time as dt_time, timedelta
 import functools
-import json
 import logging
 from pathlib import Path
-from typing import Any, Union, cast, get_args, get_origin
+from typing import Any, cast
 
 from homeassistant.components.lock.const import DOMAIN as LOCK_DOMAIN, LockState
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import (
     ATTR_ENTITY_ID,
-    ATTR_STATE,
     EVENT_HOMEASSISTANT_STARTED,
     EVENT_HOMEASSISTANT_STOP,
     SERVICE_LOCK,
@@ -37,13 +33,9 @@ from homeassistant.util import slugify
 from homeassistant.util.dt import utcnow
 
 from .autolock import AutolockTimer, TimerStore
+from .bus_events import fire_lock_state_changed, fire_unlock_state_changed
 from .const import (
-    ATTR_ACTION_CODE,
-    ATTR_ACTION_TEXT,
     ATTR_CODE_SLOT,
-    ATTR_CODE_SLOT_NAME,
-    ATTR_NAME,
-    ATTR_NOTIFICATION_SOURCE,
     BACKOFF_FAILURE_THRESHOLD,
     BACKOFF_INITIAL_SECONDS,
     BACKOFF_MAX_SECONDS,
@@ -53,7 +45,6 @@ from .const import (
     DOMAIN,
     ENTITY_DEBOUNCE_SECONDS,
     EVENT_KEYMASTER_CODE_SLOT_RESET,
-    EVENT_KEYMASTER_LOCK_STATE_CHANGED,
     ISSUE_URL,
     PIN_SET_GRACE_SECONDS,
     QUICK_REFRESH_SECONDS,
@@ -68,17 +59,23 @@ from .helpers import (
     call_hass_service,
     delete_code_slot_entities,
     dismiss_persistent_notification,
+    format_slot_message,
+    global_notification_superseded,
     send_manual_notification,
     send_persistent_notification,
+    should_defer_keypad_lock_notification,
+    should_defer_keypad_unlock_notification,
 )
-from .lock import (
-    KeymasterCodeSlot,
-    KeymasterCodeSlotDayOfWeek,
-    KeymasterLock,
-    keymasterlock_type_lookup,
-)
+from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 from .lovelace import delete_lovelace
 from .providers import CodeSlot, create_provider
+from .serialization import (
+    encode_pin,
+    kmlocks_to_dict,
+    migrate_legacy_json,
+    process_loaded_data,
+    sanitized_lock_dict,
+)
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -90,12 +87,6 @@ KEYPAD_NOTIFICATION_DELAY_SECONDS = 1
 
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.locks"
-
-
-@functools.cache
-def _serializable_dataclass_fields(cls: type) -> tuple[Any, ...]:
-    """Return dataclass fields that are persisted."""
-    return tuple(field for field in fields(cls) if field.init)
 
 
 def _is_masked_code(code: str | None) -> bool:
@@ -562,7 +553,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if legacy_json_file.exists():
             _LOGGER.info("[load_data] Found legacy JSON file, migrating to Home Assistant storage")
             config = await self.hass.async_add_executor_job(
-                self._migrate_legacy_json,
+                migrate_legacy_json,
                 legacy_json_file,
                 legacy_json_folder,
             )
@@ -575,69 +566,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("[load_data] No stored data found")
             return {}
 
-        return self._process_loaded_data(stored_data)
-
-    def _migrate_legacy_json(
-        self,
-        json_file: Path,
-        json_folder: str,
-    ) -> MutableMapping[str, KeymasterLock]:
-        """Load legacy JSON file, clean it up, and return processed data.
-
-        This is a synchronous method that performs file I/O. Must be called
-        via async_add_executor_job.
-        """
-        config: MutableMapping[str, KeymasterLock] = {}
-        try:
-            with json_file.open(encoding="utf-8") as f:
-                config = self._process_loaded_data(json.load(f))
-        except (OSError, json.JSONDecodeError) as e:
-            _LOGGER.warning(
-                "[migrate_legacy_json] Error reading legacy JSON file: %s: %s",
-                e.__class__.__qualname__,
-                e,
-            )
-
-        # Always clean up the legacy file (regardless of load success)
-        try:
-            json_file.unlink()
-            _LOGGER.info("[migrate_legacy_json] Legacy JSON file deleted")
-        except OSError as e:
-            _LOGGER.warning(
-                "[migrate_legacy_json] Could not delete legacy JSON file: %s: %s",
-                e.__class__.__qualname__,
-                e,
-            )
-            return config
-
-        # Try to remove the folder if empty
-        try:
-            Path(json_folder).rmdir()
-            _LOGGER.debug("[migrate_legacy_json] Legacy JSON folder removed")
-        except OSError:
-            # Folder not empty or other issue - that's fine
-            pass
-
-        return config
-
-    def _process_loaded_data(self, config: dict) -> MutableMapping[str, KeymasterLock]:
-        """Process loaded config data into KeymasterLock objects."""
-        for lock in config.values():
-            lock["autolock_timer"] = None
-            lock["listeners"] = []
-            for kmslot in (lock.get("code_slots") or {}).values():
-                if isinstance(kmslot.get("pin", None), str):
-                    kmslot["pin"] = KeymasterCoordinator._decode_pin(
-                        kmslot["pin"],
-                        lock["keymaster_config_entry_id"],
-                    )
-
-        kmlocks: MutableMapping = {
-            key: self._dict_to_kmlocks(value, KeymasterLock) for key, value in config.items()
-        }
-
-        _LOGGER.debug("[load_data] Loaded kmlocks: %s", kmlocks)
-        return kmlocks
+        return process_loaded_data(stored_data)
 
     async def _async_save_data(
         self,
@@ -669,10 +598,10 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
 
         for key, kmlock in save_kmlocks:
-            lock = self._sanitized_lock_dict(self._kmlocks_to_dict(kmlock))
+            lock = sanitized_lock_dict(kmlocks_to_dict(kmlock))
             for kmslot in (lock.get("code_slots") or {}).values():
                 if isinstance(kmslot.get("pin", None), str):
-                    kmslot["pin"] = KeymasterCoordinator._encode_pin(
+                    kmslot["pin"] = encode_pin(
                         kmslot["pin"],
                         lock["keymaster_config_entry_id"],
                     )
@@ -730,22 +659,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             await self.async_flush_pending_save_data()
 
-    def _sanitized_lock_dict(self, lock: object) -> dict[str, Any]:
-        """Remove runtime-only lock fields from a serialized lock dictionary."""
-        sanitized = dict(lock) if isinstance(lock, dict) else {}
-        sanitized.pop("zwave_js_lock_device", None)
-        sanitized.pop("zwave_js_lock_node", None)
-        sanitized.pop("autolock_timer", None)
-        sanitized.pop("listeners", None)
-        sanitized.pop("provider", None)
-        return sanitized
-
     def _lock_snapshot(self, entry_id: str) -> dict[str, Any] | None:
         """Return a sanitized comparable snapshot for one lock."""
         kmlock = self.kmlocks.get(entry_id)
         if kmlock is None:
             return None
-        return self._sanitized_lock_dict(self._kmlocks_to_dict(kmlock))
+        return sanitized_lock_dict(kmlocks_to_dict(kmlock))
 
     async def async_remove_data(self) -> None:
         """Remove stored data."""
@@ -769,242 +688,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("deleting %s from kmlocks", lock)
                 await self.delete_lock_by_config_entry_id(config_entry_id)
             _LOGGER.debug("================================")
-
-    @staticmethod
-    def _encode_pin(pin: str, unique_id: str) -> str:
-        salted_pin: bytes = unique_id.encode("utf-8") + pin.encode("utf-8")
-        encoded_pin: str = base64.b64encode(salted_pin).decode("utf-8")
-        return encoded_pin
-
-    @staticmethod
-    def _decode_pin(encoded_pin: str, unique_id: str) -> str:
-        decoded_pin_with_salt: bytes = base64.b64decode(encoded_pin)
-        salt_length: int = len(unique_id.encode("utf-8"))
-        original_pin: str = decoded_pin_with_salt[salt_length:].decode("utf-8")
-        return original_pin
-
-    def _dict_to_kmlocks(self, data: dict, cls: type) -> Any:
-        """Recursively convert a dictionary to a dataclass instance."""
-        if hasattr(cls, "__dataclass_fields__"):
-            field_values: MutableMapping = {}
-
-            for field in _serializable_dataclass_fields(cls):
-                field_values[field.name] = self._kmlock_field_from_dict(data, field)
-
-            return cls(**field_values)
-
-        return data
-
-    def _kmlock_field_type_from_dict(self, field_name: str, field_type: Any) -> Any:
-        """Resolve the stored type metadata for a Keymaster lock field."""
-        resolved_type = keymasterlock_type_lookup.get(field_name)
-        if not resolved_type and isinstance(field_type, type):
-            resolved_type = field_type
-        return resolved_type
-
-    def _kmlock_field_from_dict(self, data: dict, field: Any) -> Any:
-        """Convert one serialized dataclass field to its runtime value."""
-        field_name: str = field.name
-        field_type = self._kmlock_field_type_from_dict(field_name, field.type)
-        field_value: Any = data.get(field_name)
-
-        origin_type = get_origin(field_type)
-        type_args = get_args(field_type)
-
-        # _LOGGER.debug(
-        #     f"[dict_to_kmlocks] field_name: {field_name}, field_type: {field_type}, "
-        #     f"origin_type: {origin_type}, type_args: {type_args}, "
-        #     f"field_value_type: {type(field_value)}, field_value: {field_value}"
-        # )
-
-        field_type, origin_type, type_args = self._kmlock_optional_type_from_dict(
-            field_name,
-            field_type,
-            origin_type,
-            type_args,
-        )
-        field_value = self._kmlock_temporal_value_from_dict(field_name, field_value, field_type)
-        return self._kmlock_collection_value_from_dict(
-            field_name,
-            field_value,
-            field_type,
-            origin_type,
-            type_args,
-        )
-
-    def _kmlock_optional_type_from_dict(
-        self,
-        field_name: str,
-        field_type: Any,
-        origin_type: Any,
-        type_args: tuple[Any, ...],
-    ) -> tuple[Any, Any, tuple[Any, ...]]:
-        """Unwrap Optional fields while preserving existing Union handling."""
-        # Handle optional types (Union)
-        if origin_type is not Union:
-            return field_type, origin_type, type_args
-
-        non_optional_types = [t for t in type_args if t is not type(None)]
-        if len(non_optional_types) != 1:
-            return field_type, origin_type, type_args
-
-        field_type = non_optional_types[0]
-        origin_type = get_origin(field_type)
-        type_args = get_args(field_type)
-        # _LOGGER.debug(
-        #     f"[dict_to_kmlocks] Updated for Union: "
-        #     f"field_name: {field_name}, field_type: {field_type}, "
-        #     f"origin_type: {origin_type}, type_args: {type_args}"
-        # )
-        return field_type, origin_type, type_args
-
-    def _kmlock_temporal_value_from_dict(
-        self,
-        field_name: str,
-        field_value: Any,
-        field_type: Any,
-    ) -> Any:
-        """Convert serialized temporal strings while preserving fallback behavior."""
-        # Convert datetime string to datetime object
-        if isinstance(field_value, str) and field_type == dt:
-            # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to datetime")
-            with contextlib.suppress(ValueError):
-                field_value = dt.fromisoformat(field_value)
-
-        # Convert time string to time object
-        elif isinstance(field_value, str) and field_type == dt_time:
-            # _LOGGER.debug(f"[dict_to_kmlocks] field_name: {field_name}: Converting to time")
-            with contextlib.suppress(ValueError):
-                field_value = dt_time.fromisoformat(field_value)
-
-        return field_value
-
-    @staticmethod
-    def _kmlock_key_from_dict(key: Any, key_type: Any) -> Any:
-        """Convert serialized dictionary keys to their runtime type when required."""
-        if key_type is int and isinstance(key, str) and key.isdigit():
-            return int(key)
-        return key
-
-    def _kmlock_collection_value_from_dict(
-        self,
-        field_name: str,
-        field_value: Any,
-        field_type: Any,
-        origin_type: Any,
-        type_args: tuple[Any, ...],
-    ) -> Any:
-        """Convert serialized collection and nested dataclass values."""
-        # _LOGGER.debug(f"[dict_to_kmlocks] isinstance(origin_type, type): {isinstance(origin_type, type)}")
-        # if isinstance(origin_type, type):
-        # _LOGGER.debug(f"[dict_to_kmlocks] issubclass(origin_type, MutableMapping): {issubclass(origin_type, MutableMapping)}, origin_type == dict: {origin_type == dict}")
-
-        # Handle MutableMapping types: when origin_type is MutableMapping
-        if isinstance(origin_type, type) and (
-            issubclass(origin_type, MutableMapping) or origin_type is dict
-        ):
-            return self._kmlock_mapping_value_from_dict(field_name, field_value, type_args)
-
-        if (
-            isinstance(field_value, dict)
-            and is_dataclass(field_type)
-            and isinstance(field_type, type)
-        ):
-            # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting nested dataclass: {field_name}")
-            return self._dict_to_kmlocks(field_value, field_type)
-
-        if isinstance(field_value, list) and type_args:
-            return self._kmlock_list_value_from_dict(field_name, field_value, type_args)
-
-        return field_value
-
-    def _kmlock_mapping_value_from_dict(
-        self,
-        field_name: str,
-        field_value: Any,
-        type_args: tuple[Any, ...],
-    ) -> Any:
-        """Convert serialized mapping values without falling through to other branches."""
-        if len(type_args) != 2:
-            return field_value
-
-        key_type, value_type = type_args
-        # _LOGGER.debug(
-        #     f"[dict_to_kmlocks] field_name: {field_name}: Is MutableMapping or dict. key_type: {key_type}, "
-        #     f"value_type: {value_type}, isinstance(field_value, dict): {isinstance(field_value, dict)}, "
-        #     f"is_dataclass(value_type): {is_dataclass(value_type)}"
-        # )
-        if not isinstance(field_value, dict):
-            return field_value
-
-        # If the value_type is a dataclass, recursively process it
-        if is_dataclass(value_type) and isinstance(value_type, type):
-            # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting dict items for {field_name}")
-            return {
-                self._kmlock_key_from_dict(k, key_type): self._dict_to_kmlocks(v, value_type)
-                for k, v in field_value.items()
-            }
-
-        # If value_type is not a dataclass, just copy the value
-        return {self._kmlock_key_from_dict(k, key_type): v for k, v in field_value.items()}
-
-    def _kmlock_list_value_from_dict(
-        self,
-        field_name: str,
-        field_value: list,
-        type_args: tuple[Any, ...],
-    ) -> Any:
-        """Convert serialized lists containing nested dataclass dictionaries."""
-        list_type = type_args[0]
-        if not (is_dataclass(list_type) and isinstance(list_type, type)):
-            return field_value
-
-        # _LOGGER.debug(f"[dict_to_kmlocks] Recursively converting list of dataclasses: {field_name}")
-        return [
-            self._dict_to_kmlocks(item, list_type) if isinstance(item, dict) else item
-            for item in field_value
-        ]
-
-    def _kmlocks_to_dict(self, instance: object) -> object:
-        """Recursively convert a dataclass instance to a dictionary for JSON export."""
-        if is_dataclass(instance):
-            result: MutableMapping = {}
-            for field in _serializable_dataclass_fields(instance.__class__):
-                field_name: str = field.name
-                result[field_name] = self._kmlock_field_to_dict(getattr(instance, field_name))
-            return result
-        return instance
-
-    def _kmlock_field_to_dict(self, field_value: Any) -> object:
-        """Convert a dataclass field value to a JSON-compatible value."""
-        field_value = self._kmlock_temporal_value_to_dict(field_value)
-        return self._kmlock_collection_value_to_dict(field_value)
-
-    def _kmlock_temporal_value_to_dict(self, field_value: Any) -> Any:
-        """Convert temporal field values while preserving existing ordered checks."""
-        if isinstance(field_value, dt):
-            field_value = field_value.isoformat()
-
-        if isinstance(field_value, dt_time):
-            field_value = field_value.isoformat()
-
-        return field_value
-
-    def _kmlock_collection_value_to_dict(self, field_value: Any) -> object:
-        """Convert collection field values while preserving existing recursive behavior."""
-        if isinstance(field_value, list):
-            return [
-                self._kmlocks_to_dict(item) if hasattr(item, "__dataclass_fields__") else item
-                for item in field_value
-            ]
-
-        if isinstance(field_value, dict):
-            return {
-                k: (self._kmlocks_to_dict(v) if hasattr(v, "__dataclass_fields__") else v)
-                for k, v in field_value.items()
-            }
-
-        return field_value
 
     async def _rebuild_lock_relationships(self) -> None:
         for keymaster_config_entry_id, kmlock in self.kmlocks.items():
@@ -1320,82 +1003,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             kmlock.listeners.append(unsub)
 
-    def _fire_lock_state_changed_event(
-        self,
-        kmlock: KeymasterLock,
-        state: str,
-        *,
-        code_slot_num: int,
-        source: str | None,
-        event_label: str | None,
-        action_code: int | None,
-    ) -> None:
-        """Fire the keymaster_lock_state_changed bus event."""
-        slot = kmlock.code_slots.get(code_slot_num) if kmlock.code_slots else None
-        self.hass.bus.fire(
-            EVENT_KEYMASTER_LOCK_STATE_CHANGED,
-            event_data={
-                ATTR_NOTIFICATION_SOURCE: source,
-                ATTR_NAME: kmlock.lock_name,
-                ATTR_ENTITY_ID: kmlock.lock_entity_id,
-                ATTR_STATE: state,
-                ATTR_ACTION_CODE: action_code,
-                ATTR_ACTION_TEXT: event_label,
-                ATTR_CODE_SLOT: code_slot_num,
-                ATTR_CODE_SLOT_NAME: (slot.name or "") if slot and code_slot_num != 0 else "",
-            },
-        )
-
-    def _fire_unlock_state_changed(
-        self,
-        kmlock: KeymasterLock,
-        code_slot_num: int,
-        source: str | None,
-        event_label: str | None,
-        action_code: int | None,
-    ) -> None:
-        """Fire the keymaster_lock_state_changed bus event for an unlock."""
-        self._fire_lock_state_changed_event(
-            kmlock,
-            LockState.UNLOCKED,
-            code_slot_num=code_slot_num,
-            source=source,
-            event_label=event_label,
-            action_code=action_code,
-        )
-
-    def _fire_lock_state_changed(
-        self,
-        kmlock: KeymasterLock,
-        code_slot_num: int,
-        source: str | None,
-        event_label: str | None,
-        action_code: int | None,
-    ) -> None:
-        """Fire the keymaster_lock_state_changed bus event for a lock."""
-        self._fire_lock_state_changed_event(
-            kmlock,
-            LockState.LOCKED,
-            code_slot_num=code_slot_num,
-            source=source,
-            event_label=event_label,
-            action_code=action_code,
-        )
-
-    @staticmethod
-    def _format_slot_message(
-        kmlock: KeymasterLock,
-        code_slot_num: int,
-        event_label: str | None,
-    ) -> str | None:
-        """Append code slot details to a notification message."""
-        if code_slot_num <= 0:
-            return event_label
-        slot = kmlock.code_slots.get(code_slot_num) if kmlock.code_slots else None
-        if slot and slot.name:
-            return f"{event_label} by {slot.name} [{code_slot_num}]"
-        return f"{event_label} by Code Slot {code_slot_num}"
-
     async def _send_code_slot_unlock_notification(
         self,
         kmlock: KeymasterLock,
@@ -1407,7 +1014,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not slot or not slot.notifications:
             return False
 
-        message = self._format_slot_message(kmlock, code_slot_num, event_label)
+        message = format_slot_message(kmlock, code_slot_num, event_label)
         await send_manual_notification(
             hass=self.hass,
             script_name=kmlock.notify_script_name,
@@ -1427,7 +1034,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         if not slot or not slot.notifications:
             return False
 
-        message = self._format_slot_message(kmlock, code_slot_num, event_label)
+        message = format_slot_message(kmlock, code_slot_num, event_label)
         await send_manual_notification(
             hass=self.hass,
             script_name=kmlock.notify_script_name,
@@ -1443,7 +1050,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         event_label: str | None,
     ) -> None:
         """Send a global lock/unlock notification."""
-        message = self._format_slot_message(kmlock, code_slot_num, event_label)
+        message = format_slot_message(kmlock, code_slot_num, event_label)
         await send_manual_notification(
             hass=self.hass,
             script_name=kmlock.notify_script_name,
@@ -1537,45 +1144,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
         )
 
-    @staticmethod
-    def _global_notification_superseded(
-        kmlock: KeymasterLock,
-        code_slot_num: int,
-    ) -> bool:
-        """Return whether per-slot notification should replace global lock/unlock text."""
-        if not kmlock.code_slots:
-            return False
-
-        if code_slot_num > 0:
-            slot = kmlock.code_slots.get(code_slot_num)
-            return bool(slot and slot.notifications)
-
-        return False
-
-    @staticmethod
-    def _should_defer_keypad_unlock_notification(
-        kmlock: KeymasterLock,
-        code_slot_num: int,
-        event_label: str | None,
-    ) -> bool:
-        """Return whether a slot=0 keypad unlock may be superseded by slot details."""
-        if code_slot_num != 0 or event_label != "Keypad Unlock" or not kmlock.code_slots:
-            return False
-
-        return any(slot.notifications for slot in kmlock.code_slots.values())
-
-    @staticmethod
-    def _should_defer_keypad_lock_notification(
-        kmlock: KeymasterLock,
-        code_slot_num: int,
-        event_label: str | None,
-    ) -> bool:
-        """Return whether a slot=0 keypad lock may be superseded by slot details."""
-        if code_slot_num != 0 or event_label != "Keypad Lock" or not kmlock.code_slots:
-            return False
-
-        return any(slot.notifications for slot in kmlock.code_slots.values())
-
     async def _handle_already_unlocked(
         self,
         kmlock: KeymasterLock,
@@ -1609,7 +1177,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 source,
             )
             self._last_unlock_code_slot[kmlock.keymaster_config_entry_id] = code_slot_num
-            self._fire_unlock_state_changed(kmlock, code_slot_num, source, event_label, action_code)
+            fire_unlock_state_changed(
+                self.hass,
+                kmlock,
+                code_slot_num=code_slot_num,
+                source=source,
+                event_label=event_label,
+                action_code=action_code,
+            )
             had_pending_notification = self._cancel_pending_keypad_unlock_notification(kmlock)
             sent_slot_notification = await self._send_code_slot_unlock_notification(
                 kmlock,
@@ -1722,16 +1297,23 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
         if kmlock.lock_notifications:
-            if self._should_defer_keypad_unlock_notification(kmlock, code_slot_num, event_label):
+            if should_defer_keypad_unlock_notification(kmlock, code_slot_num, event_label):
                 self._defer_keypad_unlock_notification(kmlock, event_label)
-            elif not self._global_notification_superseded(kmlock, code_slot_num):
+            elif not global_notification_superseded(kmlock, code_slot_num):
                 await self._send_global_slot_notification(kmlock, code_slot_num, event_label)
 
         if code_slot_num > 0 and kmlock.code_slots and code_slot_num in kmlock.code_slots:
             await self._decrement_unlock_access_limit(kmlock, code_slot_num)
             await self._send_code_slot_unlock_notification(kmlock, code_slot_num, event_label)
 
-        self._fire_unlock_state_changed(kmlock, code_slot_num, source, event_label, action_code)
+        fire_unlock_state_changed(
+            self.hass,
+            kmlock,
+            code_slot_num=code_slot_num,
+            source=source,
+            event_label=event_label,
+            action_code=action_code,
+        )
 
     async def _handle_already_locked(
         self,
@@ -1761,7 +1343,14 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 source,
             )
             self._last_lock_code_slot[kmlock.keymaster_config_entry_id] = code_slot_num
-            self._fire_lock_state_changed(kmlock, code_slot_num, source, event_label, action_code)
+            fire_lock_state_changed(
+                self.hass,
+                kmlock,
+                code_slot_num=code_slot_num,
+                source=source,
+                event_label=event_label,
+                action_code=action_code,
+            )
             had_pending_notification = self._cancel_pending_keypad_lock_notification(kmlock)
             sent_slot_notification = await self._send_code_slot_lock_notification(
                 kmlock,
@@ -1848,15 +1437,22 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
 
         if kmlock.lock_notifications:
-            if self._should_defer_keypad_lock_notification(kmlock, code_slot_num, event_label):
+            if should_defer_keypad_lock_notification(kmlock, code_slot_num, event_label):
                 self._defer_keypad_lock_notification(kmlock, event_label)
-            elif not self._global_notification_superseded(kmlock, code_slot_num):
+            elif not global_notification_superseded(kmlock, code_slot_num):
                 await self._send_global_slot_notification(kmlock, code_slot_num, event_label)
 
         if code_slot_num > 0 and kmlock.code_slots and code_slot_num in kmlock.code_slots:
             await self._send_code_slot_lock_notification(kmlock, code_slot_num, event_label)
 
-        self._fire_lock_state_changed(kmlock, code_slot_num, source, event_label, action_code)
+        fire_lock_state_changed(
+            self.hass,
+            kmlock,
+            code_slot_num=code_slot_num,
+            source=source,
+            event_label=event_label,
+            action_code=action_code,
+        )
 
     async def _door_opened(self, kmlock: KeymasterLock) -> None:
         if not self._throttle.is_allowed(

@@ -28,7 +28,6 @@ def mock_coordinator(hass):
     with (
         patch("custom_components.keymaster.coordinator.dr.async_get"),
         patch("custom_components.keymaster.coordinator.er.async_get"),
-        patch("custom_components.keymaster.coordinator.Path"),
     ):
         coord = KeymasterCoordinator(hass)
 
@@ -355,7 +354,6 @@ def coordinator_for_unlock_test(hass):
     with (
         patch("custom_components.keymaster.coordinator.dr.async_get"),
         patch("custom_components.keymaster.coordinator.er.async_get"),
-        patch("custom_components.keymaster.coordinator.Path"),
     ):
         coord = KeymasterCoordinator(hass)
 
