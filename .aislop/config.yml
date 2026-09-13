@@ -5,6 +5,17 @@
 # comes from aislop's defaults.
 version: 1
 
+ci:
+  # The repository currently scores 98, so a 95 floor leaves a small amount of
+  # headroom while catching regressions. Nothing in this repository's GitHub
+  # Actions currently runs `aislop ci`, so this applies to local and ad-hoc
+  # runs by deliberate choice; do not add a workflow for it.
+  failBelow: 95
+
+telemetry:
+  # aislop enables telemetry by default; this repository opts out.
+  enabled: false
+
 rules:
   # keymaster is a Home Assistant custom integration - effectively a plugin.
   # Much of its dependency surface is dictated by the Home Assistant runtime
@@ -19,3 +30,29 @@ rules:
   #
   # See https://github.com/FutureTense/keymaster/issues/652
   security/dependency-audit-skipped: off
+
+# Accepted `complexity/file-too-large` findings
+#
+# aislop's file-size budget (`quality.maxFileLoc`, default 400) is global. The
+# rule has no per-file or per-glob exemption; the only path-based escape in the
+# implementation is a hardcoded case for TypeScript `.d.ts` declaration files.
+# Raising the budget or switching the rule off would apply repo-wide and lose
+# the signal on newly added files, so the rule is deliberately left ON and the
+# following findings are known and accepted (line counts as of this writing):
+#
+#   custom_components/keymaster/coordinator.py            3206
+#   custom_components/keymaster/providers/zwave_js.py     1357
+#   custom_components/keymaster/providers/zha.py           662
+#   custom_components/keymaster/providers/akuvox.py        597
+#   custom_components/keymaster/providers/schlage.py       596
+#   custom_components/keymaster/providers/zigbee2mqtt.py   491
+#
+# Each provider module implements the `BaseLockProvider` interface against a
+# single lock protocol; a survey found no meaningful cross-provider duplication
+# worth extracting. `coordinator.py` has already had its cleanly separable
+# helpers moved out into `serialization.py`, `bus_events.py`, and `helpers.py`.
+#
+# Tracked in FutureTense/keymaster#768, #769, and #770.
+#
+# Upstream feature request for per-file rule overrides:
+# https://github.com/scanaislop/aislop/issues/333
