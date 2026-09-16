@@ -23,7 +23,7 @@ lint = [
     "mypy",
     "pylint",
     "pylint-per-file-ignores",
-    "ruff==0.16.6",
+    "ruff==0.16.7",
     "types-PyYAML",
 ]
 dev = [
