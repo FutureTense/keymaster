@@ -660,6 +660,60 @@ class TestZWaveJSLockProviderUsercodes:
 
         assert result is False
 
+    async def test_clear_usercode_waits_for_lock_report(self, zwave_provider, mock_zwave_node):
+        """Test clear_usercode keeps polling until the lock reports the slot empty."""
+        zwave_provider._node = mock_zwave_node
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                side_effect=[{"usercode": "1234"}, {"usercode": "1234"}, {"usercode": ""}],
+            ) as mock_get,
+            patch(
+                "custom_components.keymaster.providers.zwave_js.asyncio.sleep",
+                new_callable=AsyncMock,
+            ) as mock_sleep,
+        ):
+            result = await zwave_provider.async_clear_usercode(1)
+
+        assert result is True
+        assert mock_get.call_count == 3
+        assert mock_sleep.await_count == 2
+
+    async def test_clear_usercode_times_out_when_lock_never_reports(
+        self, zwave_provider, mock_zwave_node, caplog
+    ):
+        """Test clear_usercode returns False once the verification window expires."""
+        zwave_provider._node = mock_zwave_node
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                return_value={"usercode": "1234"},
+            ) as mock_get,
+            patch(
+                "custom_components.keymaster.providers.zwave_js.LEGACY_CLEAR_VERIFY_TIMEOUT",
+                0.05,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.LEGACY_CLEAR_VERIFY_INTERVAL",
+                0.01,
+            ),
+        ):
+            result = await zwave_provider.async_clear_usercode(1)
+
+        assert result is False
+        assert mock_get.call_count > 1
+        assert "Slot 1 not yet cleared after command, will retry" in caplog.text
+
     async def test_clear_usercode_schlage_bug_length_4(self, zwave_provider, mock_zwave_node):
         """Test clear_usercode returns True when the returned value is 0000. Tests Schlage Bug."""
         zwave_provider._node = mock_zwave_node
