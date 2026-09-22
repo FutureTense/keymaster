@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 import functools
 import logging
+import time
 from typing import TYPE_CHECKING, Any, cast
 
 from zwave_js_server.client import Client as ZwaveJSClient
@@ -71,6 +73,12 @@ if TYPE_CHECKING:
     from custom_components.keymaster.lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
+
+# A legacy User Code CC lock acknowledges a clear command before it reports the slot's new
+# (empty) value, so the cached value read straight after the command can still hold the old
+# code for a few seconds. Poll the cache for this long before declaring the clear failed.
+LEGACY_CLEAR_VERIFY_TIMEOUT: float = 10.0
+LEGACY_CLEAR_VERIFY_INTERVAL: float = 0.5
 
 
 @dataclass
@@ -1116,11 +1124,31 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 slot_num,
             )
 
-        return self._verify_legacy_usercode_clear(node, slot_num)
+        return await self._async_verify_legacy_usercode_clear(node, slot_num)
 
-    def _verify_legacy_usercode_clear(self, node: ZwaveJSNode, slot_num: int) -> bool:
-        """Verify that a legacy User Code CC slot was cleared."""
-        # Verify the code was cleared
+    async def _async_verify_legacy_usercode_clear(self, node: ZwaveJSNode, slot_num: int) -> bool:
+        """Verify that a legacy User Code CC slot was cleared.
+
+        The first check is immediate; if the cached value still holds a code, keep
+        polling until the lock's report lands or LEGACY_CLEAR_VERIFY_TIMEOUT expires.
+        """
+        deadline = time.monotonic() + LEGACY_CLEAR_VERIFY_TIMEOUT
+        while True:
+            cleared = self._legacy_usercode_is_cleared(node, slot_num)
+            if cleared is None:
+                return False
+            if cleared:
+                return True
+            if time.monotonic() >= deadline:
+                _LOGGER.warning(
+                    "[ZWaveJSProvider] Slot %s not yet cleared after command, will retry",
+                    slot_num,
+                )
+                return False
+            await asyncio.sleep(LEGACY_CLEAR_VERIFY_INTERVAL)
+
+    def _legacy_usercode_is_cleared(self, node: ZwaveJSNode, slot_num: int) -> bool | None:
+        """Read the cached User Code value; True if empty, False if set, None on error."""
         try:
             usercode = get_usercode(node, slot_num)
         except BaseZwaveJSServerError as e:
@@ -1130,18 +1158,11 @@ class ZWaveJSLockProvider(BaseLockProvider):
                 e.__class__.__qualname__,
                 e,
             )
-            return False
+            return None
 
         # Treat both "" and full string of "0" as cleared (Schlage BE469 firmware bug workaround)
         code_value = str(usercode.get(ZWAVEJS_ATTR_USERCODE) or "")
-        if code_value not in ("", "0" * len(code_value)):
-            _LOGGER.warning(
-                "[ZWaveJSProvider] Slot %s not yet cleared after command, will retry",
-                slot_num,
-            )
-            return False
-
-        return True
+        return code_value in ("", "0" * len(code_value))
 
     def get_activity_for_sensor_event(
         self,
