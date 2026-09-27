@@ -27,6 +27,11 @@ THROTTLE_SECONDS: int = 5
 SYNC_STATUS_THRESHOLD: int = 15
 QUICK_REFRESH_SECONDS: int = 15
 PIN_SET_GRACE_SECONDS: int = 60
+# Total time a single refresh pass may spend waiting in-line for locks to
+# confirm writes (shared across all slots and locks in the pass). Slots that
+# are still unconfirmed when it runs out fail fast to OUT_OF_SYNC and are
+# reconciled by the quick refresh that follows.
+REFRESH_PASS_VERIFY_BUDGET_SECONDS: float = 10.0
 ENTITY_DEBOUNCE_SECONDS: int = 5
 BACKOFF_INITIAL_SECONDS: int = 60
 BACKOFF_MAX_SECONDS: int = 1800  # 30 minutes

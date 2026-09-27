@@ -1,9 +1,15 @@
 """Tests for the base lock provider."""
 
+import contextvars
 from dataclasses import dataclass
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
+from custom_components.keymaster.providers._base import (
+    BaseLockProvider,
+    CodeSlot,
+    refresh_pass_verify_budget,
+    verify_window,
+)
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 
@@ -234,3 +240,81 @@ class TestBaseLockProviderDefaultImplementations:
         assert platform_data["domain"] == "stub"
         assert platform_data["lock_entity_id"] == "lock.stub"
         assert platform_data["connected"] is True
+
+
+class FakeClock:
+    """Deterministic stand-in for time.monotonic()."""
+
+    def __init__(self) -> None:
+        """Start the clock at an arbitrary non-zero value."""
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        """Return the current fake time."""
+        return self.now
+
+
+class TestRefreshPassVerifyBudget:
+    """Test the refresh-pass verification budget shared by in-line waits."""
+
+    def test_window_outside_pass_uses_full_timeout(self):
+        """Outside a refresh pass (e.g. a user action) the full timeout applies."""
+        clock = FakeClock()
+        with (
+            patch("custom_components.keymaster.providers._base.time.monotonic", clock),
+            verify_window(10.0) as deadline,
+        ):
+            assert deadline == clock.now + 10.0
+
+    def test_windows_in_one_pass_share_the_budget(self):
+        """Each wait is charged to the pass budget, capping later windows."""
+        clock = FakeClock()
+        with (
+            patch("custom_components.keymaster.providers._base.time.monotonic", clock),
+            refresh_pass_verify_budget(10.0),
+        ):
+            with verify_window(10.0) as first:
+                assert first == clock.now + 10.0
+                clock.now += 7.0  # slot 1 waited 7 s before the lock reported
+
+            with verify_window(10.0) as second:
+                assert second == clock.now + 3.0
+                clock.now += 3.0  # slot 2 used the rest of the budget
+
+            with verify_window(10.0) as third:
+                # Budget spent: the deadline is already reached, so the caller
+                # checks once and fails fast instead of waiting another 10 s.
+                assert third <= clock.now
+
+    def test_window_shorter_than_budget_is_not_extended(self):
+        """A provider timeout shorter than the remaining budget still applies."""
+        clock = FakeClock()
+        with (
+            patch("custom_components.keymaster.providers._base.time.monotonic", clock),
+            refresh_pass_verify_budget(10.0),
+            verify_window(2.0) as deadline,
+        ):
+            assert deadline == clock.now + 2.0
+
+    def test_each_pass_gets_a_fresh_budget(self):
+        """A new refresh pass starts with the full budget again."""
+        clock = FakeClock()
+        with patch("custom_components.keymaster.providers._base.time.monotonic", clock):
+            with refresh_pass_verify_budget(1.0), verify_window(10.0):
+                clock.now += 5.0
+
+            with refresh_pass_verify_budget(1.0), verify_window(10.0) as deadline:
+                assert deadline == clock.now + 1.0
+
+    def test_closed_budget_is_ignored_by_captured_contexts(self):
+        """Callbacks that captured a pass's context do not inherit its spent budget."""
+        clock = FakeClock()
+        with patch("custom_components.keymaster.providers._base.time.monotonic", clock):
+            with refresh_pass_verify_budget(0.0):
+                captured = contextvars.copy_context()
+
+            def open_window() -> float:
+                with verify_window(10.0) as deadline:
+                    return deadline
+
+            assert captured.run(open_window) == clock.now + 10.0

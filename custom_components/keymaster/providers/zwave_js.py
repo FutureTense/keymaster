@@ -41,7 +41,7 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
-from ._base import BaseLockProvider, CodeSlot, LockEventCallback
+from ._base import BaseLockProvider, CodeSlot, LockEventCallback, verify_window
 from .const import ACCESS_CONTROL, ALARM_TYPE, UNKNOWN
 
 SetCredentialResult: Any
@@ -1131,21 +1131,25 @@ class ZWaveJSLockProvider(BaseLockProvider):
 
         The first check is immediate; if the cached value still holds a code, keep
         polling until the lock's report lands or LEGACY_CLEAR_VERIFY_TIMEOUT expires.
+        During a coordinator refresh pass the wait is also capped by the pass-wide
+        verification budget, so many slow slots cannot cost slots x timeout.
         """
-        deadline = time.monotonic() + LEGACY_CLEAR_VERIFY_TIMEOUT
-        while True:
-            cleared = self._legacy_usercode_is_cleared(node, slot_num)
-            if cleared is None:
-                return False
-            if cleared:
-                return True
-            if time.monotonic() >= deadline:
-                _LOGGER.warning(
-                    "[ZWaveJSProvider] Slot %s not yet cleared after command, will retry",
-                    slot_num,
+        with verify_window(LEGACY_CLEAR_VERIFY_TIMEOUT) as deadline:
+            while True:
+                cleared = self._legacy_usercode_is_cleared(node, slot_num)
+                if cleared is None:
+                    return False
+                if cleared:
+                    return True
+                if time.monotonic() >= deadline:
+                    _LOGGER.warning(
+                        "[ZWaveJSProvider] Slot %s not yet cleared after command, will retry",
+                        slot_num,
+                    )
+                    return False
+                await asyncio.sleep(
+                    min(LEGACY_CLEAR_VERIFY_INTERVAL, max(deadline - time.monotonic(), 0.0))
                 )
-                return False
-            await asyncio.sleep(LEGACY_CLEAR_VERIFY_INTERVAL)
 
     def _legacy_usercode_is_cleared(self, node: ZwaveJSNode, slot_num: int) -> bool | None:
         """Read the cached User Code value; True if empty, False if set, None on error."""

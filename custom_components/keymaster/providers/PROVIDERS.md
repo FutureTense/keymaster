@@ -173,6 +173,29 @@ async def async_clear_usercode(self, slot_num: int) -> bool:
         return False
 ```
 
+#### Waiting for the lock to confirm a write
+
+If the lock acknowledges a command before it reports the new value, and the
+provider needs to wait in-line for that report (as the Z-Wave JS legacy
+User Code CC clear does), wrap the wait in `verify_window()` from `_base.py`
+instead of computing a deadline by hand:
+
+```python
+with verify_window(MY_VERIFY_TIMEOUT) as deadline:
+    while not self._slot_is_cleared(slot_num):
+        if time.monotonic() >= deadline:
+            return False  # coordinator marks the slot OUT_OF_SYNC and retries
+        await asyncio.sleep(MY_VERIFY_INTERVAL)
+return True
+```
+
+The coordinator awaits every slot of every lock in sequence during a refresh
+pass, so it shares one verification budget across the whole pass
+(`REFRESH_PASS_VERIFY_BUDGET_SECONDS`). `verify_window()` caps each wait by
+what is left of that budget; once it is spent, the wait fails fast and the
+next refresh reconciles the slot. Outside a refresh pass (for example a user
+toggling a slot) the provider's own timeout applies unchanged.
+
 ### Step 3: Implement Optional Capabilities
 
 Override these properties to enable additional features:

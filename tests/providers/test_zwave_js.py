@@ -6,6 +6,7 @@ from datetime import timedelta
 from enum import Enum
 import importlib
 import sys
+import time
 from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -20,6 +21,7 @@ from custom_components.keymaster.const import ATTR_NODE_ID, DOMAIN
 from custom_components.keymaster.providers import (
     create_provider,
     get_provider_class_for_lock,
+    refresh_pass_verify_budget,
     zwave_js as zwave_js_provider,
 )
 from custom_components.keymaster.providers.zwave_js import ZWaveJSLockProvider
@@ -713,6 +715,67 @@ class TestZWaveJSLockProviderUsercodes:
         assert result is False
         assert mock_get.call_count > 1
         assert "Slot 1 not yet cleared after command, will retry" in caplog.text
+
+    async def test_clear_usercode_waits_share_refresh_pass_budget(
+        self, zwave_provider, mock_zwave_node, caplog
+    ):
+        """Test slots that never report cost one pass budget, not slots x timeout."""
+        zwave_provider._node = mock_zwave_node
+        slots = [1, 2, 3, 4, 5]
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                return_value={"usercode": "1234"},
+            ) as mock_get,
+            patch(
+                "custom_components.keymaster.providers.zwave_js.LEGACY_CLEAR_VERIFY_INTERVAL",
+                0.01,
+            ),
+            refresh_pass_verify_budget(0.1),
+        ):
+            started = time.monotonic()
+            results = [await zwave_provider.async_clear_usercode(slot) for slot in slots]
+            elapsed = time.monotonic() - started
+
+        # Without the shared budget this would take len(slots) x 10 s.
+        assert elapsed < 1.0
+        assert results == [False] * len(slots)
+        # Every slot is still checked at least once, so a lock that reported in
+        # time is never failed without looking.
+        assert mock_get.call_count >= len(slots)
+        for slot in slots:
+            assert f"Slot {slot} not yet cleared after command, will retry" in caplog.text
+
+    async def test_clear_usercode_in_refresh_pass_still_waits_for_late_report(
+        self, zwave_provider, mock_zwave_node
+    ):
+        """Test a single slow slot inside a refresh pass still waits for the report."""
+        zwave_provider._node = mock_zwave_node
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                side_effect=[{"usercode": "1234"}, {"usercode": "1234"}, {"usercode": ""}],
+            ) as mock_get,
+            patch(
+                "custom_components.keymaster.providers.zwave_js.LEGACY_CLEAR_VERIFY_INTERVAL",
+                0.01,
+            ),
+            refresh_pass_verify_budget(10.0),
+        ):
+            result = await zwave_provider.async_clear_usercode(1)
+
+        assert result is True
+        assert mock_get.call_count == 3
 
     async def test_clear_usercode_schlage_bug_length_4(self, zwave_provider, mock_zwave_node):
         """Test clear_usercode returns True when the returned value is 0000. Tests Schlage Bug."""
