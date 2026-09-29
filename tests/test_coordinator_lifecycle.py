@@ -5,6 +5,7 @@ import copy
 from datetime import datetime as dt, timedelta
 import logging
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,8 +22,10 @@ from custom_components.keymaster.const import (
     CONF_LOCK_NAME,
     CONF_SLOTS,
     CONF_START,
+    COORDINATOR,
     DOMAIN,
     SYNC_STATUS_THRESHOLD,
+    Synced,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
@@ -327,6 +330,133 @@ async def test_restart_startup_uses_scoped_entry_refreshes(
         ]
 
     assert unavailable_by_entry == {entry.entry_id: [] for entry in entries}
+
+
+class RecordingStartupProvider(StartupProvider):
+    """Startup provider that reports fixed usercodes and records PIN writes."""
+
+    def __init__(self, *args: Any, usercodes: list[CodeSlot], **kwargs: Any) -> None:
+        """Initialize with the usercodes the lock should report."""
+        super().__init__(*args, **kwargs)
+        self.usercodes = usercodes
+        self.cleared_slots: list[int] = []
+        self.set_slots: list[int] = []
+
+    async def async_get_usercodes(self) -> list[CodeSlot]:
+        """Return the configured usercodes."""
+        return self.usercodes
+
+    async def async_set_usercode(self, slot_num: int, code: str, name: str | None = None) -> bool:
+        """Record a set request."""
+        self.set_slots.append(slot_num)
+        return True
+
+    async def async_clear_usercode(self, slot_num: int) -> bool:
+        """Record a clear request."""
+        self.cleared_slots.append(slot_num)
+        return True
+
+
+async def test_restart_does_not_clear_disabled_slots_that_keep_a_pin(
+    hass: HomeAssistant,
+) -> None:
+    """Test a restart does not re-clear disabled slots whose PIN is kept locally.
+
+    Disabled slots keep their PIN in storage so re-enabling restores it. On
+    restart the stored lock is replaced by a freshly built one during
+    ``add_lock(update=True)``; if the slot's ``active`` baseline is not carried
+    over, the first refresh sees a phantom active -> inactive transition and
+    sends a clear to the lock for every such slot, serially, while Home
+    Assistant is still bootstrapping.
+    """
+    entry = _make_startup_entry(hass, 0)
+    hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_SLOTS: 2})
+    stored_lock = KeymasterLock(
+        lock_name=entry.data[CONF_LOCK_NAME],
+        lock_entity_id=entry.data[CONF_LOCK_ENTITY_ID],
+        keymaster_config_entry_id=entry.entry_id,
+        number_of_code_slots=2,
+        starting_code_slot=1,
+        code_slots={
+            1: KeymasterCodeSlot(
+                number=1, enabled=True, pin="1234", active=True, synced=Synced.SYNCED
+            ),
+            2: KeymasterCodeSlot(
+                number=2, enabled=False, pin="5678", active=False, synced=Synced.DISCONNECTED
+            ),
+        },
+    )
+    providers: list[RecordingStartupProvider] = []
+
+    def provider_factory(
+        hass: HomeAssistant,
+        lock_entity_id: str,
+        keymaster_config_entry: MockConfigEntry,
+    ) -> RecordingStartupProvider:
+        provider = RecordingStartupProvider(
+            hass=hass,
+            lock_entity_id=lock_entity_id,
+            keymaster_config_entry=keymaster_config_entry,
+            device_registry=dr.async_get(hass),
+            entity_registry=er.async_get(hass),
+            usercodes=[
+                CodeSlot(slot_num=1, code="1234", in_use=True),
+                # The lock already reports the disabled slot as empty.
+                CodeSlot(slot_num=2, code=None, in_use=False),
+            ],
+        )
+        providers.append(provider)
+        return provider
+
+    with (
+        patch.object(
+            KeymasterCoordinator,
+            "_async_load_data",
+            AsyncMock(return_value={entry.entry_id: stored_lock}),
+        ),
+        patch(
+            "custom_components.keymaster.coordinator.create_provider",
+            side_effect=provider_factory,
+        ),
+        patch("custom_components.keymaster.async_generate_lovelace", new_callable=AsyncMock),
+        patch(
+            "custom_components.keymaster.async_update_large_lock_repair_issue",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.keymaster.async_update_all_large_lock_repair_issues",
+            new_callable=AsyncMock,
+        ),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert providers
+        assert [slot for provider in providers for slot in provider.cleared_slots] == []
+        assert [slot for provider in providers for slot in provider.set_slots] == []
+
+        coordinator: KeymasterCoordinator = hass.data[DOMAIN][COORDINATOR]
+        kmlock = coordinator.kmlocks[entry.entry_id]
+        assert kmlock.code_slots is not None
+        disabled_slot = kmlock.code_slots[2]
+        assert disabled_slot.pin == "5678"
+        assert disabled_slot.active is False
+        assert disabled_slot.synced == Synced.DISCONNECTED
+
+        # A genuine active -> inactive transition at runtime still clears the lock.
+        provider = kmlock.provider
+        assert isinstance(provider, RecordingStartupProvider)
+        enabled_slot = kmlock.code_slots[1]
+        enabled_slot.accesslimit_count_enabled = True
+        enabled_slot.accesslimit_count = 0
+        await coordinator.async_refresh_lock(entry.entry_id)
+
+        assert provider.cleared_slots
+        assert set(provider.cleared_slots) == {1}
+        assert enabled_slot.active is False
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
 
 
 async def test_lock_coordinator_refresh_same_lock_does_not_notify(hass):

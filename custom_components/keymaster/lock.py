@@ -93,9 +93,14 @@ class KeymasterCodeSlot:
     def inherit_state_from(self, old: KeymasterCodeSlot) -> None:
         """Carry user state from `old` into `self`.
 
-        Structural identity (`number`) and runtime-only fields (`active`,
-        `synced`) are intentionally NOT inherited — they belong to the
-        new instance's lifecycle.
+        Structural identity (`number`) and `synced` are intentionally NOT
+        inherited — they belong to the new instance's lifecycle.
+
+        `active` IS inherited: it is the baseline the coordinator compares
+        against to detect activation changes. Leaving it at the dataclass
+        default (True) turns every restart/reload into a phantom
+        active -> inactive transition for disabled or out-of-schedule slots,
+        which sends a redundant clear to the lock for each of them.
 
         For `accesslimit_day_of_week`, only DOW keys present on both
         sides are inherited; keys present only on one side are left
@@ -104,6 +109,7 @@ class KeymasterCodeSlot:
         self.enabled = old.enabled
         self.name = old.name
         self.pin = old.pin
+        self.active = old.active
         self.override_parent = old.override_parent
         self.notifications = old.notifications
         self.accesslimit_count_enabled = old.accesslimit_count_enabled

@@ -3,6 +3,7 @@
 from dataclasses import fields
 from typing import Any, cast
 
+from custom_components.keymaster.const import Synced
 from custom_components.keymaster.lock import (
     KeymasterCodeSlot,
     KeymasterCodeSlotsDict,
@@ -163,3 +164,24 @@ def test_inherit_state_does_not_resurrect_disconnected_provider_on_reload():
     assert new_lock.connected is False
     assert new_lock.provider is None
     assert new_lock.lock_config_entry_id is None
+
+
+def test_code_slot_inherit_state_carries_active_baseline():
+    """Test reload keeps the slot's active baseline but not its sync status.
+
+    A freshly built slot defaults to ``active=True``. If that default replaced
+    the stored value, the next refresh would treat every disabled slot as a
+    new active -> inactive transition and clear it on the lock again.
+    """
+    old_slot = KeymasterCodeSlot(
+        number=1, enabled=False, pin="1234", active=False, synced=Synced.DISCONNECTED
+    )
+    new_slot = KeymasterCodeSlot(number=1)
+    new_slot.synced = Synced.OUT_OF_SYNC
+
+    new_slot.inherit_state_from(old_slot)
+
+    assert new_slot.active is False
+    assert new_slot.enabled is False
+    assert new_slot.pin == "1234"
+    assert new_slot.synced == Synced.OUT_OF_SYNC
