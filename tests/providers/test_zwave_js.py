@@ -751,6 +751,35 @@ class TestZWaveJSLockProviderUsercodes:
         for slot in slots:
             assert f"Slot {slot} not yet cleared after command, will retry" in caplog.text
 
+    async def test_clear_usercode_sleep_is_clamped_to_pass_budget(
+        self, zwave_provider, mock_zwave_node
+    ):
+        """Test the poll sleep never runs past what is left of the pass budget."""
+        zwave_provider._node = mock_zwave_node
+
+        with (
+            patch(
+                "custom_components.keymaster.providers.zwave_js.clear_usercode",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.get_usercode",
+                return_value={"usercode": "1234"},
+            ),
+            patch(
+                "custom_components.keymaster.providers.zwave_js.LEGACY_CLEAR_VERIFY_INTERVAL",
+                5.0,
+            ),
+            refresh_pass_verify_budget(0.05),
+        ):
+            started = time.monotonic()
+            result = await zwave_provider.async_clear_usercode(1)
+            elapsed = time.monotonic() - started
+
+        assert result is False
+        # An unclamped sleep would wait the full 5 s interval.
+        assert elapsed < 1.0
+
     async def test_clear_usercode_in_refresh_pass_still_waits_for_late_report(
         self, zwave_provider, mock_zwave_node
     ):

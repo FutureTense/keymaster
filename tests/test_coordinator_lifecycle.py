@@ -546,12 +546,21 @@ async def test_refresh_pass_bounds_serialized_clear_verification(hass: HomeAssis
         assert all(lock.code_slots[n].synced == Synced.OUT_OF_SYNC for n in slot_nums)
         assert all(lock.code_slots[n].pin == "1234" for n in slot_nums)
 
+        # A scoped per-lock pass is bounded by its own budget the same way.
+        started = time.monotonic()
+        await coordinator.async_refresh_lock(entry.entry_id)
+        elapsed = time.monotonic() - started
+
+        assert elapsed < provider.verify_timeout
+        assert provider.clear_calls == slot_nums * 2
+        assert all(lock.code_slots[n].synced == Synced.OUT_OF_SYNC for n in slot_nums)
+
         # The next pass retries every unconfirmed slot; this time the lock reports
         # the clears, so each slot settles instead of waiting out the timeout again.
         provider.lock_reports_clears = True
         await coordinator.async_refresh_lock(entry.entry_id)
 
-    assert provider.clear_calls == slot_nums * 2
+    assert provider.clear_calls == slot_nums * 3
     assert all(lock.code_slots[n].synced == Synced.DISCONNECTED for n in slot_nums)
     assert all(lock.code_slots[n].pin == "1234" for n in slot_nums)
     await coordinator.async_shutdown()
