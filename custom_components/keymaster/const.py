@@ -31,6 +31,17 @@ PIN_SET_GRACE_SECONDS: int = 60
 # confirm writes (shared across all slots and locks in the pass). Slots that
 # are still unconfirmed when it runs out fail fast to OUT_OF_SYNC and are
 # reconciled by the quick refresh that follows.
+#
+# This equals the Z-Wave JS per-slot LEGACY_CLEAR_VERIFY_TIMEOUT, so one slow
+# slot can spend the whole budget and every later slot in the pass gets a
+# single immediate check. Slots are visited in a fixed order (ascending slot
+# number, locks in kmlocks order), so the same later slots take that path each
+# time. That is deliberate: the cost is bounded to one extra reconciliation
+# cycle. A fast-failed slot is OUT_OF_SYNC with its lock already queued for a
+# quick refresh; QUICK_REFRESH_SECONDS later that pass either finds the slot
+# empty and settles it at Disconnected via _handle_empty_usercode (no new
+# command) or re-sends the clear. Raising the budget instead would raise the
+# worst-case time a pass holds up every other lock by the same amount.
 REFRESH_PASS_VERIFY_BUDGET_SECONDS: float = 10.0
 ENTITY_DEBOUNCE_SECONDS: int = 5
 BACKOFF_INITIAL_SECONDS: int = 60
