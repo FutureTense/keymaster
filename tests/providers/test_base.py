@@ -355,10 +355,18 @@ class TestRefreshPassVerifyBudget:
 
     def test_exception_in_nested_pass_keeps_the_outer_budget(self):
         """An error raised inside a nested pass leaves the outer pass intact."""
+        seen: list[_VerifyBudget | None] = []
+
+        def failing_nested_pass() -> None:
+            with refresh_pass_verify_budget(10.0):
+                seen.append(_refresh_pass_verify_budget.get())
+                raise RuntimeError("boom")
+
         with refresh_pass_verify_budget(10.0):
             outer = _refresh_pass_verify_budget.get()
-            with pytest.raises(RuntimeError), refresh_pass_verify_budget(10.0):
-                raise RuntimeError("boom")
+            with pytest.raises(RuntimeError):
+                failing_nested_pass()
+            assert seen == [outer]  # the nested pass reused the outer budget
             assert _refresh_pass_verify_budget.get() is outer
             assert outer is not None
             assert not outer.closed
