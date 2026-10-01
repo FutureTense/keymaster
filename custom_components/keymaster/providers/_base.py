@@ -32,7 +32,7 @@ class _VerifyBudget:
     """Wall-clock budget shared by in-line verification waits in one refresh pass."""
 
     remaining: float
-    open: bool = True
+    closed: bool = False
 
 
 _refresh_pass_verify_budget: ContextVar[_VerifyBudget | None] = ContextVar(
@@ -58,7 +58,7 @@ def refresh_pass_verify_budget(seconds: float) -> Iterator[None]:
     finally:
         # Close the budget so callbacks that captured this context (e.g. timers
         # scheduled during the pass) do not inherit an exhausted budget.
-        budget.open = False
+        budget.closed = True
         _refresh_pass_verify_budget.reset(token)
 
 
@@ -73,7 +73,7 @@ def verify_window(timeout: float) -> Iterator[float]:
     """
     started = time.monotonic()
     budget = _refresh_pass_verify_budget.get()
-    if budget is not None and not budget.open:
+    if budget is not None and budget.closed:
         budget = None
     deadline = started + timeout
     if budget is not None:
