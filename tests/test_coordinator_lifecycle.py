@@ -4,6 +4,7 @@ import asyncio
 import copy
 from datetime import datetime as dt, timedelta
 import logging
+import time
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,7 +30,7 @@ from custom_components.keymaster.const import (
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator, KeymasterLockCoordinator
 from custom_components.keymaster.lock import KeymasterCodeSlot, KeymasterLock
-from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
+from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot, verify_window
 from homeassistant.components.lock.const import LockState
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, STATE_UNAVAILABLE
@@ -457,6 +458,112 @@ async def test_restart_does_not_clear_disabled_slots_that_keep_a_pin(
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+
+
+class SlowClearProvider(StartupProvider):
+    """Provider whose lock accepts clears but never reports them within the wait."""
+
+    verify_timeout = 2.0
+
+    def __init__(self, *args: Any, codes: dict[int, str], **kwargs: Any) -> None:
+        """Initialize with the codes the lock currently reports."""
+        super().__init__(*args, **kwargs)
+        self.codes = codes
+        self.lock_reports_clears = False
+        self.clear_calls: list[int] = []
+
+    async def async_get_usercodes(self) -> list[CodeSlot]:
+        """Return the codes the lock reports."""
+        return [
+            CodeSlot(slot_num=slot_num, code=code or None, in_use=bool(code))
+            for slot_num, code in self.codes.items()
+        ]
+
+    async def async_clear_usercode(self, slot_num: int) -> bool:
+        """Send a clear, then wait in-line for the lock to confirm it."""
+        self.clear_calls.append(slot_num)
+        if self.lock_reports_clears:
+            self.codes[slot_num] = ""
+        with verify_window(self.verify_timeout) as deadline:
+            while self.codes[slot_num]:
+                if time.monotonic() >= deadline:
+                    return False
+                await asyncio.sleep(0.01)
+        return True
+
+
+async def test_refresh_pass_bounds_serialized_clear_verification(hass: HomeAssistant) -> None:
+    """Test unconfirmed clears cost one pass budget, then reconcile on the next pass.
+
+    Every code slot of every lock is awaited in sequence during a refresh
+    pass (#801). Slots whose lock never confirms the clear in time must not
+    each wait the provider's full verification timeout.
+    """
+    entry = MockConfigEntry(domain=DOMAIN, entry_id="test_entry", title="Test Lock", data={})
+    entry.add_to_hass(hass)
+    slot_nums = [1, 2, 3, 4, 5]
+    provider = SlowClearProvider(
+        hass=hass,
+        lock_entity_id="lock.test",
+        keymaster_config_entry=entry,
+        device_registry=dr.async_get(hass),
+        entity_registry=er.async_get(hass),
+        codes=dict.fromkeys(slot_nums, "1234"),
+    )
+    provider._connected = True
+    lock = KeymasterLock(
+        lock_name="test_lock",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=entry.entry_id,
+        number_of_code_slots=len(slot_nums),
+        starting_code_slot=1,
+        code_slots={
+            slot_num: KeymasterCodeSlot(
+                number=slot_num,
+                enabled=False,
+                pin="1234",
+                active=False,
+                synced=Synced.DISCONNECTED,
+            )
+            for slot_num in slot_nums
+        },
+    )
+    lock.connected = True
+    lock.provider = provider
+    coordinator = KeymasterCoordinator(hass)
+    coordinator._initial_setup_done_event.set()
+    coordinator.kmlocks[entry.entry_id] = lock
+    assert lock.code_slots is not None
+
+    with patch("custom_components.keymaster.coordinator.REFRESH_PASS_VERIFY_BUDGET_SECONDS", 0.2):
+        started = time.monotonic()
+        await coordinator.async_refresh()
+        elapsed = time.monotonic() - started
+
+        # Without the pass budget this would take len(slot_nums) x 2 s.
+        assert elapsed < provider.verify_timeout
+        assert provider.clear_calls == slot_nums
+        assert all(lock.code_slots[n].synced == Synced.OUT_OF_SYNC for n in slot_nums)
+        assert all(lock.code_slots[n].pin == "1234" for n in slot_nums)
+
+        # A scoped per-lock pass is bounded by its own budget the same way.
+        started = time.monotonic()
+        await coordinator.async_refresh_lock(entry.entry_id)
+        elapsed = time.monotonic() - started
+
+        assert elapsed < provider.verify_timeout
+        assert provider.clear_calls == slot_nums * 2
+        assert all(lock.code_slots[n].synced == Synced.OUT_OF_SYNC for n in slot_nums)
+
+        # The next pass retries every unconfirmed slot; this time the lock reports
+        # the clears, so each slot settles instead of waiting out the timeout again.
+        provider.lock_reports_clears = True
+        await coordinator.async_refresh_lock(entry.entry_id)
+
+    assert provider.clear_calls == slot_nums * 3
+    assert all(lock.code_slots[n].synced == Synced.DISCONNECTED for n in slot_nums)
+    assert all(lock.code_slots[n].pin == "1234" for n in slot_nums)
+    await coordinator.async_shutdown()
 
 
 async def test_lock_coordinator_refresh_same_lock_does_not_notify(hass):

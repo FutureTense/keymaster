@@ -8,7 +8,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from ._base import BaseLockProvider, CodeSlot, ConnectionCallback, LockEventCallback
+from ._base import (
+    BaseLockProvider,
+    CodeSlot,
+    ConnectionCallback,
+    LockEventCallback,
+    refresh_pass_verify_budget,
+    verify_window,
+)
 from .akuvox import AkuvoxLockProvider
 from .schlage import SchlageLockProvider
 from .zha import ZHALockProvider
@@ -131,4 +138,6 @@ __all__ = [
     "get_provider_class_for_lock",
     "get_supported_platforms",
     "is_platform_supported",
+    "refresh_pass_verify_budget",
+    "verify_window",
 ]

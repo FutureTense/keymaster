@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Coroutine
+import asyncio
+from collections.abc import Callable, Coroutine, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from custom_components.keymaster.const import (
@@ -22,6 +26,93 @@ if TYPE_CHECKING:
     from custom_components.keymaster.lock import KeymasterLock
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _current_task() -> asyncio.Task[Any] | None:
+    """Return the running asyncio task, or None outside an event loop."""
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
+@dataclass
+class _VerifyBudget:
+    """Wall-clock budget shared by in-line verification waits in one refresh pass."""
+
+    remaining: float
+    owner: asyncio.Task[Any] | None = field(default_factory=_current_task)
+    closed: bool = False
+
+
+_refresh_pass_verify_budget: ContextVar[_VerifyBudget | None] = ContextVar(
+    "keymaster_refresh_pass_verify_budget", default=None
+)
+
+
+def _active_verify_budget() -> _VerifyBudget | None:
+    """Return the budget of the refresh pass running in this task, if any.
+
+    Tasks and callbacks created during a pass copy its context, including the
+    budget. A copy only counts while the pass is still open and only in the
+    task that opened it, so concurrent work started from inside a pass is not
+    capped by, or charged to, that pass's budget.
+    """
+    budget = _refresh_pass_verify_budget.get()
+    if budget is None or budget.closed or budget.owner is not _current_task():
+        return None
+    return budget
+
+
+@contextmanager
+def refresh_pass_verify_budget(seconds: float) -> Iterator[None]:
+    """Share one in-line verification budget across a coordinator refresh pass.
+
+    A refresh pass awaits every code slot of every lock in sequence, so a
+    provider that waits in-line for the lock to confirm a write would
+    otherwise cost ``slots x timeout`` when the lock is slow to report.
+    Inside this block, ``verify_window()`` caps each wait by what is left of
+    ``seconds``; once the budget is spent, verification checks once and
+    fails fast, and the slot is picked up by the next refresh instead.
+
+    If this task is already inside a pass (a pass nested inside another), the
+    outer budget is kept rather than reset, so nesting cannot extend the
+    outer cap.
+    """
+    if _active_verify_budget() is not None:
+        yield
+        return
+    budget = _VerifyBudget(remaining=max(seconds, 0.0))
+    token = _refresh_pass_verify_budget.set(budget)
+    try:
+        yield
+    finally:
+        # Close the budget so callbacks that captured this context (e.g. timers
+        # scheduled during the pass) do not inherit an exhausted budget.
+        budget.closed = True
+        _refresh_pass_verify_budget.reset(token)
+
+
+@contextmanager
+def verify_window(timeout: float) -> Iterator[float]:
+    """Yield a ``time.monotonic()`` deadline for an in-line verification wait.
+
+    The deadline is ``timeout`` seconds from now, capped by whatever remains
+    of the active refresh pass budget (see ``refresh_pass_verify_budget()``).
+    Outside a refresh pass, e.g. for a user-initiated change or a task
+    started from inside a pass, the full ``timeout`` applies. Time spent
+    inside the block is charged to the budget.
+    """
+    started = time.monotonic()
+    budget = _active_verify_budget()
+    deadline = started + timeout
+    if budget is not None:
+        deadline = min(deadline, started + budget.remaining)
+    try:
+        yield deadline
+    finally:
+        if budget is not None:
+            budget.remaining = max(budget.remaining - (time.monotonic() - started), 0.0)
 
 
 @dataclass

@@ -48,6 +48,7 @@ from .const import (
     ISSUE_URL,
     PIN_SET_GRACE_SECONDS,
     QUICK_REFRESH_SECONDS,
+    REFRESH_PASS_VERIFY_BUDGET_SECONDS,
     SYNC_STATUS_THRESHOLD,
     THROTTLE_SECONDS,
     VERSION,
@@ -68,7 +69,7 @@ from .helpers import (
 )
 from .lock import KeymasterCodeSlot, KeymasterCodeSlotDayOfWeek, KeymasterLock
 from .lovelace import delete_lovelace
-from .providers import CodeSlot, create_provider
+from .providers import CodeSlot, create_provider, refresh_pass_verify_budget
 from .serialization import (
     encode_pin,
     kmlocks_to_dict,
@@ -2410,11 +2411,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         self._active_refresh_count += 1
         self._defer_refresh_listener_updates = True
         try:
-            dirty_entry_ids = await self._async_refresh_lock_data(
-                entry_id,
-                advance_sync_status=advance_sync_status,
-                defer_save=defer_save,
-            )
+            with refresh_pass_verify_budget(REFRESH_PASS_VERIFY_BUDGET_SECONDS):
+                dirty_entry_ids = await self._async_refresh_lock_data(
+                    entry_id,
+                    advance_sync_status=advance_sync_status,
+                    defer_save=defer_save,
+                )
         except asyncio.CancelledError as err:
             self.last_exception = err
             self.last_update_success = False
@@ -2556,7 +2558,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update all keymaster locks."""
-        self._record_refresh_dirty_entry_ids(await self.async_refresh_all_locks())
+        with refresh_pass_verify_budget(REFRESH_PASS_VERIFY_BUDGET_SECONDS):
+            dirty_entry_ids = await self.async_refresh_all_locks()
+        self._record_refresh_dirty_entry_ids(dirty_entry_ids)
         return dict(self.kmlocks)
 
     async def _clear_pending_quick_refresh(self, entry_id: str | None = None) -> None:

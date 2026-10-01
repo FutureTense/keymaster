@@ -1,9 +1,20 @@
 """Tests for the base lock provider."""
 
+import asyncio
+import contextvars
 from dataclasses import dataclass
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from custom_components.keymaster.providers._base import BaseLockProvider, CodeSlot
+import pytest
+
+from custom_components.keymaster.providers._base import (
+    BaseLockProvider,
+    CodeSlot,
+    _refresh_pass_verify_budget,
+    _VerifyBudget,
+    refresh_pass_verify_budget,
+    verify_window,
+)
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 
@@ -234,3 +245,205 @@ class TestBaseLockProviderDefaultImplementations:
         assert platform_data["domain"] == "stub"
         assert platform_data["lock_entity_id"] == "lock.stub"
         assert platform_data["connected"] is True
+
+
+class FakeClock:
+    """Deterministic stand-in for time.monotonic()."""
+
+    def __init__(self) -> None:
+        """Start the clock at an arbitrary non-zero value."""
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        """Return the current fake time."""
+        return self.now
+
+
+class TestRefreshPassVerifyBudget:
+    """Test the refresh-pass verification budget shared by in-line waits."""
+
+    def test_window_outside_pass_uses_full_timeout(self):
+        """Outside a refresh pass (e.g. a user action) the full timeout applies."""
+        clock = FakeClock()
+        with (
+            patch("custom_components.keymaster.providers._base.time.monotonic", clock),
+            verify_window(10.0) as deadline,
+        ):
+            assert deadline == clock.now + 10.0
+
+    def test_windows_in_one_pass_share_the_budget(self):
+        """Each wait is charged to the pass budget, capping later windows."""
+        clock = FakeClock()
+        with (
+            patch("custom_components.keymaster.providers._base.time.monotonic", clock),
+            refresh_pass_verify_budget(10.0),
+        ):
+            with verify_window(10.0) as first:
+                assert first == clock.now + 10.0
+                clock.now += 7.0  # slot 1 waited 7 s before the lock reported
+
+            with verify_window(10.0) as second:
+                assert second == clock.now + 3.0
+                clock.now += 3.0  # slot 2 used the rest of the budget
+
+            with verify_window(10.0) as third:
+                # Budget spent: the deadline is already reached, so the caller
+                # checks once and fails fast instead of waiting another 10 s.
+                assert third <= clock.now
+
+    def test_window_shorter_than_budget_is_not_extended(self):
+        """A provider timeout shorter than the remaining budget still applies."""
+        clock = FakeClock()
+        with (
+            patch("custom_components.keymaster.providers._base.time.monotonic", clock),
+            refresh_pass_verify_budget(10.0),
+            verify_window(2.0) as deadline,
+        ):
+            assert deadline == clock.now + 2.0
+
+    def test_each_pass_gets_a_fresh_budget(self):
+        """A new refresh pass starts with the full budget again."""
+        clock = FakeClock()
+        with patch("custom_components.keymaster.providers._base.time.monotonic", clock):
+            with refresh_pass_verify_budget(1.0), verify_window(10.0):
+                clock.now += 5.0
+
+            with refresh_pass_verify_budget(1.0), verify_window(10.0) as deadline:
+                assert deadline == clock.now + 1.0
+
+    def test_closed_budget_is_ignored_by_captured_contexts(self):
+        """Callbacks that captured a pass's context do not inherit its spent budget."""
+        clock = FakeClock()
+        with patch("custom_components.keymaster.providers._base.time.monotonic", clock):
+            with refresh_pass_verify_budget(0.0):
+                captured = contextvars.copy_context()
+
+            def open_window() -> float:
+                with verify_window(10.0) as deadline:
+                    return deadline
+
+            assert captured.run(open_window) == clock.now + 10.0
+
+    def test_nested_pass_keeps_the_outer_budget(self):
+        """A pass entered inside another pass does not reset the outer cap."""
+        clock = FakeClock()
+        with (
+            patch("custom_components.keymaster.providers._base.time.monotonic", clock),
+            refresh_pass_verify_budget(10.0),
+        ):
+            outer = _refresh_pass_verify_budget.get()
+            with verify_window(10.0):
+                clock.now += 9.5  # outer pass has 0.5 s left
+
+            with refresh_pass_verify_budget(10.0):
+                assert _refresh_pass_verify_budget.get() is outer
+                with verify_window(10.0) as deadline:
+                    # Capped by the outer remainder, not a fresh 10 s.
+                    assert deadline == clock.now + 0.5
+                    clock.now += 0.2
+
+            # Leaving the nested pass neither closes nor replaces the outer
+            # budget, and the time spent inside it was charged to the outer.
+            assert _refresh_pass_verify_budget.get() is outer
+            assert outer is not None
+            assert not outer.closed
+            with verify_window(10.0) as deadline:
+                assert deadline == pytest.approx(clock.now + 0.3)
+
+        assert outer.closed
+        assert _refresh_pass_verify_budget.get() is None
+
+    def test_exception_in_nested_pass_keeps_the_outer_budget(self):
+        """An error raised inside a nested pass leaves the outer pass intact."""
+        seen: list[_VerifyBudget | None] = []
+
+        def failing_nested_pass() -> None:
+            with refresh_pass_verify_budget(10.0):
+                seen.append(_refresh_pass_verify_budget.get())
+                raise RuntimeError("boom")
+
+        with refresh_pass_verify_budget(10.0):
+            outer = _refresh_pass_verify_budget.get()
+            with pytest.raises(RuntimeError):
+                failing_nested_pass()
+            assert seen == [outer]  # the nested pass reused the outer budget
+            assert _refresh_pass_verify_budget.get() is outer
+            assert outer is not None
+            assert not outer.closed
+
+    def test_pass_in_captured_context_gets_a_fresh_budget(self):
+        """A pass started from a callback that captured a finished pass is not nested."""
+        clock = FakeClock()
+        with patch("custom_components.keymaster.providers._base.time.monotonic", clock):
+            with refresh_pass_verify_budget(0.0):
+                captured = contextvars.copy_context()
+
+            def run_pass() -> float:
+                with refresh_pass_verify_budget(5.0), verify_window(10.0) as deadline:
+                    return deadline
+
+            assert captured.run(run_pass) == clock.now + 5.0
+
+    def test_exception_inside_pass_leaves_no_budget_active(self):
+        """An exception raised inside a pass resets and closes its budget."""
+        seen: list[_VerifyBudget | None] = []
+
+        def failing_pass() -> None:
+            with refresh_pass_verify_budget(10.0):
+                seen.append(_refresh_pass_verify_budget.get())
+                raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            failing_pass()
+
+        assert _refresh_pass_verify_budget.get() is None
+        (budget,) = seen
+        assert budget is not None
+        assert budget.closed
+
+    async def test_cancellation_inside_pass_leaves_no_budget_active(self):
+        """Cancelling a task mid-pass resets and closes its budget."""
+        entered = asyncio.Event()
+        seen: dict[str, _VerifyBudget | None] = {}
+
+        async def refresh_pass() -> None:
+            with refresh_pass_verify_budget(10.0):
+                seen["budget"] = _refresh_pass_verify_budget.get()
+                entered.set()
+                await asyncio.Event().wait()
+
+        async def run() -> None:
+            try:
+                await refresh_pass()
+            finally:
+                # Same task context the pass ran in, after the pass unwound.
+                seen["after"] = _refresh_pass_verify_budget.get()
+
+        task = asyncio.create_task(run())
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert seen["after"] is None
+        budget = seen["budget"]
+        assert budget is not None
+        assert budget.closed
+
+    async def test_task_started_during_pass_is_not_capped_or_charged(self):
+        """Work spawned from inside a pass runs outside it: full timeout, no charge."""
+        clock = FakeClock()
+        with patch("custom_components.keymaster.providers._base.time.monotonic", clock):
+
+            async def spawned_wait() -> float:
+                with verify_window(10.0) as deadline:
+                    clock.now += 4.0
+                    return deadline
+
+            with refresh_pass_verify_budget(1.0):
+                # The task copies this context, budget included.
+                spawned = asyncio.create_task(spawned_wait())
+                assert await spawned == clock.now - 4.0 + 10.0
+                with verify_window(10.0) as deadline:
+                    # The pass's own budget was not charged for the task's wait.
+                    assert deadline == clock.now + 1.0
