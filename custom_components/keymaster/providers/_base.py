@@ -50,7 +50,14 @@ def refresh_pass_verify_budget(seconds: float) -> Iterator[None]:
     Inside this block, ``verify_window()`` caps each wait by what is left of
     ``seconds``; once the budget is spent, verification checks once and
     fails fast, and the slot is picked up by the next refresh instead.
+
+    If a budget is already active (a pass nested inside another), the outer
+    budget is kept rather than reset, so nesting cannot extend the outer cap.
     """
+    existing = _refresh_pass_verify_budget.get()
+    if existing is not None and not existing.closed:
+        yield
+        return
     budget = _VerifyBudget(remaining=max(seconds, 0.0))
     token = _refresh_pass_verify_budget.set(budget)
     try:

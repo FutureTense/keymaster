@@ -4,9 +4,12 @@ import contextvars
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from custom_components.keymaster.providers._base import (
     BaseLockProvider,
     CodeSlot,
+    _refresh_pass_verify_budget,
     refresh_pass_verify_budget,
     verify_window,
 )
@@ -318,3 +321,55 @@ class TestRefreshPassVerifyBudget:
                     return deadline
 
             assert captured.run(open_window) == clock.now + 10.0
+
+    def test_nested_pass_keeps_the_outer_budget(self):
+        """A pass entered inside another pass does not reset the outer cap."""
+        clock = FakeClock()
+        with (
+            patch("custom_components.keymaster.providers._base.time.monotonic", clock),
+            refresh_pass_verify_budget(10.0),
+        ):
+            outer = _refresh_pass_verify_budget.get()
+            with verify_window(10.0):
+                clock.now += 9.5  # outer pass has 0.5 s left
+
+            with refresh_pass_verify_budget(10.0):
+                assert _refresh_pass_verify_budget.get() is outer
+                with verify_window(10.0) as deadline:
+                    # Capped by the outer remainder, not a fresh 10 s.
+                    assert deadline == clock.now + 0.5
+                    clock.now += 0.2
+
+            # Leaving the nested pass neither closes nor replaces the outer
+            # budget, and the time spent inside it was charged to the outer.
+            assert _refresh_pass_verify_budget.get() is outer
+            assert outer is not None
+            assert not outer.closed
+            with verify_window(10.0) as deadline:
+                assert deadline == pytest.approx(clock.now + 0.3)
+
+        assert outer.closed
+        assert _refresh_pass_verify_budget.get() is None
+
+    def test_exception_in_nested_pass_keeps_the_outer_budget(self):
+        """An error raised inside a nested pass leaves the outer pass intact."""
+        with refresh_pass_verify_budget(10.0):
+            outer = _refresh_pass_verify_budget.get()
+            with pytest.raises(RuntimeError), refresh_pass_verify_budget(10.0):
+                raise RuntimeError("boom")
+            assert _refresh_pass_verify_budget.get() is outer
+            assert outer is not None
+            assert not outer.closed
+
+    def test_pass_in_captured_context_gets_a_fresh_budget(self):
+        """A pass started from a callback that captured a finished pass is not nested."""
+        clock = FakeClock()
+        with patch("custom_components.keymaster.providers._base.time.monotonic", clock):
+            with refresh_pass_verify_budget(0.0):
+                captured = contextvars.copy_context()
+
+            def run_pass() -> float:
+                with refresh_pass_verify_budget(5.0), verify_window(10.0) as deadline:
+                    return deadline
+
+            assert captured.run(run_pass) == clock.now + 5.0
