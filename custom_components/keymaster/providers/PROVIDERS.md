@@ -177,8 +177,9 @@ async def async_clear_usercode(self, slot_num: int) -> bool:
 
 If the lock acknowledges a command before it reports the new value, and the
 provider needs to wait in-line for that report (as the Z-Wave JS legacy
-User Code CC clear does), wrap the wait in `verify_window()` from `_base.py`
-instead of computing a deadline by hand:
+User Code CC clear does), wrap the wait in `verify_window()` instead of
+computing a deadline by hand. Import it from the `providers` package
+(`from . import verify_window`), which re-exports it from `_base.py`:
 
 ```python
 with verify_window(MY_VERIFY_TIMEOUT) as deadline:

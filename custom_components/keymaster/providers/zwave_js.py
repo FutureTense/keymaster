@@ -41,7 +41,8 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
-from ._base import BaseLockProvider, CodeSlot, LockEventCallback, verify_window
+from . import verify_window
+from ._base import BaseLockProvider, CodeSlot, LockEventCallback
 from .const import ACCESS_CONTROL, ALARM_TYPE, UNKNOWN
 
 SetCredentialResult: Any
