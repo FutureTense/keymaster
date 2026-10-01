@@ -198,7 +198,8 @@ what is left of that budget; once it is spent, the wait fails fast and the
 next refresh reconciles the slot. Clamp each sleep to the time remaining, as
 above: a fixed sleep can overshoot the deadline by up to one interval per
 slot, which adds up across a pass. Outside a refresh pass (for example a user
-toggling a slot) the provider's own timeout applies unchanged.
+toggling a slot, or a task started from inside a pass) the provider's own
+timeout applies unchanged.
 
 ### Step 3: Implement Optional Capabilities
 

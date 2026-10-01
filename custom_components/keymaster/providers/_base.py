@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import asyncio
 from collections.abc import Callable, Coroutine, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -27,17 +28,40 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+def _current_task() -> asyncio.Task[Any] | None:
+    """Return the running asyncio task, or None outside an event loop."""
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
 @dataclass
 class _VerifyBudget:
     """Wall-clock budget shared by in-line verification waits in one refresh pass."""
 
     remaining: float
+    owner: asyncio.Task[Any] | None = field(default_factory=_current_task)
     closed: bool = False
 
 
 _refresh_pass_verify_budget: ContextVar[_VerifyBudget | None] = ContextVar(
     "keymaster_refresh_pass_verify_budget", default=None
 )
+
+
+def _active_verify_budget() -> _VerifyBudget | None:
+    """Return the budget of the refresh pass running in this task, if any.
+
+    Tasks and callbacks created during a pass copy its context, including the
+    budget. A copy only counts while the pass is still open and only in the
+    task that opened it, so concurrent work started from inside a pass is not
+    capped by, or charged to, that pass's budget.
+    """
+    budget = _refresh_pass_verify_budget.get()
+    if budget is None or budget.closed or budget.owner is not _current_task():
+        return None
+    return budget
 
 
 @contextmanager
@@ -51,11 +75,11 @@ def refresh_pass_verify_budget(seconds: float) -> Iterator[None]:
     ``seconds``; once the budget is spent, verification checks once and
     fails fast, and the slot is picked up by the next refresh instead.
 
-    If a budget is already active (a pass nested inside another), the outer
-    budget is kept rather than reset, so nesting cannot extend the outer cap.
+    If this task is already inside a pass (a pass nested inside another), the
+    outer budget is kept rather than reset, so nesting cannot extend the
+    outer cap.
     """
-    existing = _refresh_pass_verify_budget.get()
-    if existing is not None and not existing.closed:
+    if _active_verify_budget() is not None:
         yield
         return
     budget = _VerifyBudget(remaining=max(seconds, 0.0))
@@ -75,13 +99,12 @@ def verify_window(timeout: float) -> Iterator[float]:
 
     The deadline is ``timeout`` seconds from now, capped by whatever remains
     of the active refresh pass budget (see ``refresh_pass_verify_budget()``).
-    Outside a refresh pass, e.g. for a user-initiated change, the full
-    ``timeout`` applies. Time spent inside the block is charged to the budget.
+    Outside a refresh pass, e.g. for a user-initiated change or a task
+    started from inside a pass, the full ``timeout`` applies. Time spent
+    inside the block is charged to the budget.
     """
     started = time.monotonic()
-    budget = _refresh_pass_verify_budget.get()
-    if budget is not None and budget.closed:
-        budget = None
+    budget = _active_verify_budget()
     deadline = started + timeout
     if budget is not None:
         deadline = min(deadline, started + budget.remaining)

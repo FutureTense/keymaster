@@ -429,3 +429,21 @@ class TestRefreshPassVerifyBudget:
         budget = seen["budget"]
         assert budget is not None
         assert budget.closed
+
+    async def test_task_started_during_pass_is_not_capped_or_charged(self):
+        """Work spawned from inside a pass runs outside it: full timeout, no charge."""
+        clock = FakeClock()
+        with patch("custom_components.keymaster.providers._base.time.monotonic", clock):
+
+            async def spawned_wait() -> float:
+                with verify_window(10.0) as deadline:
+                    clock.now += 4.0
+                    return deadline
+
+            with refresh_pass_verify_budget(1.0):
+                # The task copies this context, budget included.
+                spawned = asyncio.create_task(spawned_wait())
+                assert await spawned == clock.now - 4.0 + 10.0
+                with verify_window(10.0) as deadline:
+                    # The pass's own budget was not charged for the task's wait.
+                    assert deadline == clock.now + 1.0
