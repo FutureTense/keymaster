@@ -1,5 +1,6 @@
 """Tests for the base lock provider."""
 
+import asyncio
 import contextvars
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
@@ -10,6 +11,7 @@ from custom_components.keymaster.providers._base import (
     BaseLockProvider,
     CodeSlot,
     _refresh_pass_verify_budget,
+    _VerifyBudget,
     refresh_pass_verify_budget,
     verify_window,
 )
@@ -373,3 +375,49 @@ class TestRefreshPassVerifyBudget:
                     return deadline
 
             assert captured.run(run_pass) == clock.now + 5.0
+
+    def test_exception_inside_pass_leaves_no_budget_active(self):
+        """An exception raised inside a pass resets and closes its budget."""
+        seen: list[_VerifyBudget | None] = []
+
+        def failing_pass() -> None:
+            with refresh_pass_verify_budget(10.0):
+                seen.append(_refresh_pass_verify_budget.get())
+                raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            failing_pass()
+
+        assert _refresh_pass_verify_budget.get() is None
+        (budget,) = seen
+        assert budget is not None
+        assert budget.closed
+
+    async def test_cancellation_inside_pass_leaves_no_budget_active(self):
+        """Cancelling a task mid-pass resets and closes its budget."""
+        entered = asyncio.Event()
+        seen: dict[str, _VerifyBudget | None] = {}
+
+        async def refresh_pass() -> None:
+            with refresh_pass_verify_budget(10.0):
+                seen["budget"] = _refresh_pass_verify_budget.get()
+                entered.set()
+                await asyncio.Event().wait()
+
+        async def run() -> None:
+            try:
+                await refresh_pass()
+            finally:
+                # Same task context the pass ran in, after the pass unwound.
+                seen["after"] = _refresh_pass_verify_budget.get()
+
+        task = asyncio.create_task(run())
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert seen["after"] is None
+        budget = seen["budget"]
+        assert budget is not None
+        assert budget.closed
