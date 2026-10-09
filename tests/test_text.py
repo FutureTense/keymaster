@@ -337,6 +337,204 @@ async def test_text_entity_async_clear_pin_value(
         )
 
 
+async def test_text_entity_child_lock_ignores_pin_change_without_override(
+    hass: HomeAssistant, text_config_entry, coordinator, caplog
+):
+    """Test that child lock ignores PIN changes when not overriding parent."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.parent_name = "parent_lock"
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            pin="1111",
+            override_parent=False,
+        )
+    }
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:1.pin",
+        name="Code Slot 1: PIN",
+        icon="mdi:lock-smart",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+    entity._attr_native_value = "1111"
+
+    with (
+        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
+        patch.object(
+            coordinator, "async_request_debounced_refresh", new=AsyncMock()
+        ) as mock_refresh,
+    ):
+        caplog.set_level(logging.DEBUG)
+        await entity.async_set_value("1234")
+
+        mock_set_pin.assert_not_called()
+        mock_refresh.assert_not_called()
+        assert kmlock.code_slots[1].pin == "1111"
+        assert entity._attr_native_value == "1111"
+        assert "not set to override parent. Ignoring change" in caplog.text
+
+
+async def test_text_entity_child_lock_pin_change_with_override(
+    hass: HomeAssistant, text_config_entry, coordinator
+):
+    """Test that child lock PIN changes work when overriding parent."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.parent_name = "parent_lock"
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(
+            number=1,
+            enabled=True,
+            override_parent=True,
+        )
+    }
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:1.pin",
+        name="Code Slot 1: PIN",
+        icon="mdi:lock-smart",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+
+    with (
+        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
+        patch.object(
+            coordinator, "async_request_debounced_refresh", new=AsyncMock()
+        ) as mock_refresh,
+    ):
+        await entity.async_set_value("1234")
+
+        mock_set_pin.assert_called_once_with(
+            config_entry_id=text_config_entry.entry_id,
+            code_slot_num=1,
+            pin="1234",
+            set_in_kmlock=True,
+        )
+        assert kmlock.code_slots[1].pin == "1234"
+        assert entity._attr_native_value == "1234"
+        mock_refresh.assert_awaited_once()
+
+
+async def test_text_entity_parent_lock_pin_change(
+    hass: HomeAssistant, text_config_entry, coordinator
+):
+    """Test that parent lock PIN changes work normally."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, enabled=True)}
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:1.pin",
+        name="Code Slot 1: PIN",
+        icon="mdi:lock-smart",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+
+    with (
+        patch.object(coordinator, "set_pin_on_lock", new=AsyncMock()) as mock_set_pin,
+        patch.object(
+            coordinator, "async_request_debounced_refresh", new=AsyncMock()
+        ) as mock_refresh,
+    ):
+        await entity.async_set_value("1234")
+
+        mock_set_pin.assert_called_once_with(
+            config_entry_id=text_config_entry.entry_id,
+            code_slot_num=1,
+            pin="1234",
+            set_in_kmlock=True,
+        )
+        assert kmlock.code_slots[1].pin == "1234"
+        assert entity._attr_native_value == "1234"
+        mock_refresh.assert_awaited_once()
+
+
+async def test_text_entity_first_pin_inactive_slot_still_requests_refresh(
+    hass: HomeAssistant, text_config_entry, coordinator
+):
+    """Test that setting the first PIN on an inactive slot still requests refresh."""
+
+    kmlock = KeymasterLock(
+        lock_name="frontdoor",
+        lock_entity_id="lock.test",
+        keymaster_config_entry_id=text_config_entry.entry_id,
+    )
+    kmlock.connected = True
+    kmlock.code_slots = {
+        1: KeymasterCodeSlot(number=1, enabled=True, active=False),
+        2: KeymasterCodeSlot(number=2, enabled=True, active=False),
+    }
+    coordinator.kmlocks[text_config_entry.entry_id] = kmlock
+    coordinator.manager._initial_setup_done_event.set()
+
+    assert await KeymasterCoordinator._is_slot_active(kmlock.code_slots[1]) is False
+    result = await coordinator.set_pin_on_lock(
+        config_entry_id=text_config_entry.entry_id,
+        code_slot_num=1,
+        pin="2468",
+        set_in_kmlock=True,
+    )
+    assert result is False
+    assert kmlock.code_slots[1].pin == "2468"
+
+    entity_description = KeymasterTextEntityDescription(
+        key="text.code_slots:2.pin",
+        name="Code Slot 2: PIN",
+        icon="mdi:lock-smart",
+        entity_registry_enabled_default=True,
+        hass=hass,
+        config_entry=text_config_entry,
+        coordinator=coordinator,
+    )
+
+    entity = KeymasterText(entity_description=entity_description)
+
+    with patch.object(
+        coordinator, "async_request_debounced_refresh", new=AsyncMock()
+    ) as mock_refresh:
+        await entity.async_set_value("1234")
+
+        assert kmlock.code_slots[2].pin == "1234"
+        assert entity._attr_native_value == "1234"
+        mock_refresh.assert_awaited_once()
+
+
 async def test_text_entity_invalid_pin_ignored(
     hass: HomeAssistant, text_config_entry, coordinator, caplog
 ):
