@@ -622,10 +622,10 @@ async def test_text_entity_unavailable_when_code_slot_missing(
     assert not entity._attr_available
 
 
-async def test_text_entity_clear_pin_failure_does_not_overwrite_restored_pin(
+async def test_text_entity_clear_pin_failure_retains_blank_local_pin(
     hass: HomeAssistant, text_config_entry, coordinator
 ):
-    """When clear_pin_from_lock fails, the text entity does not overwrite the restored PIN."""
+    """When clear_pin_from_lock fails, coordinator state remains blank and converges UI."""
 
     # Create a connected lock with code slot that has a PIN
     kmlock = KeymasterLock(
@@ -634,7 +634,8 @@ async def test_text_entity_clear_pin_failure_does_not_overwrite_restored_pin(
         keymaster_config_entry_id=text_config_entry.entry_id,
     )
     kmlock.connected = True
-    kmlock.code_slots = {1: KeymasterCodeSlot(number=1, pin="1234", enabled=True)}
+    code_slots = {1: KeymasterCodeSlot(number=1, pin="1234", enabled=True)}
+    kmlock.code_slots = code_slots
     coordinator.kmlocks[text_config_entry.entry_id] = kmlock
 
     entity_description = KeymasterTextEntityDescription(
@@ -650,15 +651,23 @@ async def test_text_entity_clear_pin_failure_does_not_overwrite_restored_pin(
     entity = KeymasterText(entity_description=entity_description)
     entity._attr_native_value = "1234"
 
-    # Mock clear_pin_from_lock to return False (provider failure)
+    async def mock_failed_clear(*args, **kwargs):
+        """Blank the slot like the coordinator does before provider failure."""
+        del args, kwargs
+        code_slots[1].pin = ""
+        return False
+
     with (
-        patch.object(coordinator, "clear_pin_from_lock", new=AsyncMock(return_value=False)),
+        patch.object(coordinator, "clear_pin_from_lock", side_effect=mock_failed_clear),
         patch.object(coordinator, "async_request_debounced_refresh", new=AsyncMock()),
+        patch.object(entity, "async_write_ha_state"),
     ):
         await entity.async_set_value("")
 
-        # The entity should NOT update its displayed value on failure
+        assert code_slots[1].pin == ""
         assert entity._attr_native_value == "1234"
+        entity._handle_coordinator_update()
+        assert entity._attr_native_value == ""
 
 
 async def test_text_entity_redaction_behavior(hass: HomeAssistant, text_config_entry, coordinator):

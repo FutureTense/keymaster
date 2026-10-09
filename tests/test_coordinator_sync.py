@@ -926,10 +926,10 @@ class TestProviderFailureSyncReset:
         assert result is False
         assert lock.code_slots[1].synced == Synced.OUT_OF_SYNC
 
-    async def test_clear_pin_from_lock_resets_sync_on_provider_failure(
+    async def test_clear_pin_from_lock_internal_failure_keeps_local_pin(
         self, real_coordinator, lock_with_provider
     ):
-        """When async_clear_usercode returns False, synced resets to OUT_OF_SYNC."""
+        """Internal clear failures leave the local PIN untouched and OUT_OF_SYNC."""
         lock, provider = lock_with_provider
         provider.async_clear_usercode = AsyncMock(return_value=False)
         real_coordinator.kmlocks["test_entry"] = lock
@@ -941,6 +941,7 @@ class TestProviderFailureSyncReset:
         )
 
         assert result is False
+        assert lock.code_slots[1].pin == "1234"
         assert lock.code_slots[1].synced == Synced.OUT_OF_SYNC
 
     async def test_set_pin_on_lock_success_sets_synced(self, real_coordinator, lock_with_provider):
@@ -1007,15 +1008,14 @@ class TestProviderFailureSyncReset:
         # Should be called twice: once for DELETING state, once for OUT_OF_SYNC reset
         assert real_coordinator.async_schedule_keymaster_notifications.call_count == 2
 
-    async def test_clear_pin_restores_prior_pin_on_provider_failure(
+    async def test_user_clear_pin_failure_retains_blank_local_pin(
         self, real_coordinator, lock_with_provider
     ):
-        """When clear fails, prior PIN is restored so _sync_pin can retry the clear."""
+        """User-initiated clear failures retain the blank PIN and OUT_OF_SYNC state."""
         lock, provider = lock_with_provider
         provider.async_clear_usercode = AsyncMock(return_value=False)
         real_coordinator.kmlocks["test_entry"] = lock
 
-        # Slot starts with pin "1234"
         assert lock.code_slots[1].pin == "1234"
 
         result = await real_coordinator.clear_pin_from_lock(
@@ -1026,9 +1026,81 @@ class TestProviderFailureSyncReset:
         )
 
         assert result is False
-        # PIN should be restored to original value so _sync_pin can detect mismatch
-        assert lock.code_slots[1].pin == "1234"
+        assert lock.code_slots[1].pin == ""
         assert lock.code_slots[1].synced == Synced.OUT_OF_SYNC
+
+    async def test_sync_pin_after_failed_user_clear_retries_when_lock_still_has_code(
+        self, real_coordinator, lock_with_provider
+    ):
+        """A failed user clear is retried when the lock still reports the old PIN."""
+        lock, provider = lock_with_provider
+        provider.async_clear_usercode = AsyncMock(return_value=False)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        result = await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+            clear_from_kmlock=True,
+        )
+
+        assert result is False
+        slot = lock.code_slots[1]
+        assert slot.pin == ""
+        assert slot.synced == Synced.OUT_OF_SYNC
+
+        real_coordinator.clear_pin_from_lock = AsyncMock(return_value=True)
+        real_coordinator.set_pin_on_lock = AsyncMock(return_value=True)
+
+        await real_coordinator._sync_pin(lock, 1, "1234")
+
+        real_coordinator.clear_pin_from_lock.assert_called_once_with(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+        )
+        real_coordinator.set_pin_on_lock.assert_not_called()
+        assert slot.synced != Synced.SYNCED
+
+        real_coordinator.clear_pin_from_lock.reset_mock()
+        assert await KeymasterCoordinator._is_slot_active(slot) is False
+        slot.active = False
+
+        await real_coordinator._sync_pin(lock, 1, "1234")
+
+        real_coordinator.clear_pin_from_lock.assert_called_once_with(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+        )
+        real_coordinator.set_pin_on_lock.assert_not_called()
+        assert slot.synced != Synced.SYNCED
+
+    async def test_sync_pin_after_failed_user_clear_empty_lock_does_not_repush_pin(
+        self, real_coordinator, lock_with_provider
+    ):
+        """A delayed clear confirmation marks the slot disconnected without re-pushing."""
+        lock, provider = lock_with_provider
+        provider.async_clear_usercode = AsyncMock(return_value=False)
+        real_coordinator.kmlocks["test_entry"] = lock
+
+        result = await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+            clear_from_kmlock=True,
+        )
+
+        assert result is False
+        slot = lock.code_slots[1]
+        slot.last_code_set_at = utcnow() - timedelta(seconds=PIN_SET_GRACE_SECONDS + 10)
+        real_coordinator.set_pin_on_lock = AsyncMock(return_value=True)
+
+        await real_coordinator._sync_pin(lock, 1, "")
+
+        assert slot.pin == ""
+        assert slot.synced == Synced.DISCONNECTED
+        real_coordinator.set_pin_on_lock.assert_not_called()
 
 
 class TestSyncPinStuckStateRecovery:
