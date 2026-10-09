@@ -908,6 +908,169 @@ class TestProviderFailureSyncReset:
         }
         return lock, provider
 
+    async def test_set_pin_child_without_override_ignores_without_mutating(
+        self, real_coordinator, lock_with_provider
+    ):
+        """Child slots that inherit from a parent do not accept direct PIN writes."""
+        lock, provider = lock_with_provider
+        lock.parent_name = "Parent Lock"
+        provider.async_set_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+        slot = lock.code_slots[1]
+        slot.synced = Synced.SYNCED
+
+        result = await real_coordinator.set_pin_on_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            pin="5678",
+            override=False,
+            set_in_kmlock=True,
+        )
+
+        assert result is False
+        assert slot.pin == "1234"
+        assert slot.synced == Synced.SYNCED
+        provider.async_set_usercode.assert_not_called()
+
+    async def test_clear_pin_child_without_override_ignores_without_mutating(
+        self, real_coordinator, lock_with_provider
+    ):
+        """Child slots that inherit from a parent do not accept direct PIN clears."""
+        lock, provider = lock_with_provider
+        lock.parent_name = "Parent Lock"
+        provider.async_clear_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+        slot = lock.code_slots[1]
+        slot.synced = Synced.SYNCED
+
+        result = await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=False,
+            clear_from_kmlock=True,
+        )
+
+        assert result is False
+        assert slot.pin == "1234"
+        assert slot.synced == Synced.SYNCED
+        provider.async_clear_usercode.assert_not_called()
+
+    async def test_set_pin_override_writes_local_pin_and_provider(
+        self, real_coordinator, lock_with_provider
+    ):
+        """Override requests still update local PIN state and the provider."""
+        lock, provider = lock_with_provider
+        lock.parent_name = "Parent Lock"
+        provider.async_set_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+        slot = lock.code_slots[1]
+
+        result = await real_coordinator.set_pin_on_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            pin="5678",
+            override=True,
+            set_in_kmlock=True,
+        )
+
+        assert result is True
+        assert slot.pin == "5678"
+        assert slot.synced == Synced.SYNCED
+        provider.async_set_usercode.assert_called_once_with(1, "5678", name="Guest")
+
+    async def test_clear_pin_override_writes_local_pin_and_provider(
+        self, real_coordinator, lock_with_provider
+    ):
+        """Override clear requests still update local PIN state and the provider."""
+        lock, provider = lock_with_provider
+        lock.parent_name = "Parent Lock"
+        provider.async_clear_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+        slot = lock.code_slots[1]
+
+        result = await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=True,
+            clear_from_kmlock=True,
+        )
+
+        assert result is True
+        assert slot.pin == ""
+        assert slot.synced == Synced.DISCONNECTED
+        provider.async_clear_usercode.assert_called_once_with(1)
+
+    async def test_set_pin_override_parent_slot_writes_local_pin_and_provider(
+        self, real_coordinator, lock_with_provider
+    ):
+        """Child slots with override_parent enabled still accept direct PIN writes."""
+        lock, provider = lock_with_provider
+        lock.parent_name = "Parent Lock"
+        provider.async_set_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+        slot = lock.code_slots[1]
+        slot.override_parent = True
+
+        result = await real_coordinator.set_pin_on_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            pin="5678",
+            override=False,
+            set_in_kmlock=True,
+        )
+
+        assert result is True
+        assert slot.pin == "5678"
+        assert slot.synced == Synced.SYNCED
+        provider.async_set_usercode.assert_called_once_with(1, "5678", name="Guest")
+
+    async def test_clear_pin_override_parent_slot_writes_local_pin_and_provider(
+        self, real_coordinator, lock_with_provider
+    ):
+        """Child slots with override_parent enabled still accept direct PIN clears."""
+        lock, provider = lock_with_provider
+        lock.parent_name = "Parent Lock"
+        provider.async_clear_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+        slot = lock.code_slots[1]
+        slot.override_parent = True
+
+        result = await real_coordinator.clear_pin_from_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            override=False,
+            clear_from_kmlock=True,
+        )
+
+        assert result is True
+        assert slot.pin == ""
+        assert slot.synced == Synced.DISCONNECTED
+        provider.async_clear_usercode.assert_called_once_with(1)
+
+    async def test_set_pin_inactive_slot_still_updates_local_pin_before_active_guard(
+        self, real_coordinator, lock_with_provider
+    ):
+        """Inactive slots still receive local PIN writes before provider calls are skipped."""
+        lock, provider = lock_with_provider
+        provider.async_set_usercode = AsyncMock(return_value=True)
+        real_coordinator.kmlocks["test_entry"] = lock
+        slot = lock.code_slots[1]
+        slot.active = False
+        slot.synced = Synced.SYNCED
+
+        result = await real_coordinator.set_pin_on_lock(
+            config_entry_id="test_entry",
+            code_slot_num=1,
+            pin="5678",
+            override=True,
+            set_in_kmlock=True,
+        )
+
+        assert result is False
+        assert slot.pin == "5678"
+        assert slot.synced == Synced.SYNCED
+        provider.async_set_usercode.assert_not_called()
+
     async def test_set_pin_on_lock_resets_sync_on_provider_failure(
         self, real_coordinator, lock_with_provider
     ):
