@@ -2065,8 +2065,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return False
 
-        prior_pin = kmlock.code_slots[code_slot_num].pin
-
         if clear_from_kmlock:
             kmlock.code_slots[code_slot_num].pin = ""
 
@@ -2104,8 +2102,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                     kmlock.lock_name,
                     code_slot_num,
                 )
-                # Restore prior PIN to preserve local state after failed clear
-                kmlock.code_slots[code_slot_num].pin = prior_pin
                 kmlock.code_slots[code_slot_num].synced = Synced.OUT_OF_SYNC
                 self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
                 return False
