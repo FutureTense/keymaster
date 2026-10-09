@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -644,6 +645,198 @@ class TestGetUsercodes:
         # Untagged gets slot 2 (skips occupied slot 1)
         assert codes[1].slot_num == 2
         assert codes[1].name == "New Code"
+
+    async def test_get_usercodes_skips_homekit_without_add_code(self, schlage_provider):
+        """Test unmanageable HomeKit codes are not passed to add_code."""
+        schlage_provider.hass.services.async_call = AsyncMock(
+            return_value={
+                "lock.schlage_front_door": {
+                    "id1": {"name": "HomeKit-abcdef", "code": "1234"},
+                    "id2": {"name": "Guest", "code": "5678"},
+                }
+            }
+        )
+
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 1
+        assert codes[0].name == "Guest"
+
+        add_calls = [
+            call
+            for call in schlage_provider.hass.services.async_call.call_args_list
+            if call.args == ("schlage", "add_code")
+        ]
+        assert len(add_calls) == 1
+        assert add_calls[0].kwargs["service_data"] == {
+            "name": "[KM:1] Guest",
+            "code": "5678",
+        }
+
+    async def test_get_usercodes_homekit_does_not_consume_slot(self, schlage_provider):
+        """Test unmanageable HomeKit codes are invisible and do not consume slots."""
+        schlage_provider.hass.services.async_call = AsyncMock(
+            return_value={
+                "lock.schlage_front_door": {
+                    "id1": {"name": "[KM:1] Owner", "code": "1111"},
+                    "id2": {"name": "HomeKit-abcdef", "code": "2222"},
+                    "id3": {"name": "Guest", "code": "3333"},
+                }
+            }
+        )
+
+        codes = await schlage_provider.async_get_usercodes()
+        assert [(code.slot_num, code.name) for code in codes] == [(1, "Owner"), (2, "Guest")]
+
+        add_calls = [
+            call
+            for call in schlage_provider.hass.services.async_call.call_args_list
+            if call.args == ("schlage", "add_code")
+        ]
+        assert len(add_calls) == 1
+        assert add_calls[0].kwargs["service_data"] == {
+            "name": "[KM:2] Guest",
+            "code": "3333",
+        }
+
+    async def test_get_usercodes_tagged_homekit_name_is_managed(self, schlage_provider):
+        """Test tagged codes remain managed even when the friendly name matches HomeKit."""
+        schlage_provider.hass.services.async_call = AsyncMock(
+            return_value={
+                "lock.schlage_front_door": {
+                    "id1": {"name": "[KM:2] HomeKit-whatever", "code": "1234"},
+                }
+            }
+        )
+
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 1
+        assert codes[0].slot_num == 2
+        assert codes[0].name == "HomeKit-whatever"
+        assert schlage_provider.hass.services.async_call.call_count == 1
+
+    async def test_get_usercodes_homekit_match_is_case_insensitive(self, schlage_provider):
+        """Test HomeKit unmanageable detection ignores case."""
+        schlage_provider.hass.services.async_call = AsyncMock(
+            return_value={
+                "lock.schlage_front_door": {
+                    "id1": {"name": "homekit-abcdef", "code": "1234"},
+                    "id2": {"name": "Guest", "code": "5678"},
+                }
+            }
+        )
+
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 1
+        assert codes[0].name == "Guest"
+
+        add_calls = [
+            call
+            for call in schlage_provider.hass.services.async_call.call_args_list
+            if call.args == ("schlage", "add_code")
+        ]
+        assert len(add_calls) == 1
+        assert add_calls[0].kwargs["service_data"] == {
+            "name": "[KM:1] Guest",
+            "code": "5678",
+        }
+
+    async def test_get_usercodes_unmanageable_count_logs_on_count_changes(
+        self, schlage_provider, caplog
+    ):
+        """Test unmanageable count warnings are only emitted when the count changes."""
+        caplog.set_level(logging.DEBUG, logger="custom_components.keymaster.providers.schlage")
+        responses = [
+            {
+                "lock.schlage_front_door": {
+                    "id1": {"name": "HomeKit-one", "code": "1111"},
+                }
+            },
+            {
+                "lock.schlage_front_door": {
+                    "id1": {"name": "HomeKit-one", "code": "1111"},
+                }
+            },
+            {
+                "lock.schlage_front_door": {
+                    "id1": {"name": "HomeKit-one", "code": "1111"},
+                    "id2": {"name": "HomeKit-two", "code": "2222"},
+                }
+            },
+        ]
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=responses)
+
+        assert await schlage_provider.async_get_usercodes() == []
+        warning_messages = [
+            record.getMessage() for record in caplog.records if record.levelno == logging.WARNING
+        ]
+        assert warning_messages == [
+            (
+                "[SchlageProvider] Skipped 1 Schlage codes that are not managed by keymaster; "
+                "view all codes on the lock in the Schlage integration"
+            )
+        ]
+
+        caplog.clear()
+        assert await schlage_provider.async_get_usercodes() == []
+        assert not [
+            record
+            for record in caplog.records
+            if "Schlage codes that are not managed by keymaster" in record.getMessage()
+        ]
+
+        assert await schlage_provider.async_get_usercodes() == []
+        warning_messages = [
+            record.getMessage() for record in caplog.records if record.levelno == logging.WARNING
+        ]
+        assert warning_messages == [
+            (
+                "[SchlageProvider] Skipped 2 Schlage codes that are not managed by keymaster; "
+                "view all codes on the lock in the Schlage integration"
+            )
+        ]
+        assert not [
+            record
+            for record in caplog.records
+            if record.levelno == logging.DEBUG
+            and "Schlage codes that are not managed by keymaster" in record.getMessage()
+        ]
+
+    async def test_get_usercodes_unmanageable_count_zero_logs_debug(self, schlage_provider, caplog):
+        """Test unmanageable count returning to zero is logged at debug."""
+        caplog.set_level(logging.DEBUG, logger="custom_components.keymaster.providers.schlage")
+        schlage_provider.hass.services.async_call = AsyncMock(
+            side_effect=[
+                {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "HomeKit-one", "code": "1111"},
+                    }
+                },
+                {"lock.schlage_front_door": {}},
+            ]
+        )
+
+        assert await schlage_provider.async_get_usercodes() == []
+        assert [
+            record
+            for record in caplog.records
+            if record.levelno == logging.WARNING
+            and "Skipped 1 Schlage codes" in record.getMessage()
+        ]
+
+        caplog.clear()
+        assert await schlage_provider.async_get_usercodes() == []
+        assert [
+            record
+            for record in caplog.records
+            if record.levelno == logging.DEBUG and "Skipped 0 Schlage codes" in record.getMessage()
+        ]
+        assert not [
+            record
+            for record in caplog.records
+            if record.levelno == logging.WARNING
+            and "Schlage codes that are not managed by keymaster" in record.getMessage()
+        ]
 
     async def test_get_usercodes_empty(self, schlage_provider):
         """Test empty code list."""

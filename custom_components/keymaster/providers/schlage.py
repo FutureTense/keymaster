@@ -32,9 +32,11 @@ SCHLAGE_DOMAIN = "schlage"
 # Regex to parse the keymaster slot tag from code names.
 # Format: [KM:XX] Friendly Name
 _SLOT_TAG_RE = re.compile(r"^\[KM:(\d+)\]\s*(.*)")
+_UNMANAGEABLE_CODE_NAME_RES = (re.compile(r"^HomeKit-", re.IGNORECASE),)
 
 _TaggedCode = tuple[str, str, int, str]
 _UntaggedCode = tuple[str, str, str]
+_PartitionedCodes = tuple[list[_TaggedCode], list[_UntaggedCode], set[int], int]
 
 
 def _make_tagged_name(slot_num: int, name: str | None = None) -> str:
@@ -53,6 +55,14 @@ def _parse_tag(name: str) -> tuple[int | None, str]:
     if match:
         return int(match.group(1)), match.group(2)
     return None, name
+
+
+def _is_manageable_code(name: str) -> bool:
+    """Return True if *name* appears manageable by keymaster."""
+    # Tagged codes are always managed by Keymaster regardless of their name.
+    if _parse_tag(name)[0] is not None:
+        return True
+    return not any(pattern.match(name) for pattern in _UNMANAGEABLE_CODE_NAME_RES)
 
 
 def _is_masked_pin(pin: str) -> bool:
@@ -82,17 +92,21 @@ def _get_schlage_locks(coordinator: Any) -> Mapping[str, Any] | None:
 
 def _partition_codes(
     codes: dict[str, dict[str, str]],
-) -> tuple[list[_TaggedCode], list[_UntaggedCode], set[int]]:
+) -> _PartitionedCodes:
     """Partition Schlage codes into tagged and untagged collections."""
     assigned_slots: set[int] = set()
     # (code_id, pin, slot, friendly_name)
     tagged: list[_TaggedCode] = []
     # (code_id, pin, original_name)
     untagged: list[_UntaggedCode] = []
+    skipped_unmanageable_count = 0
 
     for code_id, code_data in codes.items():
         name = code_data.get("name", "")
         pin = code_data.get("code", "")
+        if not _is_manageable_code(name):
+            skipped_unmanageable_count += 1
+            continue
         slot_num, friendly_name = _parse_tag(name)
         if slot_num is not None:
             tagged.append((code_id, pin, slot_num, friendly_name))
@@ -100,7 +114,7 @@ def _partition_codes(
         else:
             untagged.append((code_id, pin, name))
 
-    return tagged, untagged, assigned_slots
+    return tagged, untagged, assigned_slots, skipped_unmanageable_count
 
 
 @dataclass
@@ -113,6 +127,7 @@ class SchlageLockProvider(BaseLockProvider):
     """
 
     _schlage_device_id: str | None = field(default=None, init=False, repr=False)
+    _skipped_unmanageable_count: int | None = field(default=None, init=False, repr=False)
 
     @property
     def domain(self) -> str:
@@ -311,6 +326,19 @@ class SchlageLockProvider(BaseLockProvider):
             blocking=True,
         )
 
+    def _log_unmanageable_code_count(self, skipped_count: int) -> None:
+        """Log unmanageable code count changes without repeating on every refresh."""
+        if skipped_count == self._skipped_unmanageable_count:
+            return
+
+        self._skipped_unmanageable_count = skipped_count
+        log_method = _LOGGER.warning if skipped_count > 0 else _LOGGER.debug
+        log_method(
+            "[SchlageProvider] Skipped %d Schlage codes that are not managed by keymaster; "
+            "view all codes on the lock in the Schlage integration",
+            skipped_count,
+        )
+
     def _append_tagged_codes(
         self,
         tagged: list[_TaggedCode],
@@ -471,6 +499,7 @@ class SchlageLockProvider(BaseLockProvider):
         """
         codes = await self._async_get_codes()
         if not codes:
+            self._log_unmanageable_code_count(0)
             return []
 
         # Determine the managed slot range from the keymaster config.
@@ -479,7 +508,8 @@ class SchlageLockProvider(BaseLockProvider):
         managed_range = set(range(slot_start, slot_start + slot_count))
 
         result: list[CodeSlot] = []
-        tagged, untagged, assigned_slots = _partition_codes(codes)
+        tagged, untagged, assigned_slots, skipped_count = _partition_codes(codes)
+        self._log_unmanageable_code_count(skipped_count)
         self._append_tagged_codes(tagged, managed_range, slot_start, slot_count, result)
         await self._async_assign_untagged_codes(
             untagged, assigned_slots, managed_range, slot_start, result
