@@ -2060,7 +2060,15 @@ async def test_lock_coordinator_proxy_methods_delegate(hass):
     coordinator.reset_lock.assert_awaited_once_with("test_entry")
 
     await lock_coordinator.reset_code_slot("test_entry", 1)
-    coordinator.reset_code_slot.assert_awaited_once_with("test_entry", 1)
+    coordinator.reset_code_slot.assert_awaited_once_with("test_entry", 1, defer_refresh=False)
+    coordinator.reset_code_slot.reset_mock()
+
+    await lock_coordinator.reset_code_slot("test_entry", 1, defer_refresh=True)
+    coordinator.reset_code_slot.assert_awaited_once_with(
+        "test_entry",
+        1,
+        defer_refresh=True,
+    )
 
     assert await lock_coordinator.update_slot_active_state("test_entry", 1) is True
     coordinator.update_slot_active_state.assert_awaited_once_with("test_entry", 1)
