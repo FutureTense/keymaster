@@ -16,6 +16,7 @@ from custom_components.keymaster.bus_events import fire_unlock_state_changed
 from custom_components.keymaster.const import (
     BACKOFF_FAILURE_THRESHOLD,
     BACKOFF_MAX_SECONDS,
+    EVENT_KEYMASTER_CODE_SLOT_RESET,
     EVENT_KEYMASTER_LOCK_STATE_CHANGED,
 )
 from custom_components.keymaster.coordinator import KeymasterCoordinator
@@ -26,6 +27,7 @@ from custom_components.keymaster.lock import (
     KeymasterLock,
 )
 from custom_components.keymaster.providers import CodeSlot
+from custom_components.keymaster.providers._base import _active_verify_budget
 from custom_components.keymaster.serialization import (
     decode_pin,
     dict_to_kmlocks,
@@ -3837,6 +3839,40 @@ class TestResetCodeSlot:
         coordinator_with_lock.clear_pin_from_lock.assert_called_once()
         coordinator_with_lock.async_refresh.assert_called_once()
 
+    async def test_reset_code_slot_direct_refreshes_once(self, coordinator_with_lock):
+        """Test standalone reset_code_slot keeps the existing single refresh behavior."""
+        await coordinator_with_lock.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+        )
+
+        coordinator_with_lock.async_refresh.assert_called_once()
+
+    async def test_reset_code_slot_standalone_clear_has_no_verify_budget(
+        self,
+        coordinator_with_lock,
+    ):
+        """Test standalone reset_code_slot does not create a shared verify budget."""
+        seen_budgets: list[object | None] = []
+
+        async def clear_pin_from_lock(
+            *,
+            config_entry_id: str,
+            code_slot_num: int,
+            override: bool = False,
+        ) -> bool:
+            seen_budgets.append(_active_verify_budget())
+            return True
+
+        coordinator_with_lock.clear_pin_from_lock = AsyncMock(side_effect=clear_pin_from_lock)
+
+        await coordinator_with_lock.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+        )
+
+        assert seen_budgets == [None]
+
     async def test_reset_code_slot_lock_not_found(self, coordinator_with_lock):
         """Test reset_code_slot with non-existent lock."""
         await coordinator_with_lock.reset_code_slot(
@@ -3880,6 +3916,54 @@ class TestResetCodeSlot:
         assert fired_events[0].data["code_slot_num"] == 1
         assert fired_events[0].data["entity_id"] == "lock.front_door"
 
+    async def test_reset_code_slot_defer_refresh_replaces_slot_and_fires_event(
+        self,
+        hass: HomeAssistant,
+    ):
+        """Test deferred reset_code_slot still replaces the slot and fires the reset event."""
+        with patch.object(KeymasterCoordinator, "__init__", return_value=None):
+            coordinator = KeymasterCoordinator(hass)
+            coordinator.hass = hass
+            coordinator.kmlocks = {}
+            coordinator.clear_pin_from_lock = AsyncMock()
+            coordinator.async_refresh = AsyncMock()
+
+            lock = KeymasterLock(
+                lock_name="Front Door",
+                lock_entity_id="lock.front_door",
+                keymaster_config_entry_id="entry_1",
+            )
+            lock.code_slots = {
+                1: KeymasterCodeSlot(number=1, enabled=True, pin="1234"),
+            }
+            coordinator.kmlocks["entry_1"] = lock
+
+        fired_events: list[Event] = []
+        hass.bus.async_listen(
+            EVENT_KEYMASTER_CODE_SLOT_RESET,
+            fired_events.append,
+        )
+
+        await coordinator.reset_code_slot(
+            config_entry_id="entry_1",
+            code_slot_num=1,
+            defer_refresh=True,
+        )
+        await hass.async_block_till_done()
+
+        code_slots = coordinator.kmlocks["entry_1"].code_slots
+        assert code_slots is not None
+        slot = code_slots[1]
+        assert slot.number == 1
+        assert slot.enabled is False
+        assert slot.pin is None
+        assert slot.accesslimit_day_of_week is not None
+        assert len(fired_events) == 1
+        assert fired_events[0].data["code_slot_num"] == 1
+        assert fired_events[0].data["entity_id"] == "lock.front_door"
+        coordinator.clear_pin_from_lock.assert_called_once()
+        coordinator.async_refresh.assert_not_called()
+
     async def test_reset_code_slot_slot_not_found(self, coordinator_with_lock):
         """Test reset_code_slot with non-existent code slot."""
         await coordinator_with_lock.reset_code_slot(
@@ -3887,6 +3971,49 @@ class TestResetCodeSlot:
             code_slot_num=99,
         )
         coordinator_with_lock.clear_pin_from_lock.assert_not_called()
+
+    async def test_reset_lock_shares_verify_budget_across_slot_loop(
+        self,
+        coordinator_with_lock,
+    ):
+        """Test reset_lock shares one verify budget across all slot clears."""
+        lock = coordinator_with_lock.kmlocks["entry_1"]
+        lock.code_slots = {
+            slot_num: KeymasterCodeSlot(number=slot_num, enabled=True, pin=f"123{slot_num}")
+            for slot_num in range(1, 4)
+        }
+        seen_budgets: list[object | None] = []
+
+        async def clear_pin_from_lock(
+            *,
+            config_entry_id: str,
+            code_slot_num: int,
+            override: bool = False,
+        ) -> bool:
+            seen_budgets.append(_active_verify_budget())
+            return True
+
+        coordinator_with_lock.clear_pin_from_lock = AsyncMock(side_effect=clear_pin_from_lock)
+
+        await coordinator_with_lock.reset_lock(config_entry_id="entry_1")
+
+        assert len(seen_budgets) == 3
+        assert all(budget is not None for budget in seen_budgets)
+        assert {id(budget) for budget in seen_budgets} == {id(seen_budgets[0])}
+        assert _active_verify_budget() is None
+
+    async def test_reset_lock_refreshes_once_for_multiple_slots(self, coordinator_with_lock):
+        """Test reset_lock collapses per-slot refreshes into one refresh."""
+        lock = coordinator_with_lock.kmlocks["entry_1"]
+        lock.code_slots = {
+            slot_num: KeymasterCodeSlot(number=slot_num, enabled=True, pin=f"123{slot_num}")
+            for slot_num in range(1, 4)
+        }
+
+        await coordinator_with_lock.reset_lock(config_entry_id="entry_1")
+
+        assert coordinator_with_lock.clear_pin_from_lock.await_count == 3
+        coordinator_with_lock.async_refresh.assert_called_once()
 
 
 class TestUpdateSlotActiveState:

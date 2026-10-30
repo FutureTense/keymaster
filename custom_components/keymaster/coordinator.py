@@ -164,9 +164,19 @@ class KeymasterLockCoordinator(DataUpdateCoordinator[KeymasterLock | None]):
         """Reset all of the keymaster lock settings."""
         return await self.manager.reset_lock(config_entry_id)
 
-    async def reset_code_slot(self, config_entry_id: str, code_slot_num: int) -> None:
+    async def reset_code_slot(
+        self,
+        config_entry_id: str,
+        code_slot_num: int,
+        *,
+        defer_refresh: bool = False,
+    ) -> None:
         """Reset the settings of a code slot."""
-        return await self.manager.reset_code_slot(config_entry_id, code_slot_num)
+        return await self.manager.reset_code_slot(
+            config_entry_id,
+            code_slot_num,
+            defer_refresh=defer_refresh,
+        )
 
     async def update_slot_active_state(self, config_entry_id: str, code_slot_num: int) -> bool:
         """Update the active state for a code slot."""
@@ -2134,14 +2144,24 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.autolock_min_night = None
         kmlock.retry_lock = False
         if kmlock.code_slots:
-            for code_slot_num in kmlock.code_slots:
-                await self.reset_code_slot(
-                    config_entry_id=kmlock.keymaster_config_entry_id,
-                    code_slot_num=code_slot_num,
-                )
+            # Nested refresh-pass budgets opened from this task keep this
+            # outer budget, so resets cannot restart the verifier cap per slot.
+            with refresh_pass_verify_budget(REFRESH_PASS_VERIFY_BUDGET_SECONDS):
+                for code_slot_num in kmlock.code_slots:
+                    await self.reset_code_slot(
+                        config_entry_id=kmlock.keymaster_config_entry_id,
+                        code_slot_num=code_slot_num,
+                        defer_refresh=True,
+                    )
         await self.async_refresh()
 
-    async def reset_code_slot(self, config_entry_id: str, code_slot_num: int) -> None:
+    async def reset_code_slot(
+        self,
+        config_entry_id: str,
+        code_slot_num: int,
+        *,
+        defer_refresh: bool = False,
+    ) -> None:
         """Reset the settings of a code slot."""
         kmlock: KeymasterLock | None = self.kmlocks.get(config_entry_id)
         if not isinstance(kmlock, KeymasterLock):
@@ -2187,7 +2207,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             },
         )
 
-        await self.async_refresh()
+        if not defer_refresh:
+            await self.async_refresh()
 
     @staticmethod
     async def _is_slot_active(kmslot: KeymasterCodeSlot) -> bool:
