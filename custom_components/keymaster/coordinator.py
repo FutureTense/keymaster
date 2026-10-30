@@ -1964,9 +1964,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return False
 
-        if set_in_kmlock:
-            kmlock.code_slots[code_slot_num].pin = pin
-
         if (
             not override
             and kmlock.parent_name is not None
@@ -1980,6 +1977,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 code_slot_num,
             )
             return False
+
+        if set_in_kmlock:
+            kmlock.code_slots[code_slot_num].pin = pin
 
         if not kmlock.code_slots[code_slot_num].active:
             _LOGGER.debug(
@@ -2065,9 +2065,6 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             )
             return False
 
-        if clear_from_kmlock:
-            kmlock.code_slots[code_slot_num].pin = ""
-
         if (
             not override
             and kmlock.parent_name is not None
@@ -2080,6 +2077,9 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 code_slot_num,
             )
             return False
+
+        if clear_from_kmlock:
+            kmlock.code_slots[code_slot_num].pin = ""
 
         _LOGGER.debug(
             "[clear_pin_from_lock] %s: Code Slot %s: Clearing PIN",
