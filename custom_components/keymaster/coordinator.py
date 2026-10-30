@@ -1455,6 +1455,19 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             action_code=action_code,
         )
 
+    async def _restart_autolock_on_door_activity(self, kmlock: KeymasterLock) -> None:
+        """Restart the autolock timer when the door opens or closes while unlocked."""
+        if (
+            kmlock.autolock_enabled
+            and kmlock.autolock_timer
+            and kmlock.lock_state == LockState.UNLOCKED
+        ):
+            kmlock.pending_retry_lock = False
+            await kmlock.autolock_timer.start(
+                duration=self.autolock_duration_seconds(kmlock),
+            )
+            self.async_schedule_keymaster_notifications([kmlock.keymaster_config_entry_id])
+
     async def _door_opened(self, kmlock: KeymasterLock) -> None:
         if not self._throttle.is_allowed(
             "door_opened",
@@ -1470,6 +1483,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         kmlock.door_state = STATE_OPEN
         self._throttle.reset("door_closed", kmlock.keymaster_config_entry_id)
         _LOGGER.debug("[door_opened] %s: Running", kmlock.lock_name)
+
+        await self._restart_autolock_on_door_activity(kmlock)
 
         if kmlock.door_notifications:
             await send_manual_notification(
@@ -1507,6 +1522,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 message=f"The {kmlock.lock_name} sensor indicates the door has been closed, re-attempting to lock.",
                 notification_id=f"{slugify(kmlock.lock_name).lower()}_autolock_door_closed",
             )
+        else:
+            await self._restart_autolock_on_door_activity(kmlock)
 
         if kmlock.door_notifications:
             await send_manual_notification(
