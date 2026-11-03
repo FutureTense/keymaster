@@ -143,6 +143,29 @@ class KeymasterText(KeymasterEntity, TextEntity):
         """Return a comparable snapshot including the native value."""
         return (*super()._state_signature(), self._attr_native_value)
 
+    def _child_slot_change_is_ignored(self) -> bool:
+        """Return whether a child lock slot should ignore a local change."""
+        kmlock = self._kmlock
+        return bool(
+            kmlock
+            and kmlock.parent_name
+            and (
+                not kmlock.code_slots
+                or not self._code_slot
+                or not kmlock.code_slots[self._code_slot].override_parent
+            )
+        )
+
+    def _log_child_slot_change_ignored(self) -> None:
+        """Log that a child lock slot ignored a local change."""
+        kmlock = self._kmlock
+        _LOGGER.debug(
+            "[Text async_set_value] %s: "
+            "Child lock and code slot %s not set to override parent. Ignoring change",
+            kmlock.lock_name if kmlock else self.name,
+            self._code_slot,
+        )
+
     async def async_set_value(self, value: str) -> None:
         """Set the value of a text entity."""
         log_value = self._redact_value(value)
@@ -153,6 +176,9 @@ class KeymasterText(KeymasterEntity, TextEntity):
         )
         if self._property.endswith(".pin"):
             if value and value.isdigit() and len(value) >= 4 and self._code_slot:
+                if self._child_slot_change_is_ignored():
+                    self._log_child_slot_change_ignored()
+                    return
                 await self.coordinator.set_pin_on_lock(
                     config_entry_id=self._config_entry.entry_id,
                     code_slot_num=self._code_slot,
@@ -169,22 +195,8 @@ class KeymasterText(KeymasterEntity, TextEntity):
                     return
             else:
                 return
-        elif (
-            self._property.endswith(".name")
-            and self._kmlock
-            and self._kmlock.parent_name
-            and (
-                not self._kmlock.code_slots
-                or not self._code_slot
-                or not self._kmlock.code_slots[self._code_slot].override_parent
-            )
-        ):
-            _LOGGER.debug(
-                "[Text async_set_value] %s: "
-                "Child lock and code slot %s not set to override parent. Ignoring change",
-                self._kmlock.lock_name,
-                self._code_slot,
-            )
+        elif self._property.endswith(".name") and self._child_slot_change_is_ignored():
+            self._log_child_slot_change_ignored()
             return
         if self._set_property_value(value):
             self._attr_native_value = value
