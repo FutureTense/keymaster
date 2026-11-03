@@ -1392,6 +1392,17 @@ class TestSetUsercode:
 
         calls = schlage_provider.hass.services.async_call.call_args_list
         assert len(calls) == 4
+        # 1: get_codes
+        assert calls[0].args[:2] == ("schlage", "get_codes")
+        # 2: delete old
+        assert calls[1].args[:2] == ("schlage", "delete_code")
+        assert calls[1].kwargs["service_data"] == {"name": "[KM:1] Guest"}
+        # 3: add new fails
+        assert calls[2].args[:2] == ("schlage", "add_code")
+        assert calls[2].kwargs["service_data"] == {"name": "[KM:1] Guest", "code": "5678"}
+        # 4: rollback: add original code back (fails)
+        assert calls[3].args[:2] == ("schlage", "add_code")
+        assert calls[3].kwargs["service_data"] == {"name": "[KM:1] Guest", "code": "1234"}
 
     async def test_set_add_failure_masked_pin_skips_rollback(self, schlage_provider):
         """Test that add failure with masked existing PIN skips rollback."""
