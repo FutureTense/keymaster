@@ -13,6 +13,7 @@ services (``schlage.get_codes``, ``schlage.add_code``,
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 import logging
@@ -574,27 +575,43 @@ class SchlageLockProvider(BaseLockProvider):
 
         try:
             await self._async_add_code(tagged_name, code)
-        except HomeAssistantError as e:
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            err_msg = "[REDACTED]" if self.redact_slot_names else str(e)
             _LOGGER.error(
                 "[SchlageProvider] Failed to set usercode on slot %s: %s: %s",
                 slot_num,
                 e.__class__.__qualname__,
-                e,
+                err_msg,
             )
-            if existing_full_name and existing_pin and not _is_masked_pin(existing_pin):
-                _LOGGER.info(
-                    "[SchlageProvider] Attempting rollback of slot %s to '%s'",
-                    slot_num,
-                    self.redact_name(existing_full_name),
-                )
-                try:
-                    await self._async_add_code(existing_full_name, existing_pin)
-                except HomeAssistantError as rollback_err:
-                    _LOGGER.error(
-                        "[SchlageProvider] Rollback failed for slot %s: %s: %s",
+            if existing_full_name:
+                if existing_pin and not _is_masked_pin(existing_pin):
+                    _LOGGER.info(
+                        "[SchlageProvider] Attempting rollback of slot %s to '%s'",
                         slot_num,
-                        rollback_err.__class__.__qualname__,
-                        rollback_err,
+                        self.redact_name(existing_full_name),
+                    )
+                    try:
+                        await self._async_add_code(existing_full_name, existing_pin)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as rollback_err:  # noqa: BLE001
+                        rollback_err_msg = (
+                            "[REDACTED]" if self.redact_slot_names else str(rollback_err)
+                        )
+                        _LOGGER.error(
+                            "[SchlageProvider] Rollback failed for slot %s: %s: %s",
+                            slot_num,
+                            rollback_err.__class__.__qualname__,
+                            rollback_err_msg,
+                        )
+                else:
+                    _LOGGER.error(
+                        "[SchlageProvider] Existing code '%s' was deleted from slot %s, "
+                        "but cannot be restored because its PIN was missing or masked",
+                        self.redact_name(existing_full_name),
+                        slot_num,
                     )
             return False
 
