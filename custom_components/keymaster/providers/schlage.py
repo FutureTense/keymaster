@@ -543,22 +543,36 @@ class SchlageLockProvider(BaseLockProvider):
         codes = await self._async_get_codes()
 
         # Look for an existing code on this slot so we can preserve its
-        # friendly name when the caller doesn't supply one.
+        # friendly name when the caller doesn't supply one, and preserve
+        # the existing PIN for rollback if the replacement add fails.
         existing_full_name: str | None = None
         existing_friendly_name: str | None = None
+        existing_pin: str | None = None
         for code_data in codes.values():
             code_name = code_data.get("name", "")
             parsed_slot, friendly = _parse_tag(code_name)
             if parsed_slot == slot_num:
                 existing_full_name = code_name
                 existing_friendly_name = friendly
+                existing_pin = code_data.get("code")
                 break
 
         effective_name = name or existing_friendly_name
         tagged_name = _make_tagged_name(slot_num, effective_name)
 
+        if existing_full_name:
+            try:
+                await self._async_delete_code(existing_full_name)
+            except HomeAssistantError as e:
+                _LOGGER.error(
+                    "[SchlageProvider] Failed to remove existing code '%s' before updating slot %s: %s",
+                    self.redact_name(existing_full_name),
+                    slot_num,
+                    e,
+                )
+                return False
+
         try:
-            # Add the new code first to avoid data loss if the add fails.
             await self._async_add_code(tagged_name, code)
         except HomeAssistantError as e:
             _LOGGER.error(
@@ -567,18 +581,22 @@ class SchlageLockProvider(BaseLockProvider):
                 e.__class__.__qualname__,
                 e,
             )
-            return False
-
-        if existing_full_name and existing_full_name != tagged_name:
-            try:
-                await self._async_delete_code(existing_full_name)
-            except HomeAssistantError as e:
-                _LOGGER.warning(
-                    "[SchlageProvider] Code set on slot %s but failed to remove old entry '%s': %s",
+            if existing_full_name and existing_pin and not _is_masked_pin(existing_pin):
+                _LOGGER.info(
+                    "[SchlageProvider] Attempting rollback of slot %s to '%s'",
                     slot_num,
-                    existing_full_name,
-                    e,
+                    self.redact_name(existing_full_name),
                 )
+                try:
+                    await self._async_add_code(existing_full_name, existing_pin)
+                except HomeAssistantError as rollback_err:
+                    _LOGGER.error(
+                        "[SchlageProvider] Rollback failed for slot %s: %s: %s",
+                        slot_num,
+                        rollback_err.__class__.__qualname__,
+                        rollback_err,
+                    )
+            return False
 
         _LOGGER.debug("[SchlageProvider] Set usercode on slot %s", slot_num)
         return True
