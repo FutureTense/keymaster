@@ -612,21 +612,21 @@ class TestGetUsercodes:
         assert codes[1].code == "5678"
         assert codes[1].name == "Family"
 
-        # Verify add + delete calls for tagging (get_codes + 2 * (add + delete))
+        # Verify delete + add calls for tagging (get_codes + 2 * (delete + add))
         calls = schlage_provider.hass.services.async_call.call_args_list
-        assert len(calls) == 5  # 1 get_codes + 2 add + 2 delete
-        # First untagged code: add "[KM:1] Guest", delete "Guest"
-        assert calls[1].kwargs["service_data"] == {
+        assert len(calls) == 5  # 1 get_codes + 2 delete + 2 add
+        # First untagged code: delete "Guest", add "[KM:1] Guest"
+        assert calls[1].kwargs["service_data"] == {"name": "Guest"}
+        assert calls[2].kwargs["service_data"] == {
             "name": "[KM:1] Guest",
             "code": "1234",
         }
-        assert calls[2].kwargs["service_data"] == {"name": "Guest"}
-        # Second untagged code: add "[KM:2] Family", delete "Family"
-        assert calls[3].kwargs["service_data"] == {
+        # Second untagged code: delete "Family", add "[KM:2] Family"
+        assert calls[3].kwargs["service_data"] == {"name": "Family"}
+        assert calls[4].kwargs["service_data"] == {
             "name": "[KM:2] Family",
             "code": "5678",
         }
-        assert calls[4].kwargs["service_data"] == {"name": "Family"}
 
     async def test_get_usercodes_mixed_tagged_and_untagged(self, schlage_provider):
         """Test mix of tagged and untagged codes."""
@@ -892,8 +892,8 @@ class TestGetUsercodes:
         # Code is not returned because tagging failed — avoids slot drift
         assert len(codes) == 0
 
-    async def test_get_usercodes_partial_tagging_delete_failure(self, schlage_provider):
-        """Test add_code success followed by delete_code failure triggers rollback."""
+    async def test_get_usercodes_partial_tagging_add_failure(self, schlage_provider):
+        """Test delete_code success followed by add_code failure triggers rollback."""
         call_count = 0
 
         async def mock_service_call(*args, **kwargs):
@@ -908,13 +908,13 @@ class TestGetUsercodes:
                     }
                 }
             if idx == 1:
-                # add_code succeeds
+                # delete_code (original) succeeds
                 return None
             if idx == 2:
-                # delete_code (original) fails
-                raise HomeAssistantError("Delete failed after add")
+                # add_code (tagged) fails
+                raise HomeAssistantError("Add failed after delete")
             if idx == 3:
-                # rollback: delete_code (tagged) succeeds
+                # rollback: add_code (original) succeeds
                 return None
             pytest.fail(f"Unexpected service call #{idx}")
 
@@ -922,11 +922,11 @@ class TestGetUsercodes:
         codes = await schlage_provider.async_get_usercodes()
         # Code is not returned because tagging was rolled back
         assert len(codes) == 0
-        # get_codes + add_code + delete(original fail) + delete(rollback)
+        # get_codes + delete(original) + add(tagged fail) + add(rollback original)
         assert call_count == 4
 
     async def test_get_usercodes_partial_tagging_rollback_failure(self, schlage_provider):
-        """Test add_code success, delete_code failure, and rollback delete_code failure."""
+        """Test delete_code success, add_code failure, and rollback add_code failure."""
         # Set options dictionary on config entry
         schlage_provider.keymaster_config_entry.options = {CONF_REDACT_SLOT_NAMES: True}
         assert schlage_provider.redact_slot_names is True
@@ -945,14 +945,14 @@ class TestGetUsercodes:
                     }
                 }
             if idx == 1:
-                # add_code succeeds
+                # delete_code (original) succeeds
                 return None
             if idx == 2:
-                # delete_code (original) fails
-                raise HomeAssistantError("Delete failed after add")
+                # add_code (tagged) fails
+                raise HomeAssistantError("Add failed after delete")
             if idx == 3:
-                # rollback: delete_code (tagged) fails
-                raise HomeAssistantError("Rollback delete failed")
+                # rollback: add_code (original) fails
+                raise HomeAssistantError("Rollback add failed")
             pytest.fail(f"Unexpected service call #{idx}")
 
         schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
@@ -983,14 +983,14 @@ class TestGetUsercodes:
                     }
                 }
             if idx == 1:
-                # add_code succeeds
+                # delete_code (original) succeeds
                 return None
             if idx == 2:
-                # delete_code (original) fails
-                raise HomeAssistantError("Delete failed after add")
+                # add_code (tagged) fails
+                raise HomeAssistantError("Add failed after delete")
             if idx == 3:
-                # rollback: delete_code (tagged) fails
-                raise HomeAssistantError("Rollback delete failed")
+                # rollback: add_code (original) fails
+                raise HomeAssistantError("Rollback add failed")
             pytest.fail(f"Unexpected service call #{idx}")
 
         schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
@@ -1016,13 +1016,13 @@ class TestGetUsercodes:
                     }
                 }
             if idx == 1:
-                # add_code succeeds
+                # delete_code (original) succeeds
                 return None
             if idx == 2:
-                # delete_code (original) fails
-                raise HomeAssistantError("Delete failed")
+                # add_code (tagged) fails
+                raise HomeAssistantError("Add failed")
             if idx == 3:
-                # rollback: delete_code (tagged) succeeds
+                # rollback: add_code (original) succeeds
                 return None
             if idx == 4:
                 # Second poll: code is still untagged (rollback worked)
@@ -1032,10 +1032,10 @@ class TestGetUsercodes:
                     }
                 }
             if idx == 5:
-                # Second poll: re-tagging succeeds
+                # Second poll: re-tagging delete original succeeds
                 return None
             if idx == 6:
-                # Second poll: delete original succeeds
+                # Second poll: add tagged succeeds
                 return None
             pytest.fail(f"Unexpected service call #{idx}")
 
@@ -1050,6 +1050,54 @@ class TestGetUsercodes:
         assert len(codes_second) == 1
         assert codes_second[0].slot_num == 1
         assert call_count == 7
+
+    async def test_get_usercodes_tagging_cancelled_error_propagates(self, schlage_provider):
+        """Test that asyncio.CancelledError during tagging propagates without being caught."""
+        call_count = 0
+
+        async def mock_service_call(*args, **kwargs):
+            nonlocal call_count
+            idx = call_count
+            call_count += 1
+            if idx == 0:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            if idx == 1:
+                return None
+            raise asyncio.CancelledError
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
+        with pytest.raises(asyncio.CancelledError):
+            await schlage_provider.async_get_usercodes()
+
+    async def test_get_usercodes_tagging_rollback_cancelled_error_propagates(
+        self, schlage_provider
+    ):
+        """Test that asyncio.CancelledError during rollback propagates without being caught."""
+        call_count = 0
+
+        async def mock_service_call(*args, **kwargs):
+            nonlocal call_count
+            idx = call_count
+            call_count += 1
+            if idx == 0:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            if idx == 1:
+                return None
+            if idx == 2:
+                raise RuntimeError("Unexpected failure")
+            raise asyncio.CancelledError
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
+        with pytest.raises(asyncio.CancelledError):
+            await schlage_provider.async_get_usercodes()
 
     async def test_get_usercodes_empty_name_skipped(self, schlage_provider):
         """Test that codes with empty names are skipped during tagging."""
@@ -1723,6 +1771,28 @@ class TestStatefulSchlageValidation:
         names_to_codes = {c["name"]: c["code"] for c in fake.codes.values()}
         assert names_to_codes["[KM:1] Alice"] == "1111"
         assert names_to_codes["[KM:2] Bob"] == "2222"
+
+    async def test_tagging_untagged_code_succeeds_against_core_validation(self, schlage_provider):
+        """Test tagging pre-existing untagged code against core duplicate-PIN validation (issue #823).
+
+        Proves that delete-before-add succeeds where add-before-delete collided with schlage_code_exists.
+        """
+        fake = StatefulFakeSchlageLock(
+            {"id1": {"name": "Guest", "code": "1234"}},
+        )
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=fake.async_call)
+
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 1
+        assert codes[0].slot_num == 1
+        assert codes[0].name == "Guest"
+        assert codes[0].code == "1234"
+
+        # Check lock state: exactly one code tagged as [KM:1] Guest with PIN 1234
+        assert len(fake.codes) == 1
+        code_entry = next(iter(fake.codes.values()))
+        assert code_entry["name"] == "[KM:1] Guest"
+        assert code_entry["code"] == "1234"
 
 
 # ---------------------------------------------------------------------------
