@@ -384,7 +384,16 @@ class SchlageLockProvider(BaseLockProvider):
     async def _async_tag_untagged_code(
         self, original_name: str, pin: str, prospective_slot: int, tagged_name: str
     ) -> bool:
-        """Tag an untagged Schlage code on the lock."""
+        """Tag an untagged Schlage code on the lock.
+
+        Deletes the untagged code first before adding the tagged replacement to prevent
+        duplicate-PIN collisions (schlage_code_exists) with Home Assistant core's Schlage
+        service validator.
+
+        If the tagged add fails, a rollback attempts to re-add the original untagged code.
+        Note: If both the tagged add and the rollback add fail, the lock temporarily has
+        no code for this user until the next polling cycle retries tagging.
+        """
         if _is_masked_pin(pin):
             _LOGGER.debug(
                 "[SchlageProvider] Skipping untaggable code '%s' (slot %d): "
@@ -396,12 +405,16 @@ class SchlageLockProvider(BaseLockProvider):
 
         try:
             await self._async_delete_code(original_name)
-        except HomeAssistantError as e:
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            err_msg = "[REDACTED]" if self.redact_slot_names else str(e)
             _LOGGER.error(
-                "[SchlageProvider] Failed to remove untagged code '%s' before tagging slot %d: %s",
+                "[SchlageProvider] Failed to remove untagged code '%s' before tagging slot %d: %s: %s",
                 self.redact_name(original_name),
                 prospective_slot,
-                e,
+                e.__class__.__qualname__,
+                err_msg,
             )
             return False
 
@@ -428,6 +441,7 @@ class SchlageLockProvider(BaseLockProvider):
             except asyncio.CancelledError:
                 raise
             except Exception as rollback_err:  # noqa: BLE001
+                # If rollback also fails, the lock is left without this code until retried.
                 rollback_err_msg = "[REDACTED]" if self.redact_slot_names else str(rollback_err)
                 _LOGGER.error(
                     "[SchlageProvider] Rollback failed for untagged code '%s' (slot %d): %s: %s",

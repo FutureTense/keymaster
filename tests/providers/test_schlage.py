@@ -892,6 +892,44 @@ class TestGetUsercodes:
         # Code is not returned because tagging failed — avoids slot drift
         assert len(codes) == 0
 
+    async def test_get_usercodes_initial_delete_non_ha_error(self, schlage_provider):
+        """Test that non-HomeAssistantError during initial delete is caught and skips code."""
+        call_count = 0
+
+        async def mock_service_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            raise RuntimeError("Underlying transport broken")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
+        codes = await schlage_provider.async_get_usercodes()
+        assert len(codes) == 0
+
+    async def test_get_usercodes_initial_delete_cancelled_error_propagates(self, schlage_provider):
+        """Test that asyncio.CancelledError during initial delete propagates without being caught."""
+        call_count = 0
+
+        async def mock_service_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "Guest", "code": "1234"},
+                    }
+                }
+            raise asyncio.CancelledError
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_service_call)
+        with pytest.raises(asyncio.CancelledError):
+            await schlage_provider.async_get_usercodes()
+
     async def test_get_usercodes_partial_tagging_add_failure(self, schlage_provider):
         """Test delete_code success followed by add_code failure triggers rollback."""
         call_count = 0
