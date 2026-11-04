@@ -1464,7 +1464,7 @@ class TestSetUsercode:
         self, schlage_provider, caplog: pytest.LogCaptureFixture
     ):
         """Test that when code names are redacted, error messages containing the name are sanitized."""
-        schlage_provider.redact_code_names = True
+        schlage_provider.keymaster_config_entry.options = {CONF_REDACT_SLOT_NAMES: True}
         call_count = 0
 
         async def mock_call(*args, **kwargs):
@@ -1488,6 +1488,38 @@ class TestSetUsercode:
 
         assert "SecretName" not in caplog.text
         assert "[REDACTED]" in caplog.text
+
+    async def test_set_add_failure_unredacted_logs_raw_error(
+        self, schlage_provider, caplog: pytest.LogCaptureFixture
+    ):
+        """Test that when code names are not redacted, raw error messages are logged."""
+        schlage_provider.keymaster_config_entry.options = {CONF_REDACT_SLOT_NAMES: False}
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] SecretName", "code": "1234"},
+                    }
+                }
+            if call_count == 2:
+                return None
+            if call_count == 3:
+                raise HomeAssistantError("A code named 'SecretName' already exists")
+            # Rollback also fails
+            raise HomeAssistantError("Rollback error containing SecretName")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        with caplog.at_level(logging.ERROR):
+            result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is False
+
+        assert "A code named 'SecretName' already exists" in caplog.text
+        assert "Rollback error containing SecretName" in caplog.text
+        assert "[REDACTED]" not in caplog.text
 
     async def test_set_add_failure_non_ha_error_triggers_rollback(self, schlage_provider):
         """Test that non-HomeAssistantError exceptions during add trigger rollback."""
@@ -1560,6 +1592,7 @@ class StatefulFakeSchlageLock:
         """Initialize the fake lock with optional initial codes."""
         self.codes: dict[str, dict[str, str]] = dict(initial_codes or {})
         self.call_history: list[tuple[str, dict[str, Any]]] = []
+        self._next_id: int = len(self.codes) + 1
 
     def _normalize_name(self, name: str) -> str:
         return name.lower().strip()
@@ -1589,7 +1622,8 @@ class StatefulFakeSchlageLock:
                     f"A PIN code with value '{code}' already exists (schlage_code_exists)"
                 )
 
-            new_id = f"code_{len(self.codes) + 1}"
+            new_id = f"code_{self._next_id}"
+            self._next_id += 1
             self.codes[new_id] = {"name": name, "code": code}
             return None
 
