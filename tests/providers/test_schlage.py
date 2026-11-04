@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -1232,7 +1234,7 @@ class TestSetUsercode:
         }
 
     async def test_set_replace_existing_code(self, schlage_provider):
-        """Test replacing an existing code on a slot."""
+        """Test replacing an existing code on a slot deletes old before adding new."""
         schlage_provider.hass.services.async_call = AsyncMock(
             return_value={
                 "lock.schlage_front_door": {
@@ -1245,10 +1247,16 @@ class TestSetUsercode:
         assert result is True
 
         calls = schlage_provider.hass.services.async_call.call_args_list
-        # get_codes + add_code only (no delete — name is unchanged)
-        assert len(calls) == 2
-        # Add new — preserves friendly name since none provided
-        assert calls[1].kwargs["service_data"] == {
+        # get_codes + delete_code + add_code
+        assert len(calls) == 3
+        # 1: get_codes
+        assert calls[0].args[:2] == ("schlage", "get_codes")
+        # 2: delete old code first
+        assert calls[1].args[:2] == ("schlage", "delete_code")
+        assert calls[1].kwargs["service_data"] == {"name": "[KM:1] Guest"}
+        # 3: add new code
+        assert calls[2].args[:2] == ("schlage", "add_code")
+        assert calls[2].kwargs["service_data"] == {
             "name": "[KM:1] Guest",
             "code": "5678",
         }
@@ -1266,8 +1274,13 @@ class TestSetUsercode:
         result = await schlage_provider.async_set_usercode(5, "9999")
         assert result is True
 
-        add_call = schlage_provider.hass.services.async_call.call_args_list[1]
-        assert add_call.kwargs["service_data"]["name"] == "[KM:5] VIP"
+        calls = schlage_provider.hass.services.async_call.call_args_list
+        # get_codes + delete_code + add_code
+        assert len(calls) == 3
+        assert calls[1].args[:2] == ("schlage", "delete_code")
+        assert calls[1].kwargs["service_data"]["name"] == "[KM:5] VIP"
+        assert calls[2].args[:2] == ("schlage", "add_code")
+        assert calls[2].kwargs["service_data"]["name"] == "[KM:5] VIP"
 
     async def test_set_service_error(self, schlage_provider):
         """Test returns False on service error."""
@@ -1284,35 +1297,432 @@ class TestSetUsercode:
         result = await schlage_provider.async_set_usercode(1, "1234")
         assert result is False
 
-    async def test_rename_delete_failure_non_fatal(self, schlage_provider):
-        """Test that a delete failure during rename is non-fatal after add succeeds."""
+    async def test_set_delete_failure_aborts_before_add(self, schlage_provider):
+        """Test that delete failure on replacement aborts before calling add."""
         call_count = 0
 
         async def mock_call(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                # get_codes with tagged entry in slot 1
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] Guest", "code": "1234"},
+                    }
+                }
+            # delete_code fails
+            raise HomeAssistantError("Schlage delete_code error")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is False
+
+        calls = schlage_provider.hass.services.async_call.call_args_list
+        assert len(calls) == 2
+        assert calls[1].args[:2] == ("schlage", "delete_code")
+
+    async def test_set_add_failure_triggers_rollback(self, schlage_provider):
+        """Test that add failure on replacement attempts to restore the original code."""
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # get_codes returns existing code with unmasked pin
                 return {
                     "lock.schlage_front_door": {
                         "id1": {"name": "[KM:1] Guest", "code": "1234"},
                     }
                 }
             if call_count == 2:
-                # add_code succeeds
+                # delete_code succeeds
                 return None
-            # delete_code fails
-            raise HomeAssistantError("Schlage delete_code error")
+            if call_count == 3:
+                # add_code for replacement fails
+                raise HomeAssistantError("Schlage add_code error")
+            if call_count == 4:
+                # rollback: add_code for original succeeds
+                return None
+            pytest.fail(f"Unexpected service call #{call_count}")
 
         schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
-        result = await schlage_provider.async_set_usercode(1, "5678", "New Guest")
-        # Add succeeded so delete failure is non-fatal
-        assert result is True
+        result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is False
 
         calls = schlage_provider.hass.services.async_call.call_args_list
+        assert len(calls) == 4
+        # 1: get_codes
+        assert calls[0].args[:2] == ("schlage", "get_codes")
+        # 2: delete old
+        assert calls[1].args[:2] == ("schlage", "delete_code")
+        assert calls[1].kwargs["service_data"] == {"name": "[KM:1] Guest"}
+        # 3: add new fails
+        assert calls[2].args[:2] == ("schlage", "add_code")
+        assert calls[2].kwargs["service_data"] == {"name": "[KM:1] Guest", "code": "5678"}
+        # 4: rollback: add original code back
+        assert calls[3].args[:2] == ("schlage", "add_code")
+        assert calls[3].kwargs["service_data"] == {"name": "[KM:1] Guest", "code": "1234"}
+
+    async def test_set_add_failure_rollback_failure_logged(self, schlage_provider):
+        """Test that rollback failure when restoring original code is handled."""
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] Guest", "code": "1234"},
+                    }
+                }
+            if call_count == 2:
+                # delete_code succeeds
+                return None
+            if call_count == 3:
+                # add_code for replacement fails
+                raise HomeAssistantError("add_code failed")
+            if call_count == 4:
+                # rollback add_code fails
+                raise HomeAssistantError("rollback add_code failed")
+            pytest.fail(f"Unexpected service call #{call_count}")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is False
+
+        calls = schlage_provider.hass.services.async_call.call_args_list
+        assert len(calls) == 4
+        # 1: get_codes
+        assert calls[0].args[:2] == ("schlage", "get_codes")
+        # 2: delete old
+        assert calls[1].args[:2] == ("schlage", "delete_code")
+        assert calls[1].kwargs["service_data"] == {"name": "[KM:1] Guest"}
+        # 3: add new fails
+        assert calls[2].args[:2] == ("schlage", "add_code")
+        assert calls[2].kwargs["service_data"] == {"name": "[KM:1] Guest", "code": "5678"}
+        # 4: rollback: add original code back (fails)
+        assert calls[3].args[:2] == ("schlage", "add_code")
+        assert calls[3].kwargs["service_data"] == {"name": "[KM:1] Guest", "code": "1234"}
+
+    async def test_set_rollback_failure_cancelled_error_propagates(self, schlage_provider):
+        """Test that asyncio.CancelledError during rollback propagates without being swallowed."""
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] Guest", "code": "1234"},
+                    }
+                }
+            if call_count == 2:
+                return None
+            if call_count == 3:
+                raise HomeAssistantError("add_code failed")
+            raise asyncio.CancelledError
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        with pytest.raises(asyncio.CancelledError):
+            await schlage_provider.async_set_usercode(1, "5678")
+
+    async def test_set_add_failure_masked_pin_skips_rollback(
+        self, schlage_provider, caplog: pytest.LogCaptureFixture
+    ):
+        """Test that add failure with masked existing PIN skips rollback and logs explicit error."""
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] Guest", "code": "****"},
+                    }
+                }
+            if call_count == 2:
+                # delete_code succeeds
+                return None
+            # add_code for replacement fails
+            raise HomeAssistantError("add_code failed")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        with caplog.at_level(logging.ERROR):
+            result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is False
+
+        calls = schlage_provider.hass.services.async_call.call_args_list
+        # get_codes + delete_code + add_code (no rollback because PIN was masked)
         assert len(calls) == 3
-        delete_call = calls[2]
-        assert delete_call.args[:2] == ("schlage", "delete_code")
+        assert "cannot be restored because its PIN was missing or masked" in caplog.text
+
+    async def test_set_add_failure_redaction_sanitizes_error(
+        self, schlage_provider, caplog: pytest.LogCaptureFixture
+    ):
+        """Test that when code names are redacted, error messages containing the name are sanitized."""
+        schlage_provider.keymaster_config_entry.options = {CONF_REDACT_SLOT_NAMES: True}
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] SecretName", "code": "1234"},
+                    }
+                }
+            if call_count == 2:
+                return None
+            # Core Schlage validator message leaks name: "A code named 'SecretName' already exists"
+            raise HomeAssistantError("A code named 'SecretName' already exists")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        with caplog.at_level(logging.ERROR):
+            result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is False
+
+        assert "SecretName" not in caplog.text
+        assert "[REDACTED]" in caplog.text
+
+    async def test_set_add_failure_unredacted_logs_raw_error(
+        self, schlage_provider, caplog: pytest.LogCaptureFixture
+    ):
+        """Test that when code names are not redacted, raw error messages are logged."""
+        schlage_provider.keymaster_config_entry.options = {CONF_REDACT_SLOT_NAMES: False}
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] SecretName", "code": "1234"},
+                    }
+                }
+            if call_count == 2:
+                return None
+            if call_count == 3:
+                raise HomeAssistantError("A code named 'SecretName' already exists")
+            # Rollback also fails
+            raise HomeAssistantError("Rollback error containing SecretName")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        with caplog.at_level(logging.ERROR):
+            result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is False
+
+        assert "A code named 'SecretName' already exists" in caplog.text
+        assert "Rollback error containing SecretName" in caplog.text
+        assert "[REDACTED]" not in caplog.text
+
+    async def test_set_add_failure_non_ha_error_triggers_rollback(self, schlage_provider):
+        """Test that non-HomeAssistantError exceptions during add trigger rollback."""
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] Guest", "code": "1234"},
+                    }
+                }
+            if call_count == 2:
+                return None
+            if call_count == 3:
+                # Unexpected transport error escaping library
+                raise RuntimeError("Transport connection severed")
+            if call_count == 4:
+                # Rollback succeeds
+                return None
+            pytest.fail(f"Unexpected call #{call_count}")
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is False
+
+        calls = schlage_provider.hass.services.async_call.call_args_list
+        assert len(calls) == 4
+        assert calls[3].args[:2] == ("schlage", "add_code")
+        assert calls[3].kwargs["service_data"] == {"name": "[KM:1] Guest", "code": "1234"}
+
+    async def test_set_add_failure_cancelled_error_propagates(self, schlage_provider):
+        """Test that asyncio.CancelledError during add propagates without being swallowed."""
+        call_count = 0
+
+        async def mock_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "lock.schlage_front_door": {
+                        "id1": {"name": "[KM:1] Guest", "code": "1234"},
+                    }
+                }
+            if call_count == 2:
+                return None
+            raise asyncio.CancelledError
+
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=mock_call)
+        with pytest.raises(asyncio.CancelledError):
+            await schlage_provider.async_set_usercode(1, "5678")
+
+
+# ---------------------------------------------------------------------------
+# Stateful Schlage Lock Validation Tests
+# ---------------------------------------------------------------------------
+
+
+class StatefulFakeSchlageLock:
+    """Stateful fake mirroring Home Assistant core's Schlage service validation.
+
+    Enforces case-insensitive duplicate-name validation (schlage_name_exists)
+    and duplicate-PIN validation (schlage_code_exists), identical to
+    homeassistant.components.schlage.lock.SchlageLockEntity.
+    """
+
+    def __init__(self, initial_codes: dict[str, dict[str, str]] | None = None) -> None:
+        """Initialize the fake lock with optional initial codes."""
+        self.codes: dict[str, dict[str, str]] = dict(initial_codes or {})
+        self.call_history: list[tuple[str, dict[str, Any]]] = []
+        self._next_id: int = len(self.codes) + 1
+
+    def _normalize_name(self, name: str) -> str:
+        return name.lower().strip()
+
+    async def async_call(
+        self, domain: str, service: str, service_data: dict[str, Any] | None = None, **_: Any
+    ) -> dict[str, Any] | None:
+        """Simulate a Home Assistant service call for the schlage domain."""
+        assert domain == "schlage"
+        service_data = service_data or {}
+        self.call_history.append((service, dict(service_data)))
+
+        if service == "get_codes":
+            return {"lock.schlage_front_door": dict(self.codes)}
+
+        if service == "add_code":
+            name = service_data["name"]
+            code = service_data["code"]
+            normalized = self._normalize_name(name)
+
+            if any(self._normalize_name(c["name"]) == normalized for c in self.codes.values()):
+                raise HomeAssistantError(
+                    f"A code named '{name}' already exists (schlage_name_exists)"
+                )
+            if any(c["code"] == code for c in self.codes.values()):
+                raise HomeAssistantError(
+                    f"A PIN code with value '{code}' already exists (schlage_code_exists)"
+                )
+
+            new_id = f"code_{self._next_id}"
+            self._next_id += 1
+            self.codes[new_id] = {"name": name, "code": code}
+            return None
+
+        if service == "delete_code":
+            name = service_data["name"]
+            normalized = self._normalize_name(name)
+            to_delete = [
+                cid
+                for cid, c in self.codes.items()
+                if self._normalize_name(c["name"]) == normalized
+            ]
+            for cid in to_delete:
+                del self.codes[cid]
+            return None
+
+        raise NotImplementedError(f"Service {service} not implemented in fake")
+
+
+class TestStatefulSchlageValidation:
+    """Tests executing real SchlageProvider flows against stateful core validators."""
+
+    async def test_rotate_pin_same_name_succeeds_against_core_validation(self, schlage_provider):
+        """Test rotating a PIN without changing friendly name against core validation rules.
+
+        Proves that delete-before-add succeeds where add-before-delete failed with schlage_name_exists.
+        """
+        fake = StatefulFakeSchlageLock(
+            {"id1": {"name": "[KM:1] Guest", "code": "1234"}},
+        )
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=fake.async_call)
+
+        # Rotate PIN on slot 1 with unchanged friendly name
+        result = await schlage_provider.async_set_usercode(1, "5678")
+        assert result is True
+
+        # Verify final lock state: exactly one code on lock with new PIN and preserved name
+        assert len(fake.codes) == 1
+        code_entry = next(iter(fake.codes.values()))
+        assert code_entry["name"] == "[KM:1] Guest"
+        assert code_entry["code"] == "5678"
+
+    async def test_rename_same_pin_succeeds_against_core_validation(self, schlage_provider):
+        """Test renaming a slot while keeping the same PIN against core validation rules.
+
+        Proves that delete-before-add succeeds where add-before-delete failed with schlage_code_exists.
+        """
+        fake = StatefulFakeSchlageLock(
+            {"id1": {"name": "[KM:1] Guest", "code": "1234"}},
+        )
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=fake.async_call)
+
+        result = await schlage_provider.async_set_usercode(1, "1234", name="Visitor")
+        assert result is True
+
+        assert len(fake.codes) == 1
+        code_entry = next(iter(fake.codes.values()))
+        assert code_entry["name"] == "[KM:1] Visitor"
+        assert code_entry["code"] == "1234"
+
+    async def test_rename_and_new_pin_succeeds_against_core_validation(self, schlage_provider):
+        """Test changing both name and PIN against core validation rules."""
+        fake = StatefulFakeSchlageLock(
+            {"id1": {"name": "[KM:1] Guest", "code": "1234"}},
+        )
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=fake.async_call)
+
+        result = await schlage_provider.async_set_usercode(1, "9999", name="VIP")
+        assert result is True
+
+        assert len(fake.codes) == 1
+        code_entry = next(iter(fake.codes.values()))
+        assert code_entry["name"] == "[KM:1] VIP"
+        assert code_entry["code"] == "9999"
+
+    async def test_new_pin_duplicates_another_slot_rollback_restores_original(
+        self, schlage_provider
+    ):
+        """Test that attempting to set a PIN duplicate of another slot rolls back cleanly.
+
+        Core rejects add with schlage_code_exists. Rollback restores original slot and leaves
+        the other slot completely untouched.
+        """
+        fake = StatefulFakeSchlageLock(
+            {
+                "id1": {"name": "[KM:1] Alice", "code": "1111"},
+                "id2": {"name": "[KM:2] Bob", "code": "2222"},
+            },
+        )
+        schlage_provider.hass.services.async_call = AsyncMock(side_effect=fake.async_call)
+
+        # Attempt to set slot 1's PIN to '2222' (which belongs to slot 2)
+        result = await schlage_provider.async_set_usercode(1, "2222")
+        assert result is False
+
+        # Both slots should still exist in their original state on the lock
+        assert len(fake.codes) == 2
+        names_to_codes = {c["name"]: c["code"] for c in fake.codes.values()}
+        assert names_to_codes["[KM:1] Alice"] == "1111"
+        assert names_to_codes["[KM:2] Bob"] == "2222"
 
 
 # ---------------------------------------------------------------------------
