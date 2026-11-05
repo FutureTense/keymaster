@@ -391,8 +391,8 @@ class SchlageLockProvider(BaseLockProvider):
         service validator.
 
         If the tagged add fails, a rollback attempts to re-add the original untagged code.
-        Note: If both the tagged add and the rollback add fail, the lock temporarily has
-        no code for this user until the next polling cycle retries tagging.
+        Note: If both the tagged add and the rollback add fail, the original code has already
+        been deleted and cannot be recovered automatically; the code is lost from the lock.
         """
         if _is_masked_pin(pin):
             _LOGGER.debug(
@@ -441,7 +441,7 @@ class SchlageLockProvider(BaseLockProvider):
             except asyncio.CancelledError:
                 raise
             except Exception as rollback_err:  # noqa: BLE001
-                # If rollback also fails, the lock is left without this code until retried.
+                # If rollback also fails, the code has been removed and cannot be recovered.
                 rollback_err_msg = "[REDACTED]" if self.redact_slot_names else str(rollback_err)
                 _LOGGER.error(
                     "[SchlageProvider] Rollback failed for untagged code '%s' (slot %d): %s: %s",
