@@ -384,7 +384,16 @@ class SchlageLockProvider(BaseLockProvider):
     async def _async_tag_untagged_code(
         self, original_name: str, pin: str, prospective_slot: int, tagged_name: str
     ) -> bool:
-        """Tag an untagged Schlage code on the lock."""
+        """Tag an untagged Schlage code on the lock.
+
+        Deletes the untagged code first before adding the tagged replacement to prevent
+        duplicate-PIN collisions (schlage_code_exists) with Home Assistant core's Schlage
+        service validator.
+
+        If the tagged add fails, a rollback attempts to re-add the original untagged code.
+        Note: If both the tagged add and the rollback add fail, the original code has already
+        been deleted and cannot be recovered automatically; the code is lost from the lock.
+        """
         if _is_masked_pin(pin):
             _LOGGER.debug(
                 "[SchlageProvider] Skipping untaggable code '%s' (slot %d): "
@@ -395,34 +404,51 @@ class SchlageLockProvider(BaseLockProvider):
             return False
 
         try:
+            await self._async_delete_code(original_name)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            err_msg = "[REDACTED]" if self.redact_slot_names else str(e)
+            _LOGGER.error(
+                "[SchlageProvider] Failed to remove untagged code '%s' before tagging slot %d: %s: %s",
+                self.redact_name(original_name),
+                prospective_slot,
+                e.__class__.__qualname__,
+                err_msg,
+            )
+            return False
+
+        try:
             await self._async_add_code(tagged_name, pin)
-        except HomeAssistantError as e:
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            err_msg = "[REDACTED]" if self.redact_slot_names else str(e)
             _LOGGER.error(
                 "[SchlageProvider] Failed to tag code '%s' for slot %d: %s: %s",
                 self.redact_name(original_name),
                 prospective_slot,
                 e.__class__.__qualname__,
-                e,
+                err_msg,
             )
-            return False
-
-        try:
-            await self._async_delete_code(original_name)
-        except HomeAssistantError as e:
-            _LOGGER.warning(
-                "[SchlageProvider] Tagged code added but failed to delete "
-                "original '%s' for slot %d: %s. Attempting rollback.",
+            _LOGGER.info(
+                "[SchlageProvider] Attempting rollback of untagged code '%s' for slot %d",
                 self.redact_name(original_name),
                 prospective_slot,
-                e,
             )
             try:
-                await self._async_delete_code(tagged_name)
-            except HomeAssistantError:
+                await self._async_add_code(original_name, pin)
+            except asyncio.CancelledError:
+                raise
+            except Exception as rollback_err:  # noqa: BLE001
+                # If rollback also fails, the code has been removed and cannot be recovered.
+                rollback_err_msg = "[REDACTED]" if self.redact_slot_names else str(rollback_err)
                 _LOGGER.error(
-                    "[SchlageProvider] Rollback failed for tagged code '%s'. "
-                    "Lock may have duplicate entries.",
-                    self.redact_name(tagged_name),
+                    "[SchlageProvider] Rollback failed for untagged code '%s' (slot %d): %s: %s",
+                    self.redact_name(original_name),
+                    prospective_slot,
+                    rollback_err.__class__.__qualname__,
+                    rollback_err_msg,
                 )
             return False
 
