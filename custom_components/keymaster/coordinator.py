@@ -29,7 +29,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er, 
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.util import slugify
+from homeassistant.util import dt as dt_util, slugify
 from homeassistant.util.dt import utcnow
 
 from .autolock import AutolockTimer, TimerStore
@@ -2241,20 +2241,24 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         ):
             return False
 
+        now = dt_util.now()
+
         if kmslot.accesslimit_date_range_enabled and (
             not isinstance(kmslot.accesslimit_date_range_start, dt)
             or not isinstance(kmslot.accesslimit_date_range_end, dt)
-            or dt.now().astimezone() < kmslot.accesslimit_date_range_start
-            or dt.now().astimezone() > kmslot.accesslimit_date_range_end
+            or now < kmslot.accesslimit_date_range_start
+            or now > kmslot.accesslimit_date_range_end
         ):
             return False
 
         if kmslot.accesslimit_day_of_week_enabled and kmslot.accesslimit_day_of_week:
-            today_index: int = dt.now().astimezone().weekday()
+            today_index: int = now.weekday()
             today: KeymasterCodeSlotDayOfWeek = kmslot.accesslimit_day_of_week[today_index]
             _LOGGER.debug("[is_slot_active] today_index: %s, today: %s", today_index, today)
             if not today.dow_enabled:
                 return False
+
+            current_time = now.time()
 
             if (
                 today.limit_by_time
@@ -2262,8 +2266,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 and (
                     not isinstance(today.time_start, dt_time)
                     or not isinstance(today.time_end, dt_time)
-                    or dt.now().time() < today.time_start
-                    or dt.now().time() > today.time_end
+                    or current_time < today.time_start
+                    or current_time > today.time_end
                 )
             ):
                 return False
@@ -2274,7 +2278,7 @@ class KeymasterCoordinator(DataUpdateCoordinator):
                 and (
                     not isinstance(today.time_start, dt_time)
                     or not isinstance(today.time_end, dt_time)
-                    or (dt.now().time() >= today.time_start and dt.now().time() <= today.time_end)
+                    or (today.time_start <= current_time <= today.time_end)
                 )
             ):
                 return False

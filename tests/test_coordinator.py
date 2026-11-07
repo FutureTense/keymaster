@@ -41,6 +41,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_OPEN
 from homeassistant.core import CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 from homeassistant.util.dt import utcnow
 
 
@@ -2872,6 +2873,168 @@ class TestIsSlotActive:
         result = await KeymasterCoordinator._is_slot_active(base_slot)
 
         assert result is True
+
+    async def test_slot_day_of_week_disabled_day_returns_false(self, base_slot):
+        """Test that slot scheduled with current weekday disabled returns False."""
+        base_slot.accesslimit_day_of_week_enabled = True
+        current_now = dt_util.now()
+        current_dow = current_now.weekday()
+
+        base_slot.accesslimit_day_of_week = {
+            i: KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i,
+                day_of_week_name="Day",
+                dow_enabled=(i != current_dow),
+            )
+            for i in range(7)
+        }
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+        assert result is False
+
+    async def test_slot_day_of_week_enabled_day_returns_true(self, base_slot):
+        """Test that slot scheduled with current weekday enabled returns True."""
+        base_slot.accesslimit_day_of_week_enabled = True
+        current_now = dt_util.now()
+        current_dow = current_now.weekday()
+
+        base_slot.accesslimit_day_of_week = {
+            i: KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i,
+                day_of_week_name="Day",
+                dow_enabled=(i == current_dow),
+            )
+            for i in range(7)
+        }
+
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+        assert result is True
+
+    async def test_slot_day_of_week_uses_ha_timezone_weekday(self, base_slot):
+        """Test that weekday uses HA configured timezone rather than UTC process clock.
+
+        When it is Friday 14:00 in America/Los_Angeles (UTC-8), the UTC time is Saturday 22:00.
+        The weekday in HA local time is 4 (Friday), not 5 (Saturday).
+        """
+        base_slot.accesslimit_day_of_week_enabled = True
+        # Mock dt_util.now() returning Friday 14:00 Pacific
+        pacific_tz = dt_util.get_time_zone("America/Los_Angeles")
+        assert pacific_tz is not None
+        mock_now = dt(
+            2026, 11, 6, 14, 0, 0, tzinfo=pacific_tz
+        )  # Nov 6, 2026 was a Friday (weekday=4)
+        assert mock_now.weekday() == 4
+
+        # Configure slot to only be enabled on Friday (4)
+        base_slot.accesslimit_day_of_week = {
+            i: KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i,
+                day_of_week_name="Day",
+                dow_enabled=(i == 4),
+            )
+            for i in range(7)
+        }
+
+        with patch("custom_components.keymaster.coordinator.dt_util.now", return_value=mock_now):
+            result = await KeymasterCoordinator._is_slot_active(base_slot)
+            assert result is True
+
+            # If enabled on Saturday (5) only, it must be inactive
+            base_slot.accesslimit_day_of_week[4].dow_enabled = False
+            base_slot.accesslimit_day_of_week[5].dow_enabled = True
+            result = await KeymasterCoordinator._is_slot_active(base_slot)
+            assert result is False
+
+    async def test_slot_time_of_day_includes_window_uses_ha_timezone(self, base_slot):
+        """Test time-of-day include window uses HA configured timezone (issue #855).
+
+        At 13:57 Pacific (21:57 UTC), a slot limited to 09:00-21:00 should be active.
+        """
+        base_slot.accesslimit_day_of_week_enabled = True
+        pacific_tz = dt_util.get_time_zone("America/Los_Angeles")
+        assert pacific_tz is not None
+        mock_now = dt(2026, 11, 6, 13, 57, 0, tzinfo=pacific_tz)
+        today_index = mock_now.weekday()
+
+        base_slot.accesslimit_day_of_week = {
+            i: KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i,
+                day_of_week_name="Day",
+                dow_enabled=True,
+                limit_by_time=True,
+                include_exclude=True,  # include mode
+                time_start=dt_time(9, 0),
+                time_end=dt_time(21, 0),
+            )
+            for i in range(7)
+        }
+
+        with patch("custom_components.keymaster.coordinator.dt_util.now", return_value=mock_now):
+            # 13:57 Pacific is within 09:00 - 21:00
+            result = await KeymasterCoordinator._is_slot_active(base_slot)
+            assert result is True
+
+            # If outside the window (e.g. 08:00 - 13:00)
+            base_slot.accesslimit_day_of_week[today_index].time_end = dt_time(13, 0)
+            result = await KeymasterCoordinator._is_slot_active(base_slot)
+            assert result is False
+
+    async def test_slot_time_of_day_excludes_window(self, base_slot):
+        """Test time-of-day exclude window uses HA configured timezone."""
+        base_slot.accesslimit_day_of_week_enabled = True
+        pacific_tz = dt_util.get_time_zone("America/Los_Angeles")
+        assert pacific_tz is not None
+        mock_now = dt(2026, 11, 6, 13, 57, 0, tzinfo=pacific_tz)
+        today_index = mock_now.weekday()
+
+        base_slot.accesslimit_day_of_week = {
+            i: KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i,
+                day_of_week_name="Day",
+                dow_enabled=True,
+                limit_by_time=True,
+                include_exclude=False,  # exclude mode: inactive during window
+                time_start=dt_time(9, 0),
+                time_end=dt_time(21, 0),
+            )
+            for i in range(7)
+        }
+
+        with patch("custom_components.keymaster.coordinator.dt_util.now", return_value=mock_now):
+            # 13:57 is inside excluded window [09:00, 21:00] -> inactive
+            result = await KeymasterCoordinator._is_slot_active(base_slot)
+            assert result is False
+
+            # Outside excluded window [14:00, 21:00] -> active
+            base_slot.accesslimit_day_of_week[today_index].time_start = dt_time(14, 0)
+            result = await KeymasterCoordinator._is_slot_active(base_slot)
+            assert result is True
+
+    async def test_slot_time_of_day_invalid_time_types(self, base_slot):
+        """Test that invalid time_start or time_end types return False when limit_by_time is True."""
+        base_slot.accesslimit_day_of_week_enabled = True
+        current_dow = dt_util.now().weekday()
+
+        # Include mode with None times
+        base_slot.accesslimit_day_of_week = {
+            i: KeymasterCodeSlotDayOfWeek(
+                day_of_week_num=i,
+                day_of_week_name="Day",
+                dow_enabled=True,
+                limit_by_time=True,
+                include_exclude=True,
+                time_start=None,
+                time_end=None,
+            )
+            for i in range(7)
+        }
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+        assert result is False
+
+        # Exclude mode with None times
+        base_slot.accesslimit_day_of_week[current_dow].include_exclude = False
+        result = await KeymasterCoordinator._is_slot_active(base_slot)
+        assert result is False
 
 
 class TestDictToKmlocksConversion:
