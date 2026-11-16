@@ -22,7 +22,7 @@
           "parent": "Select parent lock",
           "notify_script": "Notification Script",
           "hide_pins": "Hide PINs in UI?",
-          "skip_pin_reads": "Skip PIN reads"
+          "skip_pin_reads": "Hopp over PIN-lesing"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
@@ -44,7 +44,7 @@
           "parent": "Select parent lock",
           "notify_script": "Notification Script",
           "hide_pins": "Hide PINs in UI?",
-          "skip_pin_reads": "Skip PIN reads"
+          "skip_pin_reads": "Hopp over PIN-lesing"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
