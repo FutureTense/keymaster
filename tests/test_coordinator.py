@@ -4589,6 +4589,39 @@ class TestSyncUsercodeRefreshMasked:
         sync_coordinator.set_pin_on_lock.assert_awaited_once()
         assert km_slot.pin == "5678"
 
+    async def test_skip_pin_reads_skips_provider_reads(self, sync_coordinator):
+        """When skip_pin_reads is enabled, _update_lock_data and _sync_usercode skip provider."""
+        provider = AsyncMock()
+        provider.async_get_usercodes = AsyncMock()
+        provider.async_refresh_usercode = AsyncMock()
+        km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="1234")
+        lock = self._make_lock(
+            provider=provider,
+            code_slots={1: km_slot},
+        )
+        lock.keymaster_config_entry_id = "entry_skip"
+        lock.connected = True
+        mock_entry = Mock()
+        mock_entry.data = {"skip_pin_reads": True}
+        sync_coordinator.hass.config_entries.async_get_entry = Mock(return_value=mock_entry)
+        sync_coordinator.kmlocks = {"entry_skip": lock}
+        sync_coordinator._next_retry_time = {}
+        sync_coordinator._consecutive_failures = {}
+        sync_coordinator.get_lock_by_config_entry_id = AsyncMock(return_value=lock)
+        sync_coordinator._connect_and_update_lock = AsyncMock()
+        sync_coordinator._update_code_slots = AsyncMock()
+
+        await sync_coordinator._update_lock_data("entry_skip")
+        provider.async_get_usercodes.assert_not_awaited()
+        sync_coordinator._update_code_slots.assert_awaited_once()
+        passed_usercodes = sync_coordinator._update_code_slots.call_args.kwargs["usercodes"]
+        assert passed_usercodes == [CodeSlot(slot_num=1, code="1234", in_use=True)]
+
+        await sync_coordinator._sync_usercode(
+            lock, CodeSlot(slot_num=1, code="**********", in_use=True)
+        )
+        provider.async_refresh_usercode.assert_not_awaited()
+
 
 async def test_async_shutdown(hass: HomeAssistant) -> None:
     """Test that async_shutdown cancels pending timers."""
