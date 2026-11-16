@@ -26,6 +26,7 @@ from .const import (
     CONF_LOCK_NAME,
     CONF_NOTIFY_SCRIPT_NAME,
     CONF_PARENT,
+    CONF_SKIP_PIN_READS,
     CONF_SLOTS,
     CONF_START,
     COORDINATOR,
@@ -33,6 +34,7 @@ from .const import (
     DEFAULT_ADVANCED_DAY_OF_WEEK,
     DEFAULT_CODE_SLOTS,
     DEFAULT_HIDE_PINS,
+    DEFAULT_SKIP_PIN_READS,
     DEFAULT_START,
     DOMAIN,
     NONE_TEXT,
@@ -220,6 +222,9 @@ def _advanced_schema_fields(get_default: DefaultGetter) -> SchemaFields:
             default=get_default(CONF_ADVANCED_DAY_OF_WEEK, DEFAULT_ADVANCED_DAY_OF_WEEK),
         ): bool,
         vol.Required(CONF_HIDE_PINS, default=get_default(CONF_HIDE_PINS, DEFAULT_HIDE_PINS)): bool,
+        vol.Required(
+            CONF_SKIP_PIN_READS, default=get_default(CONF_SKIP_PIN_READS, DEFAULT_SKIP_PIN_READS)
+        ): bool,
     }
 
 

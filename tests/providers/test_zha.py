@@ -1345,3 +1345,95 @@ class TestZHAAdditionalCoverage:
         mock_callback.reset_mock()
 
         unsub()
+
+
+class TestZHAPinReadCooldown:
+    """Test cases for ZHA PIN read timeout short-circuiting and cooldown."""
+
+    async def test_consecutive_timeouts_activate_cooldown_and_short_circuit(
+        self, provider, mock_zha_gateway
+    ):
+        """Test 2 consecutive TimeoutErrors short-circuit remaining slots and start cooldown."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        cluster = mock_zha_gateway["cluster"]
+        cluster.get_pin_code.side_effect = TimeoutError()
+        provider._usercodes_cache[1] = CodeSlot(slot_num=1, code="1234", in_use=True)
+
+        # Config has 3 slots (1, 2, 3); should stop after 2 consecutive timeouts
+        slots = await provider.async_get_usercodes()
+        assert cluster.get_pin_code.call_count == 2
+        assert len(slots) == 3
+        assert slots[0] == CodeSlot(slot_num=1, code="1234", in_use=True)
+        assert slots[1] == CodeSlot(slot_num=2, code=None, in_use=False)
+        assert slots[2] == CodeSlot(slot_num=3, code=None, in_use=False)
+        assert provider._is_pin_read_in_cooldown() is True
+
+        # Subsequent get_usercodes and refresh_usercode skip cluster calls during cooldown
+        cluster.get_pin_code.reset_mock()
+        slots_again = await provider.async_get_usercodes()
+        assert cluster.get_pin_code.call_count == 0
+        assert slots_again == slots
+
+        refreshed = await provider.async_refresh_usercode(1)
+        assert cluster.get_pin_code.call_count == 0
+        assert refreshed == CodeSlot(slot_num=1, code="1234", in_use=True)
+
+    async def test_cooldown_expires_and_success_resets_counter(self, provider, mock_zha_gateway):
+        """Test PIN reads resume after cooldown expires and success resets timeout counter."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        cluster = mock_zha_gateway["cluster"]
+        cluster.get_pin_code.side_effect = TimeoutError()
+
+        with patch("custom_components.keymaster.providers.zha.time.monotonic", return_value=1000.0):
+            await provider.async_get_usercodes()
+            assert provider._is_pin_read_in_cooldown() is True
+
+        # Advance past 1-hour (3600s) cooldown
+        cluster.get_pin_code.reset_mock()
+        cluster.get_pin_code.side_effect = None
+        cluster.get_pin_code.return_value = [1, 1, 0, b"1234"]
+
+        with patch("custom_components.keymaster.providers.zha.time.monotonic", return_value=4601.0):
+            assert provider._is_pin_read_in_cooldown() is False
+            slots = await provider.async_get_usercodes()
+            assert cluster.get_pin_code.call_count == 3
+            assert provider._consecutive_pin_read_timeouts == 0
+            assert all(s.in_use for s in slots)
+
+    async def test_refresh_usercode_timeout_returns_cache(self, provider, mock_zha_gateway):
+        """Test async_refresh_usercode handles TimeoutError and returns cached slot."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        cluster = mock_zha_gateway["cluster"]
+        cluster.get_pin_code.side_effect = TimeoutError()
+        provider._usercodes_cache[2] = CodeSlot(slot_num=2, code="5678", in_use=True)
+
+        result = await provider.async_refresh_usercode(2)
+        assert result == CodeSlot(slot_num=2, code="5678", in_use=True)
+        assert provider._consecutive_pin_read_timeouts == 1
+
+    async def test_timeout_after_cooldown_enables_skip_pin_reads(self, provider, mock_zha_gateway):
+        """Test a timeout after cooldown expires enables CONF_SKIP_PIN_READS permanently."""
+        setup_successful_connect(provider)
+        await provider.async_connect()
+
+        cluster = mock_zha_gateway["cluster"]
+        cluster.get_pin_code.side_effect = TimeoutError()
+
+        with patch("custom_components.keymaster.providers.zha.time.monotonic", return_value=1000.0):
+            await provider.async_get_usercodes()
+            assert provider._is_pin_read_in_cooldown() is True
+
+        # Cooldown expires; next read times out -> CONF_SKIP_PIN_READS is persisted
+        cluster.get_pin_code.reset_mock()
+        with patch("custom_components.keymaster.providers.zha.time.monotonic", return_value=4601.0):
+            await provider.async_get_usercodes()
+            assert cluster.get_pin_code.call_count == 1
+            provider.hass.config_entries.async_update_entry.assert_called_once()
+            updated_data = provider.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+            assert updated_data["skip_pin_reads"] is True

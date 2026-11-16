@@ -39,6 +39,7 @@ from .const import (
     BACKOFF_FAILURE_THRESHOLD,
     BACKOFF_INITIAL_SECONDS,
     BACKOFF_MAX_SECONDS,
+    CONF_SKIP_PIN_READS,
     DAY_NAMES,
     DEFAULT_AUTOLOCK_MIN_DAY,
     DEFAULT_AUTOLOCK_MIN_NIGHT,
@@ -2700,7 +2701,17 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             del self._consecutive_failures[keymaster_config_entry_id]
         self._next_retry_time.pop(keymaster_config_entry_id, None)
 
-        usercodes: list[CodeSlot] = await kmlock.provider.async_get_usercodes()
+        if self._should_skip_pin_reads(kmlock):
+            usercodes = [
+                CodeSlot(
+                    slot_num=slot_num,
+                    code=kmslot.pin if kmslot.active else None,
+                    in_use=bool(kmslot.active and kmslot.pin),
+                )
+                for slot_num, kmslot in (kmlock.code_slots or {}).items()
+            ]
+        else:
+            usercodes = await kmlock.provider.async_get_usercodes()
         _LOGGER.debug(
             "[update_lock_data] %s: usercodes count: %s",
             kmlock.lock_name,
@@ -2708,6 +2719,11 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         )
 
         await self._update_code_slots(kmlock=kmlock, usercodes=usercodes)
+
+    def _should_skip_pin_reads(self, kmlock: KeymasterLock) -> bool:
+        """Return True if PIN reads are disabled for this lock."""
+        entry = self.hass.config_entries.async_get_entry(kmlock.keymaster_config_entry_id)
+        return entry is not None and entry.data.get(CONF_SKIP_PIN_READS, False) is True
 
     async def _update_code_slots(self, kmlock: KeymasterLock, usercodes: list[CodeSlot]) -> None:
         """Update the code slots for a keymaster lock."""
@@ -2821,7 +2837,12 @@ class KeymasterCoordinator(DataUpdateCoordinator):
         # refresh once per slot; after a masked result the slot is recorded in
         # masked_code_slots so subsequent polls skip the Z-Wave round-trip,
         # avoiding battery drain (#589).
-        if kmlock.provider and in_use and _is_masked_code(usercode):
+        if (
+            kmlock.provider
+            and in_use
+            and _is_masked_code(usercode)
+            and not self._should_skip_pin_reads(kmlock)
+        ):
             if code_slot_num not in kmlock.masked_code_slots:
                 refreshed = await kmlock.provider.async_refresh_usercode(code_slot_num)
                 if refreshed:
