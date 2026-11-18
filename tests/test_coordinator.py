@@ -4595,9 +4595,10 @@ class TestSyncUsercodeRefreshMasked:
         provider.async_get_usercodes = AsyncMock()
         provider.async_refresh_usercode = AsyncMock()
         km_slot = KeymasterCodeSlot(number=1, enabled=True, pin="1234")
+        disabled_slot = KeymasterCodeSlot(number=2, enabled=False, active=True, pin="5678")
         lock = self._make_lock(
             provider=provider,
-            code_slots={1: km_slot},
+            code_slots={1: km_slot, 2: disabled_slot},
         )
         lock.keymaster_config_entry_id = "entry_skip"
         lock.connected = True
@@ -4615,7 +4616,10 @@ class TestSyncUsercodeRefreshMasked:
         provider.async_get_usercodes.assert_not_awaited()
         sync_coordinator._update_code_slots.assert_awaited_once()
         passed_usercodes = sync_coordinator._update_code_slots.call_args.kwargs["usercodes"]
-        assert passed_usercodes == [CodeSlot(slot_num=1, code="1234", in_use=True)]
+        assert passed_usercodes == [
+            CodeSlot(slot_num=1, code="1234", in_use=True),
+            CodeSlot(slot_num=2, code=None, in_use=False),
+        ]
 
         await sync_coordinator._sync_usercode(
             lock, CodeSlot(slot_num=1, code="**********", in_use=True)

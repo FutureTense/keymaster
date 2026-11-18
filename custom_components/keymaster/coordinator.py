@@ -2705,8 +2705,8 @@ class KeymasterCoordinator(DataUpdateCoordinator):
             usercodes = [
                 CodeSlot(
                     slot_num=slot_num,
-                    code=kmslot.pin if kmslot.active else None,
-                    in_use=bool(kmslot.active and kmslot.pin),
+                    code=kmslot.pin if kmslot.enabled and kmslot.active else None,
+                    in_use=bool(kmslot.enabled and kmslot.active and kmslot.pin),
                 )
                 for slot_num, kmslot in (kmlock.code_slots or {}).items()
             ]
