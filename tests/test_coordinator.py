@@ -4620,6 +4620,9 @@ class TestSyncUsercodeRefreshMasked:
             CodeSlot(slot_num=1, code="1234", in_use=True),
             CodeSlot(slot_num=2, code=None, in_use=False),
         ]
+        for _ in range(2):
+            await sync_coordinator._sync_usercode(lock, passed_usercodes[1])
+        sync_coordinator.clear_pin_from_lock.assert_not_awaited()
 
         await sync_coordinator._sync_usercode(
             lock, CodeSlot(slot_num=1, code="**********", in_use=True)
