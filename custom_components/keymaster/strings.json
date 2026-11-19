@@ -20,7 +20,8 @@
           "lockname": "keymaster Lock Name (ie: frontdoor)",
           "parent": "keymaster Parent Lock (optional)",
           "notify_script": "Notification Script",
-          "hide_pins": "Hide PINs in UI"
+          "hide_pins": "Hide PINs in UI",
+          "skip_pin_reads": "Skip PIN reads"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"
@@ -41,7 +42,8 @@
           "lockname": "keymaster Lock Name (ie: frontdoor)",
           "parent": "keymaster Parent Lock (optional)",
           "notify_script": "Notification Script",
-          "hide_pins": "Hide PINs in UI"
+          "hide_pins": "Hide PINs in UI",
+          "skip_pin_reads": "Skip PIN reads"
         },
         "data_description": {
           "notify_script": "If left blank, will default to script.keymaster_[lock_name]_manual_notify"

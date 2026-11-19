@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 import contextlib
 from dataclasses import dataclass, field
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from zigpy.zcl.clusters.closures import DoorLock
 
-from custom_components.keymaster.const import CONF_SLOTS, CONF_START, COORDINATOR, DOMAIN
+from custom_components.keymaster.const import (
+    CONF_SKIP_PIN_READS,
+    CONF_SLOTS,
+    CONF_START,
+    COORDINATOR,
+    DOMAIN,
+)
 from homeassistant.components.zha.const import DOMAIN as ZHA_DOMAIN
 from homeassistant.components.zha.helpers import get_zha_gateway_proxy
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -25,6 +33,9 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 ZCL_DUPLICATE_CODE_STATUS = 3
+PIN_READ_TIMEOUT_SECONDS = 20
+PIN_READ_CONSECUTIVE_TIMEOUT_THRESHOLD = 2
+PIN_READ_COOLDOWN_SECONDS = 3600
 
 
 def _parse_operation_event_args(args: Any) -> tuple[Any, Any, Any]:
@@ -133,6 +144,9 @@ class ZHALockProvider(BaseLockProvider):
     _endpoint_id: int | None = field(default=None, init=False, repr=False)
     _usercodes_cache: dict[int, CodeSlot] = field(default_factory=dict, init=False, repr=False)
     _event_unsub: Callable[[], None] | None = field(default=None, init=False, repr=False)
+    _consecutive_pin_read_timeouts: int = field(default=0, init=False, repr=False)
+    _pin_read_cooldown_until: float | None = field(default=None, init=False, repr=False)
+    _pin_read_cooldown_expired_once: bool = field(default=False, init=False, repr=False)
 
     @property
     def domain(self) -> str:
@@ -316,17 +330,44 @@ class ZHALockProvider(BaseLockProvider):
         slot_start = self.keymaster_config_entry.data.get(CONF_START, 1)
         slot_count = self.keymaster_config_entry.data.get(CONF_SLOTS, 0)
 
+        if self.keymaster_config_entry.data.get(CONF_SKIP_PIN_READS, False) or (
+            self._is_pin_read_in_cooldown()
+        ):
+            return [
+                self._usercodes_cache.get(
+                    slot_num, CodeSlot(slot_num=slot_num, code=None, in_use=False)
+                )
+                for slot_num in range(slot_start, slot_start + slot_count)
+            ]
+
         result: list[CodeSlot] = []
         for slot_num in range(slot_start, slot_start + slot_count):
             res = None
             try:
-                res = await cluster.get_pin_code(slot_num)
+                async with asyncio.timeout(PIN_READ_TIMEOUT_SECONDS):
+                    res = await cluster.get_pin_code(slot_num)
+                self._record_pin_read_success()
                 _LOGGER.debug(
                     "Lock %s slot %s get_pin_code: %s",
                     self.lock_entity_id,
                     slot_num,
                     res,
                 )
+            except TimeoutError:
+                _LOGGER.warning(
+                    "Lock %s: timed out reading slot %s; using cache",
+                    self.lock_entity_id,
+                    slot_num,
+                )
+                if self._record_pin_read_timeout():
+                    result.extend(
+                        self._usercodes_cache.get(
+                            remaining_slot,
+                            CodeSlot(slot_num=remaining_slot, code=None, in_use=False),
+                        )
+                        for remaining_slot in range(slot_num, slot_start + slot_count)
+                    )
+                    return result
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning(
                     "Lock %s: could not read slot %s (%s); using cache",
@@ -379,17 +420,73 @@ class ZHALockProvider(BaseLockProvider):
         """Get a specific user code from cache."""
         return self._usercodes_cache.get(slot_num)
 
+    def _is_pin_read_in_cooldown(self) -> bool:
+        """Return True if PIN reads are temporarily skipped due to timeouts."""
+        if self._pin_read_cooldown_until is None:
+            return False
+        if time.monotonic() < self._pin_read_cooldown_until:
+            return True
+        self._pin_read_cooldown_until = None
+        self._consecutive_pin_read_timeouts = 0
+        self._pin_read_cooldown_expired_once = True
+        return False
+
+    def _record_pin_read_timeout(self) -> bool:
+        """Record a PIN read timeout and return True if reads should be skipped."""
+        self._consecutive_pin_read_timeouts += 1
+        if self._pin_read_cooldown_expired_once:
+            self.hass.config_entries.async_update_entry(
+                self.keymaster_config_entry,
+                data={**self.keymaster_config_entry.data, CONF_SKIP_PIN_READS: True},
+            )
+            _LOGGER.warning(
+                "Lock %s: get_pin_code timed out again after cooldown; "
+                "enabling 'Skip PIN reads' option",
+                self.lock_entity_id,
+            )
+            return True
+        if self._consecutive_pin_read_timeouts >= PIN_READ_CONSECUTIVE_TIMEOUT_THRESHOLD:
+            self._pin_read_cooldown_until = time.monotonic() + PIN_READ_COOLDOWN_SECONDS
+            _LOGGER.warning(
+                "Lock %s: %s consecutive get_pin_code timeouts; skipping PIN reads for %s seconds",
+                self.lock_entity_id,
+                self._consecutive_pin_read_timeouts,
+                PIN_READ_COOLDOWN_SECONDS,
+            )
+            return True
+        return False
+
+    def _record_pin_read_success(self) -> None:
+        """Reset PIN read timeout tracking after a successful response."""
+        self._consecutive_pin_read_timeouts = 0
+        self._pin_read_cooldown_until = None
+        self._pin_read_cooldown_expired_once = False
+
     async def async_refresh_usercode(self, slot_num: int) -> CodeSlot | None:
         """Bypass integration cache and query the device directly."""
         if not self._connected:
             return None
+        if self.keymaster_config_entry.data.get(CONF_SKIP_PIN_READS, False) or (
+            self._is_pin_read_in_cooldown()
+        ):
+            return self._usercodes_cache.get(slot_num)
         cluster = self._get_door_lock_cluster()
         if not cluster:
             return None
 
         res = None
         try:
-            res = await cluster.get_pin_code(slot_num)
+            async with asyncio.timeout(PIN_READ_TIMEOUT_SECONDS):
+                res = await cluster.get_pin_code(slot_num)
+            self._record_pin_read_success()
+        except TimeoutError:
+            _LOGGER.warning(
+                "Lock %s: timed out reading slot %s; using cache",
+                self.lock_entity_id,
+                slot_num,
+            )
+            self._record_pin_read_timeout()
+            return self._usercodes_cache.get(slot_num)
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning(
                 "Lock %s: could not read slot %s (%s); using cache",
